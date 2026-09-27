@@ -7,8 +7,8 @@
 <p align="center"><strong>Your AI workspace in one portable EXE — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.13.0">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.13.0">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.21.2">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.21.2">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -22,17 +22,21 @@
 
 OhMyHarness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows, macOS and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.13.0) · [CLI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.13.0) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.21.2) · [CLI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.21.2) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
-Version **1.13.0**, available as both GUI and CLI downloads, includes an independent CLI font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**, plus **GitHub update checks** for both interfaces. GUI Settings → General and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
+Version **1.21.2** is available for Windows x64 as both GUI and CLI downloads. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → General and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
 
 The chat model itself is **not** bundled: cloud providers need network access and, depending on the service, an API key. Git, Docker/Podman, OpenCode, and Chrome MCP are optional integrations with their own prerequisites. The core app does not require a separate OhMyHarness server.
 
 ## New in the current downloads
 
-**New in 1.14.0:** The integrated Web pane now has independent tabs per conversation, also controllable by the AI browser skill. Asset generator adds pixel art, center and grid guides, timed animation frames, and animated SVG, GIF and PNG-sequence exports in GUI and CLI. [Asset generator guide](docs/asset-generator.md).
+**New in 1.21.2:** Benchmark runs now show total challenge duration and streamed reasoning. The rich-text translator, proofreader and benchmark preview open correctly on Uno Desktop; the conversation archive remains scrollable after reopening.
+
+**New in 1.21.0:** Hard benchmark challenges include visual app-building tasks with an interactive preview, including a 3D Rubik's Cube. See the [changelog](CHANGELOG.md) for task details and scoring limits.
+
+**Earlier in 1.14.0:** The integrated Web pane now has independent tabs per conversation, also controllable by the AI browser skill. Asset generator adds pixel art, center and grid guides, timed animation frames, and animated SVG, GIF and PNG-sequence exports in GUI and CLI. [Asset generator guide](docs/asset-generator.md).
 
 **Also new in 1.13.0:** The opt-in Asset generator lets the AI draw SVG shapes, colors, text and layers in a live GUI canvas, capture its artwork for visual checks, and export SVG, PNG, WebP, JPEG or PDF from GUI or CLI.
 
@@ -40,7 +44,7 @@ The chat model itself is **not** bundled: cloud providers need network access an
 
 **Since 1.9.0:** the complete-design skill helps guide projects from discovery through implementation and testing; browser access choices now persist with other skills; the GUI question tool has a clearer step-by-step choice card; and the CLI logo follows the selected theme. GUI and CLI archives remain available for Windows x64, both Mac architectures and Fedora Linux x64. Unix archives use `.tar.gz` to preserve executable permissions; see the [Mac guide](docs/macos.md) and [Fedora guide](docs/fedora.md).
 
-Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.13.0 and CLI v1.13.0** package the same shared engine and current features in separate downloads for Windows x64, macOS Intel and Apple Silicon, and Fedora Linux x64.
+Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.21.2 and CLI v1.21.2** package the same shared engine for Windows x64. Earlier releases provide macOS and Fedora Linux archives.
 
 - **Response styles:** DEFAULT, SHORT, PRAGMATIC, DETAILED and FUN, shared between GUI General settings and CLI `/settings`.
 - **CLI editing:** selection, word navigation, copy/cut/paste and undo/redo; ordinary Backspace deletes one character.
@@ -52,7 +56,7 @@ Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/relea
 - **Fresh portable workspaces:** launching the executable in a new folder creates fresh data instead of importing previous AppData conversations.
 - **Guided work:** Complete design coordinates questions, choices, implementation, optional subagents and verification; the GUI question card presents one decision at a time.
 
-See the [full changelog](CHANGELOG.md) for version-by-version details. Both current downloads include their applicable changes through v1.13.0.
+See the [full changelog](CHANGELOG.md) for version-by-version details. Both current Windows downloads include changes through v1.21.2.
 
 ## Take a look
 
@@ -143,7 +147,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.13.0), or choose the [CLI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.13.0) for a terminal workspace. Select the archive for your OS and CPU.
+1. Download the [GUI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.21.2), or choose the [CLI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.21.2) for a terminal workspace. The 1.21.2 archives target Windows x64; earlier releases retain their other platform downloads.
 2. Extract the archive into a **writable folder** and run <code>OhMyHarness.App.exe</code> on Windows or <code>./OhMyHarness.App</code> on macOS/Linux. The app creates its skills folder beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
