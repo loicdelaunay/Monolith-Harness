@@ -9,6 +9,8 @@ void Check(bool condition, string name) { if (!condition) throw new Exception("Ã
 async Task Throws<T>(Func<Task> action, string name) where T : Exception
 { try { await action(); } catch (T) { Check(true, name); return; } throw new Exception("Exception attendue : " + name); }
 string Event(object value) => "data: " + System.Text.Json.JsonSerializer.Serialize(value) + "\r\n\r\n";
+await ModelUtilityChecks.Run(Check);
+if (args.Contains("--model-tools")) { Console.WriteLine($"{passed} model tool checks passed."); return; }
 if(args.Contains("--browser-smoke")) { await ChromiumChecks.Run(Check); return; }
 if(args.Contains("--chrome-smoke")) { await ChromeMcpChecks.Run(Check); return; }
 await BrowserSkillChecks.Run(Check);

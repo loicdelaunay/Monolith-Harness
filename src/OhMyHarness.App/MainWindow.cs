@@ -181,22 +181,29 @@ public sealed partial class MainWindow : Window
         chatHeader.Children.Add(chatHeading); chatHeader.Children.Add(searchBox);
         Grid.SetRow(chatHeader, 3); panel.Children.Add(chatHeader);
         var conversationArea = new Grid();
+        // Reserve the archive's measured height first; the active list scrolls in
+        // the remaining space instead of retaining the collapsed archive's space.
+        conversationArea.RowDefinitions.Add(new RowDefinition { Height = new(1, GridUnitType.Star) });
         conversationArea.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        conversationArea.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        foreach (var list in new[] { chats, archivedChats })
+        {
+            ScrollViewer.SetVerticalScrollMode(list, ScrollMode.Enabled);
+            ScrollViewer.SetVerticalScrollBarVisibility(list, ScrollBarVisibility.Auto);
+            ScrollViewer.SetHorizontalScrollMode(list, ScrollMode.Disabled);
+            ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
+        }
         conversationArea.Children.Add(chats);
         archiveExpander.Header = archiveHeading;
         archiveExpander.Content = archivedChats;
         archiveExpander.Margin = new Thickness(0, 8, 0, 0);
         Grid.SetRow(archiveExpander, 1); conversationArea.Children.Add(archiveExpander);
-        void SizeConversationLists()
+        void SizeArchiveViewport()
         {
             var available = conversationArea.ActualHeight;
             if (available <= 0) return;
-            archivedChats.MaxHeight = Math.Min(240, Math.Max(80, available * 0.45));
-            chats.MaxHeight = Math.Max(100, available - archiveExpander.ActualHeight - 8);
+            archivedChats.MaxHeight = Math.Min(240, available * 0.45);
         }
-        conversationArea.SizeChanged += (_, _) => SizeConversationLists();
-        archiveExpander.SizeChanged += (_, _) => SizeConversationLists();
+        conversationArea.SizeChanged += (_, _) => SizeArchiveViewport();
         chatEmpty.Foreground = FluentDesign.Secondary;
         chatEmpty.TextAlignment = TextAlignment.Center;
         chatEmpty.HorizontalAlignment = HorizontalAlignment.Center;
@@ -276,7 +283,7 @@ public sealed partial class MainWindow : Window
         FluentDesign.IconButton(settingsButton, "\uE713", T("Réglages"));
         settingsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         settingsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
-        foot.Children.Add(Action(WorkflowText("◷ Tâches planifiées", "◷ Scheduled tasks"), ShowScheduledTasks));
+        foot.Children.Add(BuildDedicatedToolsRow());
         foot.Children.Add(settingsButton);
         Grid.SetRow(foot, 5); panel.Children.Add(foot);
         shell.Pane = panel;

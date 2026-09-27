@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.21.2 - 2026-09-27
+
+- Benchmark challenge headers now show their total elapsed time after completion, failure or cancellation, including generation and functional checks. JSON entries retain this duration independently from model throughput metrics.
+- Benchmark responses now display reasoning streamed by the provider while generation is in progress, followed by the answer. Completed reports retain the full provider reasoning; the latest streamed update is preserved when generation stops.
+- Fixed the rich-text editors failing to open on Uno Desktop: local HTML navigation is now accepted for the exact bundled document, while other destinations remain blocked. The same fix applies to the benchmark preview.
+- Aligned GUI and CLI versions at 1.21.2, including the archive scrolling fix from 1.21.1.
+
+## 1.21.1 - 2026-09-27
+
+- Fixed the conversation sidebar losing the archive viewport after collapsing and reopening it. Active conversations now use the remaining height while archives keep a bounded, independently scrollable area, including after window resizing.
+- Aligned GUI and CLI versions at 1.21.1.
+
+## 1.21.0 — 2026-09-27
+
+- Replaced the former Hard benchmark with six seeded ARC-AGI-2 grid tasks, exact asymmetric tour optimization, planted 3-SAT, Killer Sudoku and three full algorithm regression challenges. Valid witnesses are checked independently; the previous short BBH/HumanEval exercises no longer define Hard.
+- Added interactive application coding benchmarks: a 3D Rubik’s Cube with a solver and orbit camera, a 3D gravitational simulator, a visual logic-circuit editor, and an optimal collision-free multi-agent route planner. Run one application, all four, or combine them with reasoning tasks.
+- Added a right-hand offline preview for the HTML/CSS/JavaScript produced by the selected model. The app independently checks cube facelets and solutions, numerical integration, circuit outputs, path legality and optimality. Generated applications can be reopened and their HTML copied after the run; visual appearance and usability remain a separate human inspection.
+- Added reproducible series numbers and 3/10/20-minute request limits. Reports include selected task IDs, seed, source revisions, individual functional checks and generated HTML. Generated pages run inside a sandboxed iframe with network access blocked by content security policies.
+- Updated the benchmark suite to `omh-model-tools-v3-frontier`. Public subsets, transformations and original tasks are documented; these are not official ARC scores or an empirically calibrated frontier leaderboard. GUI and CLI versions are aligned at 1.21.0.
+
+## 1.20.0 — 2026-09-27
+
+- Translator and Proofreader now accept rich email content and copy HTML plus plain text back to the clipboard. Translation and rephrasing retain styled text runs, links, lists, paragraphs and tables; verified spelling corrections preserve the surrounding markup.
+- Replaced Proofreader mode buttons with native tabs. Removed routine status text and token/speed counters from both writing tools; retained progress, cancellation and error feedback. Primary actions consistently use an accent button at the bottom right of each tool window.
+- Added Easy, Medium and Hard model benchmarks (7, 9 and 12 requests). Medium and Hard include attributed BIG-Bench Hard questions and bug-fixing adaptations of HumanEval tasks, with fixed source revisions and bundled MIT notices.
+- Added an S–F success grade before the throughput card, with S for 100% and F for 0%, explicit thresholds and provisional scores on incomplete runs. JSON reports include difficulty, source references and grading details. These selected/adapted tasks are not official BBH or HumanEval scores.
+- Aligned GUI and CLI versions at 1.20.0.
+
+## 1.19.0 — 2026-09-27
+
+- Added a **Tools / Outils** dropdown beside Scheduled tasks, opening independent Translator, Proofreader and Model benchmark windows with the application's theme and configured models.
+- Translate between source and target languages in side-by-side panels, detect the source language, swap languages and copy results. Proofreading offers verified, individually applicable spelling/grammar/punctuation suggestions, apply all, ignore and rephrasing.
+- Benchmark a selected model with one throughput sample, three logic challenges and three bug-fixing challenges. Inspect expected answers, input/output token usage, latency and end-to-end tokens per second, then copy the JSON report. Estimated token counts are labelled explicitly; generated code is not executed.
+- Tool requests support cancellation, use isolated provider requests without chat history or agent tools, and preserve the chat's selected model. GUI and CLI versions remain aligned.
+
+## 1.18.0 — 2026-09-26
+
+- Expanded the shared pixel-art skill with palette-based sprite stamps, connected brushes, symmetry, outlined rectangles/ellipses, flood fill, color replacement, and selection copy/move/flip/rotation. Compact region inspection returns reusable patterns to reduce repetitive tool calls.
+- Aligned the transparency checker and grid with the actual pixel cells. GUI previews use whole physical pixels, including 125%/150% Windows display scaling, and scroll rather than shrink below one screen pixel per cell. Pixel-art exports reject fractional cell sizes.
+
+## 1.17.1 — 2026-09-26
+
+- Fixed HTTP 400 errors after an assistant requested several image-producing tools together. GUI and CLI now send every tool result before adding the captured images to the next model request.
+
+## 1.17.0 — 2026-09-26
+
+- Added explicit Classic and Pixel art modes to the Asset generator in the GUI and AI tools. Pixel art offers 16 × 16, 32 × 32, 64 × 64, 128 × 128 and custom grid sizes, with one addressable cell per pixel by default.
+- Pixel-art previews and captures use nearest-neighbor enlargement; pixel-only editing and crisp SVG output keep drawn edges sharp. Existing grid-based assets remain readable.
+
+## 1.16.0 — 2026-09-25
+
+- Added an opt-in **[BETA] Bypass free limitation** toggle when creating or editing an OpenCode provider (in both GUI and CLI), allowing the use of free models (such as `opencode/big-pickle`, `zen`, or other free-tier models) on another harness without being blocked by free-tier quota or rate limit errors.
+- OpenCode requests and runner script now forward `x-opencode-client: desktop` headers, allow cross-origin requests (`cors: ['*']`), and automatically renew exhausted sessions while preserving prior conversation history if a free usage limit error is encountered.
+
 ## 1.15.0 — 2026-09-25
 
 - Select a range of conversations with Shift+click (or add individual conversations with Ctrl+click), then right-click the selection to archive or delete them together. The selection count appears in the project sidebar.

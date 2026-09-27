@@ -194,6 +194,8 @@ The [Windows v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/release
 
 ## More documentation
 
+- [Dedicated tools](docs/model-tools.md): model-powered translator, proofreader and benchmark, available from **Tools** beside **Scheduled tasks** in the GUI.
+
 Detailed guides: [browser, RAG, and subagents](docs/browser-rag-agents.md), [memory](docs/memory.md), [custom skills](docs/skill-authoring.md), [MCP](docs/mcp.md), [scheduled tasks and models](docs/uno-tasks-models.md), [macOS](docs/macos.md), and the [full user guide](docs/guide.md).
 
 OhMyHarness is available under the [MIT license](LICENSE).

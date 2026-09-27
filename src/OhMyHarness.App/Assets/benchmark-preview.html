@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src about: blob: 'self'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#151922;color:#b7c5d8;font:14px 'Segoe UI',sans-serif}iframe{display:block;border:0;width:100%;height:100%;background:#151922}#empty{display:grid;place-items:center;height:100%;padding:28px;text-align:center}</style>
+</head><body><div id="empty">L’application générée apparaîtra ici.</div>
+<script>
+(() => {
+ 'use strict';
+ let frame=null,token='',serial=0;const replies=new Map();
+ const policy="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; worker-src blob:; base-uri 'none'; form-action 'none'";
+ window.addEventListener('message',event=>{
+   if(!frame || event.source!==frame.contentWindow || event.data?.token!==token)return;
+   const data=event.data;
+   if(data.type==='ready'){replies.set('ready',{done:true,value:true});return;}
+   if(data.type==='result' && typeof data.id==='string' && replies.has(data.id)){
+     let encoded;try{encoded=JSON.stringify(data);}catch{return;}
+     if(encoded.length>1500000){replies.set(data.id,{done:true,error:'Réponse de l’aperçu trop volumineuse.'});return;}
+     replies.set(data.id,{done:true,value:data.value??null,error:data.error||null});
+   }
+ });
+ function bridge(secret){
+   return `(() => {
+     const token=${JSON.stringify(secret)}, send=window.parent.postMessage.bind(window.parent), errors=[];
+     window.addEventListener('error',e=>{if(errors.length<12)errors.push(String(e.message).slice(0,300));});
+     window.addEventListener('unhandledrejection',e=>{if(errors.length<12)errors.push(String(e.reason).slice(0,300));});
+     const frames=()=>Promise.race([new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))),new Promise(resolve=>setTimeout(resolve,300))]);
+     function probe(){
+       let surfaces=0,signature='';
+       const visible=e=>{const r=e.getBoundingClientRect();return r.width>24&&r.height>24&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';};
+       for(const c of document.querySelectorAll('canvas,svg'))if(visible(c)){surfaces++;try{signature+=c.tagName.toLowerCase()==='canvas'?c.toDataURL():c.outerHTML;}catch{signature+='unreadable';}}
+       const spatial=[...document.querySelectorAll('div')].filter(e=>visible(e)&&getComputedStyle(e).transform!=='none');
+       if(spatial.length){surfaces++;signature+=spatial.map(e=>e.getAttribute('style')+getComputedStyle(e).transform+e.textContent).join('|');}
+       let hash=2166136261;for(let i=0;i<signature.length;i++)hash=Math.imul(hash^signature.charCodeAt(i),16777619);
+       return {surfaces,controls:[...document.querySelectorAll('button,input,select,[role=button]')].filter(e=>visible(e)&&!e.disabled).length,fingerprint:(hash>>>0).toString(16),errors:[...errors]};
+     }
+     window.addEventListener('message',async event=>{
+       if(event.source!==window.parent||event.data?.token!==token||event.data.type!=='call')return;
+       const {id,method,args}=event.data;
+       try{
+         if(method==='$probe')await frames();
+         const api=window.benchmark;
+         if(method!=='$probe'&&(!api||typeof api[method]!=='function'))throw Error('API absente : window.benchmark.'+method);
+         const value=method==='$probe'?probe():await api[method](args);
+         send({token,type:'result',id,value:value??null},'*');
+       }catch(e){send({token,type:'result',id,error:String(e?.message||e).slice(0,700)},'*');}
+     });
+     document.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();},true);
+     window.addEventListener('load',()=>send({token,type:'ready'},'*'));
+   })();`;
+ }
+ window.omhPreview={
+   load(html,nonce){
+     frame?.remove();replies.clear();token=nonce;serial=0;
+     const doc=new DOMParser().parseFromString(html,'text/html');
+     for(const item of doc.querySelectorAll('base,meta[http-equiv],iframe,frame,object,embed,link,script[src],form'))item.remove();
+     for(const item of doc.querySelectorAll('[src]')){
+       const value=item.getAttribute('src')||'';if(!value.startsWith('data:')&&!value.startsWith('blob:'))item.removeAttribute('src');
+     }
+     for(const item of doc.querySelectorAll('[href]'))if(!(item.getAttribute('href')||'').startsWith('#'))item.removeAttribute('href');
+     const csp=doc.createElement('meta');csp.httpEquiv='Content-Security-Policy';csp.content=policy;doc.head.prepend(csp);
+     const adapter=doc.createElement('script');adapter.textContent=bridge(token);csp.after(adapter);
+     frame=document.createElement('iframe');frame.setAttribute('sandbox','allow-scripts');
+     frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; fullscreen 'none'");
+     frame.referrerPolicy='no-referrer';frame.title='Application produite par le modèle';
+     frame.srcdoc='<!doctype html>'+doc.documentElement.outerHTML;
+     document.getElementById('empty').style.display='none';document.body.append(frame);
+     replies.set('ready',{done:false});return true;
+   },
+   call(id,method,args){
+     if(!frame)throw Error('Aucun aperçu chargé.');replies.set(id,{done:false});
+     frame.contentWindow.postMessage({token,type:'call',id,method,args},'*');return true;
+   },
+   read(id){return JSON.stringify(replies.get(id)||{done:false});},
+   forget(id){replies.delete(id);},
+   clear(){frame?.remove();frame=null;replies.clear();document.getElementById('empty').style.display='grid';}
+ };
+})();
+</script></body></html>

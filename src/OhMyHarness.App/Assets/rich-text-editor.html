@@ -1,0 +1,104 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__NONCE__'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<style>
+html,body{margin:0;height:100%;background:#fff;color:#202124;font:16px/1.5 'Segoe UI',sans-serif}
+*{box-sizing:border-box}#editor{padding:16px;min-height:100%;outline:none;overflow-wrap:anywhere;white-space:pre-wrap}
+#editor:empty:before{content:attr(data-placeholder);color:#777;pointer-events:none}table{max-width:100%}img{max-width:100%;height:auto}
+#editor[aria-disabled=true]{cursor:wait}::selection{background:#b8d6ff;color:#111}
+</style></head><body><div id="editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"></div>
+<script nonce="__NONCE__">
+(() => {
+ 'use strict';
+ const editor=document.getElementById('editor');
+ const tags=new Set('DIV P SPAN B STRONG I EM U S STRIKE DEL SUB SUP BR HR A UL OL LI BLOCKQUOTE PRE CODE H1 H2 H3 H4 H5 H6 TABLE THEAD TBODY TFOOT TR TD TH CAPTION COLGROUP COL FONT IMG'.split(' '));
+ const dropped=new Set('SCRIPT STYLE IFRAME FRAME OBJECT EMBED SVG MATH FORM INPUT BUTTON TEXTAREA SELECT LINK META BASE NOSCRIPT TEMPLATE'.split(' '));
+ const properties=new Set('color background-color font-family font-size font-weight font-style font-variant text-decoration text-decoration-line text-decoration-color text-align vertical-align line-height letter-spacing word-spacing white-space direction unicode-bidi margin margin-top margin-bottom margin-left margin-right padding padding-top padding-bottom padding-left padding-right border border-width border-style border-color border-collapse border-spacing border-top border-bottom border-left border-right width max-width height list-style-type text-indent'.split(' '));
+ const blocks=new Set('DIV P LI BLOCKQUOTE PRE H1 H2 H3 H4 H5 H6 TR TABLE UL OL'.split(' '));
+ let revision=0, lastGood='', readOnly=false, enabled=true;
+ function clean(html) {
+   const source=new DOMParser().parseFromString(html,'text/html');
+   function copy(node) {
+     if(node.nodeType===3)return document.createTextNode(node.data);
+     if(node.nodeType!==1)return document.createDocumentFragment();
+     if(dropped.has(node.tagName))return document.createDocumentFragment();
+     const target=tags.has(node.tagName)?document.createElement(node.tagName.toLowerCase()):document.createDocumentFragment();
+     if(target.nodeType===1){
+       for(const key of node.style){const value=node.style.getPropertyValue(key); if(properties.has(key)&&!/(url\s*\(|expression|@import|javascript:|behavior)/i.test(value))target.style.setProperty(key,value);}
+       for(const key of ['colspan','rowspan','start','type','dir','align','valign','cellpadding','cellspacing','width','height','color','face','size','bgcolor']){
+         const value=node.getAttribute(key);if(value && value.length<200 && !/[<>]/.test(value))target.setAttribute(key,value);
+       }
+       if(node.tagName==='A'){
+         const href=node.getAttribute('href')||'';
+         if(/^(https?:|mailto:|tel:)/i.test(href))target.setAttribute('href',href);
+       }
+       if(node.tagName==='IMG'){
+         const src=node.getAttribute('src')||'';
+         if((/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src)&&src.length<2000000)||/^(https?:|cid:)/i.test(src))target.setAttribute('src',src);
+         else {const alt=node.getAttribute('alt')||'[image]';return document.createTextNode(alt);}
+         if(node.hasAttribute('alt'))target.setAttribute('alt',node.getAttribute('alt'));
+       }
+     }
+     for(const child of node.childNodes)target.append(copy(child));
+     return target;
+   }
+   const result=document.createElement('div');for(const child of source.body.childNodes)result.append(copy(child));
+   return result.innerHTML;
+ }
+ function snapshot() {
+   const root=editor.cloneNode(true), runs=[];let id=0, negative=-1;
+   function boundary(text){if(!runs.length||runs[runs.length-1].Text.endsWith('\n'))return;runs.push({Id:negative--,Text:text,Structural:true});}
+   function walk(node){
+     if(node.nodeType===3){const run={Id:id++,Text:node.data,Structural:false};runs.push(run);node.replaceWith(document.createComment('omh-text-'+run.Id));return;}
+     if(node.nodeType!==1)return;
+     if(node.tagName==='BR'){runs.push({Id:negative--,Text:'\n',Structural:true});return;}
+     if(blocks.has(node.tagName))boundary('\n');
+     for(const child of [...node.childNodes])walk(child);
+     if(blocks.has(node.tagName))boundary('\n');
+     if(node.tagName==='TD'||node.tagName==='TH')boundary('\t');
+   }
+   for(const child of [...root.childNodes])walk(child);
+   while(runs.length && runs[runs.length-1].Structural)runs.pop();
+   if(!runs.length){runs.push({Id:0,Text:'',Structural:false});root.append(document.createComment('omh-text-0'));}
+   return {Template:root.innerHTML,Runs:runs};
+ }
+ function changed(){
+   const value=snapshot();
+   if(value.Runs.reduce((n,r)=>n+r.Text.length,0)>20000 && !readOnly){editor.innerHTML=lastGood;return;}
+   lastGood=editor.innerHTML;revision++;
+ }
+ editor.addEventListener('input',changed);
+ editor.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();});
+ editor.addEventListener('drop',e=>e.preventDefault());
+ editor.addEventListener('paste',e=>{
+   if(readOnly||!enabled)return;
+   e.preventDefault();const data=e.clipboardData;
+   const html=data.getData('text/html');const text=data.getData('text/plain');
+   if((html||text).length>3000000)return;
+   if(html)document.execCommand('insertHTML',false,clean(html));else document.execCommand('insertText',false,text);
+   changed();
+ });
+ window.omhEditor={
+   configure(placeholder,ro){readOnly=ro;editor.dataset.placeholder=placeholder;editor.setAttribute('aria-label',placeholder);this.enable(enabled);},
+   enable(value){enabled=value;editor.contentEditable=String(!readOnly&&enabled);editor.setAttribute('aria-readonly',String(readOnly));editor.setAttribute('aria-disabled',String(!enabled));},
+   set(html){editor.innerHTML=clean(html);lastGood=editor.innerHTML;revision++;return this.read(-1);},
+   read(previous){return previous===revision?null:JSON.stringify({Revision:revision,Document:snapshot()});},
+   select(start,length){
+     const entries=[];let offset=0;
+     function boundary(value){if(!offset||entries[entries.length-1]?.break==='\n')return;entries.push({break:value,start:offset,length:value.length});offset+=value.length;}
+     function walk(node){
+       if(node.nodeType===3){entries.push({node,start:offset,length:node.length});offset+=node.length;return;}
+       if(node.nodeType!==1)return;
+       if(node.tagName==='BR'){entries.push({break:'\n',start:offset,length:1});offset++;return;}
+       if(blocks.has(node.tagName))boundary('\n');for(const child of node.childNodes)walk(child);
+       if(blocks.has(node.tagName))boundary('\n');if(node.tagName==='TD'||node.tagName==='TH')boundary('\t');
+     }
+     for(const child of editor.childNodes)walk(child);
+     const nodes=entries.filter(e=>e.node);if(!nodes.length)return;
+     function point(pos){const entry=nodes.find(e=>pos<=e.start+e.length)||nodes[nodes.length-1];return [entry.node,Math.max(0,Math.min(entry.length,pos-entry.start))];}
+     const range=document.createRange();range.setStart(...point(start));range.setEnd(...point(start+length));
+     editor.focus();const selection=getSelection();selection.removeAllRanges();selection.addRange(range);range.startContainer.parentElement?.scrollIntoView({block:'nearest'});
+   }
+ };
+})();
+</script></body></html>

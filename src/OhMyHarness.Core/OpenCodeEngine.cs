@@ -20,7 +20,7 @@ public sealed class OpenCodeEngine(HttpClient http)
         return ChatEngine.Endpoint(provider.BaseUrl, suffix);
     }
 
-    static void Configure(HttpRequestMessage request, Provider provider, string password, string? directory)
+    public static void Configure(HttpRequestMessage request, Provider provider, string password, string? directory = null)
     {
         if (!string.IsNullOrEmpty(password))
         {

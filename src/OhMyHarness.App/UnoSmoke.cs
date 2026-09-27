@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (Environment.GetEnvironmentVariable("OHMYHARNESS_MODEL_TOOLS_SMOKE") == "1") { await SmokeModelTools(output); return; }
             if (Environment.GetEnvironmentVariable("OHMYHARNESS_ASSET_SMOKE") == "1") { await SmokeAssetGenerator(output); return; }
             if (Environment.GetEnvironmentVariable("OHMYHARNESS_THEME_SMOKE") == "1") { await SmokeThemes(output); return; }
             if (Environment.GetEnvironmentVariable("OHMYHARNESS_UX_SMOKE") == "1") { await SmokeConversationEnhancements(output); return; }

@@ -1,5 +1,9 @@
 # Conventions du projet
 
+## Actions des fenêtres
+
+- Placer les actions principales des fenêtres en bas à droite, dans une barre d’actions stable. Mettre en évidence l’action principale avec le style accentué de l’application ; garder les actions secondaires visuellement discrètes.
+
 ## Dossiers de publication
 
 - Après chaque mise à jour du logiciel (GUI, CLI ou moteur partagé), republier systématiquement **les deux interfaces**, même si la modification ne concerne directement qu’une seule interface.
