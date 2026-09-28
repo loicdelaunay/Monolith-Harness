@@ -7,19 +7,27 @@ namespace OhMyHarness.App;
 
 public sealed partial class MainWindow
 {
-    async Task ShowMemoryDatabaseAsync(XamlRoot xamlRoot)
+    Window? memoryDatabaseWindow;
+
+    async Task ShowMemoryDatabaseAsync()
     {
-        var panel = new Grid { Width = Math.Max(500, Math.Min(1320, xamlRoot.Size.Width - 110)), Height = Math.Max(320, Math.Min(800, xamlRoot.Size.Height - 180)), RowSpacing = 10 };
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(180), GridLength.Auto }) panel.RowDefinitions.Add(new() { Height = height });
+        if (memoryDatabaseWindow is { } existing) { existing.Activate(); return; }
+        var window = new Window { Title = DisplayApplicationName + " · " + WorkflowText("Mémoire · Vue de la base", "Memory · Database viewer") };
+        memoryDatabaseWindow = window;
+        var panel = new Grid { Padding = new Thickness(24), RowSpacing = 10, RequestedTheme = root.RequestedTheme, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
+        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(210), GridLength.Auto, GridLength.Auto }) panel.RowDefinitions.Add(new() { Height = height });
+        var title = Label(WorkflowText("Mémoire · Vue de la base", "Memory · Database viewer"), 25);
+        title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+        panel.Children.Add(title);
         var hint = Label(WorkflowText("Toutes les mémoires de la base, tous projets et conversations confondus. Filtres combinés : texte contient, nombres exacts (ou NULL), dates AAAA-MM-JJ en UTC.", "All database memories across projects and conversations. Combined filters: text contains, exact numbers (or NULL), UTC dates YYYY-MM-DD."), 12);
-        panel.Children.Add(hint);
+        Grid.SetRow(hint, 1); panel.Children.Add(hint);
         var sort = new ComboBox { ItemsSource = MemoryBrowser.Columns, SelectedIndex = 0, MinWidth = 160 };
         var descending = new CheckBox { Content = WorkflowText("Décroissant", "Descending"), IsChecked = true };
         var progress = new ProgressBar { IsIndeterminate = true, Height = 3, Visibility = Visibility.Collapsed };
-        Grid.SetRow(progress, 2); panel.Children.Add(progress);
+        Grid.SetRow(progress, 3); panel.Children.Add(progress);
         var details = new StackPanel { Spacing = 8 };
         var detailsScroll = new ScrollViewer { Content = details, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        var detailsBorder = FluentDesign.Surface(detailsScroll, 12); Grid.SetRow(detailsBorder, 4); panel.Children.Add(detailsBorder);
+        var detailsBorder = FluentDesign.Surface(detailsScroll, 12); Grid.SetRow(detailsBorder, 5); panel.Children.Add(detailsBorder);
         var status = Label("", 12);
         var filters = new Dictionary<string, TextBox>();
         var columns = MemoryBrowser.Columns.ToArray();
@@ -46,7 +54,7 @@ public sealed partial class MainWindow
         rows.ItemContainerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
         table.Children.Add(headings); Grid.SetRow(filterRow, 1); table.Children.Add(filterRow); Grid.SetRow(rows, 2); table.Children.Add(rows);
         var horizontal = new ScrollViewer { Content = table, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Grid.SetRow(horizontal, 3); panel.Children.Add(horizontal);
+        Grid.SetRow(horizontal, 4); panel.Children.Add(horizontal);
         MemoryEntry? selected = null;
         rows.SelectionChanged += (_, _) =>
         {
@@ -98,7 +106,7 @@ public sealed partial class MainWindow
         }
         var refresh = Action(WorkflowText("Actualiser", "Refresh"), () => Load());
         var reset = Action(WorkflowText("Effacer les filtres", "Clear filters"), async () => { resetting = true; foreach (var filter in filters.Values) filter.Text = ""; resetting = false; debounce.Stop(); await Load(true); });
-        var controls = Row(Label(WorkflowText("Trier par", "Sort by"), 13), sort, descending, refresh, reset); Grid.SetRow(controls, 1); panel.Children.Add(controls);
+        var controls = Row(Label(WorkflowText("Trier par", "Sort by"), 13), sort, descending, refresh, reset); Grid.SetRow(controls, 2); panel.Children.Add(controls);
         previous.Click += async (_, _) => { offset = Math.Max(0, offset - MemoryBrowser.PageSize); await Load(); };
         next.Click += async (_, _) => { offset += MemoryBrowser.PageSize; await Load(); };
         void Schedule() { if (!resetting && !closed) { debounce.Stop(); debounce.Start(); } }
@@ -107,13 +115,22 @@ public sealed partial class MainWindow
         debounce.Tick += async (_, _) => { debounce.Stop(); await Load(true); };
         var copy = Action(WorkflowText("Copier la ligne", "Copy row"), () => { if (selected != null) { var package = new DataPackage(); package.SetText(System.Text.Json.JsonSerializer.Serialize(selected, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); Clipboard.SetContent(package); } return Task.CompletedTask; });
         var footer = new Grid(); footer.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); footer.Children.Add(status);
-        var actions = Row(copy, previous, next); Grid.SetColumn(actions, 1); footer.Children.Add(actions); Grid.SetRow(footer, 5); panel.Children.Add(footer);
-        var dialog = new ContentDialog { XamlRoot = xamlRoot, Title = WorkflowText("Mémoire · Vue de la base", "Memory · Database viewer"), Content = panel, PrimaryButtonText = WorkflowText("Fermer", "Close"), DefaultButton = ContentDialogButton.Primary };
-        dialog.Resources["ContentDialogMaxWidth"] = panel.Width + 60;
-        dialog.Resources["ContentDialogMaxHeight"] = panel.Height + 160;
-        dialog.Opened += async (_, _) => await Load();
+        var actions = Row(copy, previous, next); Grid.SetColumn(actions, 1); footer.Children.Add(actions); Grid.SetRow(footer, 6); panel.Children.Add(footer);
+        var close = new Button { Content = WorkflowText("Fermer", "Close"), Style = (Style)Application.Current.Resources["AccentButtonStyle"], MinWidth = 140 };
+        close.Click += (_, _) => window.Close();
+        var actionBar = Row(close); actionBar.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetRow(actionBar, 7); panel.Children.Add(actionBar);
+        window.Closed += (_, _) =>
+        {
+            closed = true; revision++; debounce.Stop(); pending?.Cancel();
+            if (ReferenceEquals(memoryDatabaseWindow, window)) memoryDatabaseWindow = null;
+        };
+        window.Content = panel;
         ObserveTextZoom(panel);
-        try { await dialog.ShowAsync(); }
-        finally { closed = true; revision++; debounce.Stop(); pending?.Cancel(); }
+        FluentDesign.WindowChrome(window);
+        ApplyBrandingIcon(window);
+        window.AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1340, Height = 900 });
+        window.Activate();
+        await Load();
     }
 }

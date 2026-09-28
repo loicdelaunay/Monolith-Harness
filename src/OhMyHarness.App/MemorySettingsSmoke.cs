@@ -24,6 +24,11 @@ public sealed partial class MainWindow
         await Task.Delay(150);
         var memory = Find(settingsRoot).Single(x => Equals(x.Tag, "memory-settings"));
         Click(Find(memory).OfType<Button>().Single(x => x.Content?.ToString() == "Voir la mémoire"));
+        for (var attempt = 0; attempt < 100 && memoryDatabaseWindow?.Content is not DependencyObject; attempt++) await Task.Delay(20);
+        if (memoryDatabaseWindow?.Content is not DependencyObject viewer) throw new Exception("Memory database window did not open.");
+        if (!Find(viewer).OfType<TextBox>().Any(x => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(x) == "Filtrer Content")) throw new Exception("Memory database filters are missing.");
+        Click(Find(viewer).OfType<Button>().Single(x => x.Content?.ToString() == "Fermer"));
+        Click(Find(memory).OfType<Button>().Single(x => x.Content?.ToString() == "Modifier les mémoires…"));
         for (var attempt = 0; attempt < 100 && !Find(memory).OfType<TextBlock>().Any(x => x.Text == "Aucune mémoire trouvée."); attempt++) await Task.Delay(20);
         if (!Find(memory).OfType<TextBlock>().Any(x => x.Text == "Aucune mémoire trouvée.")) throw new Exception("Memory viewer failed to load.");
         Click(Find(memory).OfType<Button>().Single(x => x.Content?.ToString() == "Créer une mémoire"));

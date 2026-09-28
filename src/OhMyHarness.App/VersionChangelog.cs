@@ -9,15 +9,14 @@ namespace OhMyHarness.App;
 public sealed partial class MainWindow
 {
     Button? versionChip;
-    TextBlock? versionChipText;
     bool changelogOpen;
     static Windows.UI.Color ParseSidebarColor(string hex) => Windows.UI.Color.FromArgb(255,
         Convert.ToByte(hex.Substring(1, 2), 16), Convert.ToByte(hex.Substring(3, 2), 16), Convert.ToByte(hex.Substring(5, 2), 16));
     Button BuildVersionChip()
     {
-        versionChipText = new TextBlock { Text = "v" + GitHubUpdates.CurrentVersion, FontSize = 11 };
-        versionChip = Action("", ShowChangelogAsync); versionChip.Content = versionChipText;
-        versionChip.Padding = new(8, 4, 8, 4); versionChip.MinHeight = 24; versionChip.CornerRadius = new(12); versionChip.BorderThickness = new(1);
+        versionChip = new Button { Content = "v" + GitHubUpdates.CurrentVersion, FontSize = 11, MinWidth = 66, MinHeight = 24,
+            Padding = new(8, 4, 8, 4), CornerRadius = new(12), BorderThickness = new(1), HorizontalContentAlignment = HorizontalAlignment.Center };
+        versionChip.Click += async (_, _) => await Guard(ShowChangelogAsync);
         versionChip.VerticalAlignment = VerticalAlignment.Center;
         ToolTipService.SetToolTip(versionChip, WorkflowText("Voir le changelog", "View changelog"));
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(versionChip, WorkflowText("Version ", "Version ") + GitHubUpdates.CurrentVersion + WorkflowText(" · Voir le changelog", " · View changelog"));
@@ -27,7 +26,7 @@ public sealed partial class MainWindow
     }
     void RefreshVersionChip(AppearanceTheme theme)
     {
-        if (versionChip == null || versionChipText == null) return;
+        if (versionChip == null) return;
         string first = ThemeContrast.Blend(theme.Surface, theme.Accent, .15), last = first, foreground = theme.Text;
         for (double amount = .45; amount >= .14; amount -= .05)
         {
@@ -40,7 +39,7 @@ public sealed partial class MainWindow
         versionChip.Background = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1), GradientStops = {
             new GradientStop { Offset = 0, Color = ParseSidebarColor(first) }, new GradientStop { Offset = 1, Color = ParseSidebarColor(last) } } };
         versionChip.BorderBrush = new SolidColorBrush(ParseSidebarColor(ThemeContrast.Blend(theme.Surface, theme.Accent, .5)));
-        versionChipText.Foreground = new SolidColorBrush(ParseSidebarColor(foreground));
+        versionChip.Foreground = new SolidColorBrush(ParseSidebarColor(foreground));
     }
     async Task ShowChangelogAsync()
     {

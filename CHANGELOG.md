@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.26.1 - 2026-09-28
+
+- The memory database viewer now opens in its own resizable window, independent of Settings. Its table, combined filters, row details, pagination and copy action remain available; reopening it focuses the existing window.
+- Fixed the sidebar version chip so the full `v1.26.1` label stays visible beside custom application names and still opens the changelog.
+
 ## 1.26.0 - 2026-09-28
 
 - Added an Appearance settings tab grouping themes and the three independent font selectors.

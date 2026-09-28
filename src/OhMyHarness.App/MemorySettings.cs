@@ -123,7 +123,7 @@ public sealed partial class MainWindow
             if (stamp == revision) await Load();
         }
         var initialProject = project?.Id; var initialChat = chat?.Id;
-        panel.Children.Add(Action(WorkflowText("Voir la mémoire", "View memory"), () => panel.XamlRoot is { } memoryRoot ? ShowMemoryDatabaseAsync(memoryRoot) : Task.CompletedTask));
+        panel.Children.Add(Action(WorkflowText("Voir la mémoire", "View memory"), ShowMemoryDatabaseAsync));
         var view = Action(WorkflowText("Modifier les mémoires…", "Edit memories…"), () => Safe(async () =>
         {
             browser.Visibility = Visibility.Visible;
