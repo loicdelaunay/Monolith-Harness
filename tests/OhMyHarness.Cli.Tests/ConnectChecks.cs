@@ -43,8 +43,8 @@ static class ConnectChecks
         check(cancelled.Draft == null, "Cancelling final confirmation saves no provider");
         var early = await Scenario(["deepseek", null]);
         check(early.Draft == null && early.Api.Calls == 0, "Cancelling credentials saves nothing and makes no request");
-        var opencode = await Scenario(["opencode", "fixture-key", "http://localhost:4096", "opencode", "auto", "OpenCode", "save"]);
-        check(opencode.Api.Path == "/provider" && opencode.Api.Authorization?.StartsWith("Basic ") == true && opencode.Draft is { Kind: "opencode", Model: "demo/chat" }, "OpenCode uses its native catalog and authentication");
+        var opencode = await Scenario(["opencode", "fixture-key", "http://localhost:4096", "opencode", "yes", "auto", "OpenCode", "save"]);
+        check(opencode.Api.Path == "/provider" && opencode.Api.Authorization?.StartsWith("Basic ") == true && opencode.Draft is { Kind: "opencode", Model: "demo/chat", BypassFreeLimitation: true }, "OpenCode uses its native catalog and authentication");
         foreach (var size in new[] { (56, 18), (80, 24), (118, 36), (180, 50) })
         {
             foreach (bool commands in new[] { false, true })
