@@ -31,6 +31,7 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
       if(isChild)delta=toolOrFinish();
       else if(!previous.length)delta=tool('delegate_tasks',{tasks:[{name:'Review',prompt:'Inspect conventions'}]});
     }else if(scenario==='disabled'&&!previous.length)delta=tool('delegate_tasks',{tasks:[{name:'Forbidden',prompt:'Should never start'}]});
+    else if(scenario==='forced'&&body.messages[0].content.includes('Plan independent bounded subtasks'))delta={content:JSON.stringify({tasks:[{name:'Exploration',prompt:'Inspect project conventions'},{name:'Validation',prompt:'Review project sources'}]})};
     else if(scenario==='forced'&&isChild)delta=toolOrFinish();
     else if(scenario==='execute'&&!previous.length)delta=tool('write_source',{path:'allowed.md',content:'written'});
     function toolOrFinish(){return previous.length?{content:'Child verified sources'}:tool('read_source',{path:'AGENTS.md'});}
@@ -51,7 +52,7 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
   scenario='skill';const skill=await run('plan','disabled');assert.ok(skill.some(x=>x.role==='tool'&&x.content.includes('# Exemple de skill personnalisable')));assert.ok(skill.some(x=>x.role==='tool'&&x.content.includes('# Checklist')));
   scenario='auto';const auto=await run('plan','auto');assert.equal(childCalls,2);assert.ok(auto.some(x=>x.role==='tool'&&x.content.includes('Child verified sources')));
   scenario='disabled';await run('execute','disabled');assert.equal(childCalls,0);
-  scenario='forced';const forced=await run('plan','forced');assert.equal(childCalls,4);assert.equal(rootCalls,1);assert.ok(forced.some(x=>x.content.includes('Sous-agents / Subagents')&&x.content.includes('Exploration')));
+  scenario='forced';const forced=await run('plan','forced');assert.equal(childCalls,4);assert.equal(rootCalls,2);assert.ok(forced.some(x=>x.content.includes('Sous-agents / Subagents')&&x.content.includes('Exploration')));
   scenario='execute';await run('execute','disabled');assert.equal(await fs.readFile(path.join(directory,'allowed.md'),'utf8'),'written');
   assert.ok(events.some(x=>x.event==='status'&&x.text.includes('Subagent')));
   const snap=await rpc('snapshot');assert.ok(snap.skills.some(x=>x.id==='custom:exemple-revue'));assert.equal(snap.skillsDirectory,skillRoot);assert.equal(snap.running.length,0);
