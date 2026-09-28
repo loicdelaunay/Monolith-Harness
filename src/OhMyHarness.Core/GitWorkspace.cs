@@ -63,7 +63,7 @@ public static class GitWorkspace
         var files = new List<GitChangedFile>();
         foreach (var root in roots.Where(WorkspaceTools.HasGitRepository).Distinct(PlatformSupport.PathComparer))
         {
-            var output = await Run(root, ["--no-pager", "status", "--porcelain=v1", "-z", "--untracked-files=all"], ct);
+            var output = await Run(root, ["--no-pager", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"], ct);
             var entries = output.Split('\0');
             for (int i = 0; i < entries.Length; i++)
             {

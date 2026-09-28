@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.27.0 - 2026-09-28
+
+- Added the GIT skill with repository status, diffs, history, branches, initialization, explicit file staging/unstaging, commits, and approved fetch/pull/push operations. Pulls only fast-forward; forced pushes and destructive reset/clean operations are not exposed. Plan mode and subagents only receive the Git read tools.
+- Added the FILE INDEX skill: create a portable `index.ohm` in an attached folder, browse its immediate children or search paths and descriptions with pagination, and enrich file/folder descriptions from inspected contents.
+- Existing indexes update after source-tool edits while FILE INDEX is enabled and reconcile external additions, deletions and renames at their next consultation. Changed model descriptions are marked for review and retained alongside refreshed structural descriptions. Automatic maintenance can be disabled per index; Plan queries never write to disk.
+- Both skills are available in the GUI and CLI skill selectors, use the existing source boundaries and permission policy, and start disabled. GUI, CLI and legacy desktop host versions are aligned at 1.27.0.
+
 ## 1.26.1 - 2026-09-28
 
 - The memory database viewer now opens in its own resizable window, independent of Settings. Its table, combined filters, row details, pagination and copy action remain available; reopening it focuses the existing window.

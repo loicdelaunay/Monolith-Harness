@@ -12,7 +12,7 @@ public static class AgentPolicy
         "asset_inspect" or "asset_capture" or "asset_guides" or "browser_tabs" or "memory_search" or "memory_read" or
         "list_images" or "analyze_image" or "rag_search" or "rag_sources" or "rag_read" or "list_sources" or "read_source" or "glob_sources" or "grep_sources" or "git_changes" or
         "read_page" or "inspect_dom" or "python_info" or "keyboard_keys" or "desktop_applications" or "desktop_screens" or "desktop_screenshot" or "browser_screenshot" or
-        "load_skill" or "read_skill_resource" or "skill_locations" or "delegate_tasks" or "todowrite" or "question" or "list_terminals" or "read_terminal" or "wait_terminal";
+        "load_skill" or "read_skill_resource" or "skill_locations" or "delegate_tasks" or "todowrite" or "question" or "list_terminals" or "read_terminal" or "wait_terminal" or "file_index_read" || GitTools.IsReadOnly(tool);
     public static void Demand(string mode, string tool)
     {
         if (!Allowed(mode, tool)) throw new UnauthorizedAccessException($"Mode Plan : outil '{tool}' interdit. Passez en Exécution au prochain envoi / Plan mode forbids this tool.");

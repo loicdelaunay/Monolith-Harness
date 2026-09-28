@@ -131,7 +131,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         var source = new SourceAccess(run.Project.GetSourceFolders());
         var enabled = run.Options.EnabledSkills;
         var definitions = ChatEngine.ToolDefinitions(source.Roots.Count > 0 && SourceTools.CanRead(enabled), false, Skills.Enabled(enabled, "write_sources") && source.Roots.Count > 0);
-        SourceTools.AddDefinitions(definitions, source.Roots.Count > 0, enabled);
+        SourceTools.AddDefinitions(definitions, source.Roots.Count > 0, enabled, child: true);
         AddDefinitions(definitions, child: true); AgentPolicy.Filter(definitions, mode);
         SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
         var system = Skills.Prompt(enabled, run.Options.Language, source.Roots.Count > 0, false, Skills.Enabled(enabled, "write_sources")) + context + AgentPolicy.Prompt(mode, "disabled") +
@@ -175,7 +175,10 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                         AgentPolicy.Demand(mode, tool);
                         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, tool);
                         if (liveSkills != null) enabled = await liveSkills(ct);
+                        source.MaintainFileIndex = Skills.Enabled(enabled, FileIndexTools.SkillId) && !AgentPolicy.ReadOnly(mode);
                         var authorized = tool switch {
+                            _ when GitTools.Handles(tool) => GitTools.IsReadOnly(tool) && Skills.Enabled(enabled, GitTools.SkillId),
+                            _ when FileIndexTools.Handles(tool) => Skills.Enabled(enabled, FileIndexTools.SkillId),
                             "list_sources" or "read_source" => SourceTools.CanRead(enabled),
                             "write_source" or "edit_source" => Skills.Enabled(enabled, "write_sources"),
                             "glob_sources" or "grep_sources" => Skills.Enabled(enabled, "code_search"),
@@ -193,7 +196,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                                 var allowed = await approve(scope, diff, token);
                                 if (liveSkills != null) enabled = await liveSkills(token);
                                 return allowed;
-                            }, ct);
+                            }, ct, AgentPolicy.ReadOnly(mode));
                         else
                         {
                             var path = args["path"]?.GetValue<string>() ?? ".";

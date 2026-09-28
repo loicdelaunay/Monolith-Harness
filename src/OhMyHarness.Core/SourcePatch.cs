@@ -106,9 +106,14 @@ public sealed partial class SourceAccess
 
     public async Task<string> ApplyPatchAsync(PatchPlan plan, CancellationToken ct)
     {
+        string result;
         await WriteGate.WaitAsync(ct);
-        try { return await ApplyPreparedPatchAsync(plan, ct); }
+        try { result = await ApplyPreparedPatchAsync(plan, ct); }
         finally { WriteGate.Release(); }
+        if (MaintainFileIndex)
+            foreach (var directory in plan.Changes.Select(x => Path.GetDirectoryName(x.Path)!).Distinct(PlatformSupport.PathComparer))
+                result += await FileIndexTools.RefreshAncestorsAsync(this, directory, ct);
+        return result;
     }
 
     async Task<string> ApplyPreparedPatchAsync(PatchPlan plan, CancellationToken ct)

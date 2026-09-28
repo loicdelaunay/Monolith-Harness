@@ -1908,8 +1908,9 @@ public sealed partial class MainWindow : Window
             else if (IsVisible(run)) RefreshTerminals();
             return result;
         }
+        source.MaintainFileIndex = Skills.Enabled(state.EnabledSkills, FileIndexTools.SkillId) && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode);
         if (SourceTools.Handles(name)) return await SourceTools.ExecuteAsync(source, name, argsObj, () => state.EnabledSkills,
-            (scope, diff, token) => RequestAccessAsync(scope, "Patch multi-fichiers / Multi-file patch", diff, "Patch des sources / Source patch", token), ct);
+            (scope, diff, token) => RequestAccessAsync(scope, SourceTools.PermissionTitle(name), diff, SourceTools.PermissionTitle(name), token), ct, AgentPolicy.ReadOnly(run.Chat.ExecutionMode));
         switch (name)
         {
             case "open_local_file":

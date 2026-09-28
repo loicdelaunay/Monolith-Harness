@@ -9,6 +9,8 @@ void Check(bool condition, string name) { if (!condition) throw new Exception("Ã
 async Task Throws<T>(Func<Task> action, string name) where T : Exception
 { try { await action(); } catch (T) { Check(true, name); return; } throw new Exception("Exception attendue : " + name); }
 string Event(object value) => "data: " + System.Text.Json.JsonSerializer.Serialize(value) + "\r\n\r\n";
+if (args.Length == 0 || args.Contains("--git-file-index")) await GitFileIndexChecks.Run(Check);
+if (args.Contains("--git-file-index")) { Console.WriteLine($"{passed} Git and file index checks passed."); return; }
 if (args.Contains("--conversation-workspace")) { await ConversationWorkspaceChecks.Run(Check); Console.WriteLine($"{passed} conversation workspace checks passed."); return; }
 await ModelUtilityChecks.Run(Check);
 if (args.Contains("--model-tools")) { Console.WriteLine($"{passed} model tool checks passed."); return; }

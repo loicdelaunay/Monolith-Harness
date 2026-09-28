@@ -130,10 +130,10 @@ public sealed partial class HarnessService
         }, ct));
         if (SourceTools.Handles(name)) return new(await SourceTools.ExecuteAsync(new SourceAccess(run.Project.GetSourceFolders()), name, p, () => skills,
             async (scope, diff, token) => {
-                var allowed = await Approve(scope, run.Chat.Title + " · Patch multi-fichiers / Multi-file patch", diff, token);
+                var allowed = await Approve(scope, run.Chat.Title + " · " + SourceTools.PermissionTitle(name), diff, token);
                 skills = await db.States.Select(x => x.EnabledSkills).SingleAsync(token);
                 return allowed;
-            }, ct));
+            }, ct, AgentPolicy.ReadOnly(run.Chat.ExecutionMode)));
         var required = name switch
         {
             "keyboard_keys" or "desktop_keyboard" or "browser_keyboard" => "keyboard_control",
@@ -161,7 +161,7 @@ public sealed partial class HarnessService
         if (name == "open_local_file") return new(await Preview(run.Project, S(p, "path"), ct, run.Chat.Id));
         if (name is "list_sources" or "read_source" or "write_source" or "edit_source")
         {
-            var source = new SourceAccess(run.Project.GetSourceFolders()); var path = S(p, "path", ".");
+            var source = new SourceAccess(run.Project.GetSourceFolders()) { MaintainFileIndex = Skills.Enabled(skills, FileIndexTools.SkillId) && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode) }; var path = S(p, "path", ".");
             if (name == "list_sources") return new(source.List(path));
             try { source.Resolve(path); }
             catch (UnauthorizedAccessException) when (!run.Chat.SandboxEnabled)

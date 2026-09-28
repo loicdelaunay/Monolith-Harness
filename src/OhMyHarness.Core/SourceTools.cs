@@ -4,11 +4,20 @@ namespace OhMyHarness.Core;
 
 public static class SourceTools
 {
-    public static bool CanRead(string skills) => new[] { "sources", "write_sources", "code_search", "patch_sources" }.Any(s => Skills.Enabled(skills, s));
-    public static bool Handles(string name) => name is "glob_sources" or "grep_sources" or "patch_sources";
-    public static void AddDefinitions(JsonArray definitions, bool sources, string skills)
+    public static bool CanRead(string skills) => new[] { "sources", "write_sources", "code_search", "patch_sources", GitTools.SkillId, FileIndexTools.SkillId }.Any(s => Skills.Enabled(skills, s));
+    public static bool Handles(string name) => GitTools.Handles(name) || FileIndexTools.Handles(name) || name is "glob_sources" or "grep_sources" or "patch_sources";
+    public static string PermissionTitle(string name) => GitTools.Handles(name) ? "GIT · " + name : FileIndexTools.Handles(name) ? "FILE INDEX · " + name : "Patch multi-fichiers / Multi-file patch";
+    public static void AddDefinitions(JsonArray definitions, bool sources, string skills, bool child = false)
     {
         if (!sources) return;
+        GitTools.AddDefinitions(definitions, skills);
+        FileIndexTools.AddDefinitions(definitions, skills);
+        if (child)
+            for (int i = definitions.Count - 1; i >= 0; i--)
+            {
+                var name = definitions[i]?["function"]?["name"]?.GetValue<string>() ?? "";
+                if (GitTools.Handles(name) && !GitTools.IsReadOnly(name)) definitions.RemoveAt(i);
+            }
         void Add(string name, string description, JsonObject properties, params string[] required) => definitions.Add(new JsonObject {
             ["type"] = "function", ["function"] = new JsonObject { ["name"] = name, ["description"] = description,
                 ["parameters"] = new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = new JsonArray(required.Select(x => (JsonNode?)JsonValue.Create(x)).ToArray()), ["additionalProperties"] = false } } });
@@ -25,8 +34,12 @@ public static class SourceTools
                     ["path"] = new JsonObject { ["type"] = "string" }, ["old_text"] = new JsonObject { ["type"] = new JsonArray("string", "null") }, ["new_text"] = new JsonObject { ["type"] = "string" } },
                 ["required"] = new JsonArray("path", "old_text", "new_text"), ["additionalProperties"] = false } } }, "edits");
     }
-    public static async Task<string> ExecuteAsync(SourceAccess source, string name, JsonObject args, Func<string> skills, Func<string, string, CancellationToken, Task<bool>> approve, CancellationToken ct)
+    public static async Task<string> ExecuteAsync(SourceAccess source, string name, JsonObject args, Func<string> skills, Func<string, string, CancellationToken, Task<bool>> approve, CancellationToken ct, bool readOnly = false)
     {
+        AgentPolicy.Demand(readOnly ? "plan" : "execute", name);
+        source.MaintainFileIndex = !readOnly && Skills.Enabled(skills(), FileIndexTools.SkillId);
+        if (GitTools.Handles(name)) return await GitTools.ExecuteAsync(source, name, args, skills, approve, ct);
+        if (FileIndexTools.Handles(name)) return await FileIndexTools.ExecuteAsync(source, name, args, skills, approve, ct, readOnly);
         var required = name == "patch_sources" ? "patch_sources" : "code_search";
         void Check() { if (!Skills.Enabled(skills(), required)) throw new UnauthorizedAccessException("Skill désactivé."); }
         Check();
@@ -41,6 +54,7 @@ public static class SourceTools
         var scope = "source-patch|" + string.Join("|", source.Roots);
         if (!await approve(scope, plan.Diff, ct)) return "Accès refusé. Aucun fichier modifié.";
         ct.ThrowIfCancellationRequested(); Check();
+        source.MaintainFileIndex = !readOnly && Skills.Enabled(skills(), FileIndexTools.SkillId);
         return await source.ApplyPatchAsync(plan, ct);
     }
 }

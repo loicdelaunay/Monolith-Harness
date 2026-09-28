@@ -2,6 +2,7 @@ namespace OhMyHarness.Core;
 
 public sealed partial class SourceAccess
 {
+    public bool MaintainFileIndex { get; set; }
     static readonly SemaphoreSlim WriteGate = new(1, 1);
     static readonly HashSet<string> Excluded = new(StringComparer.OrdinalIgnoreCase)
     { ".git", ".vs", "bin", "obj", "node_modules", ".env", "secrets.json", "appsettings.Production.json", "dist", "build" };
@@ -274,9 +275,11 @@ public sealed partial class SourceAccess
 
     public async Task<string> WriteAsync(string relative, string content, CancellationToken ct)
     {
+        string result;
         await WriteGate.WaitAsync(ct);
-        try { return await WriteCoreAsync(relative, content, ct); }
+        try { result = await WriteCoreAsync(relative, content, ct); }
         finally { WriteGate.Release(); }
+        return result + (MaintainFileIndex ? await FileIndexTools.RefreshAncestorsAsync(this, relative, ct) : "");
     }
 
     async Task<string> WriteCoreAsync(string relative, string content, CancellationToken ct)
@@ -303,9 +306,11 @@ public sealed partial class SourceAccess
 
     public async Task<string> ModifyAsync(string relative, string oldText, string newText, CancellationToken ct)
     {
+        string result;
         await WriteGate.WaitAsync(ct);
-        try { return await ModifyCoreAsync(relative, oldText, newText, ct); }
+        try { result = await ModifyCoreAsync(relative, oldText, newText, ct); }
         finally { WriteGate.Release(); }
+        return result + (MaintainFileIndex ? await FileIndexTools.RefreshAncestorsAsync(this, relative, ct) : "");
     }
 
     async Task<string> ModifyCoreAsync(string relative, string oldText, string newText, CancellationToken ct)
