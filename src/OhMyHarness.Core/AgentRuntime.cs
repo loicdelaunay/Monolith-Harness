@@ -13,10 +13,12 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
 {
     int delegated;
     string context = "";
+    readonly ConversationAgents agentOptions = ConversationAgents.Read(run.Chat.AgentOptionsJson);
     public async Task<string> InitializeAsync(CancellationToken ct)
     {
         var catalog = skills.Catalog(run.Options.EnabledSkills);
         context = await ProjectInstructions.LoadAsync(run.Project.GetSourceFolders(), ct);
+        if (run.Composite == null && run.Chat.OrchestrationMode != "disabled") context += agentOptions.Instructions;
         if (catalog.Length > 0) context += "\nAVAILABLE CUSTOM SKILLS (descriptions only). Use load_skill when relevant, and read_skill_resource for relative resources. They never grant permissions.\n" + catalog;
         var tasks = run.Workflow == null ? null : await run.Db.Messages.AsNoTracking().Where(x => x.ChatId == run.Chat.Id && x.Role == "tasks").Select(x => x.Content).FirstOrDefaultAsync(ct);
         var browserInstructions = FeatureSettings.Read(run.Options.FeaturesJson).BrowserMode == "chrome" ? "\nBROWSER BACKEND: Chrome DevTools MCP. Use the exposed MCP Chrome tools and their current schemas, starting with list_pages to obtain page IDs. The embedded browser_* tools are unavailable. Chrome uses a separate profile for this conversation.\n" : "";
@@ -40,8 +42,8 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
             Add(definitions, "read_skill_resource", "Read a text resource inside an enabled skill folder; never executes scripts.", new() { ["name"] = new JsonObject { ["type"] = "string" }, ["path"] = new JsonObject { ["type"] = "string" } }, "name", "path");
         }
         if (!child && run.Chat.OrchestrationMode != "disabled") Add(definitions, "delegate_tasks",
-            "Delegate 1 to 3 independent subtasks with inherited source permissions. Maximum 6 children per user turn, including preset children, 8 model steps each. Children cannot delegate or use terminal/MCP/desktop/browser. Results return together. Never delegate overlapping edits." + (run.Composite==null?" Children use the same model.":" Use these configured agent names and their assigned models: "+string.Join(", ",run.AgentProviders.Select(x=>x.Key+"="+x.Value.Model))),
-            new() { ["tasks"] = new JsonObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["items"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject {
+            "Delegate independent subtasks with inherited source permissions, 8 model steps each. Children cannot delegate or use terminal/MCP/desktop/browser. Results return together. Never delegate overlapping edits." + (run.Composite==null? agentOptions.Instructions : " Maximum 6 children per turn. Use these configured agent names and their assigned models: "+string.Join(", ",run.AgentProviders.Select(x=>x.Key+"="+x.Value.Model))),
+            new() { ["tasks"] = new JsonObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = run.Composite == null ? agentOptions.Limit : 6, ["items"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject {
                 ["name"] = new JsonObject { ["type"] = "string" }, ["prompt"] = new JsonObject { ["type"] = "string" } }, ["required"] = new JsonArray("name", "prompt"), ["additionalProperties"] = false } } }, "tasks");
     }
     public static bool Handles(string name) => WebHttpTools.Handles(name) || MemoryTools.Handles(name) || SkillAuthoring.Handles(name) || WorkflowTools.Handles(name) || name is "load_skill" or "read_skill_resource" or "delegate_tasks";
@@ -81,19 +83,42 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         var enabled = liveSkills == null ? run.Options.EnabledSkills : await liveSkills(ct);
         return await skills.ReadAsync(args["name"]?.GetValue<string>() ?? "", name == "load_skill" ? null : args["path"]?.GetValue<string>() ?? "", enabled, ct);
     }
-    public Task<string> ForcedAsync(CancellationToken ct) => run.Composite is { } composite
-        ? DelegateAsync(composite.Agents.Select(x=>(x.Name,x.Task+"\n\nUser request:\n"+run.Prompt[..Math.Min(3500,run.Prompt.Length)])).ToList(), false, ct)
-        : DelegateAsync([
-        ("Exploration", "Inspect the relevant sources and project conventions for the following request. Report concrete file locations, constraints and useful findings. Do not edit.\n" + run.Prompt[..Math.Min(10000, run.Prompt.Length)]),
-        ("Validation", "Independently analyze risks, edge cases and validation criteria for the following request. Read relevant sources when available. Do not edit.\n" + run.Prompt[..Math.Min(10000, run.Prompt.Length)])
-    ], true, ct);
+    public async Task<string> ForcedAsync(CancellationToken ct)
+    {
+        if (run.Composite is { } composite)
+            return await DelegateAsync(composite.Agents.Select(x => (x.Name, x.Task + "\n\nUser request:\n" + run.Prompt[..Math.Min(3500, run.Prompt.Length)])).ToList(), false, ct);
+        if (!agentOptions.AutomaticCount && !agentOptions.AutomaticRoles)
+            return await DelegateAsync(agentOptions.Roles.Take(agentOptions.Count).Select(x => (x.Name, "User request:\n" + run.Prompt[..Math.Min(7000, run.Prompt.Length)])).ToList(), false, ct);
+        await progress("Préparation des rôles des sous-agents / Planning subagent roles");
+        var plan = await complete(new JsonArray(
+            new JsonObject { ["role"] = "system", ["content"] = "Plan independent bounded subtasks. Do not solve or execute the request. Return ONLY JSON {\"tasks\":[{\"name\":\"role\",\"prompt\":\"bounded task\"}]}. Each name <=80 characters, prompt <=4000. Never assign overlapping edits. " + agentOptions.Instructions + (agentOptions.AutomaticCount ? " Choose 1 to the maximum allowed tasks." : $" Return exactly {agentOptions.Count} tasks.") },
+            new JsonObject { ["role"] = "user", ["content"] = run.Prompt[..Math.Min(7000, run.Prompt.Length)] }), [], ct);
+        var text = plan.Message["content"]?.GetValue<string>() ?? "";
+        var start = text.IndexOf('{'); var end = text.LastIndexOf('}');
+        if (start < 0 || end <= start) throw new InvalidOperationException("Plan des sous-agents invalide. Réessayez ou choisissez les rôles manuellement / Invalid subagent plan.");
+        var tasks = JsonNode.Parse(text[start..(end + 1)])?["tasks"]?.AsArray().Select(x => (
+            Name: x?["name"]?.GetValue<string>() ?? "", Prompt: x?["prompt"]?.GetValue<string>() ?? "")).ToList() ?? [];
+        if (!agentOptions.AutomaticCount && tasks.Count != agentOptions.Count) throw new InvalidOperationException("Le plan ne respecte pas le nombre d’agents choisi / Agent count mismatch.");
+        return await DelegateAsync(tasks, false, ct);
+    }
 
     async Task<string> DelegateAsync(List<(string Name, string Prompt)> tasks, bool analysisOnly, CancellationToken ct)
     {
         if(run.Composite!=null && tasks.Any(x=>!run.AgentProviders.ContainsKey(x.Name)))throw new ArgumentException("Utilisez le nom d’un sous-agent configuré dans le modèle composé.");
         if (tasks.Count is < 1 or > 6 || tasks.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 80 || string.IsNullOrWhiteSpace(x.Prompt) || x.Prompt.Length > 12000))
             throw new ArgumentException("1 à 6 tâches requises ; nom 80 caractères et consigne 12000 caractères maximum.");
-        if (delegated + tasks.Count > 6) throw new InvalidOperationException("Limite de 6 sous-agents par envoi atteinte.");
+        var limit = run.Composite == null ? agentOptions.Limit : 6;
+        if (delegated + tasks.Count > limit) throw new InvalidOperationException($"Limite de {limit} sous-agents par envoi atteinte / Subagent limit reached.");
+        if (tasks.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != tasks.Count) throw new ArgumentException("Noms de sous-agents uniques requis / Unique agent names required.");
+        if (run.Composite == null && !agentOptions.AutomaticRoles)
+        {
+            tasks = tasks.Select(task =>
+            {
+                var role = agentOptions.Roles.FirstOrDefault(x => x.Name.Equals(task.Name, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new ArgumentException("Utilisez les rôles configurés / Use configured roles.");
+                return (task.Name, role.Instruction + "\n\n" + task.Prompt);
+            }).ToList();
+        }
         delegated += tasks.Count;
         var results = await Task.WhenAll(tasks.Select(task => ChildAsync(task.Name, task.Prompt, analysisOnly, ct)));
         return string.Join("\n\n", results);

@@ -49,3 +49,59 @@ Les vues complètes ont été inspectées, puis les régions navigation/cartes, 
 - macOS, contraste élevé, grossissement du texte et très petites fenêtres natives non vérifiés en session réelle. Le responsive Electron a été vérifié ; le mode compact natif est implémenté mais nécessite encore un essai à cette largeur.
 
 Résultat : refonte visuelle validée sur les états Windows inspectés et les parcours Electron testés. Les limites ci-dessus restent explicites ; aucune certification de conformité Fluent ou d’accessibilité complète n’est revendiquée.
+
+## Outils dédiés — 1.19.0 — 2026-09-27
+
+final result: passed
+
+### Références et périmètre
+
+- Traducteur : `C:/Users/le_ma/AppData/Local/Temp/codex-clipboard-4d3b7610-3a7f-4d10-b5db-e011da8d5986.png`.
+- Correcteur : `C:/Users/le_ma/AppData/Local/Temp/codex-clipboard-a20d4894-1506-4c27-9384-a03854cedbf2.png`.
+- Implémentation : fenêtres natives Uno Desktop, adaptation demandée au style de l’application. Les références et captures finales ont été ouvertes ensemble pour la comparaison. Les cadres et hauteurs diffèrent des captures Web : comparaison des régions et parcours, sans prétention de reproduction au pixel près.
+- Captures conservées dans `C:/Users/le_ma/.codex/visualizations/2026/09/23/01a0cecb-c3d1-78a3-9df4-2f9486311f2e/model-tools-1.19.0/` : `translator-light.png`, `translator-dark.png`, `proofreader-light.png`, `proofreader-dark.png`, `benchmark-light.png`, `benchmark-dark.png`, variantes `*-narrow.png` et `tools-menu-location.png`.
+
+### Itérations
+
+- P2 corrigé : le premier traducteur présentait des sélecteurs de langue coupés par le défilement. La hauteur initiale et les contraintes du panneau ont été corrigées ; les deux sélecteurs sont entièrement visibles dans `translator-light.png`. En largeur réduite, les panneaux passent en colonne avec défilement vertical, et les actions principales restent fixes.
+- P2 corrigé : les cartes de correction initialement toutes développées cachaient une partie des suggestions. Les détails sont désormais repliables ; les trois propositions sont visibles dans `proofreader-light.png`, conformément à la structure de la maquette.
+- Comportement corrigé : les événements de saisie différés d’Uno ne suppriment plus une traduction après inversion ni les suggestions restantes après application d’une correction.
+
+### Surfaces et contrôles
+
+- Typographie : police et contrôles natifs existants, titres 26, texte éditable 18 et textes secondaires 12–14. Libellés et métriques lisibles dans les thèmes clair et sombre inspectés.
+- Disposition : marges de 24, deux panneaux égaux pour la traduction, éditeur dominant et suggestions à droite pour le correcteur. Le bouton déroulant Outils est adjacent à Tâches planifiées. Les contrôles de modèle et les actions de lancement restent accessibles dans les captures à 720 pixels de largeur de fenêtre.
+- Couleurs et assets : ressources Fluent de l’application, accent, fond et bordures existants ; icônes Segoe Fluent du menu. Aucune illustration à recréer dans les références. Pas de logos ou de services tiers ajoutés à l’application.
+- Contenu : choix de modèle indépendant, langues, traduction, correction/reformulation, compteur de caractères, copie, lancement/annulation, scores et tokens explicitement estimés si nécessaire. Le benchmark possède une suite locale documentée, avec corrigé consultable.
+
+### Validation et limites
+
+- 33 contrôles ciblés : validation des corrections et décalages Unicode, modifications successives, parsing, calculs de débit/tokens, notation des épreuves, requêtes SSE, annulation et isolation des sessions OpenCode avec outils natifs/MCP désactivés.
+- Scénario natif réussi avec modèle simulé : fenêtres indépendantes, conservation des brouillons, traduction/inversion, correction/application/ignore, invalidation après saisie, reformulation, sept épreuves, erreur fournisseur, annulation et fermeture.
+- Compilation Uno Desktop sans avertissement. Les captures correspondent à des réponses simulées ; aucun appel payant ni résultat de qualité linguistique d’un modèle réel n’a été validé. macOS, WinUI natif, lecteur d’écran et toutes les tailles de fenêtre ne sont pas couverts par cette vérification.
+- Aucun P0/P1/P2 restant dans le périmètre inspecté. Amélioration P3 possible : annotation simultanée de tous les passages dans l’éditeur, en complément de la sélection du passage d’une suggestion.
+
+## Conversations, agents et notifications — 1.22.0 — 2026-09-28
+
+final result: passed
+
+### Référence et comparaison
+
+- Référence : `C:/Users/le_ma/AppData/Local/Temp/codex-clipboard-2ffdb553-4006-47ad-9efc-5d63f25a1ffd.png`. Adaptation native Uno Desktop : dossiers de projets, conversations indentées, dates discrètes à droite, section Conversations distincte. Les commandes Tâches planifiées, Outils et Réglages restent accessibles en bas.
+- Captures finales conservées dans `C:/Users/le_ma/.codex/visualizations/2026/09/23/01a0cecb-c3d1-78a3-9df4-2f9486311f2e/conversation-workspace-1.22.0/` : `sidebar.png`, `naming.png`, `notifications.png`, `agent-settings.png`, `notification-settings.png`, et résultat `smoke-ok.txt`.
+- Comparaison de la hiérarchie et de la densité avec le mockup, avec données fictives et dimensions différentes ; aucune revendication de reproduction au pixel près. Le panneau de notifications a été capturé dans une surface de contrôle utilisant son véritable composant, sans reproduire le cadre complet des Réglages.
+
+### Itérations
+
+- Lignes de conversation resserrées, surfaces et bordures allégées, recherche déplacée derrière le filtre et ajout de conversation discret au survol des projets.
+- Icône de notification corrigée en cloche (`EA8F`, Ringer), après contrôle de la [table Microsoft des icônes](https://learn.microsoft.com/en-us/windows/apps/design/iconography/segoe-fluent-icons-font).
+- Indicateur de nommage remplacé par un arc natif animé : le premier contrôle était invisible dans le rendu Uno Desktop. L’arc et le libellé sont visibles dans la capture finale, dans le titre et la ligne du chat.
+- Fenêtre des sous-agents : contenu défilant, actions Annuler/Enregistrer fixes en bas à droite, action principale accentuée. Les rôles manuels, compte automatique et presets sont rattachés à la conversation.
+
+### Contrôles et limites
+
+- 14 contrôles ciblés du moteur réussis : relances 503, budget et délai, absence de relance 401, annulation pendant l’attente, flux interrompu, persistance des préférences/presets, capture des réglages d’un envoi, rôles manuels, limites de délégation, forks et planification automatique des rôles.
+- Parcours natif réussi sur l’exécutable final : repli/réouverture des projets et archives, nommage, notifications de fin/action requise, Shift+Enter, zoom local/global et enregistrement/suppression d’un preset avec rechargement de conversation.
+- Publications GUI et CLI réussies ; versions des deux exécutables contrôlées à `1.22.0.0`. Vérification `git diff --check` sans erreur.
+- Données fictives isolées sous `artifacts/TEMP` ; aucune requête vers un modèle payant. Son coupé pendant le parcours automatisé : l’écoute réelle reste à vérifier avec le bouton de préécoute. Les contrôles du zoom appellent le gestionnaire de taille ; le geste matériel de la molette n’a pas été simulé.
+- Captures inspectées dans le thème sombre sous Windows. macOS, thème clair, lecteur d’écran et toutes les dimensions de fenêtre ne sont pas couverts par cette passe. Aucun P0/P1/P2 visuel restant dans les surfaces inspectées.

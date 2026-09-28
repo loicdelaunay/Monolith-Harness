@@ -43,6 +43,20 @@ Resuming requires stopping generation and confirmation: full history is first co
 
 ## Display
 
+- The desktop sidebar shows independently expandable project folders. Several folders can remain open at once; clicking a folder only collapses or reopens it, and clicking a conversation selects it. Folder expansion is retained during the application session. The filter icon reveals conversation search; the folder-plus action creates a project, and the plus beside a project creates a chat there. Right-click a project to manage it, including its icon and color (12 icon choices and a color palette with live preview). The application logo and name remain above Projects; the notification bell sits immediately left of the search icon.
+- Right-click a conversation and choose **Pin / Unpin** to add or remove its shortcut in **Pinned**, above Projects. The conversation remains in its original project or archive. Pins are saved in SQLite and survive application restarts.
+- Parent project badges count running chats (**…**), unread completed replies (**✓**) and chats needing attention (**!**). Opening a chat clears its unread completion or error marker; a pending question or permission request remains marked until answered. Badge counts work independently of notification and sound preferences and are retained for the current application session.
+- The version beside the application name is a theme-aware gradient chip. Click it to open the complete bundled changelog in a scrollable dialog; no internet connection is needed.
+- **Conversations** contains chats without a user-created project. Favorite chats stay at the top; compact ages indicate their latest message submission. Archives retain a separate, bounded scroll area.
+- During AI title generation, a rotating indicator and **Nommage… / Naming…** appear in the chat row and current title.
+- Hovering a conversation keeps the row dimensions stable. Hovering a completed response reveals its generation duration and local completion time (`HH:mm:ss`); the timestamp tooltip includes the date. Completion times are saved for new responses and preserved in forks. Older responses without a recorded timestamp retain their duration only.
+
+### Notifications
+
+**Settings → Notifications** enables completed-chat and action-required events independently. The bell opens unread notifications and takes you to the corresponding chat; the same bell appears on affected conversation rows. Reading a completed conversation clears its notification. Notifications for pending questions or permissions remain until the request is answered. Notifications are retained for the current application session, up to 100 chats.
+
+Sound can be enabled separately, with nine tones (Soft, Bell, Alert, Chime, Glass, Marimba, Digital, Success and Water drop), volume and a preview button. The Notifications settings tab uses an audio icon. Sound playback is implemented on Windows. These preferences are saved with the portable application settings.
+
 [Persistent memory](memory.md) has a Settings tab: two skill levels (conversation and shared), Project/General/User categories and indexed SQLite search.
 
 - Conversations show a skeleton during background reads, then the 24 latest messages. Earlier pages load while preserving reading position. Full history remains in the database and is used by the model; only images from displayed pages load into the interface.
@@ -62,4 +76,8 @@ API errors show provider details with the request key masked. Some HTTP 400/422 
 
 Degraded mode is visible and saved with the answer. Original history and images remain in the database. If tools are refused, the response becomes text-only and cannot act. If vision is unavailable, an explicit marker replaces the image in the request; enable/configure **Bypass image AI** and disable the main model's image capability to delegate analysis. No other paid provider is selected automatically.
 
-The mechanism does not replay a request after a successful stream has started, avoiding duplicate actions. HTTP 400 alone does not establish that a key or a particular capability is responsible.
+The capability fallback above does not replay a request after a successful stream has started. HTTP 400 alone does not establish that a key or a particular capability is responsible.
+
+**Settings → General → Automatic retry** separately handles transient network errors, HTTP 408/429/5xx and interrupted model streams. Choose 0–10 additional attempts and a 1–300 second delay; defaults are enabled, three retries and five seconds. Retry status shows the attempt and delay. Stopping generation cancels the wait. Interrupted text is replaced by the new attempt, and completed tool calls are not replayed. Invalid keys, ordinary HTTP 400 errors and tool execution errors do not trigger this mechanism.
+
+For OpenCode, read-only polling can retry; a prompt submission retries only an explicit HTTP 429 response. Ambiguous submission failures are left visible because the remote server may already be executing the request. Model benchmarks disable retries so timing and scores reflect the original attempt.

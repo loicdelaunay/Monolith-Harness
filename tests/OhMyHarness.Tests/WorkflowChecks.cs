@@ -18,7 +18,19 @@ static class WorkflowChecks
         try { await guard.CheckAsync("same", "{}", denied, default); } catch (OperationCanceledException) { stopped = true; }
         check(stopped, "Annuler une décision de boucle arrête le travail");
         var q = WorkflowTools.ParseQuestions(JsonNode.Parse("""[{"question":"Choisir","options":[{"label":"A","description":"Option A"}],"custom":false}]""")!.AsArray());
+        check(!q[0].Multiple, "Question sans mode explicite conserve le choix unique");
+        var multipleArgs = JsonNode.Parse("""{"questions":[{"question":"Quelles fonctions ?","options":[{"label":"Recherche","description":"Trouver"},{"label":"Export","description":"Enregistrer"}],"multiple":true,"custom":false}]}""")!.AsObject();
+        var multipleQuestions = WorkflowTools.ParseQuestions(multipleArgs["questions"]!.AsArray());
+        check(multipleQuestions[0].Multiple, "Question avec multiple=true active les choix multiples");
+        WorkflowTools.ValidateAnswer(multipleQuestions, new(false, [new[] { "Recherche", "Export" }]));
+        var multiWorkflow = new WorkflowTools((items, _) => Task.FromResult(new AgentAnswer(false, [new[] { items[0].Options[0].Label, items[0].Options[1].Label }])), (_, _) => Task.CompletedTask);
+        var multiResult = JsonNode.Parse(await multiWorkflow.CallAsync("question", multipleArgs, default))!;
+        check(multiResult["answers"]?[0]?.AsArray().Count == 2 && multiResult["answers"]?[0]?[1]?.GetValue<string>() == "Export",
+            "Question multi-choix transmet toutes les réponses sélectionnées au modèle");
         bool invalid = false;
+        try { WorkflowTools.ValidateAnswer(q, new(false, [new[] { "A", "A" }])); } catch (ArgumentException) { invalid = true; }
+        check(invalid, "Choix unique refuse plusieurs réponses");
+        invalid = false;
         try { WorkflowTools.ValidateAnswer(q, new(false, [new[] { "forged" }])); } catch (ArgumentException) { invalid = true; }
         check(invalid, "Choix inconnu refusé lorsque le texte libre est désactivé");
         invalid = false;

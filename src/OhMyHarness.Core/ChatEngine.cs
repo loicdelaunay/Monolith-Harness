@@ -8,6 +8,7 @@ namespace OhMyHarness.Core;
 public record GenerationUpdate(string Text, string Reasoning, int? InputTokens, int? OutputTokens, double Seconds)
 {
     public string CompatibilityNotice { get; init; } = "";
+    public RetryProgress? Retry { get; init; }
     public double TokensPerSecond => (OutputTokens ?? Math.Ceiling((Text.Length + Reasoning.Length) / 4d)) / Math.Max(.1, Seconds);
 }
 public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens, double Seconds);
@@ -31,8 +32,13 @@ public sealed class ChatEngine(HttpClient http)
         var data = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
         return data?["data"]?.AsArray().Select(x => x?["id"]?.GetValue<string>() ?? "").Where(x => x.Length > 0).Order().ToList() ?? [];
     }
-    public async Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
-        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null)
+    public Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null) =>
+        RequestRetry.RunAsync(() => StreamOnceAsync(provider, key, messages, tools, update, ct, reasoningEffort), retrySettings, ct,
+            retry => update(new("", "", null, null, 0) { Retry = retry }));
+
+    async Task<Completion> StreamOnceAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort)
     {
         var payload = new JsonObject { ["model"] = provider.Model, ["messages"] = messages.DeepClone(), ["stream"] = true,
             ["stream_options"] = new JsonObject { ["include_usage"] = true } };
@@ -65,7 +71,7 @@ public sealed class ChatEngine(HttpClient http)
                 if (key.Length > 0) detail = detail.Replace(key, "[secret]");
                 detail = detail[..Math.Min(detail.Length, 1500)];
                 if ((int)response.StatusCode is 400 or 422 && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase))) continue;
-                throw new HttpRequestException($"API : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {detail}");
+                throw new HttpRequestException($"API : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {detail}", null, response.StatusCode);
             }
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
             compatibility[compatibilityKey] = profile.Copy();
@@ -129,6 +135,25 @@ public sealed class ChatEngine(HttpClient http)
         return new(message, input, output, timer.Elapsed.TotalSeconds);
     }
     public static JsonObject ToWire(Message message) => ToWire(message, includeImageData: true);
+
+    public static void AppendHistoryWithToolImages(JsonArray wire, IEnumerable<Message> history, Func<Message, JsonObject> imageWire)
+    {
+        // Providers require every tool reply to immediately follow its assistant tool-call batch.
+        var pendingImages = new List<Message>();
+        foreach (var message in history)
+        {
+            if (message.Role != "tool")
+            {
+                foreach (var image in pendingImages) wire.Add(imageWire(image));
+                pendingImages.Clear();
+            }
+
+            wire.Add(ToWire(message));
+            if (message.Role == "tool" && message.Attachments.Count > 0) pendingImages.Add(message);
+        }
+
+        foreach (var image in pendingImages) wire.Add(imageWire(image));
+    }
 
     // Context estimates charge a fixed cost for data images; encoding their bytes
     // just to count tokens wastes memory and stalls UI refreshes.

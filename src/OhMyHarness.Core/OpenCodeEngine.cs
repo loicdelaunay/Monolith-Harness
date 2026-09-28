@@ -12,6 +12,8 @@ public sealed record OpenCodePermission(string Id, string SessionId, string Acti
 
 public sealed class OpenCodeEngine(HttpClient http)
 {
+    readonly AsyncLocal<FeatureSettings?> retryOptions = new();
+    readonly AsyncLocal<Action<RetryProgress>?> retryProgress = new();
     static Uri Endpoint(Provider provider, string resource, string? directory = null)
     {
         var suffix = resource.TrimStart('/');
@@ -28,9 +30,21 @@ public sealed class OpenCodeEngine(HttpClient http)
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(user + ":" + password)));
         }
         if (!string.IsNullOrWhiteSpace(directory)) request.Headers.TryAddWithoutValidation("x-opencode-directory", directory);
+        if (provider.BypassFreeLimitation)
+        {
+            request.Headers.TryAddWithoutValidation("x-opencode-client", "desktop");
+            request.Headers.TryAddWithoutValidation("x-bypass-free-limitation", "true");
+        }
     }
 
-    async Task<JsonNode?> JsonAsync(Provider provider, string password, HttpMethod method, string resource, string? directory, JsonNode? body, CancellationToken ct)
+    Task<JsonNode?> JsonAsync(Provider provider, string password, HttpMethod method, string resource, string? directory, JsonNode? body, CancellationToken ct) =>
+        RequestRetry.RunAsync(() => JsonOnceAsync(provider, password, method, resource, directory, body, ct), retryOptions.Value, ct, retryProgress.Value,
+            // Polling is read-only. Only an explicit 429 can safely retry a rejected submission;
+            // an ambiguous network failure must never submit the same remote tools twice.
+            error => method == HttpMethod.Get ? RequestRetry.IsTransient(error) :
+                resource.EndsWith("/prompt_async", StringComparison.Ordinal) && error is HttpRequestException { StatusCode: System.Net.HttpStatusCode.TooManyRequests });
+
+    async Task<JsonNode?> JsonOnceAsync(Provider provider, string password, HttpMethod method, string resource, string? directory, JsonNode? body, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(method, Endpoint(provider, resource, directory));
         Configure(request, provider, password, directory);
@@ -38,7 +52,7 @@ public sealed class OpenCodeEngine(HttpClient http)
         using var response = await http.SendAsync(request, ct);
         var content = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"OpenCode : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {ErrorText(content)}".Trim());
+            throw new HttpRequestException($"OpenCode : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {ErrorText(content)}".Trim(), null, response.StatusCode);
         return string.IsNullOrWhiteSpace(content) ? null : JsonNode.Parse(content);
     }
 
@@ -80,7 +94,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 foreach (var pair in modelMap)
                 {
                     var model = pair.Value as JsonObject;
-                    if (isConnected || isFreeProvider || IsFreeModel(model, pair.Key))
+                    if (provider.BypassFreeLimitation || isConnected || isFreeProvider || IsFreeModel(model, pair.Key))
                         AddModel(result, providerId, pair.Key, model);
                 }
             }
@@ -89,7 +103,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 foreach (var model in modelList.OfType<JsonObject>())
                 {
                     var modelId = String(model, "id", "modelID");
-                    if (isConnected || isFreeProvider || IsFreeModel(model, modelId))
+                    if (provider.BypassFreeLimitation || isConnected || isFreeProvider || IsFreeModel(model, modelId))
                         AddModel(result, providerId, modelId, model);
                 }
             }
@@ -101,11 +115,14 @@ public sealed class OpenCodeEngine(HttpClient http)
                      .ToList();
     }
 
+    public static bool IsFreeModel(string modelId) => IsFreeModel(null, modelId);
     public static bool IsFreeModel(JsonObject? model, string modelId)
     {
         if (modelId.Contains("-free", StringComparison.OrdinalIgnoreCase) ||
+            modelId.Contains(":free", StringComparison.OrdinalIgnoreCase) ||
             modelId.Contains("free", StringComparison.OrdinalIgnoreCase) ||
-            modelId.Contains("big-pickle", StringComparison.OrdinalIgnoreCase))
+            modelId.Contains("big-pickle", StringComparison.OrdinalIgnoreCase) ||
+            modelId.Contains("zen", StringComparison.OrdinalIgnoreCase))
             return true;
         if (model == null) return false;
         var name = String(model, "name", "label");
@@ -155,8 +172,10 @@ public sealed class OpenCodeEngine(HttpClient http)
 
     public async Task<Completion> PromptAsync(Provider provider, string password, string directory, string sessionId, string prompt,
         string systemPrompt, IReadOnlyList<OpenCodeAttachment> attachments, Action<GenerationUpdate> update, CancellationToken ct,
-        Func<OpenCodePermission, CancellationToken, Task<string>>? authorize = null, OpenCodeRunPolicy? policy = null, WorkflowTools? workflow = null)
+        Func<OpenCodePermission, CancellationToken, Task<string>>? authorize = null, OpenCodeRunPolicy? policy = null, WorkflowTools? workflow = null, FeatureSettings? retrySettings = null)
     {
+        retryOptions.Value = retrySettings;
+        retryProgress.Value = retry => update(new("", "", null, null, 0) { Retry = retry });
         var separator = provider.Model.IndexOf('/');
         if (separator <= 0 || separator == provider.Model.Length - 1) throw new ArgumentException("Le modèle OpenCode doit être au format fournisseur/modèle.");
         var parts = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = prompt } };

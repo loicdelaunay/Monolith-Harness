@@ -31,11 +31,15 @@ public static class AssetGuides
                 int x=layer.Pixels.Min(p=>p.X)*document.PixelSize, y=layer.Pixels.Min(p=>p.Y)*document.PixelSize;
                 int w=(layer.Pixels.Max(p=>p.X)+1)*document.PixelSize-x, h=(layer.Pixels.Max(p=>p.Y)+1)*document.PixelSize-y;
                 bounds.Add(new { layer_id = layer.Id, pixels = layer.Pixels.Count, x, y, width = w, height = h,
+                    cell_x = x / document.PixelSize, cell_y = y / document.PixelSize, cell_width = w / document.PixelSize, cell_height = h / document.PixelSize,
+                    center_shift_cells_x = (int)Math.Floor((document.Width - w) / (2d * document.PixelSize)) - x / document.PixelSize,
+                    center_shift_cells_y = (int)Math.Floor((document.Height - h) / (2d * document.PixelSize)) - y / document.PixelSize,
                     center_x = x+w/2d, center_y = y+h/2d, offset_to_canvas_center_x = document.Width/2d-(x+w/2d),
                     offset_to_canvas_center_y = document.Height/2d-(y+h/2d), approximate = false });
             }
         }
         return JsonSerializer.Serialize(new { document.Id, document.Width, document.Height, document.PixelSize, frame_id = frameId,
+            grid = new { columns = document.Width / document.PixelSize, rows = document.Height / document.PixelSize, origin = "top-left", pixel_operations_use = "integer cells", bounds_are = "canvas coordinates; cell_* fields use logical cells" },
             center = new { x = document.Width/2d, y = document.Height/2d },
             vertical_guides = new[] { document.Width/3d, document.Width/2d, document.Width*2d/3d },
             horizontal_guides = new[] { document.Height/3d, document.Height/2d, document.Height*2d/3d },

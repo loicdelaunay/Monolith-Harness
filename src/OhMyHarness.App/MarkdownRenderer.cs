@@ -60,6 +60,7 @@ public sealed class MarkdownRenderer
         }
         while (container.Children.Count > keys.Count) container.Children.RemoveAt(container.Children.Count - 1);
         state.Keys = keys;
+        AppTypography.Apply(container);
     }
     void Render(Panel container, string? markdown)
     {

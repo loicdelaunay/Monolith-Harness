@@ -9,7 +9,7 @@ public sealed partial class TerminalUi
     TerminalCanvas Draw(int width, int height)
     {
         var settings = FeatureSettings.Read(workspace?.State.FeaturesJson ?? "{}");
-        var appearance = CliThemes.Resolve(dialog?.ThemePreview ?? options.Theme ?? settings.CliTheme, settings.Theme);
+        var appearance = CliThemes.Resolve(dialog?.ThemePreview ?? options.Theme ?? settings.CliTheme, settings.Theme, settings.CustomThemes);
         var p = appearance.Palette;
         var canvas = new TerminalCanvas(width, height, p.Normal, appearance.Border);
         queueRows.Clear();

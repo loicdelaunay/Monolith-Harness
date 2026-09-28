@@ -78,12 +78,15 @@ public sealed partial class MainWindow
         var hover = ReferenceEquals(hoveredConversationContainer, container);
         var selected = container.Content is Chat selectedChat &&
             (selectedChat.IsArchived ? archivedChats : chats).SelectedItems.Contains(selectedChat);
-        card.Background = hover || selected ? FluentDesign.Resource("ConversationHoverFillBrush") : FluentDesign.Card;
+        card.Background = hover || selected ? FluentDesign.Resource("ConversationHoverFillBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         card.BorderBrush = selected ? FluentDesign.Resource("AccentFillColorDefaultBrush") :
             hover ? FluentDesign.Resource("ConversationHoverStrokeBrush") : FluentDesign.Stroke;
         if (FindConversationElement<Button>(container, "conversation-favorite") is { } favorite && container.Content is Chat item)
         {
             favorite.Opacity = item.IsFavorite || hover ? 1 : 0;
+            favorite.Visibility = Visibility.Visible;
+            favorite.IsHitTestVisible = item.IsFavorite || hover;
+            favorite.IsTabStop = item.IsFavorite || hover;
             favorite.Content = new FontIcon { Glyph = item.IsFavorite ? "\uE735" : "\uE734", FontSize = 14 };
             ToolTipService.SetToolTip(favorite, WorkflowText(item.IsFavorite ? "Retirer des favoris" : "Ajouter aux favoris", item.IsFavorite ? "Remove favorite" : "Add favorite"));
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(favorite, WorkflowText("Favori", "Favorite"));
@@ -93,6 +96,7 @@ public sealed partial class MainWindow
 
     void RefreshConversationProgress()
     {
+        RefreshIndependentChatRows();
         RefreshSubagentSidebar();
         foreach (var list in new[] { chats, archivedChats })
         foreach (var item in list.Items.OfType<Chat>())
@@ -109,8 +113,25 @@ public sealed partial class MainWindow
             if (FindConversationElement<TextBlock>(container, "conversation-title") is { } label)
             {
                 label.Text = item.Title;
+                label.Visibility = namingChats.Contains(item.Id) ? Visibility.Collapsed : Visibility.Visible;
                 ToolTipService.SetToolTip(label, item.Title);
             }
+            if (FindConversationElement<StackPanel>(container, "conversation-naming") is { } naming)
+                naming.Visibility = namingChats.Contains(item.Id) ? Visibility.Visible : Visibility.Collapsed;
+            if (FindConversationElement<Border>(container, "conversation-naming-spinner") is { } spinnerHost)
+            {
+                if (spinnerHost.Child is not BusySpinner) spinnerHost.Child = new BusySpinner();
+                ((BusySpinner)spinnerHost.Child).IsActive = namingChats.Contains(item.Id);
+            }
+            if (FindConversationElement<TextBlock>(container, "conversation-naming-label") is { } namingLabel)
+                namingLabel.Text = WorkflowText("Nommage…", "Naming…");
+            if (FindConversationElement<TextBlock>(container, "conversation-age") is { } age)
+            {
+                age.Text = ConversationAge(item);
+                ToolTipService.SetToolTip(age, item.UpdatedUtc?.ToLocalTime().ToString("g") ?? "");
+            }
+            if (FindConversationElement<FontIcon>(container, "conversation-notice") is { } notice)
+                notice.Visibility = FeatureSettings.Read(state.FeaturesJson).NotificationBell && chatNotices.Any(x => x.ChatId == item.Id) ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
@@ -152,11 +173,14 @@ public sealed partial class MainWindow
     void MarkRunSubmitted(ConversationRun run)
     {
         run.Submitted = true;
+        run.Chat.UpdatedUtc = DateTime.UtcNow;
         // Update only the originating list entry, never the newly selected conversation.
         var entry = db.Chats.Local.FirstOrDefault(x => x.Id == run.Chat.Id);
         if (entry != null)
         {
             entry.Title = run.Chat.Title;
+            entry.UpdatedUtc = run.Chat.UpdatedUtc;
+            db.Entry(entry).Property(x => x.UpdatedUtc).OriginalValue = run.Chat.UpdatedUtc;
             db.Entry(entry).Property(x => x.Title).OriginalValue = run.Chat.Title;
         }
         if (IsVisible(run)) title.Text = run.Chat.Title;
@@ -192,6 +216,7 @@ public sealed partial class MainWindow
         permissionProject.Value = run.Project;
         automaticToolRun.Value = run;
         bool success=false;
+        MarkProjectChatStarted(run);
         RefreshGenerationControls();
         SetRunStatus(run, T("Le modèle réfléchit…"));
         try
@@ -227,6 +252,7 @@ public sealed partial class MainWindow
             if (run.Submitted) conversationHistory[run.Chat.Id] = run.Db.Messages.Local.ToList();
             if (run.Sandbox != null) await terminals.StopChatAsync(run.Chat.Id, true);
             conversationRuns.Remove(run.Chat.Id);
+            MarkProjectChatEnded(run, success);
             run.Dispose();
             RefreshGenerationControls();
             if (IsVisible(run)) RestoreRunMetrics(run);
@@ -234,6 +260,7 @@ public sealed partial class MainWindow
         }
         if (success)
         {
+            NotifyChat(run, false);
             await AutoNameAsync(run.Chat.Id, true);
             AppLog.Write(AppLogLevel.Information, "generation.completed", chatId: run.Chat.Id);
             await RunNextQueuedAsync(run.Chat.Id,run.Messages);
@@ -247,7 +274,10 @@ public sealed partial class MainWindow
         {
             ct.ThrowIfCancellationRequested();
             using var registration = ct.Register(() => DispatcherQueue.TryEnqueue(dialog.Hide));
-            return await dialog.ShowAsync();
+            var pending = automaticToolRun.Value;
+            if (pending != null && conversationRuns.ContainsKey(pending.Chat.Id)) NotifyChat(pending, true);
+            try { return await dialog.ShowAsync(); }
+            finally { if (pending != null) AcknowledgeChatNotice(pending.Chat.Id, actionResolved: true); }
         }
         finally { approvalQueue.Release(); }
     }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Xml.Linq;
 using SkiaSharp;
 
@@ -14,6 +15,10 @@ public sealed class AssetDocument
     public int Height { get; set; } = 512;
     public string Background { get; set; } = "none";
     public int PixelSize { get; set; } = 1;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mode { get; set; }
+    [JsonIgnore]
+    public bool IsPixelArt => Mode == "pixel_art" || Mode == null && PixelSize > 1;
     public int Revision { get; set; }
     public List<AssetLayer> Layers { get; set; } = [new()];
     public List<AssetFrame> Frames { get; set; } = [];
@@ -24,10 +29,14 @@ public sealed class AssetDocument
         AssetWorkspace.ValidId(Id);
         if (Name.Length is < 1 or > 120 || Width is < 1 or > 4096 || Height is < 1 or > 4096 || (long)Width * Height > 16777216) throw new ArgumentException("Canvas: name 1–120 characters, dimensions 1–4096 pixels.");
         _ = AssetRenderer.Color(Background);
+        if (Mode is not (null or "classic" or "pixel_art")) throw new ArgumentException("Asset mode must be classic or pixel_art.");
         if (PixelSize is < 1 or > 64 || Width % PixelSize != 0 || Height % PixelSize != 0) throw new ArgumentException("Pixel size must divide canvas width and height (1–64).");
+        if (Mode == "pixel_art" && (Width / PixelSize > 512 || Height / PixelSize > 512)) throw new ArgumentException("Pixel-art grids are limited to 512 × 512 cells.");
         if (Frames.Count > 32 || Frames.Select(f => f.Id).Distinct().Count() != Frames.Count) throw new ArgumentException("Maximum 32 uniquely named frames.");
         foreach (var frame in Frames) { AssetWorkspace.ValidId(frame.Id); if (frame.DurationMs is < 20 or > 10000) throw new ArgumentException("Frame duration: 20–10000 ms."); }
         var scenes = new List<List<AssetLayer>> { Layers }; scenes.AddRange(Frames.Select(f => f.Layers));
+        if (Mode == "pixel_art" && scenes.Any(scene => scene.Any(layer => layer.Shapes.Count > 0)))
+            throw new ArgumentException("Pixel-art mode accepts painted pixels only; choose classic mode for vector shapes.");
         if (scenes.Any(scene => scene.Count > 64 || scene.Select(l => l.Id).Distinct().Count() != scene.Count) || scenes.Sum(scene => scene.Sum(l => l.Shapes.Count)) > 5000 || scenes.Sum(scene => scene.Sum(l => l.Pixels.Count)) > 20000)
             throw new ArgumentException("Maximum 64 layers per frame, 5000 shapes and 20000 pixels total.");
         foreach (var layer in scenes.SelectMany(scene => scene))
@@ -169,6 +178,7 @@ public static class AssetRenderer
         doc.Validate(); if (background != null) _ = Color(background);
         XNamespace ns = "http://www.w3.org/2000/svg";
         var svg = new XElement(ns + "svg", new XAttribute("width", doc.Width), new XAttribute("height", doc.Height), new XAttribute("viewBox", $"0 0 {doc.Width} {doc.Height}"));
+        if (doc.IsPixelArt) { svg.SetAttributeValue("shape-rendering", "crispEdges"); svg.SetAttributeValue("style", "image-rendering:pixelated"); }
         svg.Add(new XElement(ns + "title", doc.Name));
         void Attr(XElement e, string key, object value) => e.SetAttributeValue(key, value is float f ? N(f) : value);
         void SetColor(XElement e, string key, string value)
@@ -214,6 +224,8 @@ public static class AssetRenderer
         if (doc.Frames.Count > 0) doc = AssetAnimation.FrameScene(doc, 0);
         if (format is not ("svg" or "png" or "webp" or "jpeg" or "pdf")) throw new ArgumentException("Formats: svg, png, webp, jpeg, pdf, svg-animated, gif, frames.");
         if (!float.IsFinite(scale) || scale <= 0 || scale > 4) throw new ArgumentException("Scale: >0 to 4.");
+        if (doc.IsPixelArt && Math.Abs(scale * doc.PixelSize - Math.Round(scale * doc.PixelSize)) > 0.0001)
+            throw new ArgumentException("Pixel-art export requires a whole number of output pixels per logical cell.");
         int w = Math.Max(1, (int)Math.Ceiling(doc.Width * scale)), h = Math.Max(1, (int)Math.Ceiling(doc.Height * scale));
         if ((long)w*h > 16777216 || w > 8192 || h > 8192) throw new ArgumentException("Export limited to 16 megapixels and 8192 pixels per side.");
         if (format == "svg") return Encoding.UTF8.GetBytes(Svg(doc, transparent, background));
@@ -234,30 +246,53 @@ public static class AssetRenderer
     public static byte[] Preview(AssetDocument doc, int maxSize = 1400, bool checkerboard = false, int frameIndex = 0, bool guides = false, bool pixelGrid = false)
     {
         if (doc.Frames.Count > 0) doc = AssetAnimation.FrameScene(doc, frameIndex);
-        var png = Export(doc, "png", scale: Math.Min(1, maxSize/(float)Math.Max(doc.Width,doc.Height)));
+        var scale = PreviewScale(doc, maxSize);
+        var png = Export(doc, "png", scale: doc.IsPixelArt ? 1 : scale);
+        if (doc.IsPixelArt && scale != 1)
+        {
+            using var original = SKBitmap.Decode(png) ?? throw new IOException("Cannot decode pixel-art preview.");
+            int cell = Math.Max(1, (int)Math.Round(doc.PixelSize * scale));
+            var size = new SKImageInfo(doc.Width / doc.PixelSize * cell, doc.Height / doc.PixelSize * cell);
+            using var resized = original.Resize(size, new SKSamplingOptions(SKFilterMode.Nearest)) ?? throw new IOException("Cannot resize pixel-art preview.");
+            using var enlarged = SKImage.FromBitmap(resized);
+            using var encoded = enlarged.Encode(SKEncodedImageFormat.Png, 100);
+            png = encoded.ToArray();
+        }
         if (!checkerboard && !guides && !pixelGrid) return png;
         using var image = SKImage.FromEncodedData(png);
         using var surface = SKSurface.Create(new SKImageInfo(image.Width,image.Height));
         surface.Canvas.Clear(checkerboard ? new SKColor(210,213,219) : SKColors.Transparent);
         if (checkerboard)
         {
-            using var tile = new SKPaint { Color = new SKColor(236,238,242) };
-            for(int y=0;y<image.Height;y+=16) for(int x=0;x<image.Width;x+=16)
-                if ((x/16+y/16)%2==0) surface.Canvas.DrawRect(x,y,16,16,tile);
+            int cell = doc.IsPixelArt ? Math.Max(1, (int)Math.Round(doc.PixelSize * scale)) : 16;
+            int tileSize = doc.IsPixelArt ? cell * Math.Max(1, (int)Math.Ceiling(4d / cell)) : 16;
+            using var tile = new SKPaint { Color = new SKColor(236,238,242), IsAntialias = false };
+            for(int y=0;y<image.Height;y+=tileSize) for(int x=0;x<image.Width;x+=tileSize)
+                if ((x/tileSize+y/tileSize)%2==0) surface.Canvas.DrawRect(x,y,tileSize,tileSize,tile);
         }
         surface.Canvas.DrawImage(image,0,0);
-        if (guides || (pixelGrid && doc.PixelSize > 1))
+        if (guides || (pixelGrid && doc.IsPixelArt))
         {
             float sx = image.Width / (float)doc.Width, sy = image.Height / (float)doc.Height;
             using var guide = new SKPaint { Color = new SKColor(76, 201, 240, 180), StrokeWidth = 1, IsAntialias = false };
-            if (pixelGrid && doc.PixelSize > 1 && doc.PixelSize * sx >= 5 && doc.PixelSize * sy >= 5)
+            if (pixelGrid && doc.IsPixelArt && doc.PixelSize * sx >= 5 && doc.PixelSize * sy >= 5)
             {
                 guide.Color = new SKColor(128, 128, 128, 70);
-                for (int x = doc.PixelSize; x < doc.Width; x += doc.PixelSize) surface.Canvas.DrawLine(x*sx,0,x*sx,image.Height,guide);
-                for (int y = doc.PixelSize; y < doc.Height; y += doc.PixelSize) surface.Canvas.DrawLine(0,y*sy,image.Width,y*sy,guide);
+                for (int x = doc.PixelSize; x < doc.Width; x += doc.PixelSize) surface.Canvas.DrawRect(MathF.Round(x*sx),0,1,image.Height,guide);
+                for (int y = doc.PixelSize; y < doc.Height; y += doc.PixelSize) surface.Canvas.DrawRect(0,MathF.Round(y*sy),image.Width,1,guide);
             }
             if (guides) { guide.Color = new SKColor(76, 201, 240, 200); surface.Canvas.DrawLine(image.Width/2f,0,image.Width/2f,image.Height,guide); surface.Canvas.DrawLine(0,image.Height/2f,image.Width,image.Height/2f,guide); }
         }
         using var snapshot = surface.Snapshot(); using var data = snapshot.Encode(SKEncodedImageFormat.Png,100); return data.ToArray();
+    }
+    public static float PreviewScale(AssetDocument doc, int maxSize)
+    {
+        if (maxSize < 1) throw new ArgumentOutOfRangeException(nameof(maxSize));
+        if (doc.IsPixelArt)
+        {
+            int longest = Math.Max(doc.Width / doc.PixelSize, doc.Height / doc.PixelSize);
+            return Math.Clamp(maxSize / longest, 1, Math.Max(1, Math.Min(32, 4096 / longest))) / (float)doc.PixelSize;
+        }
+        return Math.Min(1, maxSize / (float)Math.Max(doc.Width, doc.Height));
     }
 }

@@ -60,7 +60,19 @@ static class AssetChecks
             check(sprite.PixelSize==4&&sprite.Frames.Count==2&&sprite.Frames[1].Layers[0].Pixels.Count==4,"Pixel grid and editable animation frames persist");
             using(var first=SKBitmap.Decode(AssetRenderer.Preview(sprite,64,false,0)))
             using(var second=SKBitmap.Decode(AssetRenderer.Preview(sprite,64,false,1)))
-                check(first.GetPixel(5,9).Red==255&&second.GetPixel(5,9).Blue==255,"Frame preview renders hard-edged pixel changes");
+                check(first.Width==64&&first.GetPixel(10,18).Red==255&&second.GetPixel(10,18).Blue==255,"Frame preview enlarges pixel changes with hard edges");
+            var tiny=await store.CreateAsync("Tiny custom icon",16,16,"none",1,"pixel_art",default);
+            tiny=await store.UpdateAsync(tiny.Id,tiny.Revision,d=>AssetTools.Edit(d,new JsonArray(
+                new JsonObject{["action"]="pixel",["layer_id"]="layer-1",["x"]=1,["y"]=2,["color"]="#FF0000"})),default);
+            check(tiny.IsPixelArt&&tiny.Mode=="pixel_art"&&(await store.ReadAsync(tiny.Id,default)).Mode=="pixel_art","Explicit pixel-art mode and custom resolution persist");
+            using(var original=SKBitmap.Decode(AssetRenderer.Export(tiny,"png")))
+                check(original.Width==16&&original.Height==16&&original.GetPixel(1,2).Red==255&&original.GetPixel(2,2).Alpha==0,"Pixel-art export draws individual pixels at native resolution");
+            using(var preview=SKBitmap.Decode(AssetRenderer.Preview(tiny,160)))
+                check(preview.Width==160&&preview.GetPixel(19,29).Red==255&&preview.GetPixel(20,29).Alpha==0,"Pixel-art preview enlarges with nearest-neighbor edges");
+            check(AssetRenderer.PreviewScale(tiny,160)==10&&AssetRenderer.Svg(tiny).Contains("shape-rendering=\"crispEdges\""),"Pixel-art capture scale and SVG disable smoothing");
+            await Throws<ArgumentException>(()=>store.UpdateAsync(tiny.Id,tiny.Revision,d=>d.Layers[0].Shapes.Add(new(){Id="not-a-pixel"}),default),"Pixel-art mode rejects vector shapes");
+            var custom=await store.CreateAsync("Custom sprite",24,20,"none",1,"pixel_art",default);
+            check(custom.Width==24&&custom.Height==20,"Pixel-art mode accepts custom non-square resolutions");
             var guided=JsonNode.Parse(AssetGuides.Describe(sprite,"step-1"))!;
             check(guided["center"]!["x"]!.GetValue<double>()==16&&guided["bounds"]![0]!["width"]!.GetValue<int>()==8,"Numeric guides expose pixel bounding box and center");
             var withGuides=AssetRenderer.Preview(sprite,64,true,0,true,true);
@@ -81,6 +93,32 @@ static class AssetChecks
             var capture=await Tool("asset_capture",new(){["asset_id"]=doc.Id});
             check(capture.Image?.Mime=="image/png" && asks==1,"Capture returns an image attachment after approval");
             check(capture.Image!.Data.Length>0 && JsonNode.Parse(capture.Text)!["capture_width"]!.GetValue<int>()==128,"Capture metadata identifies artwork coordinates");
+            var compact=await Tool("asset_edit",new(){["asset_id"]=tiny.Id,["expected_revision"]=tiny.Revision,["compact_response"]=true,
+                ["operations"]=new JsonArray(new JsonObject{["action"]="pixel_stamp",["layer_id"]="layer-1",["x"]=0,["y"]=0,["rows"]=new JsonArray("AA"),["palette"]=new JsonObject{["A"]="#00FF00"}})});
+            check(JsonNode.Parse(compact.Text)!["document"]==null && compact.Document?.Layers[0].Pixels.Count==3,"Compact tool replies retain the full document for live GUI updates");
+            var batch=await store.CreateAsync("Multi-action sprite",16,16,"none",1,"pixel_art",default);
+            int approvalsBeforeBatch=asks;
+            var editedBatch=await Tool("asset_edit",new(){["asset_id"]=batch.Id,["expected_revision"]=batch.Revision,["compact_response"]=true,
+                ["operations"]=new JsonArray(
+                    new JsonObject{["action"]="layer",["layer_id"]="sprite",["name"]="Sprite"},
+                    new JsonObject{["action"]="pixel_stamp",["layer_id"]="sprite",["x"]=2,["y"]=3,["rows"]=new JsonArray("AB","BA"),["palette"]=new JsonObject{["A"]="#FF0000",["B"]="#0000FF"}},
+                    new JsonObject{["action"]="frame_add",["frame_id"]="walking",["duration_ms"]=90},
+                    new JsonObject{["action"]="pixel_transform",["frame_id"]="walking",["layer_id"]="sprite",["x"]=2,["y"]=3,["width"]=2,["height"]=2,["to_x"]=6,["to_y"]=3,["copy"]=false})});
+            var savedBatch=await store.ReadAsync(batch.Id,default);
+            check(asks==approvalsBeforeBatch+1 && editedBatch.Document?.Revision==batch.Revision+1 && savedBatch.Revision==batch.Revision+1
+                && savedBatch.Layers.Single(l=>l.Id=="sprite").Pixels.Count==4
+                && savedBatch.Frames.Single(f=>f.Id=="walking").Layers.Single(l=>l.Id=="sprite").Pixels.All(p=>p.X is 6 or 7),
+                "One asset_edit runs ordered layer, stamp, frame and transform actions with one approval and revision");
+            await Throws<ArgumentException>(()=>Tool("asset_edit",new(){["asset_id"]=batch.Id,["expected_revision"]=savedBatch.Revision,
+                ["operations"]=new JsonArray(
+                    new JsonObject{["action"]="pixel",["layer_id"]="sprite",["x"]=0,["y"]=0,["color"]="#00FF00"},
+                    new JsonObject{["action"]="pixel_stamp",["layer_id"]="sprite",["x"]=4,["y"]=4,["rows"]=new JsonArray("X"),["palette"]=new JsonObject()})}),
+                "A later invalid action rejects the whole asset_edit batch");
+            var afterFailedBatch=await store.ReadAsync(batch.Id,default);
+            check(afterFailedBatch.Revision==savedBatch.Revision && afterFailedBatch.Layers.Single(l=>l.Id=="sprite").Pixels.All(p=>p.X!=0 || p.Y!=0),
+                "A failed multi-action edit does not persist earlier drawing actions");
+            var large=await store.CreateAsync("Large pixel canvas",128,128,"none",1,"pixel_art",default);
+            await Throws<ArgumentException>(()=>Tool("asset_capture",new(){["asset_id"]=large.Id,["max_size"]=64}),"Capture rejects a size that would merge logical pixels");
             allowed=false;var denied=await Tool("asset_edit",new(){["asset_id"]=doc.Id,["expected_revision"]=doc.Revision,["operations"]=new JsonArray(new JsonObject{["action"]="delete_layer",["layer_id"]="front"})});
             check(denied.Text.Contains("denied") && (await store.ReadAsync(doc.Id,default)).Revision==3,"Denied asset edit leaves drawing unchanged");
             enabled="";await Throws<UnauthorizedAccessException>(()=>Tool("asset_capture",new(){["asset_id"]=doc.Id}),"Disabled skill blocks capture");

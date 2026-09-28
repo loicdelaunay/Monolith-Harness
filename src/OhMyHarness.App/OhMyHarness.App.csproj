@@ -9,8 +9,8 @@
     <ApplicationTitle>OhMyHarness</ApplicationTitle>
     <ApplicationId>com.ohmyharness.app</ApplicationId>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <ApplicationDisplayVersion>1.21.2</ApplicationDisplayVersion>
-    <ApplicationVersion>30</ApplicationVersion>
+    <ApplicationDisplayVersion>1.26.0</ApplicationDisplayVersion>
+    <ApplicationVersion>35</ApplicationVersion>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
@@ -26,6 +26,7 @@
     <EnableMsixTooling>true</EnableMsixTooling>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../CHANGELOG.md" LogicalName="OhMyHarness.Changelog.md" />
     <EmbeddedResource Include="Assets/rich-text-editor.html" />
     <EmbeddedResource Include="Assets/benchmark-preview.html" />
     <Content Include="Assets\**">

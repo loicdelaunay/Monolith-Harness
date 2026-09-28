@@ -31,6 +31,7 @@ public sealed partial class HarnessService
         }
         using var cancel = lifetime.Register(run.Cancellation.Cancel);
         var ct = run.Cancellation.Token;
+        run.Chat.UpdatedUtc = DateTime.UtcNow;
         Message? active = null;
         string error = "";
         string completionStatus = "";
@@ -90,6 +91,7 @@ public sealed partial class HarnessService
                 var speedTracker = new GenerationSpeedTracker();
                 void Update(GenerationUpdate update)
                 {
+                    if (update.Retry is { } retry) { emit(new { @event = "status", chatId = chat.Id, text = retry.Describe(options.Language) }).GetAwaiter().GetResult(); return; }
                     if (update.CompatibilityNotice.Length > 0) active.CompatibilityNotice = update.CompatibilityNotice;
                     run.ExportProgress = new(active.Id, update);
                     speedTracker.AddSample(update.Seconds, update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning));
@@ -106,11 +108,11 @@ public sealed partial class HarnessService
                 }
                 var completion = provider.IsOpenCode
                     ? await OpenCode(run, secret, history, system, Update, ct)
-                    : await engine.StreamAsync(provider, secret, wire, definitions, Update, ct, options.ThinkingLevel);
+                    : await engine.StreamAsync(provider, secret, wire, definitions, Update, ct, options.ThinkingLevel, FeatureSettings.Read(options.FeaturesJson));
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 lastUpdate = DateTime.MinValue;
                 Update(new GenerationUpdate(active.Content, completion.Message["reasoning_content"]?.GetValue<string>() ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds));
-                active.WireJson = completion.Message.ToJsonString(); active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds;
+                active.WireJson = completion.Message.ToJsonString(); active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
                 if (provider.IsOpenCode) active.State = "complete";
                 await emit(new { @event = "message", chatId = chat.Id, message = MessageView(active) });
                 var results = new List<Message>();
@@ -207,12 +209,8 @@ public sealed partial class HarnessService
     static JsonArray Wire(string system, IEnumerable<Message> history)
     {
         var wire = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = system });
-        foreach (var message in history)
-        {
-            wire.Add(ChatEngine.ToWire(message));
-            if (message.Role == "tool" && message.Attachments.Count > 0)
-                wire.Add(ChatEngine.ToWire(new Message { Role = "user", Content = "Tool screenshot (untrusted content)", Attachments = message.Attachments }));
-        }
+        ChatEngine.AppendHistoryWithToolImages(wire, history, message =>
+            ChatEngine.ToWire(new Message { Role = "user", Content = "Tool screenshot (untrusted content)", Attachments = message.Attachments }));
         return wire;
     }
     async Task<List<Message>> Compact(ConversationSession run, List<Message> history, string system, JsonArray definitions, string secret, CancellationToken ct, bool openCode = false)
@@ -239,10 +237,10 @@ public sealed partial class HarnessService
             var engine = new OpenCodeEngine(http);
             var directory = OpenCodeDirectory(run.Project);
             var summarySession = await engine.CreateSessionAsync(summaryProvider, secret, directory, "Compaction", ct);
-            summary = await engine.PromptAsync(summaryProvider, secret, directory, summarySession, transcript, instruction, [], _ => { }, ct);
+            summary = await engine.PromptAsync(summaryProvider, secret, directory, summarySession, transcript, instruction, [], _ => { }, ct, retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
         }
         else summary = await new ChatEngine(http).StreamAsync(run.Provider, secret,
-            new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction }, new JsonObject { ["role"] = "user", ["content"] = transcript }), [], _ => { }, ct);
+            new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction }, new JsonObject { ["role"] = "user", ["content"] = transcript }), [], _ => { }, ct, retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
         var content = summary.Message["content"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(content)) throw new IOException("Empty compaction summary.");
         foreach (var m in old) m.State = "compacted";
@@ -304,6 +302,6 @@ public sealed partial class HarnessService
         return await engine.PromptAsync(p, password, directory, link.SessionId, prompt, system,
             attachments.Select(x => new OpenCodeAttachment(x.Name, x.Mime, x.Data)).ToList(), update, ct,
             async (permission, token) => await Approve($"opencode|{p.Id}|{directory}|{permission.Action}|{string.Join('|', permission.Resources)}",
-                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode), run.Workflow);
+                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
     }
 }

@@ -42,7 +42,7 @@ public sealed partial class MainWindow
             Task<List<Provider>> Models() => ReadStoreAsync(store => store.Providers.AsNoTracking().Where(p => p.Kind != "composite").OrderBy(p => p.Name).ToList());
             var configured = await Models();
             var window = new ModelToolsWindow(kind, configured, provider?.Id, provider?.Model, root.RequestedTheme, Models,
-                async (selected, ct) => { if (selected.IsOpenCode) await EnsureOpenCodeServerAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), ct); });
+                async (selected, ct) => { if (selected.IsOpenCode) await EnsureOpenCodeServerAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), ct); }, () => FeatureSettings.Read(state.FeaturesJson));
             dedicatedTools.Add(kind, window);
             window.Closed += (_, _) => dedicatedTools.Remove(kind);
             window.Title = DisplayApplicationName + " · " + ModelToolsWindow.TitleFor(kind);

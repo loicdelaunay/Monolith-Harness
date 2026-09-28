@@ -14,7 +14,7 @@ namespace OhMyHarness.App;
 public sealed partial class MainWindow
 {
     readonly ComboBox assetPicker = new() { HorizontalAlignment=HorizontalAlignment.Stretch, MinWidth=160 };
-    readonly Image assetImage = new() { Stretch=Stretch.Uniform, HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center };
+    readonly Image assetImage = new() { Stretch=Stretch.Uniform, HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center, UseLayoutRounding=false };
     readonly StackPanel assetLayers = new() { Spacing=5 };
     readonly TextBlock assetStatus = new() { TextWrapping=TextWrapping.Wrap, FontSize=12 };
     readonly TextBlock assetEmpty = new() { TextWrapping=TextWrapping.Wrap, HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center,
@@ -27,12 +27,19 @@ public sealed partial class MainWindow
     readonly ComboBox assetFramePicker = new() { MinWidth=120 };
     readonly CheckBox assetGuides = new() { Content="Repères" };
     readonly CheckBox assetGrid = new() { Content="Grille" };
+    readonly ComboBox assetZoom = new() { MinWidth=100, Visibility=Visibility.Collapsed };
+    bool populatingAssetZoom;
     readonly DispatcherTimer assetPlayback = new();
     readonly Button assetPlay = new() { Content="▶" };
     int selectedAssetFrame = -1;
     bool populatingAssetFrames;
     AssetDocument? selectedAsset;
     int assetLoadRevision;
+    int assetPreviewRequest;
+    float assetPreviewScale;
+    double assetPreviewDensity;
+    Grid? assetCanvas;
+    readonly Grid assetSurface = new() { UseLayoutRounding=false };
     bool populatingAssets;
     AssetWorkspace CurrentAssets() => new(db.Database.GetDbConnection().DataSource,chat?.Id ?? throw new InvalidOperationException("Choisissez une conversation."));
     Grid BuildAssetsPane()
@@ -43,11 +50,12 @@ public sealed partial class MainWindow
         var pane = new Grid { RowSpacing=8, Padding=new(4,8,4,4) };
         foreach(var h in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1,GridUnitType.Star), GridLength.Auto, GridLength.Auto }) pane.RowDefinitions.Add(new() { Height=h });
         var header = new Grid { ColumnSpacing=6 };
-        header.ColumnDefinitions.Add(new() { Width=new(1,GridUnitType.Star) }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto });
+        header.ColumnDefinitions.Add(new() { Width=new(1,GridUnitType.Star) }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto });
         header.Children.Add(assetPicker);
+        Grid.SetColumn(assetZoom,1);header.Children.Add(assetZoom);
         var create = Action("+",CreateAssetManuallyAsync); ToolTipService.SetToolTip(create,WorkflowText("Nouveau canevas","New canvas"));
-        Grid.SetColumn(create,1);header.Children.Add(create);
-        var refresh = Action("↻",()=>RefreshAssetsAsync());ToolTipService.SetToolTip(refresh,WorkflowText("Actualiser","Refresh"));Grid.SetColumn(refresh,2);header.Children.Add(refresh);
+        Grid.SetColumn(create,2);header.Children.Add(create);
+        var refresh = Action("↻",()=>RefreshAssetsAsync());ToolTipService.SetToolTip(refresh,WorkflowText("Actualiser","Refresh"));Grid.SetColumn(refresh,3);header.Children.Add(refresh);
         pane.Children.Add(header);
         var exportButton = new Button { Content=WorkflowText("Exporter…","Export…") };
         var exportOptions = new StackPanel { Spacing=8, Width=260 };
@@ -101,6 +109,9 @@ public sealed partial class MainWindow
         });
         var drawingTools=new StackPanel { Orientation=Orientation.Horizontal, Spacing=5 };
         foreach (var control in new FrameworkElement[] { paletteButton, exportButton, assetGuides, assetGrid }) drawingTools.Children.Add(control);
+        ToolTipService.SetToolTip(assetZoom,WorkflowText("Zoom · pixels écran par cellule","Zoom · screen pixels per cell"));
+        ToolTipService.SetToolTip(assetGrid,WorkflowText("Grille visible à partir de 5 pixels écran par cellule","Grid visible from 5 screen pixels per cell"));
+        assetZoom.SelectionChanged += async (_,_) => {if(!populatingAssetZoom && selectedAsset is {} doc && chat!=null)await Guard(()=>RefreshAssetImageAsync(doc,assetLoadRevision,chat.Id));};
         var frameTools=new StackPanel { Orientation=Orientation.Horizontal, Spacing=5 };
         foreach (var control in new FrameworkElement[] { assetFramePicker, addFrame, deleteFrame, durationFrame, assetPlay }) frameTools.Children.Add(control);
         var toolbar=new StackPanel { Spacing=5 };
@@ -123,7 +134,34 @@ public sealed partial class MainWindow
         assetGrid.Click += async (_,_) => { if(selectedAsset is {} doc) await RefreshAssetImageAsync(doc,assetLoadRevision,chat?.Id ?? 0); };
         Grid.SetRow(toolbar,1);pane.Children.Add(toolbar);
         var canvas = new Grid { MinHeight=180, Background=FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
-        canvas.Children.Add(assetImage);canvas.Children.Add(assetEmpty);
+        assetCanvas=canvas;
+        canvas.SizeChanged += async (_,_) =>
+        {
+            if (selectedAsset is not {} doc || chat==null) return;
+            if (!doc.IsPixelArt) { ApplyAssetImageLayout(doc); return; }
+            var wanted=PixelPreviewLayout(doc);
+            ApplyAssetImageLayout(doc);
+            if (Math.Abs(wanted.Scale-assetPreviewScale)>0.001f || Math.Abs(AssetDisplayDensity()-assetPreviewDensity)>0.001)
+                await Guard(()=>RefreshAssetImageAsync(doc,assetLoadRevision,chat.Id));
+        };
+        XamlRoot? observedRoot=null;
+        async void DisplayChanged(XamlRoot sender,XamlRootChangedEventArgs args)
+        {
+            if(selectedAsset is {IsPixelArt:true} doc && chat!=null && Math.Abs(AssetDisplayDensity()-assetPreviewDensity)>0.001)
+                await Guard(()=>RefreshAssetImageAsync(doc,assetLoadRevision,chat.Id));
+        }
+        canvas.Loaded += (_,_) => { observedRoot=canvas.XamlRoot;if(observedRoot!=null)observedRoot.Changed+=DisplayChanged; };
+        canvas.Unloaded += (_,_) => {if(observedRoot!=null)observedRoot.Changed-=DisplayChanged;observedRoot=null;};
+        assetSurface.Children.Add(assetImage);
+        var viewport=new ScrollViewer { Content=assetSurface, HorizontalScrollBarVisibility=ScrollBarVisibility.Auto, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, ZoomMode=ZoomMode.Disabled };
+        viewport.ViewChanged += (_,args) =>
+        {
+            if(args.IsIntermediate || selectedAsset is not {IsPixelArt:true})return;
+            var density=AssetDisplayDensity();
+            var x=Math.Round(viewport.HorizontalOffset*density)/density;var y=Math.Round(viewport.VerticalOffset*density)/density;
+            if(Math.Abs(x-viewport.HorizontalOffset)>0.001||Math.Abs(y-viewport.VerticalOffset)>0.001)viewport.ChangeView(x,y,null,true);
+        };
+        canvas.Children.Add(viewport);canvas.Children.Add(assetEmpty);
         var frame=new Border { Child=canvas, Padding=new(12), CornerRadius=new(12), BorderThickness=new(1), BorderBrush=FluentDesign.Stroke };
         Grid.SetRow(frame,2);pane.Children.Add(frame);
         var layerSection = new Expander { Header=WorkflowText("Calques · premier plan en haut","Layers · front first"), IsExpanded=true, HorizontalAlignment=HorizontalAlignment.Stretch, HorizontalContentAlignment=HorizontalAlignment.Stretch,
@@ -135,7 +173,7 @@ public sealed partial class MainWindow
     }
     void ResetAssetPreview()
     {
-        assetLoadRevision++;selectedAsset=null;assetImage.Source=null;assetEmpty.Visibility=Visibility.Visible;assetLayers.Children.Clear();assetStatus.Text="";assetPlayback.Stop();assetPlay.Content="▶";selectedAssetFrame=-1;
+        assetLoadRevision++;assetPreviewRequest++;selectedAsset=null;assetImage.Source=null;assetImage.Width=double.NaN;assetImage.Height=double.NaN;assetImage.Stretch=Stretch.Uniform;assetPreviewScale=0;assetEmpty.Visibility=Visibility.Visible;assetLayers.Children.Clear();assetStatus.Text="";assetPlayback.Stop();assetPlay.Content="▶";selectedAssetFrame=-1;
         populatingAssets=true;assetPicker.Items.Clear();populatingAssets=false;assetLoading.Visibility=Visibility.Collapsed;
     }
     async Task RefreshAssetsAsync(string? requestedId=null)
@@ -158,6 +196,7 @@ public sealed partial class MainWindow
             finally{populatingAssets=false;}
             selectedAsset=doc;assetLayers.Children.Clear();assetEmpty.Visibility=doc==null?Visibility.Visible:Visibility.Collapsed;
             if(doc==null){assetImage.Source=null;assetStatus.Text="";return;}
+            ConfigureAssetZoom(doc);
             if (selectedAssetFrame >= doc.Frames.Count) selectedAssetFrame=doc.Frames.Count-1;
             populatingAssetFrames=true;
             try { assetFramePicker.Items.Clear();assetFramePicker.Items.Add(WorkflowText("Base", "Base"));
@@ -165,7 +204,10 @@ public sealed partial class MainWindow
             finally { populatingAssetFrames=false; }
             await RefreshAssetImageAsync(doc,revision,chatId);
             var displayedLayers = selectedAssetFrame >= 0 ? doc.Frames[selectedAssetFrame].Layers : doc.Layers;
-            assetStatus.Text=$"{doc.Width} × {doc.Height} px  ·  {displayedLayers.Sum(l=>l.Shapes.Count)} {WorkflowText("formes","shapes")}  ·  {displayedLayers.Sum(l=>l.Pixels.Count)} pixels  ·  {doc.Frames.Count} frames  ·  r{doc.Revision}";
+            var modeText=doc.IsPixelArt
+                ? $"{WorkflowText("Pixel art · grille","Pixel art · grid")} {doc.Width/doc.PixelSize} × {doc.Height/doc.PixelSize} · {WorkflowText("canevas","canvas")} {doc.Width} × {doc.Height} px"
+                : $"{WorkflowText("Classique","Classic")} · {doc.Width} × {doc.Height} px";
+            assetStatus.Text=$"{modeText}  ·  {displayedLayers.Sum(l=>l.Shapes.Count)} {WorkflowText("formes","shapes")}  ·  {displayedLayers.Sum(l=>l.Pixels.Count)} pixels  ·  {doc.Frames.Count} frames  ·  r{doc.Revision}";
             foreach(var layer in displayedLayers.AsEnumerable().Reverse())
             {
                 var row=new Grid { ColumnSpacing=5 };row.ColumnDefinitions.Add(new(){Width=new(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
@@ -191,26 +233,90 @@ public sealed partial class MainWindow
     }
     async Task RefreshAssetImageAsync(AssetDocument doc,int revision,int chatId)
     {
+        var request=++assetPreviewRequest;
         var scene = selectedAssetFrame >= 0 && selectedAssetFrame < doc.Frames.Count ? AssetAnimation.FrameScene(doc,selectedAssetFrame) : doc.Clone();
         scene.Frames=[];
-        var bytes=await Task.Run(()=>AssetRenderer.Preview(scene,1400,true,0,assetGuides.IsChecked==true,assetGrid.IsChecked==true));
-        if(revision!=assetLoadRevision||chat?.Id!=chatId)return;
+        var layout=doc.IsPixelArt?PixelPreviewLayout(doc):null;
+        var maxSize=layout!=null?Math.Max(layout.PixelWidth,layout.PixelHeight):1400;
+        var scale=AssetRenderer.PreviewScale(scene,maxSize);
+        var guides=assetGuides.IsChecked==true;var grid=assetGrid.IsChecked==true;
+        var bytes=await Task.Run(()=>AssetRenderer.Preview(scene,maxSize,true,0,guides,grid));
+        if(revision!=assetLoadRevision||request!=assetPreviewRequest||chat?.Id!=chatId)return;
         using var stream=new MemoryStream(bytes);using var randomAccess=stream.AsRandomAccessStream();
         var bitmap=new BitmapImage();await bitmap.SetSourceAsync(randomAccess);
-        if(revision==assetLoadRevision&&chat?.Id==chatId)assetImage.Source=bitmap;
+        if(revision==assetLoadRevision&&request==assetPreviewRequest&&chat?.Id==chatId)
+        {
+            ApplyAssetImageLayout(doc);
+            assetImage.Source=bitmap;assetPreviewScale=scale;assetPreviewDensity=AssetDisplayDensity();
+        }
+    }
+    double AssetDisplayDensity()=>assetCanvas?.XamlRoot?.RasterizationScale ?? 1;
+    void ConfigureAssetZoom(AssetDocument doc)
+    {
+        populatingAssetZoom=true;
+        try
+        {
+            int current=assetZoom.SelectedItem is ComboBoxItem {Tag:int value}?value:0;
+            assetZoom.Visibility=doc.IsPixelArt?Visibility.Visible:Visibility.Collapsed;
+            assetZoom.Items.Clear();
+            int maxCell=Math.Max(1,Math.Min(32,4096/Math.Max(doc.Width/doc.PixelSize,doc.Height/doc.PixelSize)));
+            foreach(int zoom in new[]{0,1,2,4,8,16,32}.Where(v=>v<=maxCell))
+            {var item=new ComboBoxItem {Content=zoom==0?WorkflowText("Adapter","Fit"):$"{zoom}×",Tag=zoom};assetZoom.Items.Add(item);if(zoom==current)assetZoom.SelectedItem=item;}
+            if(assetZoom.SelectedIndex<0)assetZoom.SelectedIndex=0;
+        }
+        finally{populatingAssetZoom=false;}
+    }
+    AssetPixelPreview PixelPreviewLayout(AssetDocument doc)
+    {
+        int zoom=assetZoom.SelectedItem is ComboBoxItem {Tag:int value}?value:0;
+        if(assetCanvas is not { ActualWidth: > 0, ActualHeight: > 0 })return AssetPixelPreview.Fit(doc,512,512,AssetDisplayDensity(),zoom);
+        var origin=assetCanvas.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point());
+        return AssetPixelPreview.Fit(doc,assetCanvas.ActualWidth,assetCanvas.ActualHeight,AssetDisplayDensity(),zoom,origin.X,origin.Y);
+    }
+    void ApplyAssetImageLayout(AssetDocument doc)
+    {
+        if(doc.IsPixelArt)
+        {
+            var layout=PixelPreviewLayout(doc);
+            assetImage.Stretch=Stretch.Fill;
+            assetImage.HorizontalAlignment=HorizontalAlignment.Left;assetImage.VerticalAlignment=VerticalAlignment.Top;
+            assetImage.Width=layout.Width;assetImage.Height=layout.Height;assetImage.Margin=new(layout.Left,layout.Top,0,0);
+            assetSurface.Width=Math.Max(assetCanvas?.ActualWidth ?? 0,layout.Width+layout.Left);
+            assetSurface.Height=Math.Max(assetCanvas?.ActualHeight ?? 0,layout.Height+layout.Top);
+        }
+        else
+        {
+            assetImage.Stretch=Stretch.Uniform;assetImage.Width=double.NaN;assetImage.Height=double.NaN;assetImage.Margin=new(0);
+            assetImage.HorizontalAlignment=HorizontalAlignment.Stretch;assetImage.VerticalAlignment=VerticalAlignment.Stretch;
+            assetSurface.Width=assetCanvas?.ActualWidth ?? 512;assetSurface.Height=assetCanvas?.ActualHeight ?? 512;
+        }
     }
     async Task CreateAssetManuallyAsync()
     {
         if(chat==null)return;
         var name=new TextBox { Text=WorkflowText("Nouvel asset","New asset"),Header=WorkflowText("Nom","Name") };
-        var width=new NumberBox { Header=WorkflowText("Largeur","Width"),Value=512,Minimum=1,Maximum=4096 };
-        var height=new NumberBox { Header=WorkflowText("Hauteur","Height"),Value=512,Minimum=1,Maximum=4096 };
-        var pixelSize=new NumberBox { Header=WorkflowText("Taille d'un pixel (1 = dessin vectoriel)","Pixel size (1 = vector canvas)"),Value=1,Minimum=1,Maximum=64 };
-        var panel=new StackPanel { Spacing=8 };panel.Children.Add(name);panel.Children.Add(width);panel.Children.Add(height);panel.Children.Add(pixelSize);
+        var mode=new ComboBox { Header=WorkflowText("Mode de dessin","Drawing mode"),ItemsSource=new[]{WorkflowText("Classique · formes SVG lissées","Classic · smooth SVG shapes"),WorkflowText("Pixel art · dessin pixel par pixel","Pixel art · pixel-by-pixel drawing")},SelectedIndex=0,HorizontalAlignment=HorizontalAlignment.Stretch };
+        var preset=new ComboBox { Header=WorkflowText("Résolution conseillée","Recommended resolution"),ItemsSource=new[]{"16 × 16 px","32 × 32 px","64 × 64 px","128 × 128 px",WorkflowText("Personnalisée","Custom")},SelectedIndex=1,HorizontalAlignment=HorizontalAlignment.Stretch,Visibility=Visibility.Collapsed };
+        var width=new NumberBox { Header=WorkflowText("Largeur (px)","Width (px)"),Value=512,Minimum=1,Maximum=4096 };
+        var height=new NumberBox { Header=WorkflowText("Hauteur (px)","Height (px)"),Value=512,Minimum=1,Maximum=4096 };
+        var hint=new TextBlock { Text=WorkflowText("En pixel art, chaque cellule correspond à un pixel. Le rendu et l’agrandissement restent nets.","In pixel-art mode, each cell is one pixel. Rendering and enlargement stay sharp."),TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,FontSize=12 };
+        void SyncPreset()
+        {
+            var custom=preset.SelectedIndex==4;width.IsEnabled=custom;height.IsEnabled=custom;
+            if(!custom){var size=preset.SelectedIndex switch{0=>16,2=>64,3=>128,_=>32};width.Value=size;height.Value=size;}
+        }
+        preset.SelectionChanged+=(_,_)=>{if(mode.SelectedIndex==1)SyncPreset();};
+        mode.SelectionChanged+=(_,_)=>
+        {
+            var pixel=mode.SelectedIndex==1;preset.Visibility=pixel?Visibility.Visible:Visibility.Collapsed;hint.Visibility=preset.Visibility;
+            width.Maximum=pixel?512:4096;height.Maximum=pixel?512:4096;
+            if(pixel)SyncPreset();else{width.IsEnabled=true;height.IsEnabled=true;width.Value=512;height.Value=512;}
+        };
+        var panel=new StackPanel { Spacing=8 };panel.Children.Add(name);panel.Children.Add(mode);panel.Children.Add(preset);panel.Children.Add(width);panel.Children.Add(height);panel.Children.Add(hint);
         var dialog=new ContentDialog { XamlRoot=root.XamlRoot,Title=WorkflowText("Nouveau canevas","New canvas"),Content=panel,PrimaryButtonText=WorkflowText("Créer","Create"),CloseButtonText=WorkflowText("Annuler","Cancel") };
         var store=CurrentAssets();int chatId=chat.Id;
         if(await dialog.ShowAsync()!=ContentDialogResult.Primary)return;
-        var doc=await store.CreateAsync(name.Text,(int)width.Value,(int)height.Value,"none",(int)pixelSize.Value,CancellationToken.None);
+        var doc=await store.CreateAsync(name.Text,(int)width.Value,(int)height.Value,"none",1,mode.SelectedIndex==1?"pixel_art":"classic",CancellationToken.None);
         if(chat?.Id==chatId)await RefreshAssetsAsync(doc.Id);
     }
     async Task SaveAssetAsAsync()

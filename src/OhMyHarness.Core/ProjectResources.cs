@@ -7,7 +7,7 @@ public static class ProjectResources
 {
     public static Project Effective(Chat chat, Project project)
     {
-        var copy = new Project { Id = project.Id, Name = project.Name, PermissionProfileJson = project.PermissionProfileJson };
+        var copy = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
         copy.SetSourceFolders(For(chat, project)); return copy;
     }
     public static List<string> Validate(IEnumerable<string> paths)

@@ -5,6 +5,7 @@ namespace OhMyHarness.Core;
 public sealed class FeatureSettings
 {
     public string Theme { get; set; } = "fluent-dark";
+    public List<AppearanceTheme> CustomThemes { get; set; } = [];
     public string ResponseStyle { get; set; } = "default";
     public string CliTheme { get; set; } = "shared";
     public string CliFont { get; set; } = "";
@@ -14,6 +15,19 @@ public sealed class FeatureSettings
     public string ApplicationName { get; set; } = "OhMyHarness";
     public string LogoPath { get; set; } = "";
     public int FontZoomPercent { get; set; } = 100;
+    public string InterfaceFont { get; set; } = "";
+    public string UserMessageFont { get; set; } = "";
+    public string AssistantMessageFont { get; set; } = "";
+    public bool RetryEnabled { get; set; } = true;
+    public int RetryCount { get; set; } = 3;
+    public int RetryDelaySeconds { get; set; } = 5;
+    public bool NotificationBell { get; set; } = true;
+    public bool NotificationSound { get; set; } = true;
+    public bool NotifyCompleted { get; set; } = true;
+    public bool NotifyActionRequired { get; set; } = true;
+    public string NotificationTone { get; set; } = "soft";
+    public int NotificationVolume { get; set; } = 50;
+    public List<AgentPreset> AgentPresets { get; set; } = [];
     public bool ComposerInfoExpanded { get; set; } = true;
     public bool AutoFocusTool { get; set; }
     public string BrowserMode { get; set; } = "embedded";
@@ -45,7 +59,15 @@ public sealed class FeatureSettings
     public static FeatureSettings Read(string json) { try { return JsonSerializer.Deserialize<FeatureSettings>(json) ?? new(); } catch { return new(); } }
     public string Json()
     {
+        if (CustomThemes == null || CustomThemes.Count > 50 || CustomThemes.Any(x => !AppearanceThemes.IsValidCustom(x)) || CustomThemes.Select(x => x.Id).Distinct().Count() != CustomThemes.Count)
+            throw new ArgumentException("Thèmes personnalisés invalides / Invalid custom themes.");
         ResponseStyle = ResponseStyles.Get(ResponseStyle).Id;
+        if (new[] { InterfaceFont, UserMessageFont, AssistantMessageFont }.Any(font => font == null || font.Length > 100 || font.Any(char.IsControl)))
+            throw new ArgumentException("Police d’interface invalide / Invalid interface font.");
+        if (RetryCount is < 0 or > 10 || RetryDelaySeconds is < 1 or > 300 || NotificationVolume is < 0 or > 100 || !NotificationSounds.Contains(NotificationTone))
+            throw new ArgumentException("Réglages de retry ou notification invalides / Invalid retry or notification settings.");
+        if (AgentPresets == null || AgentPresets.Count > 30) throw new ArgumentException("30 presets maximum.");
+        foreach (var preset in AgentPresets) preset.Validate();
         if (CliFont.Length > 100 || CliFont.Any(char.IsControl) || CliFontSize is < 8 or > 36) throw new ArgumentException("Police CLI invalide / Invalid CLI font.");
         if (VisionInstruction.Length > 8000 || NamingModel.Length > 200 || NamingProviderId < 0 || LogRetentionDays is < 1 or > 365 || !Enum.TryParse<AppLogLevel>(LogLevel, out _))
             throw new ArgumentException("Réglages vision, nommage ou logs invalides.");

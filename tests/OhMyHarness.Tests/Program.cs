@@ -9,12 +9,16 @@ void Check(bool condition, string name) { if (!condition) throw new Exception("�
 async Task Throws<T>(Func<Task> action, string name) where T : Exception
 { try { await action(); } catch (T) { Check(true, name); return; } throw new Exception("Exception attendue : " + name); }
 string Event(object value) => "data: " + System.Text.Json.JsonSerializer.Serialize(value) + "\r\n\r\n";
+if (args.Contains("--conversation-workspace")) { await ConversationWorkspaceChecks.Run(Check); Console.WriteLine($"{passed} conversation workspace checks passed."); return; }
 await ModelUtilityChecks.Run(Check);
 if (args.Contains("--model-tools")) { Console.WriteLine($"{passed} model tool checks passed."); return; }
+ToolImageHistoryChecks.Run(Check);
+if(args.Contains("--tool-image-history")) return;
 if(args.Contains("--browser-smoke")) { await ChromiumChecks.Run(Check); return; }
 if(args.Contains("--chrome-smoke")) { await ChromeMcpChecks.Run(Check); return; }
 await BrowserSkillChecks.Run(Check);
 await AssetChecks.Run(Check);
+await PixelArtChecks.Run(Check);
 if(args.Contains("--assets")){Console.WriteLine($"{passed} asset checks passed.");return;}
 await WebHttpChecks.Run(Check);
 if (args.Contains("--web-http")) { Console.WriteLine($"{passed} checks passed."); return; }
@@ -603,7 +607,9 @@ try
     var originalTemplate = await File.ReadAllTextAsync(Path.Combine(skillFolder, "exemple-revue", "SKILL.md"));
     await File.AppendAllTextAsync(Path.Combine(skillFolder, "exemple-revue", "SKILL.md"), "\nUSER-CUSTOMIZATION"); customSkills.EnsureTemplate();
     Check((await File.ReadAllTextAsync(Path.Combine(skillFolder, "exemple-revue", "SKILL.md"))).Contains("USER-CUSTOMIZATION"), "Le modèle de skill ne remplace pas les personnalisations");
-    var runtimeChat = new Chat { Id = 1234, ExecutionMode = "plan", OrchestrationMode = "forced" };
+    var runtimeChat = new Chat { Id = 1234, ExecutionMode = "plan", OrchestrationMode = "forced",
+        AgentOptionsJson = new ConversationAgents { AutomaticCount = false, AutomaticRoles = false, Count = 2, Roles = [
+            new() { Name = "Exploration", Instruction = "Inspect sources without edits." }, new() { Name = "Validation", Instruction = "Review constraints without edits." }] }.Json() };
     var runtimeProject = new Project { SourceFolder = featureRoot };
     await using(var runtimeDb = new HarnessDb(Path.Combine(workspace,"runtime.sqlite")))
     {
@@ -708,6 +714,7 @@ await VisionChecks.Run(Check);
 ApplicationChecks.Run(Check);
 await WorkspaceEnhancementChecks.Run(Check);
 await SchedulingChecks.Run(Check);
+await OpenCodeBypassChecks.Run(Check);
 Console.WriteLine($"\n{passed} contrôles réussis.");
 
 sealed class FakeHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> action) : HttpMessageHandler

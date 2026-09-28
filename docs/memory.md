@@ -7,7 +7,9 @@
 
 Categories are **Project**, **General** and **User**. Shared Project memory is limited to the current project. Shared General and User memory is accessible across projects. Conversation memory stays private to that thread regardless of category. Disabling a skill preserves data but removes model access.
 
-**View memory** opens a list with project, conversation, scope and category filters. Search covers keys, titles, content and tags. Pages contain 20 results; **Show more** loads the next page. Clicking displays full content, version, last modification and originating thread. Manual creation, editing and deletion are saved immediately; the general **Cancel** button does not undo them. Skill toggles are committed with **Save**.
+**View memory** opens a read-only database viewer covering every row of the `Memories` table, across all projects and conversations. All 15 columns are accessible with horizontal scrolling. Each column has a filter: text contains (case-insensitive for ASCII), exact integers (or `NULL` for an empty relationship), and UTC dates in `YYYY-MM-DD` or `DD/MM/YYYY` format. Filters combine with AND. Sorting, 100-row pages and matching/total counts keep the full table browsable. Select a row to inspect all fields without truncation; **Copy row** copies its JSON. **Refresh** reloads the database; **Clear filters** returns to all rows. This administrative view does not expand a model's memory permissions.
+
+**Edit memories…** preserves the project/conversation editor with scope/category filters and full-text search. Pages contain 20 results; **Show more** loads the next page. Clicking displays full content, version, last modification and originating thread. Manual creation, editing and deletion are saved immediately; the general **Cancel** button does not undo them. Skill toggles are committed with **Save**.
 
 ## Model tools
 

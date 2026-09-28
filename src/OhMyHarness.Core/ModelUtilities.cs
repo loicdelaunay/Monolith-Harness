@@ -26,7 +26,7 @@ public sealed class ModelToolClient(HttpClient http)
     readonly OpenCodeEngine openCode = new(http);
 
     public async Task<ModelToolResult> RunAsync(Provider provider, string secret, ModelToolRequest request,
-        Action<GenerationUpdate> progress, CancellationToken ct)
+        Action<GenerationUpdate> progress, CancellationToken ct, FeatureSettings? retrySettings = null)
     {
         if (provider.IsComposite) throw new ArgumentException("Choisissez un modèle direct / Select a direct model.");
         var messages = request.Messages();
@@ -48,7 +48,7 @@ public sealed class ModelToolClient(HttpClient http)
         try
         {
             if (!provider.IsOpenCode)
-                completion = await chat.StreamAsync(provider, secret, messages, [], Update, timeout.Token);
+                completion = await chat.StreamAsync(provider, secret, messages, [], Update, timeout.Token, retrySettings: retrySettings);
             else
             {
                 // A fresh session for every tool request prevents benchmark answers and user text
@@ -61,7 +61,7 @@ public sealed class ModelToolClient(HttpClient http)
                 try
                 {
                     completion = await openCode.PromptAsync(isolated, secret, directory, session,
-                        request.Input, request.System, [], Update, timeout.Token, policy: new("plan", "disabled"));
+                        request.Input, request.System, [], Update, timeout.Token, policy: new("plan", "disabled"), retrySettings: retrySettings);
                     watch.Stop();
                 }
                 finally

@@ -22,7 +22,7 @@ public sealed partial class MainWindow
         {
             visibleProjectChats.Clear();
             visibleArchivedChats.Clear();
-            foreach (var item in matches.Where(c => !c.IsArchived).OrderByDescending(c => c.IsFavorite)) visibleProjectChats.Add(item);
+            foreach (var item in matches.Where(c => !c.IsArchived).OrderByDescending(c => c.IsFavorite).ThenByDescending(c => c.UpdatedUtc).ThenByDescending(c => c.Id)) visibleProjectChats.Add(item);
             foreach (var item in matches.Where(c => c.IsArchived)) visibleArchivedChats.Add(item);
             var activeMatch = visibleProjectChats.FirstOrDefault(item => item.Id == selectedId);
             var archivedMatch = visibleArchivedChats.FirstOrDefault(item => item.Id == selectedId);
@@ -34,6 +34,7 @@ public sealed partial class MainWindow
 
         UpdateChatSearchSummary();
         RefreshConversationProgress();
+        if (!loading) RebuildProjectNavigation();
         if (scrollToFirst && visibleProjectChats.Count > 0)
         {
             var first = visibleProjectChats[0];
@@ -53,6 +54,7 @@ public sealed partial class MainWindow
             ? WorkflowText($"{selected} sélectionnées", $"{selected} selected")
             : chatSearch.Text.Trim().Length == 0 ? total.ToString() : $"{shown} / {total}";
         archiveHeading.Text = WorkflowText($"Archive ({allProjectChats.Count(c => c.IsArchived)})", $"Archive ({allProjectChats.Count(c => c.IsArchived)})");
+        archiveExpander.Visibility = allProjectChats.Any(c => c.IsArchived) ? Visibility.Visible : Visibility.Collapsed;
         chatEmpty.Text = UiText.T(total == 0 ? "Aucune conversation" : "Aucun résultat");
         chatEmpty.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -85,6 +87,8 @@ public sealed partial class MainWindow
         var menu = new MenuFlyout();
         if (selected.Length == 1)
         {
+            var pin = new MenuFlyoutItem { Text = WorkflowText(target.IsPinned ? "Désépingler" : "Épingler", target.IsPinned ? "Unpin" : "Pin"), Icon = FluentDesign.Icon("\uE718") };
+            pin.Click += async (_, _) => await Guard(() => TogglePinnedChatAsync(target)); menu.Items.Add(pin);
             var rename = new MenuFlyoutItem { Text = UiText.T("Renommer") };
             rename.Click += async (_, _) => await Guard(() => RenameChatAsync(target));
             menu.Items.Add(rename);

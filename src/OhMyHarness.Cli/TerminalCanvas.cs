@@ -6,9 +6,9 @@ namespace OhMyHarness.Cli;
 public sealed record Ink(int Foreground, int Background, bool Bold = false);
 public sealed record Palette(int Background, int Panel, int Card, int Foreground, int Muted, int Accent, int Green, int Gold)
 {
-    public static Palette FromTheme(string id)
+    public static Palette FromTheme(string id) => FromTheme(OhMyHarness.Core.AppearanceThemes.Get(id));
+    public static Palette FromTheme(OhMyHarness.Core.AppearanceTheme theme)
     {
-        var theme = OhMyHarness.Core.AppearanceThemes.Get(id);
         static int Hex(string hex) => Convert.ToInt32(hex[1..], 16);
         return new(Hex(theme.Background), Hex(theme.Surface), Hex(OhMyHarness.Core.ThemeContrast.Blend(theme.Surface, theme.Accent, .12)),
             Hex(theme.Text), Hex(theme.Muted), Hex(OhMyHarness.Core.ThemeContrast.AccentText(theme)),

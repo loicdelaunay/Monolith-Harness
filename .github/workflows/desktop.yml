@@ -92,7 +92,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./artifacts/CLI/omh --version | grep '1.13.0'
+          version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/OhMyHarness.Cli/OhMyHarness.Cli.csproj | head -n 1)"
+          test -n "$version"
+          ./artifacts/CLI/omh --version | grep -F "$version"
           smoke_dir="$(mktemp -d)"
           trap 'kill "$xvfb_pid" 2>/dev/null || true; rm -rf "$smoke_dir"' EXIT
           Xvfb :99 -screen 0 1280x800x24 > "$smoke_dir/xvfb.log" 2>&1 &

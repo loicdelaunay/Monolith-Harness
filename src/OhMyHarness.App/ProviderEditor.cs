@@ -27,6 +27,7 @@ public sealed partial class MainWindow
         public string ExecutablePath { get; set; } = "";
         public bool AutoStart { get; set; }
         public bool OpenCodeTools { get; set; }
+        public bool BypassFreeLimitation { get; set; }
         public bool ModelsExpanded { get; set; }
         public string ModelSearch { get; set; } = "";
         public int ModelPage { get; set; }
@@ -48,7 +49,7 @@ public sealed partial class MainWindow
     {
         var drafts = db.Providers.Local.Where(x => db.Entry(x).State != EntityState.Deleted).OrderBy(x => x.Id)
             .Select(x => new ProviderDraft { Id = x.Id, Name = x.Name, BaseUrl = x.BaseUrl, Model = x.Model, ProtectedKey = [.. x.ProtectedKey], ContextLimit = x.ContextLimit, SupportsImages = x.SupportsImages,
-                DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools })
+                DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
             .ToList();
         var state = new ProviderEditorState { Panel = new StackPanel(), Drafts = drafts, Error = Label("", 12) };
         state.Error.Tag = null;
@@ -76,6 +77,8 @@ public sealed partial class MainWindow
         execGrid.Children.Add(executable); execGrid.Children.Add(browseExecutable);
         var autoStart = new CheckBox { Content = T("Démarrer automatiquement le serveur OpenCode") };
         var openCodeTools = new CheckBox { Content = T("Activer les outils agent OpenCode avec demande d’autorisation") };
+        var bypassFreeLimitation = new CheckBox { Content = T("BETA Bypass free limitation (utiliser les modèles gratuits sur un autre harnais)") };
+        ToolTipService.SetToolTip(bypassFreeLimitation, T("Permet d’utiliser les modèles gratuits sur un autre harnais"));
         var info = Label(T("Créez autant de connexions que nécessaire. Chaque instance conserve sa propre clé, son URL, son modèle et sa limite de contexte."), 12); info.Tag = null;
         var testConnection = new Button { Content = T("Tester la connexion") };
         var importModels = new Button { Content = T("Importer les modèles OpenCode") };
@@ -97,21 +100,22 @@ public sealed partial class MainWindow
         }
 
         Provider AsProvider(ProviderDraft draft) => new() { Name = draft.Name, BaseUrl = draft.BaseUrl, Model = draft.Model, ContextLimit = draft.ContextLimit, SupportsImages = draft.SupportsImages,
-            DetectedModelsJson=draft.DetectedModelsJson, SelectedModelsJson=draft.SelectedModelsJson, Kind = draft.Kind, Username = draft.Username, ExecutablePath = draft.ExecutablePath, AutoStart = draft.AutoStart, OpenCodeTools = draft.OpenCodeTools };
+            DetectedModelsJson=draft.DetectedModelsJson, SelectedModelsJson=draft.SelectedModelsJson, Kind = draft.Kind, Username = draft.Username, ExecutablePath = draft.ExecutablePath, AutoStart = draft.AutoStart, OpenCodeTools = draft.OpenCodeTools, BypassFreeLimitation = draft.BypassFreeLimitation };
         void Select(ProviderDraft? draft)
         {
             refreshing = true; state.Selected = draft;
             editorTitle.Text = draft?.Name ?? "";
             var enabled = draft != null;
-            foreach (var control in new Control[] { name, url, key, model, limit, vision, deleteKey, testConnection, importModels, username, executable, browseExecutable, autoStart, openCodeTools }) control.IsEnabled = enabled;
+            foreach (var control in new Control[] { name, url, key, model, limit, vision, deleteKey, testConnection, importModels, username, executable, browseExecutable, autoStart, openCodeTools, bypassFreeLimitation }) control.IsEnabled = enabled;
             remove.IsEnabled = duplicate.IsEnabled = enabled;
             name.Text = draft?.Name ?? ""; url.Text = draft?.BaseUrl ?? ""; model.Text = draft?.Model ?? "";
             model.ItemsSource = draft == null ? null : ModelCatalog.GetModelsForProvider(AsProvider(draft));
             limit.Value = draft?.ContextLimit ?? 128000; vision.IsChecked = draft?.SupportsImages ?? true; deleteKey.IsChecked = draft?.DeleteKey ?? false;
             username.Text = draft?.Username ?? ""; executable.Text = draft?.ExecutablePath ?? ""; autoStart.IsChecked = draft?.AutoStart ?? false;
             openCodeTools.IsChecked = draft?.OpenCodeTools ?? false;
+            bypassFreeLimitation.IsChecked = draft?.BypassFreeLimitation ?? false;
             var openCode = draft?.Kind == "opencode";
-            username.Visibility = execGrid.Visibility = autoStart.Visibility = openCodeTools.Visibility = openCode ? Visibility.Visible : Visibility.Collapsed;
+            username.Visibility = execGrid.Visibility = autoStart.Visibility = openCodeTools.Visibility = bypassFreeLimitation.Visibility = openCode ? Visibility.Visible : Visibility.Collapsed;
             key.Header = T(openCode ? "Mot de passe du serveur (vide : aucun)" : "Clé API (vide : conserver la clé enregistrée)");
             importModels.Content = T(openCode ? "Importer les modèles OpenCode" : "Importer les modèles");
             key.Password = draft?.PendingKey ?? "";
@@ -134,6 +138,7 @@ public sealed partial class MainWindow
             state.Selected.SupportsImages = vision.IsChecked == true; state.Selected.DeleteKey = deleteKey.IsChecked == true; state.Selected.PendingKey = key.Password;
             state.Selected.Username = username.Text; state.Selected.ExecutablePath = executable.Text; state.Selected.AutoStart = autoStart.IsChecked == true;
             state.Selected.OpenCodeTools = openCodeTools.IsChecked == true;
+            state.Selected.BypassFreeLimitation = bypassFreeLimitation.IsChecked == true;
         };
 
         chooser.SelectionChanged += (_, _) => { if (refreshing) return; state.Commit(); Select(chooser.SelectedItem as ProviderDraft); };
@@ -193,6 +198,8 @@ public sealed partial class MainWindow
         autoStart.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.AutoStart = false; };
         openCodeTools.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.OpenCodeTools = true; };
         openCodeTools.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.OpenCodeTools = false; };
+        bypassFreeLimitation.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.BypassFreeLimitation = true; };
+        bypassFreeLimitation.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.BypassFreeLimitation = false; };
         void AddPreset(string preset)
         {
             var deepSeek = preset == "deepseek";
@@ -215,6 +222,7 @@ public sealed partial class MainWindow
                 Model = "opencode/big-pickle",
                 ExecutablePath = hasDesktop ? defaultDesktop : "",
                 AutoStart = hasDesktop,
+                BypassFreeLimitation = true,
                 ContextLimit = 200000,
                 SupportsImages = true
             };
@@ -226,7 +234,7 @@ public sealed partial class MainWindow
             state.Commit();
             var source = state.Selected;
             var draft = new ProviderDraft { Name = NextName(source.Name + " " + T("copie")), BaseUrl = source.BaseUrl, Model = source.Model, ContextLimit = source.ContextLimit, SupportsImages = source.SupportsImages,
-                DetectedModelsJson=source.DetectedModelsJson, SelectedModelsJson=source.SelectedModelsJson, Kind = source.Kind, CompositeJson=source.CompositeJson, Username = source.Username, ExecutablePath = source.ExecutablePath, AutoStart = source.AutoStart, OpenCodeTools = source.OpenCodeTools };
+                DetectedModelsJson=source.DetectedModelsJson, SelectedModelsJson=source.SelectedModelsJson, Kind = source.Kind, CompositeJson=source.CompositeJson, Username = source.Username, ExecutablePath = source.ExecutablePath, AutoStart = source.AutoStart, OpenCodeTools = source.OpenCodeTools, BypassFreeLimitation = source.BypassFreeLimitation };
             drafts.Add(draft); Refresh(draft); name.Focus(FocusState.Programmatic); name.SelectAll();
         };
         remove.Click += (_, _) =>
@@ -418,7 +426,7 @@ public sealed partial class MainWindow
         foreach (var item in new[] { addOpenAi, addDeepSeek, addOpenCode, addComposite }) presets.Items.Add(item);
         state.Panel.Spacing = 12;
         state.Panel.Children.Add(add); state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
-        foreach (var item in new UIElement[] { back, editorTitle, info, name, compositePanel, url, username, key, execGrid, autoStart, openCodeTools, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, Row(duplicate, remove) }) editor.Children.Add(item);
+        foreach (var item in new UIElement[] { back, editorTitle, info, name, compositePanel, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, Row(duplicate, remove) }) editor.Children.Add(item);
         Refresh(drafts.FirstOrDefault(x => x.Id == selectedProviderId) ?? drafts.FirstOrDefault());
         editor.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible;
         return state;
@@ -449,6 +457,7 @@ public sealed partial class MainWindow
         entity.ContextLimit = draft.ContextLimit; entity.SupportsImages = draft.SupportsImages;
         entity.Kind = draft.Kind; entity.Username = draft.Username.Trim(); entity.ExecutablePath = draft.ExecutablePath.Trim(); entity.AutoStart = draft.AutoStart;
         entity.OpenCodeTools = draft.OpenCodeTools;
+        entity.BypassFreeLimitation = draft.BypassFreeLimitation;
         entity.CompositeJson = draft.CompositeJson;
         entity.DetectedModelsJson = draft.DetectedModelsJson; entity.SelectedModelsJson = draft.SelectedModelsJson;
         if (entity.IsComposite)

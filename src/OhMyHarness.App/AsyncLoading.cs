@@ -91,7 +91,13 @@ public sealed partial class MainWindow
         {
             var list = selected == null ? [] : await ReadStoreAsync(store => store.Chats.AsNoTracking()
                 .Where(x => x.ProjectId == selected.Id).OrderByDescending(x => x.Id).ToList());
+            var sidebarRows = await ReadStoreAsync(store => store.Chats.AsNoTracking().Select(x => new Chat {
+                Id = x.Id, ProjectId = x.ProjectId, Title = x.Title, IsPinned = x.IsPinned, IsFavorite = x.IsFavorite, IsArchived = x.IsArchived, UpdatedUtc = x.UpdatedUtc
+            }).ToList());
             if (revision != projectLoadRevision) return;
+            navigationChats = sidebarRows;
+            PruneSidebarActivity();
+            if (selected != null && !collapsedSidebarProjects.Contains(selected.Id)) expandedSidebarProjects.Add(selected.Id);
             // Keep edits to chat preferences on the UI-owned tracked entities.
             list = list.Select(item => db.Chats.Local.FirstOrDefault(x => x.Id == item.Id) ?? db.Chats.Attach(item).Entity).ToList();
             loading = true;
@@ -99,7 +105,9 @@ public sealed partial class MainWindow
             {
                 chatSearch.Text = string.Empty;
                 allProjectChats = list;
+                archiveExpander.IsExpanded = selected != null && expandedSidebarArchives.Contains(selected.Id);
                 ApplyChatSearch(state.ChatId, selectFirst: true);
+                RebuildProjectNavigation();
             }
             finally { loading = false; }
             await SelectChat();
@@ -125,6 +133,7 @@ public sealed partial class MainWindow
         SaveConversationDraft();
         var selected = (chats.SelectedItem ?? archivedChats.SelectedItem) as Chat;
         chat = selected; state.ChatId = selected?.Id;
+        if (selected != null) AcknowledgeChatNotice(selected.Id);
         project = projects.SelectedItem is Project owner && (selected == null || owner.Id == selected.ProjectId)
             ? selected == null ? owner : ProjectResources.Effective(selected, owner)
             : null;
@@ -133,6 +142,7 @@ public sealed partial class MainWindow
         pinnedTasks.Child = null; pinnedTasks.Visibility = Visibility.Collapsed;
         inboxPanel.Children.Clear();
         title.Text = selected?.Title ?? T("Créez une conversation");
+        RefreshNamingState();
         ToolTipService.SetToolTip(title, title.Text);
         var displayedRun = ActiveRun;
         messages = displayedRun?.Messages ?? CreateMessagePanel();

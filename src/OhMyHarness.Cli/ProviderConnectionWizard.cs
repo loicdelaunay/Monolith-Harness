@@ -44,6 +44,11 @@ public sealed class ProviderConnectionWizard(HttpClient http,
             var username = await prompt(new("2/4 · Utilisateur OpenCode / OpenCode username", Initial: "opencode"));
             if (username == null) return null;
             draft.Username = string.IsNullOrWhiteSpace(username) ? "opencode" : username.Trim();
+            var bypass = await prompt(new("2/4 · [BETA] Bypass free limitation",
+                "Permet d’utiliser les modèles gratuits sur un autre harnais / Use free models on another harness",
+                [new("yes", "Oui / Yes (Recommandé / Recommended)"), new("no", "Non / No")]));
+            if (bypass == null) return null;
+            draft.BypassFreeLimitation = bypass != "no";
         }
         List<string> models = [];
         while (models.Count == 0)
@@ -87,7 +92,8 @@ public sealed class ProviderConnectionWizard(HttpClient http,
         var name = await prompt(new("4/4 · Nom de cette connexion / Connection name", "Plusieurs connexions du même type sont possibles. / Multiple connections of the same type are supported.", Initial: draft.Name));
         if (name == null) return null;
         if (!string.IsNullOrWhiteSpace(name)) draft.Name = name.Trim();
-        var decision = await prompt(new("4/4 · Valider la connexion / Confirm connection", $"{draft.Name}\n{draft.BaseUrl}\n{models.Count} modèle(s) · {draft.Model}\n" + (key.Length == 0 ? "Sans clé / No key" : "Clé fournie (masquée) / Key provided (hidden)"),
+        var bypassInfo = draft.IsOpenCode && draft.BypassFreeLimitation ? " · [BETA bypass]" : "";
+        var decision = await prompt(new("4/4 · Valider la connexion / Confirm connection", $"{draft.Name}\n{draft.BaseUrl}\n{models.Count} modèle(s) · {draft.Model}{bypassInfo}\n" + (key.Length == 0 ? "Sans clé / No key" : "Clé fournie (masquée) / Key provided (hidden)"),
             [new("save", "Valider et utiliser / Save and use"), new("cancel", "Annuler / Cancel")]));
         if (decision != "save") return null;
         ct.ThrowIfCancellationRequested();

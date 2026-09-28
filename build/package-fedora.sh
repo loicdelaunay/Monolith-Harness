@@ -1,43 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version="$(sed -n 's/.*<ApplicationDisplayVersion>\([^<]*\)<\/ApplicationDisplayVersion>.*/\1/p' src/OhMyHarness.App/OhMyHarness.App.csproj)"
-cli_version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/OhMyHarness.Cli/OhMyHarness.Cli.csproj)"
-[[ -n "$version" && "$version" == "$cli_version" ]] || { echo 'GUI/CLI versions differ' >&2; exit 1; }
-root="artifacts/TEMP/release-packages"
+version="$(sed -n 's/.*<ApplicationDisplayVersion>\([^<]*\)<\/ApplicationDisplayVersion>.*/\1/p' src/OhMyHarness.App/OhMyHarness.App.csproj | head -n 1)"
+cli_version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/OhMyHarness.Cli/OhMyHarness.Cli.csproj | head -n 1)"
+test -n "$version" && test "$version" = "$cli_version"
+root="$(pwd -P)/artifacts/TEMP/release-packages"
+mkdir -p "$root/GUI" "$root/CLI"
 for channel in GUI CLI; do
-  if [[ "$channel" == GUI ]]; then exe=OhMyHarness.App; prefix=OhMyHarness; else exe=omh; prefix=OhMyHarness-CLI; fi
-  source="artifacts/$channel/$exe"
-  [[ -f "$source" ]] || { echo "Missing $source" >&2; exit 1; }
-  stage="$root/stage-$channel-linux-x64"
-  output="$root/$channel"
-  [[ ! -e "$stage" ]] || { echo "Staging folder already exists: $stage" >&2; exit 1; }
-  mkdir -p "$stage" "$output"
-  trap 'rm -rf -- "$stage"' EXIT
-  cp -- "$source" "$stage/$exe"
-  cp -- LICENSE "$stage/LICENSE"
+  executable=OhMyHarness.App
+  prefix=OhMyHarness
+  if [[ "$channel" == CLI ]]; then executable=omh; prefix=OhMyHarness-CLI; fi
+  source="artifacts/$channel/$executable"
+  test -s "$source"
+  stage="$(mktemp -d "$root/stage-$channel-linux-x64.XXXXXXXX")"
+  cleanup() {
+    local resolved
+    resolved="$(realpath -m "$stage")"
+    [[ "$(dirname "$resolved")" == "$root" && "$resolved" == "$root"/stage-"$channel"-linux-x64.* ]]
+    rm -rf -- "$resolved"
+  }
+  trap cleanup EXIT
+  cp "$source" "$stage/$executable"
+  cp LICENSE "$stage/LICENSE"
+  if [[ "$channel" == GUI ]]; then start='Run ./OhMyHarness.App and open Settings > Providers.'; else start='Run ./omh from a terminal, then /connect to configure your provider.'; fi
   cat > "$stage/README.txt" <<EOF
-OhMyHarness $channel $version (Linux x64; tested on Fedora 44)
+OhMyHarness $channel $version (linux-x64)
 
-Extract into a writable folder with tar -xzf. Run ./$exe.
-The GUI requires an X11 desktop. Browser use needs GTK3 and WebKitGTK.
-The CLI can connect a provider with /connect.
-Bundled .NET and Python need no separate installation.
+Extract into a writable, private folder. $start
+Linux GUI uses X11 or XWayland; install GTK3 and WebKitGTK for its browser.
+No separate .NET or Python installation is required.
 
-The portable database and .linux-key file are created beside the executable.
-Keep the entire folder private and back it up together. To update, close the
-application and replace only $exe.
+To update, close the application and replace only $executable. Keep your
+database.sqlite, keys and existing resources. This download has no user data.
+The chat model is not bundled; configure a provider. Optional integrations
+such as Git, Docker/Podman, OpenCode and MCP retain their own prerequisites.
 
-Desktop mouse, keyboard, application listing and screen capture are not
-implemented on Linux. Git, Docker/Podman, OpenCode and MCP are optional.
 https://github.com/loicdelaunay/OhMyHarness
 EOF
-  chmod +x "$stage/$exe"
-  archive="$prefix-v$version-linux-x64.tar.gz"
-  [[ ! -e "$output/$archive" ]] || { echo "Archive already exists: $output/$archive" >&2; exit 1; }
-  tar -czf "$output/$archive" -C "$stage" "$exe" LICENSE README.txt
-  ( cd "$output" && sha256sum "$archive" > SHA256SUMS-linux-x64.txt )
-  rm -rf -- "$stage"
+  chmod +x "$stage/$executable"
+  archive="$root/$channel/$prefix-v$version-linux-x64.tar.gz"
+  test ! -e "$archive"
+  tar -czf "$archive" -C "$stage" "$executable" LICENSE README.txt
+  (cd "$root/$channel" && sha256sum "$(basename "$archive")" > SHA256SUMS-linux-x64.txt)
+  cleanup
   trap - EXIT
-  echo "Packaged $output/$archive"
+  echo "Packaged $archive"
 done

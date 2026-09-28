@@ -48,18 +48,38 @@ public sealed partial class MainWindow
         chats.SelectedItem=allProjectChats.Single(c=>c.Id==owner.Id);await SelectChat();
         if(selectedAsset?.Id!=id||selectedAsset.Revision!=3)throw new Exception("Asset was not restored on conversation switch.");
         await store.UpdateAsync(id,3,d=>d.Layers[1].Visible=true,default);await RefreshAssetsAsync(id);
-        var pixel=await Tool("asset_create",new(){["name"]="Animated pixel sprite",["width"]=64,["height"]=64,["pixel_size"]=8});
+        var pixel=await Tool("asset_create",new(){["name"]="Animated pixel sprite",["mode"]="pixel_art",["width"]=32,["height"]=32,["pixel_size"]=1});
         var pixelId=pixel["asset_id"]!.GetValue<string>();
         await Tool("asset_edit",new(){["asset_id"]=pixelId,["expected_revision"]=1,["operations"]=new JsonArray(
             new JsonObject{["action"]="pixel_rect",["layer_id"]="layer-1",["x"]=2,["y"]=2,["width"]=3,["height"]=3,["color"]="#4CC9F0"},
             new JsonObject{["action"]="frame_add",["frame_id"]="first",["duration_ms"]=80},
             new JsonObject{["action"]="frame_add",["frame_id"]="second",["source_frame_id"]="first",["duration_ms"]=140},
             new JsonObject{["action"]="pixel",["frame_id"]="second",["layer_id"]="layer-1",["x"]=2,["y"]=2,["color"]="#FF0044"})});
-        if(selectedAsset?.Id!=pixelId||assetFramePicker.Items.Count!=3||assetImage.Source==null)throw new Exception("Pixel art animation did not appear in the GUI.");
+        if(selectedAsset?.Id!=pixelId||selectedAsset.Mode!="pixel_art"||assetFramePicker.Items.Count!=3||assetImage.Source==null||!assetStatus.Text.Contains("Pixel art"))throw new Exception("Pixel art mode and animation did not appear in the GUI.");
         assetFramePicker.SelectedIndex=2;await Task.Delay(200);
         if(selectedAssetFrame!=1||assetGrid.IsChecked==true)throw new Exception("Animation frame selection failed.");
+        await Tool("asset_edit",new(){["asset_id"]=pixelId,["expected_revision"]=2,["operations"]=new JsonArray(
+            new JsonObject { ["action"]="pixel_stamp",["layer_id"]="layer-1",["frame_id"]="second",["x"]=2,["y"]=7,
+                ["rows"]=new JsonArray("....AAAA....","...ABBBBA...","..ABCCCCBA..","..ABCDDCBA..","..ABCCCCBA..","...ABBBBA...","....AAAA....","....A..A....","...AA..AA..."),
+                ["palette"]=new JsonObject { ["A"]="#172038",["B"]="#4CC9F0",["C"]="#F0B35A",["D"]="#0E0F12" } },
+            new JsonObject { ["action"]="pixel_transform",["layer_id"]="layer-1",["frame_id"]="second",["x"]=2,["y"]=7,["width"]=12,["height"]=9,["to_x"]=18,["to_y"]=7,["transform"]="flip_x",["copy"]=true })});
+        var region=await Tool("asset_inspect",new(){["asset_id"]=pixelId,["frame_id"]="second",["layer_id"]="layer-1",["x"]=2,["y"]=7,["width"]=12,["height"]=9});
+        if(region["rows"]?.AsArray().Count!=9)throw new Exception("Compact pixel inspection failed through the tool runtime.");
+        await Capture(root,Path.Combine(output,"asset-pixel-art.png"));
+        assetGrid.IsChecked=true;await RefreshAssetImageAsync(selectedAsset!,assetLoadRevision,owner.Id);await Task.Delay(150);
+        var pixelLayout=PixelPreviewLayout(selectedAsset!);var density=AssetDisplayDensity();
+        if(Math.Abs(assetImage.Width*density-pixelLayout.PixelWidth)>0.001 || Math.Abs(assetImage.Height*density-pixelLayout.PixelHeight)>0.001)
+            throw new Exception("GUI preview rescales physical pixel cells.");
+        await Capture(root,Path.Combine(output,"asset-pixel-grid.png"));
+        await File.WriteAllTextAsync(Path.Combine(output,"pixel-preview-geometry.json"),System.Text.Json.JsonSerializer.Serialize(new{density,assetImage.Width,assetImage.Height,pixelLayout}));
+        assetGrid.IsChecked=false;
         var exported=await Tool("asset_export",new(){["asset_id"]=pixelId,["format"]="gif"});
         if(!File.Exists(exported["path"]!.GetValue<string>()))throw new Exception("Animated GIF export failed in GUI runtime.");
+        if(Environment.GetEnvironmentVariable("OHMYHARNESS_PIXEL_SMOKE")=="1")
+        {
+            File.WriteAllText(Path.Combine(output,"smoke-ok.txt"),"Pixel stamp/transform/inspect, live GUI rendering at display DPI, grid alignment, frames, and GIF export passed.");
+            return;
+        }
         CloseConversationBrowser(owner.Id);
         var firstTab=NewBrowserTab(owner.Id);var secondTab=NewBrowserTab(owner.Id);
         if(conversationBrowsers.Keys.Count(k=>k.ChatId==owner.Id)!=2||SelectedBrowserTab(owner.Id)!=secondTab.TabId)throw new Exception("Web tabs did not open independently.");

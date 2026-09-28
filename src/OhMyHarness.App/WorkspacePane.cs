@@ -171,7 +171,22 @@ public sealed partial class MainWindow
                 selectedChat.OrchestrationMode = value; await db.SaveChangesAsync();
                 ShowStatus(T("Mode appliqué au prochain envoi : ") + agentsPicker.SelectionBoxItem);
             });
-            content.Children.Add(ChoiceRow(WorkflowText("Sous-agents", "Subagents"), agentsPicker));
+            var agentConfig = ConversationAgents.Read(selectedChat.AgentOptionsJson);
+            var agentCount = new NumberBox { Minimum = 1, Maximum = 6, Value = agentConfig.Count, Width = 70,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, IsEnabled = !agentConfig.AutomaticCount && provider?.IsComposite != true };
+            ToolTipService.SetToolTip(agentCount, agentConfig.AutomaticCount ? WorkflowText("Nombre automatique · modifier dans les réglages à droite", "Automatic count · change in the settings on the right") : WorkflowText("Nombre d’agents", "Agent count"));
+            agentCount.ValueChanged += async (_, _) => await Guard(async () =>
+            {
+                if (!double.IsFinite(agentCount.Value)) return;
+                var options = ConversationAgents.Read(selectedChat.AgentOptionsJson);
+                options.Count = Math.Clamp((int)agentCount.Value, 1, 6);
+                selectedChat.AgentOptionsJson = options.Json(); await db.SaveChangesAsync();
+            });
+            var configureAgents = new Button { Width = 32, Height = 32, Padding = new(0), IsEnabled = provider?.IsComposite != true };
+            FluentDesign.IconButton(configureAgents, "\uE713", WorkflowText("Rôles et presets d’agents", "Agent roles and presets"), false);
+            configureAgents.Click += async (_, _) => { menu.Hide(); await Guard(() => ConfigureAgentsAsync(selectedChat)); };
+            agentsPicker.MinWidth = 112;
+            content.Children.Add(ChoiceRow(WorkflowText("Sous-agents", "Subagents"), Row(agentsPicker, agentCount, configureAgents)));
             AddSandboxMenu(content, selectedChat);
         }
         content.Children.Add(Item(WorkflowText("Afficher la liste de tâches", "Show task list"), "\uE8FD", async () =>
@@ -488,7 +503,9 @@ public sealed partial class MainWindow
                 Content = new ScrollViewer { MaxHeight = 400, Content = new TextBlock { Text = action + "\n\n" + details, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true } },
                 PrimaryButtonText = T("Autoriser une fois"), SecondaryButtonText = T("Toujours autoriser"), CloseButtonText = T("Refuser"), DefaultButton = ContentDialogButton.Close };
             using var registration = ct.Register(() => DispatcherQueue.TryEnqueue(dialog.Hide));
+            if (automaticToolRun.Value is { } pendingRun) NotifyChat(pendingRun, true);
             var response = await dialog.ShowAsync();
+            if (automaticToolRun.Value is { } answeredRun) AcknowledgeChatNotice(answeredRun.Chat.Id, actionResolved: true);
             ct.ThrowIfCancellationRequested();
             if (response == ContentDialogResult.Secondary)
             {

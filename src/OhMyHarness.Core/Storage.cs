@@ -8,6 +8,9 @@ namespace OhMyHarness.Core;
 
 public sealed class Project
 {
+    public string Icon { get; set; } = "folder";
+    public string Color { get; set; } = "";
+    public bool IsInbox { get; set; }
     public int Id { get; set; }
     public string Name { get; set; } = "Mon projet";
     public string SourceFolder { get; set; } = "";
@@ -29,6 +32,9 @@ public sealed class Project
 }
 public sealed class Chat
 {
+    public bool IsPinned { get; set; }
+    public DateTime? UpdatedUtc { get; set; } = DateTime.UtcNow;
+    public string AgentOptionsJson { get; set; } = "{}";
     public bool IsFavorite { get; set; }
     public bool IsArchived { get; set; }
     public int Id { get; set; }
@@ -44,6 +50,7 @@ public sealed class Chat
 }
 public sealed class Message
 {
+    public DateTime? CompletedUtc { get; set; }
     public int Id { get; set; }
     public int ChatId { get; set; }
     public string Role { get; set; } = "user";
@@ -82,6 +89,7 @@ public sealed class Provider
     public string ExecutablePath { get; set; } = "";
     public bool AutoStart { get; set; }
     public bool OpenCodeTools { get; set; }
+    public bool BypassFreeLimitation { get; set; }
     public bool IsOpenCode => Kind.Equals("opencode", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id > 0 ? $"{Name} · #{Id}" : Name;
 }

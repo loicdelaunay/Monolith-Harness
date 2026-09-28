@@ -126,96 +126,17 @@ public sealed partial class MainWindow : Window
         ObserveTextZoom(root);
         root.Loaded += async (_, _) => await Guard(InitializeAsync);
         root.SizeChanged += (_, _) => ResizeLayout();
-        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); settingsWindow?.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
+        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
     }
     void BuildSidebar()
     {
-        var panel = new Grid { Padding = new(16, 20, 16, 16), Background = new SolidColorBrush(Colors.Transparent), RowSpacing = 20 };
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
-            panel.RowDefinitions.Add(new RowDefinition { Height = height });
-        var brand = new Grid { ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Center };
-        brand.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        brand.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        brand.Children.Add(brandLogo); Grid.SetColumn(brandName, 1); brand.Children.Add(brandName);
-        panel.Children.Add(brand);
-        var projectBox = new StackPanel { Spacing = 10 };
-        projectBox.Children.Add(Label(T("PROJETS"), 11));
-        var projectRow = new Grid { ColumnSpacing = 6 };
-        projectRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        projectRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        projectRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        projects.MinWidth = 0;
-        projectRow.Children.Add(projects);
-        var addProject = Action(T("+ Projet"), NewProject, true);
-        var manageProject = Action(T("Gérer"), ManageProject, true);
-        addProject.Padding = manageProject.Padding = new Thickness(8, 6, 8, 6);
-        Grid.SetColumn(addProject, 1); Grid.SetColumn(manageProject, 2);
-        projectRow.Children.Add(addProject); projectRow.Children.Add(manageProject);
-        projectBox.Children.Add(projectRow);
-        Grid.SetRow(projectBox, 1); panel.Children.Add(projectBox);
-        var newChat = Action(T("+  Nouvelle conversation"), NewChat, true);
-        newChat.HorizontalAlignment = HorizontalAlignment.Stretch;
-        newChat.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
-        newChat.Content = new TextBlock { Text = T("+  Nouvelle conversation"), Foreground = FluentDesign.Resource("TextOnAccentFillColorPrimaryBrush") };
-        newChat.MinHeight = 40;
-        Grid.SetRow(newChat, 2); panel.Children.Add(newChat);
-        var chatHeading = new Grid { ColumnSpacing = 8 };
-        chatHeading.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        chatHeading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        chatHeading.Children.Add(Label("CONVERSATIONS", 11));
-        chatCount.Foreground = FluentDesign.Secondary;
-        Grid.SetColumn(chatCount, 1); chatHeading.Children.Add(chatCount);
-        var searchBox = new Grid();
-        chatSearch.PlaceholderText = T("Rechercher une conversation…");
-        chatSearch.Padding = new Thickness(34, 5, 8, 5);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chatSearch, T("Rechercher une conversation"));
-        searchBox.Children.Add(chatSearch);
-        var searchIcon = FluentDesign.Icon("\uE721", 15);
-        searchIcon.Foreground = FluentDesign.Secondary;
-        searchIcon.HorizontalAlignment = HorizontalAlignment.Left;
-        searchIcon.VerticalAlignment = VerticalAlignment.Center;
-        searchIcon.Margin = new Thickness(11, 0, 0, 0);
-        searchIcon.IsHitTestVisible = false;
-        searchBox.Children.Add(searchIcon);
-        var chatHeader = new StackPanel { Spacing = 10 };
-        chatHeader.Children.Add(chatHeading); chatHeader.Children.Add(searchBox);
-        Grid.SetRow(chatHeader, 3); panel.Children.Add(chatHeader);
-        var conversationArea = new Grid();
-        // Reserve the archive's measured height first; the active list scrolls in
-        // the remaining space instead of retaining the collapsed archive's space.
-        conversationArea.RowDefinitions.Add(new RowDefinition { Height = new(1, GridUnitType.Star) });
-        conversationArea.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        foreach (var list in new[] { chats, archivedChats })
-        {
-            ScrollViewer.SetVerticalScrollMode(list, ScrollMode.Enabled);
-            ScrollViewer.SetVerticalScrollBarVisibility(list, ScrollBarVisibility.Auto);
-            ScrollViewer.SetHorizontalScrollMode(list, ScrollMode.Disabled);
-            ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
-        }
-        conversationArea.Children.Add(chats);
-        archiveExpander.Header = archiveHeading;
-        archiveExpander.Content = archivedChats;
-        archiveExpander.Margin = new Thickness(0, 8, 0, 0);
-        Grid.SetRow(archiveExpander, 1); conversationArea.Children.Add(archiveExpander);
-        void SizeArchiveViewport()
-        {
-            var available = conversationArea.ActualHeight;
-            if (available <= 0) return;
-            archivedChats.MaxHeight = Math.Min(240, available * 0.45);
-        }
-        conversationArea.SizeChanged += (_, _) => SizeArchiveViewport();
-        chatEmpty.Foreground = FluentDesign.Secondary;
-        chatEmpty.TextAlignment = TextAlignment.Center;
-        chatEmpty.HorizontalAlignment = HorizontalAlignment.Center;
-        chatEmpty.VerticalAlignment = VerticalAlignment.Center;
-        chatEmpty.Visibility = Visibility.Collapsed;
-        conversationArea.Children.Add(chatEmpty);
-        Grid.SetRow(conversationArea, 4); panel.Children.Add(conversationArea);
+        var panel = BuildConversationNavigation();
         chats.ItemsSource = visibleProjectChats;
         archivedChats.ItemsSource = visibleArchivedChats;
         chats.ItemContainerStyle = new Style(typeof(ListViewItem));
         chats.ItemContainerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
         chats.ItemContainerStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
+        chats.ItemContainerStyle.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 28d));
         chats.ItemContainerStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 2)));
         chats.ItemContainerStyle.Setters.Add(new Setter(Control.TemplateProperty,
             (ControlTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
@@ -224,27 +145,7 @@ public sealed partial class MainWindow : Window
                         HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" />
                 </ControlTemplate>
                 """)));
-        chats.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
-            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                <Border Tag="conversation-card" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="9,8">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="3"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <Border Tag="conversation-selection" Grid.Column="0" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2" Visibility="Collapsed" />
-                        <StackPanel Grid.Column="1" Spacing="5" HorizontalAlignment="Stretch">
-                            <Grid ColumnSpacing="4">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Button Tag="conversation-favorite" Width="26" Height="26" Padding="2" Opacity="0" Background="Transparent" BorderThickness="0"/>
-                                <TextBlock Grid.Column="1" Tag="conversation-title" Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </Grid>
-                            <ProgressBar Tag="conversation-progress" Height="2" IsIndeterminate="True" Visibility="Collapsed" />
-                            <Border Tag="conversation-subagents" Margin="0,2,0,0" Padding="7,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" Visibility="Collapsed">
-                                <StackPanel Tag="subagents" Spacing="3" />
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-            </DataTemplate>
-            """);
+        chats.ItemTemplate = CompactConversationTemplate();
         archivedChats.ItemContainerStyle = chats.ItemContainerStyle;
         archivedChats.ItemTemplate = chats.ItemTemplate;
         void WireConversationContainer(ListView list) => list.ContainerContentChanging += (_, e) =>
@@ -262,8 +163,11 @@ public sealed partial class MainWindow : Window
                         if (previous != null && !ReferenceEquals(previous, sender)) RefreshConversationCard(previous);
                         RefreshConversationCard((ListViewItem)sender);
                     };
-                    container.PointerExited += (sender, _) =>
+                    container.PointerExited += (sender, e) =>
                     {
+                        var item = (ListViewItem)sender;
+                        var point = e.GetCurrentPoint(item).Position;
+                        if (point.X >= 0 && point.Y >= 0 && point.X <= item.ActualWidth && point.Y <= item.ActualHeight) return;
                         if (!ReferenceEquals(hoveredConversationContainer, sender)) return;
                         hoveredConversationContainer = null;
                         RefreshConversationCard((ListViewItem)sender);
@@ -285,7 +189,7 @@ public sealed partial class MainWindow : Window
         settingsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
         foot.Children.Add(BuildDedicatedToolsRow());
         foot.Children.Add(settingsButton);
-        Grid.SetRow(foot, 5); panel.Children.Add(foot);
+        Grid.SetRow(foot, 3); panel.Children.Add(foot);
         shell.Pane = panel;
         idleOnly.AddRange([projects, chats, archivedChats, providers, modelSelector, refreshModelsBtn, thinkingSelector]);
         projects.SelectionChanged += async (_, _) => { if (!loading) await Guard(SelectProject); };
@@ -328,8 +232,10 @@ public sealed partial class MainWindow : Window
         var menuBtn = Action("☰", () => { shell.IsPaneOpen = !shell.IsPaneOpen; return Task.CompletedTask; });
         FluentDesign.IconButton(menuBtn, "\uE700", "Navigation", false);
         header.Children.Add(menuBtn);
-        Grid.SetColumn(title, 1);
-        header.Children.Add(title);
+        var titleHost = new Grid();
+        titleHost.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); titleHost.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        titleHost.Children.Add(namingSpinner); Grid.SetColumn(title, 1); titleHost.Children.Add(title);
+        Grid.SetColumn(titleHost, 1); header.Children.Add(titleHost);
         var toolsButton = Action("Outils", ToggleBrowser);
         var headerActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         headerActions.Children.Add(Action("Exporter", ExportConversationAsync));
@@ -370,17 +276,21 @@ public sealed partial class MainWindow : Window
         {
             if (e.Key != Windows.System.VirtualKey.Enter) return;
             e.Handled = true;
-            bool control = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
-            if (control)
-            {
-                var caret = composer.SelectionStart;
-                composer.SelectedText = "\r";
-                composer.Select(caret + 1, 0);
-            }
-            else if (send.IsEnabled) await Guard(SendAsync);
+            bool shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            await HandleComposerEnterAsync(shift);
         };
         stop.Click += async (_, _) => { generation?.Cancel(); if (chat != null) await terminals.StopChatAsync(chat.Id); };
         BuildToolsPane();
+    }
+    async Task HandleComposerEnterAsync(bool shift)
+    {
+        if (shift)
+        {
+            var caret = composer.SelectionStart;
+            composer.SelectedText = "\r";
+            composer.Select(caret + 1, 0);
+        }
+        else if (send.IsEnabled) await Guard(SendAsync);
     }
     Border BuildFloatingInfoBar()
     {
@@ -729,7 +639,7 @@ public sealed partial class MainWindow : Window
         chatSearch.PlaceholderText = T("Rechercher une conversation…");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chatSearch, T("Rechercher une conversation"));
         UpdateChatSearchSummary();
-        ToolTipService.SetToolTip(composer, T("Entrée : envoyer · Ctrl+Entrée : nouvelle ligne"));
+        ToolTipService.SetToolTip(composer, T("Entrée : envoyer · Shift+Entrée : nouvelle ligne"));
         ToolTipService.SetToolTip(refreshModelsBtn, T("Recharger les modèles de l’API"));
         FluentDesign.IconButton(send, "\uE724", T("Envoyer"), false);
         FluentDesign.IconButton(stop, "\uE71A", T("Arrêter"), false);
@@ -757,7 +667,9 @@ public sealed partial class MainWindow : Window
         ApplyAppearance();
         var providerList = await db.Providers.OrderBy(x => x.Id).ToListAsync();
         providers.ItemsSource = providerList; provider = providerList.FirstOrDefault(x => x.Id == state.ProviderId) ?? providerList.FirstOrDefault(); providers.SelectedItem = provider;
+        if (!await db.Projects.AnyAsync(x => x.IsInbox)) { db.Projects.Add(new Project { Name = "Conversations", IsInbox = true }); await db.SaveChangesAsync(); }
         var list = await db.Projects.OrderBy(x => x.Id).ToListAsync();
+        RefreshNotificationBell();
         projects.ItemsSource = list; projects.SelectedItem = list.FirstOrDefault(x => x.Id == state.ProjectId) ?? list.FirstOrDefault();
         address.Text = state.BrowserUrl;
         loading = false;
@@ -828,7 +740,7 @@ public sealed partial class MainWindow : Window
                 }
                 var text = item.Content + (item.State == "interrupted" ? T("\n[Réponse interrompue]") : "");
                 var rendered = AddAssistantMessage(text, reasoning, target: messages, sourceProject: sourceProject);
-                rendered.SetDuration(item.Seconds); actionCard = rendered.Container;
+                rendered.SetDuration(item.Seconds, item.CompletedUtc); actionCard = rendered.Container;
             }
             else if (item.Role == "tool")
             {
@@ -901,12 +813,18 @@ public sealed partial class MainWindow : Window
         bool isHovered;
         string? pendingText;
         (string Text, bool Complete)? pendingThinking;
-        public void SetDuration(double seconds)
+        public void SetDuration(double seconds, DateTime? completedUtc = null)
         {
             Duration.Text = seconds > 0 ? (UiText.Language == "en" ? "Duration: " : "Durée : ") + (seconds >= 60 ? $"{(int)(seconds / 60)} min {seconds % 60:0.#} s" : $"{seconds:0.#} s") : "";
-            // Keep the footer in layout after completion; hover must not resize the message.
-            Duration.Visibility = seconds > 0 ? Visibility.Visible : Visibility.Collapsed;
-            Duration.Opacity = isHovered && seconds > 0 ? 1 : 0;
+            if (completedUtc is { } completed)
+            {
+                var local = DateTime.SpecifyKind(completed, DateTimeKind.Utc).ToLocalTime();
+                Duration.Text += (Duration.Text.Length > 0 ? " · " : "") + (UiText.Language == "en" ? "Answered at " : "Réponse à ") + local.ToString("HH:mm:ss");
+                ToolTipService.SetToolTip(Duration, local.ToString("dd/MM/yyyy HH:mm:ss"));
+            }
+            // Reserve the footer before hover, including the response timestamp.
+            Duration.Visibility = Duration.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Duration.Opacity = isHovered && Duration.Text.Length > 0 ? 1 : 0;
         }
         public void SetHovered(bool hovered)
         {
@@ -957,6 +875,7 @@ public sealed partial class MainWindow : Window
     {
         var messageProject = sourceProject ?? project;
         var bodyContainer = new StackPanel { Spacing = 4 };
+        AppTypography.SetScope(bodyContainer, FontArea.Assistant);
         var duration = Label("", 11); duration.Foreground = FluentDesign.Secondary; duration.Visibility = Visibility.Collapsed;
 
         var stack = new StackPanel { Spacing = 10 };
@@ -1377,6 +1296,7 @@ public sealed partial class MainWindow : Window
     Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null)
     {
         var bodyContainer = new StackPanel { Spacing = 4 };
+        AppTypography.SetScope(bodyContainer, role == "user" ? FontArea.User : role == "assistant" ? FontArea.Assistant : FontArea.Interface);
         if (!string.IsNullOrWhiteSpace(text))
         {
             MarkdownRenderer.RenderTo(bodyContainer, text);
@@ -1421,10 +1341,11 @@ public sealed partial class MainWindow : Window
         var project = this.project == null ? null : await db.Projects.SingleAsync(x => x.Id == this.project.Id);
         if (project == null) return;
         var input = new TextBox { Text = project.Name, Header = T("Nom du projet"), MaxLength = 120 };
+        var appearance = BuildProjectAppearance(project);
         var folders = new TextBox { Header = WorkflowText("Dossiers par défaut · un par ligne", "Default folders · one per line"), Text = string.Join('\n', project.GetSourceFolders()), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90, MaxHeight = 180 };
         var permissionText = new TextBlock { Text = project.PermissionProfileJson, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
         var imported = project.PermissionProfileJson;
-        var panel = new StackPanel { Spacing = 12 }; panel.Children.Add(input); panel.Children.Add(folders);
+        var panel = new StackPanel { Spacing = 12 }; panel.Children.Add(input); panel.Children.Add(appearance.Panel); panel.Children.Add(folders);
         panel.Children.Add(Action(WorkflowText("Ajouter un dossier", "Add folder"), async () => { var picker = new FolderPicker(); picker.FileTypeFilter.Add("*"); InitializePicker(picker, this); var folder = await picker.PickSingleFolderAsync(); if (folder != null) folders.Text = (folders.Text.Trim() + "\n" + folder.Path).Trim(); }));
         panel.Children.Add(Label(WorkflowText("Les conversations héritent de ces dossiers tant qu’elles n’ont pas de ressources personnalisées. AGENTS.md et Agent.md sont chargés automatiquement.", "Chats inherit these folders until their resources are customized. AGENTS.md and Agent.md load automatically."), 12));
         panel.Children.Add(Action(WorkflowText("Lire permission.json", "Read permission.json"), async () => { var draft = new Project(); draft.SetSourceFolders(ProjectResources.Validate(folders.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))); imported = await ProjectResources.ReadPermissionsAsync(draft); permissionText.Text = string.IsNullOrEmpty(imported) ? WorkflowText("Aucune règle trouvée.", "No rules found.") : imported; }));
@@ -1434,7 +1355,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog { XamlRoot = root.XamlRoot, Title = T("Gérer le projet"), Content = new ScrollViewer { Content = panel, MaxHeight = 560 }, PrimaryButtonText = T("Enregistrer"), SecondaryButtonText = T("Supprimer…"), CloseButtonText = T("Annuler") };
         var result = await ShowDialogAsync(dialog);
         if (result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(input.Text))
-        { var paths = ProjectResources.Validate(folders.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)); if (paths.Any(x => !Directory.Exists(x))) throw new ArgumentException("Dossiers requis."); project.Name = input.Text.Trim(); project.SetSourceFolders(paths); project.PermissionProfileJson = imported; }
+        { var paths = ProjectResources.Validate(folders.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)); if (paths.Any(x => !Directory.Exists(x))) throw new ArgumentException("Dossiers requis."); project.Name = input.Text.Trim(); appearance.Save(project); project.SetSourceFolders(paths); project.PermissionProfileJson = imported; }
         else if (result == ContentDialogResult.Secondary && await Confirm(T("Supprimer le projet et toutes ses conversations ? Les fichiers sources restent sur le disque.")))
         {
             if (conversationRuns.Values.Any(x => x.Project.Id == project.Id)) throw new InvalidOperationException(T("Arrêtez les conversations en cours avant de supprimer leur projet."));
@@ -1544,18 +1465,14 @@ public sealed partial class MainWindow : Window
             SelectedIndex = state.Language == "en" ? 1 : 0,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        var themeSelector = new ComboBox { ItemsSource = AppearanceThemes.All.Select(x => state.Language == "en" ? x.English : x.French).ToArray(), SelectedIndex = AppearanceThemes.All.ToList().FindIndex(x => x.Id == AppearanceThemes.Get(FeatureSettings.Read(state.FeaturesJson).Theme).Id), MinWidth = 170 };
-        themeSelector.SelectionChanged += (_, _) =>
-        {
-            if (themeSelector.SelectedIndex >= 0 && themeSelector.SelectedIndex < AppearanceThemes.All.Count)
-                ApplyTheme(AppearanceThemes.All[themeSelector.SelectedIndex].Id);
-        };
+        var appearance = BuildAppearanceSettings(loadingWindow);
         var general = new StackPanel { Spacing = 14 };
         var updates = BuildUpdateSettings();
         var branding = BuildBrandingSettings();
         var conversationPreferences = BuildConversationPreferences();
+        var retrySettings = BuildRetrySettings();
+        var notificationSettings = BuildNotificationSettings();
         general.Children.Add(branding.Panel);
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Thème", "Theme"), WorkflowText("Quatre thèmes sombres et quatre thèmes clairs, dont Fly dark et Fly light.", "Four dark and four light themes, including Fly dark and Fly light."), themeSelector));
         language.Header = null;
         general.Children.Add(FluentDesign.Setting(T("Langue de l’application"), "", language));
         var responseStyle = new ComboBox
@@ -1577,8 +1494,11 @@ public sealed partial class MainWindow : Window
             WorkflowText("Déplie le raisonnement pendant la génération.", "Expand reasoning during generation."), showReasoning));
         var autoFocusTool = new CheckBox { IsChecked = FeatureSettings.Read(state.FeaturesJson).AutoFocusTool };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Ouvrir et sélectionner le dernier outil utilisé par l’IA", "Open and focus the latest AI tool"), WorkflowText("Dans la conversation affichée uniquement.", "Only in the visible conversation."), autoFocusTool));
-        general.Children.Add(updates.Panel);
+        general.Children.Add(retrySettings.Panel);
         general.Children.Add(conversationPreferences.Panel);
+        var about = new StackPanel { Spacing = 20 };
+        about.Children.Add(FluentDesign.Surface(updates.Panel, 16));
+        about.Children.Add(conversationPreferences.Logs);
 
         var skillPanel = new StackPanel { Spacing = 8 };
         skillPanel.Children.Add(Label(T("Les skills ajoutent des instructions spécialisées. Les accès aux sources et au web peuvent être désactivés indépendamment."), 13));
@@ -1651,13 +1571,16 @@ public sealed partial class MainWindow : Window
         await YieldSettingsAsync(loadingWindow);
         var tabs = new SettingsNavigation();
         tabs.Add(T("Général"),general);
-        tabs.Add(T("Fournisseurs"),providerEditor.Panel);
-        tabs.Add("Skills",skillPanel);
-        tabs.Add(WorkflowText("Mémoire", "Memory"), BuildMemorySettings(skillToggles));
-        tabs.Add("MCP",mcpEditor.Panel);
-        tabs.Add("Templates",templateEditor.Panel);
-        tabs.Add(T("Autorisations"),permissionPanel);
-        tabs.Add(WorkflowText("Navigateur", "Browser"),features.Browser);
+        tabs.Add(WorkflowText("Apparence", "Appearance"), appearance.Panel, "\uE790");
+        var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968");
+        tabs.Add("Skills",skillPanel, "\uE945");
+        tabs.Add(WorkflowText("Mémoire", "Memory"), BuildMemorySettings(skillToggles), "\uE8F1");
+        var mcpTab = tabs.Add("MCP",mcpEditor.Panel, "\uE8D4");
+        var templateTab = tabs.Add("Templates",templateEditor.Panel, "\uE8A5");
+        tabs.Add(T("Autorisations"),permissionPanel, "\uE72E");
+        tabs.Add(WorkflowText("Navigateur", "Browser"),features.Browser, "\uE774");
+        tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
+        tabs.Add("About", about, "\uE946", footer: true);
         if (!await ShowSettingsWindowAsync(loadingWindow, tabs, () =>
         {
             if (!conversationPreferences.Validate()) { tabs.SelectedIndex = 0; return false; }
@@ -1668,16 +1591,16 @@ public sealed partial class MainWindow : Window
             if (providerError != null)
             {
                 providerEditor.Error.Text = providerError;
-                tabs.SelectedIndex = 1;
+                tabs.SelectedIndex = providerTab;
                 valid = false;
             }
             if (templateEditor.Drafts.Any(x => string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Content)))
             {
                 templateEditor.Error.Text = T("Nom et contenu du template requis.");
-                tabs.SelectedIndex = 5;
+                tabs.SelectedIndex = templateTab;
                 valid = false;
             }
-            if (!mcpEditor.Validate()) { tabs.SelectedIndex = 4; valid = false; }
+            if (!mcpEditor.Validate()) { tabs.SelectedIndex = mcpTab; valid = false; }
             return valid;
         }))
         {
@@ -1687,13 +1610,15 @@ public sealed partial class MainWindow : Window
 
         var previousBrowserMode = FeatureSettings.Read(state.FeaturesJson).BrowserMode;
         var savedFeatures = FeatureSettings.Read(features.Save());
-        savedFeatures.Theme = AppearanceThemes.All[Math.Max(0,themeSelector.SelectedIndex)].Id;
+        appearance.Save(savedFeatures);
         savedFeatures.ComposerInfoExpanded = FeatureSettings.Read(state.FeaturesJson).ComposerInfoExpanded;
         savedFeatures.FontZoomPercent = FeatureSettings.Read(state.FeaturesJson).FontZoomPercent;
+        savedFeatures.AgentPresets = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         savedFeatures.AutoFocusTool = autoFocusTool.IsChecked == true;
         savedFeatures.ResponseStyle = ResponseStyles.All[Math.Clamp(responseStyle.SelectedIndex, 0, ResponseStyles.All.Count - 1)].Id;
         updates.Save(savedFeatures);
         conversationPreferences.Save(savedFeatures);
+        retrySettings.Save(savedFeatures); notificationSettings.Save(savedFeatures);
         await branding.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
         AppLog.Configure(savedFeatures);
@@ -1729,6 +1654,7 @@ public sealed partial class MainWindow : Window
         UiText.Language = state.Language;
         ApplyLanguage();
         ApplyAppearance();
+        RefreshNotificationBell(); RebuildProjectNavigation();
         UpdateProvider();
         PopulateModelSelector();
         ShowStatus(T("Configuration enregistrée."));
@@ -2448,6 +2374,13 @@ public sealed partial class MainWindow : Window
                 var lastPaint = DateTime.MinValue;
                 var completion = await engine.StreamAsync(provider, secret, wire, definitions, update =>
                 {
+                    if (update.Retry is { } retry)
+                    {
+                        SetRunStatus(run, retry.Describe(run.Options.Language)); assistantUi.UpdateContent(retry.Describe(run.Options.Language));
+                        assistantUi.UpdateThinking("", isComplete: false); run.Tracker = new GenerationSpeedTracker(); lastPaint = DateTime.MinValue;
+                        return;
+                    }
+                    SetRunStatus(run, T("Le modèle réfléchit…"));
                     if (update.CompatibilityNotice.Length > 0) { active.CompatibilityNotice = update.CompatibilityNotice; compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible; }
                     run.ExportProgress = new(active.Id, update);
                     active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.Seconds = update.Seconds;
@@ -2462,15 +2395,15 @@ public sealed partial class MainWindow : Window
                     assistantUi.UpdateContent(displayText, streaming: true);
                     UpdateMetrics(run, update, inputEstimate); lastPaint = DateTime.UtcNow;
                     if (IsVisible(run)) ScrollToBottom();
-                }, ct, run.Options.ThinkingLevel);
+                }, ct, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson));
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
-                active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds;
+                active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
                 var finalTokens = completion.OutputTokens ?? Math.Ceiling((active.Content.Length + (completion.Message["reasoning_content"]?.GetValue<string>()?.Length ?? 0)) / 4.0);
                 run.Tracker?.Complete(completion.Seconds, finalTokens);
                 if (run.Tracker != null) messageTrackers[active.Id] = run.Tracker;
                 run.Tracker = null;
                 assistantUi.UpdateContent(active.Content); UpdateMetrics(run, new(active.Content, "", completion.InputTokens, completion.OutputTokens, completion.Seconds), inputEstimate);
-                assistantUi.SetDuration(completion.Seconds);
+                assistantUi.SetDuration(completion.Seconds, active.CompletedUtc);
                 if (IsVisible(run)) RefreshSpeedTooltip();
                 ScrollRunToBottom(run);
                 var finalReasoning = completion.Message["reasoning_content"]?.GetValue<string>();

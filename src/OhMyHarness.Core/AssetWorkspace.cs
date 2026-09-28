@@ -57,10 +57,12 @@ public sealed class AssetWorkspace
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
     public Task<AssetDocument> CreateAsync(string name, int width, int height, string background, CancellationToken ct)
-        => CreateAsync(name, width, height, background, 1, ct);
-    public async Task<AssetDocument> CreateAsync(string name, int width, int height, string background, int pixelSize, CancellationToken ct)
+        => CreateAsync(name, width, height, background, 1, "classic", ct);
+    public Task<AssetDocument> CreateAsync(string name, int width, int height, string background, int pixelSize, CancellationToken ct)
+        => CreateAsync(name, width, height, background, pixelSize, pixelSize > 1 ? "pixel_art" : "classic", ct);
+    public async Task<AssetDocument> CreateAsync(string name, int width, int height, string background, int pixelSize, string mode, CancellationToken ct)
     {
-        var doc = new AssetDocument { Name = name, Width = width, Height = height, Background = background, PixelSize = pixelSize, Revision = 1 }; doc.Validate();
+        var doc = new AssetDocument { Name = name, Width = width, Height = height, Background = background, PixelSize = pixelSize, Mode = mode, Revision = 1 }; doc.Validate();
         using var guard = await LockAsync(ct);
         if (Directory.EnumerateFiles(Root, "*.json").Take(100).Count() >= 100) throw new IOException("Maximum 100 assets per conversation.");
         await WriteAtomic(FilePath(doc.Id), JsonSerializer.SerializeToUtf8Bytes(doc, AssetDocument.Json), false, ct); return doc;

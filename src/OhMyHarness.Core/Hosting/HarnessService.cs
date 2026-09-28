@@ -62,7 +62,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 var snapshotSkills = Skills.Available().Concat(snapshotProjects.SelectMany(item =>
                     new CustomSkills(CustomSkills.DefaultRoot, item.GetSourceFolders(), item.Id).Definitions()
                         .Where(skill => skill.Id.StartsWith("project:", StringComparison.Ordinal)))).ToList();
-                return new { platform = OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "Windows", shell = PlatformSupport.ShellName, database, mcpConfigError, appearanceThemes = AppearanceThemes.All,
+                return new { platform = OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "Windows", shell = PlatformSupport.ShellName, database, mcpConfigError, appearanceThemes = AppearanceThemes.WithCustom(FeatureSettings.Read(snapshotState.FeaturesJson).CustomThemes),
                     projects = snapshotProjects.Select(x => new { x.Id, x.Name, x.SourceFolder, x.PermissionProfileJson }),
                     chats = await db.Chats.AsNoTracking().Select(x => new { x.Id, x.ProjectId, x.Title, x.ExecutionMode, x.OrchestrationMode, x.SandboxEnabled, x.ResourcePathsJson, x.TodoDismissed }).ToListAsync(ct),
                     providers = (await db.Providers.AsNoTracking().ToListAsync(ct)).Select(ProviderView),

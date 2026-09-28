@@ -189,6 +189,7 @@ public sealed partial class MainWindow
             var card = new Border { Child = panel, Padding = new(16), CornerRadius = new(16), BorderThickness = new(1),
                 Background = FluentDesign.Resource("AssistantMessageFillBrush"), BorderBrush = FluentDesign.Stroke };
             run.Messages.Children.Add(card); ScrollRunToBottom(run);
+            NotifyChat(run, true);
             SetRunStatus(run, WorkflowText("Réponse attendue dans la conversation", "Waiting for your answer in the conversation"), StatusKind.Notice);
             try
             {
@@ -201,7 +202,7 @@ public sealed partial class MainWindow
                 SetRunStatus(run, WorkflowText("Reprise du travail…", "Resuming…"));
                 return answer;
             }
-            finally { run.Messages.Children.Remove(card); }
+            finally { run.Messages.Children.Remove(card); AcknowledgeChatNotice(run.Chat.Id, actionResolved: true); }
         },
         async (items, ct) =>
         {

@@ -33,13 +33,21 @@ Launch `artifacts\GUI\OhMyHarness.App.exe`, then **Settings → Providers**. Eac
 
 **Scheduled tasks**, within a project, creates a CRON schedule with a picker, instruction, model, thinking, resources, skills and a choice of fresh conversation or continued history. Tasks run while the application is open; they do not wake the PC.
 
-**Settings → General** selects French or English. Language applies after Save and persists across launches; project names and conversation content are not translated. In the GUI composer, **Enter sends**, **Ctrl+Enter inserts a newline** at the cursor or replaces the selection. For CLI keyboard shortcuts, see [the CLI guide](cli.md).
+**Settings → General** selects French or English. Language applies after Save and persists across launches; project names and conversation content are not translated. In the GUI composer, **Enter sends**, **Shift+Enter inserts a newline** at the cursor or replaces the selection. For CLI keyboard shortcuts, see [the CLI guide](cli.md).
 
 **General → Application name and logo** customizes the displayed name and loads a logo with preview. Settings are stored in SQLite; external logos copy into `branding/`, and paths stay relative to the portable folder. Copying the whole folder preserves customization. Themes include **Fly dark** and **Fly light**, inspired by official Airbus blue, and **Electric dark/light**. See [portable customization](branding.md).
 
 **General → Response style** offers DEFAULT (unchanged), SHORT, PRAGMATIC, DETAILED and FUN. The saved preference also appears under CLI `/settings → Response style`. It applies to subsequent sends; explicit user requirements and permissions still take precedence.
 
-**Ctrl + mouse wheel** adjusts interface fonts in 10% steps from 80% to 150%. **Ctrl + 0** restores 100%. Size persists in SQLite and applies to new messages, code, reasoning and Settings windows without disabling auto-scroll. Browser content keeps its own zoom.
+**Appearance → Fonts** independently selects the interface font, your messages/composer font and the model reply font from installed families, with previews. Save applies the choices to open application windows and future content; each default restores that area's original typography. Code blocks retain a monospaced font. The sidebar version chip opens the bundled changelog.
+
+**Appearance → Theme → Customize** opens the custom palette dialog. Choose a built-in or existing custom theme, then **Create a copy** to create a new named theme. Custom themes support light/dark mode and 21 colors: application background, panels, text, accents, borders, hover/selection states, and user/model/tool messages. Use the color picker or `#RRGGBB`; clearing an optional color restores its automatic value. The preview includes a text-contrast indicator. Built-in themes stay available; only custom copies can be renamed, edited or deleted. **Apply** accepts the dialog draft, then **Save** in Settings persists it; **Cancel** discards changes at either level. The CLI can follow the same saved base palette.
+
+**About**, at the bottom of Settings, contains **GitHub updates** and **Enable logs**, including severity and retention. **Automatically name new conversations**, its provider and its model remain in **General**.
+
+**Ctrl + mouse wheel** adjusts fonts in the window under the pointer, in 10% steps from 80% to 150%; **Ctrl + 0** resets that window to 100%. **Ctrl + Shift + mouse wheel** applies the size to all application windows and saves it in SQLite; **Ctrl + Shift + 0** resets the global size. Local overrides last for the window's lifetime or until the next global change. New messages, code and reasoning follow their window's scale. Browser content keeps its own zoom.
+
+**General → Automatic retry** controls retries after transient model request failures, with 0–10 retries and a 1–300 second delay (default: three retries, five seconds). **Settings → Notifications** controls the completion/action-required bell, sound, tone and volume. See [conversation workspace](conversation-workspace.md) for details.
 
 On Windows WinUI, Settings opens in an independent window: agents continue generating and using tools in the background. Their permission requests remain available in the main window. Save applies changes; Cancel or closing the window discards Settings drafts.
 

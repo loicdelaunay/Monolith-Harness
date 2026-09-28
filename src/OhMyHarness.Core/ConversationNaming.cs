@@ -35,7 +35,7 @@ public static class ConversationNaming
             var session = await engine.CreateSessionAsync(provider, secret, directory, "Conversation title", timeout.Token);
             response = await engine.PromptAsync(provider, secret, directory, session, content, instruction, [], _ => { }, timeout.Token, (_, _) => Task.FromResult("reject"), new("plan", "disabled"));
         }
-        else response = await new ChatEngine(http).StreamAsync(provider, secret, new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction }, new JsonObject { ["role"] = "user", ["content"] = content }), [], _ => { }, timeout.Token);
+        else response = await new ChatEngine(http).StreamAsync(provider, secret, new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction }, new JsonObject { ["role"] = "user", ["content"] = content }), [], _ => { }, timeout.Token, retrySettings: config);
         var title = CleanTitle(response.Message["content"]?.GetValue<string>() ?? "");
         if (title.Length == 0) throw new IOException("Le modèle n’a pas renvoyé de titre / Empty generated title.");
         // A late model response must never replace a title manually changed in the meantime.

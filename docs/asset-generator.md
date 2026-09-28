@@ -16,9 +16,60 @@ For example:
 
 The AI updates a structured drawing scene, rather than executing SVG scripts or loading remote SVG resources. Changes become visible when each tool call succeeds. This is an AI drawing workspace; it is not a freehand mouse editor or a general SVG importer.
 
-## Pixel art, guides and animation
+## Classic and pixel-art modes
 
-Set `pixel_size` when creating a canvas to draw in logical cells. For example, a 64 × 64 canvas with `pixel_size: 8` has an 8 × 8 pixel-art grid. Width and height must be divisible by the pixel size. `asset_edit` accepts `pixel`, `erase_pixel`, `pixel_rect` and `pixel_line`; their `x`/`y` coordinates are logical cell coordinates, while vector shapes still use canvas coordinates. `color` accepts the full RGB palette with optional alpha. Pixel cells render without antialiasing.
+Choose **Classic** for smooth SVG shapes, paths and text. Choose **Pixel art** for cell-by-cell drawing with no antialiasing. The GUI canvas dialog offers 16 × 16 (small icons), 32 × 32 (sprites), 64 × 64 (detailed sprites), 128 × 128 and a custom width and height. The AI receives the same recommendations through the skill instructions and `asset_create` tool. For a 32 × 32 sprite, use `{"mode":"pixel_art","width":32,"height":32,"pixel_size":1}`: every canvas pixel is one addressable cell. Custom pixel-art grids can be up to 512 × 512 cells.
+
+In pixel-art mode, `asset_edit` accepts `pixel`, `erase_pixel`, `pixel_rect` and `pixel_line`; their `x`/`y` coordinates refer to individual cells. Vector shapes are rejected in this mode so the artwork cannot acquire smoothed edges accidentally. `color` accepts the full RGB palette with optional alpha. Captures and the GUI preview enlarge pixel art with nearest-neighbor sampling; PNG, WebP, GIF and numbered PNG exports retain hard edges. SVG output requests crisp edges. Use `grid: true` in `asset_capture` to inspect each cell. The grid is an overlay and never appears in exports.
+
+The older `pixel_size` option remains available for block-sized cells: a 64 × 64 canvas with `pixel_size: 8` has an 8 × 8 logical grid. Width and height must be divisible by the cell size. Existing drawings without an explicit mode continue to load; drawings that already use `pixel_size > 1` retain their pixel-art preview.
+
+## Guides and animation
+
+### Fast pixel composition
+
+The AI can use editor-style operations in `asset_edit` instead of specifying every pixel separately. All coordinates and sizes below are integer logical cells. These operations paint cells directly, with no antialiasing or fractional placement.
+
+Set `compact_response: true` on edits to return the new revision and layer/frame counts without repeating the entire pixel scene. The live GUI still receives the full updated drawing. Inspect only the regions needed for the next step.
+
+| Operation | Parameters and behavior |
+| --- | --- |
+| `pixel_stamp` | Place equal-length character `rows` at `x,y`, using a `palette` of characters to RGBA colors. `.` skips a transparent cell; `erase_transparent: true` clears it instead. |
+| `pixel_brush` | Connect `points: [[x,y], ...]` with a continuous stroke. `brush_size` is 1–32; `brush_shape` is `square` or `circle`. `color: "none"` erases. Brush edges clip to the canvas. Even sizes extend one extra cell right/down. |
+| `pixel_rect`, `pixel_ellipse` | Draw a filled region of `width,height`, or a one-cell outline with `filled: false`. |
+| `pixel_fill` | Fill the four-connected region at `x,y` that matches the original cell's exact RGBA color. Boundaries use the selected layer only. |
+| `pixel_replace` | Replace `from_color` with `color` inside a region, or the whole layer if no region is supplied. `none` matches transparent cells. |
+| `pixel_transform` | Move a selected rectangle to `to_x,to_y`, or duplicate it with `copy: true`. `transform` supports `identity`, `flip_x`, `flip_y`, and clockwise `rotate_90`, `rotate_180`, `rotate_270`. An optional `target_layer_id` selects another existing layer. |
+
+Drawing operations accept `symmetry: "x"`, `"y"` or `"xy"` to mirror across the whole canvas's center axes (`x` reverses columns, `y` reverses rows). Selection transforms snapshot the source first, so overlapping moves work correctly. Rotations by 90° or 270° swap the region's width and height. Transparent source cells replace destination cells too; selections must fit entirely inside the canvas. All operations respect `frame_id` and atomic revision checking.
+
+For example, the model can draw and duplicate a small sprite in two operations:
+
+```json
+{
+  "asset_id": "<asset ID>", "expected_revision": 1,
+  "operations": [
+    {
+      "action": "pixel_stamp", "layer_id": "layer-1", "x": 2, "y": 2,
+      "rows": [".AAA.", "ABBBA", "AB.BA", ".AAA."],
+      "palette": { "A": "#172038", "B": "#4CC9F0" }
+    },
+    {
+      "action": "pixel_transform", "layer_id": "layer-1",
+      "x": 2, "y": 2, "width": 5, "height": 4,
+      "to_x": 10, "to_y": 2, "transform": "flip_x", "copy": true
+    }
+  ]
+}
+```
+
+`asset_inspect` with `layer_id`, optional `frame_id`, and a region up to 64 × 64 returns compact reusable `rows`/`palette` instead of the whole scene. Regions containing too many distinct colors return explicit pixels. `asset_guides` also returns logical grid dimensions, `cell_*` bounds and integer centering shifts. A missing `frame_id` edits or inspects the base scene.
+
+### Pixel-perfect viewing
+
+The transparency checker follows the pixel cells, and the optional grid uses one-pixel lines on their exact boundaries. Choose **Fit / Adapter** or an integer zoom beside the canvas selector; scroll to inspect enlarged artwork. The GUI calculates the preview in physical screen pixels at 100%, 125%, 150% or other display scaling; oversized native artwork scrolls instead of being reduced below one screen pixel per cell. The grid appears from five screen pixels per cell, so it does not obscure smaller previews. Captures report `cell_pixels`, `grid_visible`, logical grid dimensions and output dimensions. Set `max_size` to at least the longest logical grid side. Pixel-art raster exports require a whole number of output pixels per cell; normal vector exports retain fractional scaling.
+
+### Alignment and frames
 
 `asset_guides` returns the exact canvas center, thirds, and the bounds and center offsets of visible shapes and painted pixel regions. Text, SVG paths and rotated shapes have approximate bounds; capture the canvas to verify them visually. Set `guides: true` or `grid: true` in `asset_capture`, or use the **Repères / Grille** controls in the GUI, to overlay visual guides. These overlays never appear in exported files.
 
@@ -58,7 +109,7 @@ Example edit after creating a canvas at revision 1:
 }
 ```
 
-Supported operations are `canvas`, `layer`, `delete_layer`, `move_layer`, `shape`, `delete_shape`, `move_shape`, `pixel`, `erase_pixel`, `pixel_rect`, `pixel_line`, `frame_add`, `frame_delete` and `frame_duration`. A `shape` upsert replaces the complete shape; omitted fields return to defaults. Move indices are zero-based, from back to front. Re-inspect the scene if an edit reports a revision conflict.
+Supported operations are `canvas`, `layer`, `delete_layer`, `move_layer`, `shape`, `delete_shape`, `move_shape`, `pixel`, `erase_pixel`, `pixel_rect`, `pixel_line`, `pixel_ellipse`, `pixel_brush`, `pixel_fill`, `pixel_replace`, `pixel_stamp`, `pixel_transform`, `frame_add`, `frame_delete` and `frame_duration`. A `shape` upsert replaces the complete shape; omitted fields return to defaults. Move indices are zero-based, from back to front. Re-inspect the scene if an edit reports a revision conflict.
 
 ## Capture and export
 

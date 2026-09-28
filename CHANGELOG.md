@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.26.0 - 2026-09-28
+
+- Added an Appearance settings tab grouping themes and the three independent font selectors.
+- Added Customize under Theme: create named copies of built-in or custom themes, edit 21 individual colors with a color picker or hexadecimal input, preview messages and contrast, and delete custom palettes. Optional colors can follow the base palette automatically. Custom themes are saved in portable settings; Cancel discards the draft.
+- Custom palettes are restored at startup and supported by the shared CLI palette. The version chip continues to derive a readable gradient from the active theme.
+- Moved GitHub updates and log settings to About, anchored at the bottom of settings navigation. Automatic conversation naming and its model remain in General.
+- Aligned GUI, CLI and desktop host versions at 1.26.0.
+
+## 1.25.0 - 2026-09-28
+
+- Project folders can stay expanded independently. Opening or closing a folder no longer switches the active conversation, and other expanded projects remain visible when navigating between chats.
+- Added Pin/Unpin to conversation context menus. Pinned conversations are saved in SQLite and also appear above Projects while remaining in their original folders.
+- Parent project badges now count running chats, unread completed replies and chats needing attention. Pending requests stay marked until resolved; read completion badges clear when opening the chat. These indicators remain available independently of bell and sound preferences.
+- Replaced the sidebar version label with a theme-aware gradient chip. Clicking opens the bundled changelog in a scrollable dialog, including when offline.
+- Aligned GUI and CLI at version 1.25.0.
+
+## 1.24.0 - 2026-09-28
+
+- Stabilized conversation rows on hover by reserving favorite-button space and ignoring pointer exits between child controls.
+- Added three independent font selectors in General settings: interface, user messages/composer and model replies. Installed fonts are listed with previews; code retains its monospaced font.
+- Response footers now show the local response time alongside generation duration on hover. New completion timestamps persist in SQLite and are retained by forks; historical timestamps are left unknown.
+- Displayed the software version in smaller text beside the sidebar application name.
+- View memory now opens a database-style dialog across all projects and conversations, with every memory column, combined column filters, sorting, pagination, full selected-row details and copy. Existing editing remains available separately.
+- Aligned GUI, CLI and desktop host versions at 1.24.0.
+
+## 1.23.0 - 2026-09-28
+
+- Restored the application logo and name above the project sidebar. Moved the notification bell to the left of conversation search and replaced the filter glyph with a magnifying glass.
+- Added persistent project icons and colors with a preview in Manage project.
+- Fixed restoration of vision and naming model dropdowns, including manually entered model names and refreshing the vision catalog without clearing the selection.
+- Added an audio icon to Notifications settings and six new sounds: Chime, Glass, Marimba, Digital, Success and Water drop. All nine sounds support volume and preview.
+- Published GUI and CLI at version 1.23.0.
+
+## 1.22.0 - 2026-09-28
+
+- Reorganized the desktop conversation sidebar into compact project folders with expandable conversation lists, discreet activity ages, preserved favorites and archives, and a separate section for conversations without a project.
+- Added configurable automatic retries in General settings: enable/disable, retry count and delay. Transient model request failures and interrupted streams can retry without replaying completed tools; cancellation stops waiting immediately. OpenCode retries read-only polling and explicitly rate-limited submissions without resubmitting ambiguous remote actions.
+- Added a notification bell and conversation badges for completed chats and user actions, with a dedicated Notifications settings page for event selection, sound, tone, volume and preview.
+- Display a spinner and “Nommage…” while AI conversation naming is in progress.
+- Added per-conversation subagent count and role configuration, automatic count/role toggles, and reusable presets that can be saved or deleted. Configured roles and limits are applied by the shared agent runtime; forks retain the settings.
+- Shift+Enter now inserts a line in the composer. Ctrl+wheel changes the text size in the window under the pointer; Ctrl+Shift+wheel changes all application windows. Ctrl+0 and Ctrl+Shift+0 reset the corresponding scope.
+- Aligned GUI, CLI and the legacy desktop host versions at 1.22.0.
+
 ## 1.21.2 - 2026-09-27
 
 - Benchmark challenge headers now show their total elapsed time after completion, failure or cancellation, including generation and functional checks. JSON entries retain this duration independently from model throughput metrics.

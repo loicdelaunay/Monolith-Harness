@@ -15,12 +15,12 @@ public static class CliThemes
         new("crt-amber", "CRT · Ambre", new(0x100B03, 0x1C1308, 0x352510, 0xFFE2AE, 0xC7A573, 0xFFC15A, 0xFFDA8A, 0xFFFFB5), "Lucida Console", 12, true, TerminalBorder.Ascii, "[ O H M / T E R M ]", "AMBER MONITOR · 02"),
         new("neon-synthwave", "Néon · Synthwave", new(0x100B20, 0x1B1232, 0x2C1D49, 0xF6EFFF, 0xBEB1D5, 0xFF81E5, 0x65FFE0, 0xFFE790), "Cascadia Mono", 12, true, TerminalBorder.Double, "O H M  / /  N E O N", "SYNTHWAVE · NIGHT SHIFT")
     ];
-    public static bool IsValid(string id) => id == "shared" || All.Any(t => t.Id == id) || AppearanceThemes.All.Any(t => t.Id == id);
-    public static CliTheme Resolve(string? id, string sharedTheme = "fluent-dark")
+    public static bool IsValid(string id, IEnumerable<AppearanceTheme>? custom = null) => id == "shared" || All.Any(t => t.Id == id) || AppearanceThemes.WithCustom(custom).Any(t => t.Id == id);
+    public static CliTheme Resolve(string? id, string sharedTheme = "fluent-dark", IEnumerable<AppearanceTheme>? custom = null)
     {
         var dedicated = All.FirstOrDefault(t => t.Id == id);
         if (dedicated != null) return dedicated;
-        var theme = AppearanceThemes.Get(id is null or "shared" ? sharedTheme : id);
-        return new(theme.Id, theme.French, Palette.FromTheme(theme.Id), "Cascadia Mono", 12, false, TerminalBorder.Rounded, "◈  OH MY HARNESS", "TERMINAL WORKSPACE");
+        var theme = AppearanceThemes.Get(id is null or "shared" ? sharedTheme : id, custom);
+        return new(theme.Id, theme.French, Palette.FromTheme(theme), "Cascadia Mono", 12, false, TerminalBorder.Rounded, "◈  OH MY HARNESS", "TERMINAL WORKSPACE");
     }
 }

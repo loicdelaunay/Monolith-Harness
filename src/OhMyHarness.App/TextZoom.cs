@@ -15,29 +15,41 @@ static class TextZoom
 {
     sealed record Metrics(double FontSize, double LineHeight = 0);
     sealed record Dimensions(double Height);
+    sealed class WindowZoom { public int? Percent; }
     static readonly ConditionalWeakTable<DependencyObject, Metrics> originals = new();
     static readonly ConditionalWeakTable<Control, Dimensions> dimensions = new();
     static readonly List<WeakReference<FrameworkElement>> roots = [];
+    static readonly ConditionalWeakTable<FrameworkElement, WindowZoom> windowZoom = new();
     public static int Percent { get; private set; } = 100;
+    public static int ForWindow(FrameworkElement root) => windowZoom.GetValue(root, _ => new()).Percent ?? Percent;
+    public static void SetWindow(FrameworkElement root, int percent)
+    {
+        windowZoom.GetValue(root, _ => new()).Percent = Math.Clamp(percent, 80, 150);
+        Apply(root);
+    }
     public static void Set(int percent)
     {
         Percent = Math.Clamp(percent, 80, 150);
         roots.RemoveAll(item => !item.TryGetTarget(out _));
-        foreach (var item in roots) if (item.TryGetTarget(out var root)) Apply(root);
+        foreach (var item in roots) if (item.TryGetTarget(out var root)) { windowZoom.GetValue(root, _ => new()).Percent = null; Apply(root); }
     }
     public static void Observe(FrameworkElement root)
     {
         roots.Add(new(root));
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         // Coalesce streaming layout changes; new text receives the current scale.
-        root.LayoutUpdated += (_, _) => { if (Percent != 100 && !timer.IsEnabled) timer.Start(); };
+        root.LayoutUpdated += (_, _) => { if ((ForWindow(root) != 100 || AppTypography.HasCustomFonts) && !timer.IsEnabled) timer.Start(); };
         root.Loaded += (_, _) => Apply(root);
         root.Unloaded += (_, _) => timer.Stop();
         timer.Tick += (_, _) => { timer.Stop(); Apply(root); };
     }
     public static void Apply(DependencyObject node)
     {
-        var factor = Percent / 100d;
+        AppTypography.Apply(node);
+        ApplyTree(node, (node is FrameworkElement root ? ForWindow(root) : Percent) / 100d);
+    }
+    static void ApplyTree(DependencyObject node, double factor)
+    {
         if (node is IconElement) return;
         if (node is Control control && double.IsFinite(control.Height))
         {
@@ -66,7 +78,7 @@ static class TextZoom
             if (Math.Abs(password.FontSize - basis.FontSize * factor) > .01) password.FontSize = basis.FontSize * factor;
             return;
         }
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) Apply(VisualTreeHelper.GetChild(node, i));
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) ApplyTree(VisualTreeHelper.GetChild(node, i), factor);
     }
     static void ScaleInline(Inline inline, double factor)
     {
@@ -82,11 +94,12 @@ static class TextZoom
 
 public sealed partial class MainWindow
 {
-    int fontWheelRemainder;
     static bool ControlPressed() => (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+    static bool ShiftPressed() => (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
     void ObserveTextZoom(FrameworkElement target)
     {
         TextZoom.Observe(target);
+        int fontWheelRemainder = 0;
         target.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(async (_, e) =>
         {
             if (!ControlPressed()) { fontWheelRemainder = 0; return; }
@@ -96,19 +109,24 @@ public sealed partial class MainWindow
             fontWheelRemainder += point.Properties.MouseWheelDelta;
             var steps = fontWheelRemainder / 120;
             fontWheelRemainder %= 120;
-            if (steps != 0) await Guard(() => SetFontZoomAsync(TextZoom.Percent + steps * 10));
+            if (steps != 0)
+            {
+                chatScrollInputUntil = 0; chatScrollMayResume = false;
+                if (ShiftPressed()) await Guard(() => SetFontZoomAsync(TextZoom.Percent + steps * 10));
+                else TextZoom.SetWindow(target, TextZoom.ForWindow(target) + steps * 10);
+            }
         }), true);
         target.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(async (_, e) =>
         {
             if (!ControlPressed() || e.Key is not (VirtualKey.Number0 or VirtualKey.NumberPad0)) return;
             e.Handled = true; fontWheelRemainder = 0;
-            await Guard(() => SetFontZoomAsync(100));
+            if (ShiftPressed()) await Guard(() => SetFontZoomAsync(100));
+            else TextZoom.SetWindow(target, 100);
         }), true);
     }
     async Task SetFontZoomAsync(int percent)
     {
         percent = Math.Clamp(percent, 80, 150);
-        if (percent == TextZoom.Percent) return;
         // A font reflow is not a user's scroll gesture.
         chatScrollInputUntil = 0; chatScrollMayResume = false;
         TextZoom.Set(percent);

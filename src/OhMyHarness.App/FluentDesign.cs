@@ -13,7 +13,9 @@ internal static partial class FluentDesign
     static readonly Dictionary<string, SolidColorBrush> resources = [];
     static readonly Dictionary<(byte R, byte G, byte B), SolidColorBrush> adapted = [];
     static Windows.UI.Color Color(string hex) => ColorHelper.FromArgb(255, Convert.ToByte(hex.Substring(1,2),16), Convert.ToByte(hex.Substring(3,2),16), Convert.ToByte(hex.Substring(5,2),16));
-    static Windows.UI.Color ResourceColor(string key) => aliases.TryGetValue(key, out var canonical) ? ResourceColor(canonical) : key switch
+    static Windows.UI.Color ResourceColor(string key) => ThemeColor(theme, key);
+    internal static Windows.UI.Color ThemeColor(AppearanceTheme theme, string key) => aliases.TryGetValue(key, out var canonical) ? ThemeColor(theme, canonical)
+        : theme.Colors.TryGetValue(key, out var custom) && AppearanceThemes.CustomColorKeys.Contains(key) && AppearanceThemes.IsColor(custom) ? Color(custom) : key switch
     {
         "TextFillColorPrimaryBrush" => Color(theme.Text),
         "TextFillColorSecondaryBrush" => Color(theme.Muted),
@@ -45,11 +47,10 @@ internal static partial class FluentDesign
         "AccentTextFillColorPrimaryBrush" or "AccentTextFillColorSecondaryBrush" or "AccentTextFillColorTertiaryBrush" => Color(ThemeContrast.AccentText(theme)),
         "AccentFillColorSecondaryBrush" => WithOpacity(Color(theme.Accent), 230),
         "AccentFillColorTertiaryBrush" => WithOpacity(Color(theme.Accent), 204),
-        "TextOnAccentFillColorPrimaryBrush" => AccentForeground(),
-        "TextOnAccentFillColorSecondaryBrush" => WithOpacity(AccentForeground(), 200),
+        "TextOnAccentFillColorPrimaryBrush" => Color(ThemeContrast.On(theme.Accent)),
+        "TextOnAccentFillColorSecondaryBrush" => WithOpacity(Color(ThemeContrast.On(theme.Accent)), 200),
         _ => Color(theme.Surface)
     };
-    static Windows.UI.Color AccentForeground() => Color(ThemeContrast.On(theme.Accent));
     static Windows.UI.Color WithOpacity(Windows.UI.Color color, byte alpha) => ColorHelper.FromArgb(alpha, color.R, color.G, color.B);
     static Windows.UI.Color Blend(Windows.UI.Color background, Windows.UI.Color foreground, double amount) =>
         ColorHelper.FromArgb(255,
@@ -73,9 +74,10 @@ internal static partial class FluentDesign
             return Color(Math.Max(r,Math.Max(g,b)) > 220 ? theme.Text : theme.Muted);
         return Color(ThemeContrast.Readable($"#{r:X2}{g:X2}{b:X2}", theme.Surface));
     }
-    public static void SetTheme(string id)
+    public static void SetTheme(string id) => SetTheme(AppearanceThemes.Get(id));
+    public static void SetTheme(AppearanceTheme selected)
     {
-        theme = AppearanceThemes.Get(id);
+        theme = selected;
         foreach (var (key,brush) in resources) brush.Color = ResourceColor(key);
         foreach (var (key,brush) in adapted) brush.Color = AdaptColor(key.R,key.G,key.B);
         // Explicit control aliases also cover popups, whose templates can cache StaticResource aliases.

@@ -101,6 +101,10 @@ namespace OhMyHarness.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AgentOptionsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ExecutionMode")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -109,6 +113,9 @@ namespace OhMyHarness.Core.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsFavorite")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPinned")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("OrchestrationMode")
@@ -131,6 +138,9 @@ namespace OhMyHarness.Core.Migrations
 
                     b.Property<bool>("TodoDismissed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedUtc")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -293,6 +303,9 @@ namespace OhMyHarness.Core.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("CompletedUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -391,6 +404,17 @@ namespace OhMyHarness.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsInbox")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -439,6 +463,9 @@ namespace OhMyHarness.Core.Migrations
                     b.Property<string>("BaseUrl")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("BypassFreeLimitation")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("CompositeJson")
                         .IsRequired()

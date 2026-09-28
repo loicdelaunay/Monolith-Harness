@@ -29,24 +29,20 @@ public sealed partial class MainWindow
     static JsonArray ComposeWire(string systemPrompt, IEnumerable<Message> history)
     {
         var wire = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = systemPrompt } };
-        foreach (var item in history)
+        ChatEngine.AppendHistoryWithToolImages(wire, history, item =>
         {
-            wire.Add(ChatEngine.ToWire(item));
-            if (item.Role == "tool" && item.Attachments.Count > 0)
+            var image = item.Attachments[0];
+            var toolName = item.Content.Split('\n')[0];
+            return new JsonObject
             {
-                var image = item.Attachments[0];
-                var toolName = item.Content.Split('\n')[0];
-                wire.Add(new JsonObject
+                ["role"] = "user",
+                ["content"] = new JsonArray
                 {
-                    ["role"] = "user",
-                    ["content"] = new JsonArray
-                    {
-                        new JsonObject { ["type"] = "text", ["text"] = $"[Image issue de l’outil {toolName}]" },
-                        new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = $"data:{image.Mime};base64,{Convert.ToBase64String(image.Data)}" } }
-                    }
-                });
-            }
-        }
+                    new JsonObject { ["type"] = "text", ["text"] = $"[Image issue de l’outil {toolName}]" },
+                    new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = $"data:{image.Mime};base64,{Convert.ToBase64String(image.Data)}" } }
+                }
+            };
+        });
         return wire;
     }
 
@@ -125,7 +121,7 @@ public sealed partial class MainWindow
         {
             var output = update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning);
             ShowContextUsage(run, (update.InputTokens ?? summaryInputEstimate) + output, estimated: !update.InputTokens.HasValue || !update.OutputTokens.HasValue);
-        }, ct);
+        }, ct, retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
         var summary = completion.Message["content"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(summary)) summary = completion.Message["reasoning_content"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(summary)) throw new IOException(T("Le fournisseur n’a pas produit de résumé pour la compaction."));

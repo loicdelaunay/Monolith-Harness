@@ -9,13 +9,13 @@ public sealed partial class TerminalUi
         var settings = FeatureSettings.Read(snapshot.State.FeaturesJson);
         var choices = new List<Choice> { new("shared", L("Suivre le thème de l’application", "Follow desktop theme")) };
         choices.AddRange(CliThemes.All.Select(t => new Choice(t.Id, t.Name, "CRT")));
-        choices.AddRange(AppearanceThemes.All.Select(t => new Choice(t.Id, L(t.French, t.English))));
+        choices.AddRange(AppearanceThemes.WithCustom(settings.CustomThemes).Select(t => new Choice(t.Id, L(t.French, t.English))));
         string? selected = requested.Length > 0 ? requested : await Prompt(L("Thème du CLI", "CLI theme"),
             L("↑/↓ : aperçu immédiat. Entrée : enregistrer. Échap : revenir au thème précédent. /font pour la police et l’effet cathodique Windows Terminal.",
               "↑/↓: live preview. Enter: save. Esc: restore previous theme. /font for Windows Terminal fonts and CRT effects."), choices,
             previewTheme: true, selectedValue: options.Theme ?? settings.CliTheme);
         if (selected == null) return;
-        if (!CliThemes.IsValid(selected)) throw new ArgumentException("Unknown CLI theme: " + selected);
+        if (!CliThemes.IsValid(selected, settings.CustomThemes)) throw new ArgumentException("Unknown CLI theme: " + selected);
         await client.State(s => { var config = FeatureSettings.Read(s.FeaturesJson); config.CliTheme = selected; s.FeaturesJson = config.Json(); });
         var fresh = await client.Snapshot(lifetime.Token);
         Post(() => { options.Theme = null; workspace = fresh; notice = L("Thème appliqué · /font pour la police et le CRT", "Theme applied · /font for fonts and CRT"); });
@@ -37,7 +37,7 @@ public sealed partial class TerminalUi
         if (size == null) return;
         if (!int.TryParse(size, out int points) || points is < 8 or > 36) throw new ArgumentException("Taille de police invalide / Invalid font size.");
         config.CliFont = face == "default" ? "" : face.Trim(); config.CliFontSize = points; _ = config.Json();
-        var theme = CliFonts.Apply(CliThemes.Resolve(options.Theme ?? config.CliTheme, config.Theme), config);
+        var theme = CliFonts.Apply(CliThemes.Resolve(options.Theme ?? config.CliTheme, config.Theme, config.CustomThemes), config);
         string details = L($"Police : {theme.Font}, {theme.FontSize} pt. CRT : {(theme.Crt ? "oui" : "non")}.\nLa police est contrôlée par le terminal hôte. Le profil dédié applique police, curseur, couleurs et effet CRT dans un nouvel onglet Windows Terminal.\nLes terminaux macOS et autres conservent leur police : choisissez-la dans leurs préférences. Aucun téléchargement de police.",
             $"Font: {theme.Font}, {theme.FontSize} pt. CRT: {theme.Crt}.\nThe host terminal controls fonts. The dedicated profile applies font, cursor, colors and CRT in a new Windows Terminal tab.\nmacOS and other terminals retain their font: choose it in their preferences. No font downloads.");
         var choices = new List<Choice> { new("export", L("Enregistrer et exporter le profil + police", "Save and export profile + font"), "terminal-profiles/*.json · fonts/"), new("save", L("Enregistrer le choix", "Save selection")) };

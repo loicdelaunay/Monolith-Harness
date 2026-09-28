@@ -22,7 +22,7 @@ public sealed partial class MainWindow
         {
             using var client = new HttpClient();
             guiUpdate = await new GitHubUpdates(client).CheckAsync(UpdateChannel.Gui, updateLifetime.Token);
-            if (guiUpdate != null) ShowStatus(WorkflowText("Mise à jour GUI disponible : ", "GUI update available: ") + guiUpdate.Version + WorkflowText(" · Réglages > Général", " · Settings > General"));
+            if (guiUpdate != null) ShowStatus(WorkflowText("Mise à jour GUI disponible : ", "GUI update available: ") + guiUpdate.Version + WorkflowText(" · Réglages > About", " · Settings > About"));
         }
         catch (Exception ex)
         {

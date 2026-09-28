@@ -13,16 +13,19 @@ public sealed partial class MainWindow
     void ApplyAppearance()
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
+        AppTypography.Configure(config);
+        AppTypography.SetScope(composer, FontArea.User);
         TextZoom.Set(config.FontZoomPercent);
         ApplyTheme(config.Theme);
         ApplyBranding();
         composerInfoExpanded = config.ComposerInfoExpanded;
         UpdateInfoPanel();
     }
-    void ApplyTheme(string themeId)
+    void ApplyTheme(string themeId, IEnumerable<AppearanceTheme>? customThemes = null)
     {
-        var theme = AppearanceThemes.Get(themeId);
-        FluentDesign.SetTheme(theme.Id);
+        var theme = AppearanceThemes.Get(themeId, customThemes ?? FeatureSettings.Read(state.FeaturesJson).CustomThemes);
+        FluentDesign.SetTheme(theme);
+        RefreshVersionChip(theme);
         root.RequestedTheme = theme.Dark ? ElementTheme.Dark : ElementTheme.Light;
         root.Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
         shell.PaneBackground = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");

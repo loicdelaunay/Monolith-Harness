@@ -25,6 +25,7 @@ internal sealed partial class ModelToolsWindow : Window
     readonly List<Control> busyControls = [];
     readonly HttpClient http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     readonly ModelToolClient client;
+    readonly Func<FeatureSettings>? readRetrySettings;
     readonly Func<Task<List<Provider>>> loadModels;
     readonly Func<Provider, CancellationToken, Task> prepare;
     readonly ModelToolKind kind;
@@ -44,9 +45,10 @@ internal sealed partial class ModelToolsWindow : Window
     { ModelToolKind.Translator => L("Traducteur", "Translator"), ModelToolKind.Proofreader => L("Correcteur d’orthographe", "Proofreader"), _ => L("Benchmark de modèle", "Model benchmark") };
 
     internal ModelToolsWindow(ModelToolKind kind, List<Provider> providers, int? providerId, string? selectedModel,
-        ElementTheme theme, Func<Task<List<Provider>>> loadModels, Func<Provider, CancellationToken, Task> prepare)
+        ElementTheme theme, Func<Task<List<Provider>>> loadModels, Func<Provider, CancellationToken, Task> prepare, Func<FeatureSettings>? readRetrySettings = null)
     {
         this.kind = kind; this.loadModels = loadModels; this.prepare = prepare; client = new(http);
+        this.readRetrySettings = readRetrySettings;
         Panel.RequestedTheme = theme;
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
             Panel.RowDefinitions.Add(new() { Height = height });
@@ -150,6 +152,11 @@ internal sealed partial class ModelToolsWindow : Window
         void Render(GenerationUpdate update) { text?.Invoke(update.Text); progress?.Invoke(update); }
         void Update(GenerationUpdate update)
         {
+            if (update.Retry is { } retry)
+            {
+                DispatcherQueue.TryEnqueue(() => { if (streaming && !ClosedForTools) SetNotice(retry.Describe(UiText.Language)); });
+                return;
+            }
             latest = update;
             if ((text == null && progress == null) || (DateTime.UtcNow - last).TotalMilliseconds < 60) return;
             last = DateTime.UtcNow;
@@ -159,7 +166,7 @@ internal sealed partial class ModelToolsWindow : Window
         try
         {
             result = SmokeRequest != null ? await SmokeRequest(selected, request, Update, ct)
-                : await client.RunAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), request, Update, ct);
+                : await client.RunAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), request, Update, ct, kind == ModelToolKind.Benchmark ? null : readRetrySettings?.Invoke());
         }
         finally
         {

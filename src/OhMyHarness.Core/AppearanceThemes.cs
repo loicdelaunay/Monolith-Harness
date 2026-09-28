@@ -2,6 +2,7 @@ namespace OhMyHarness.Core;
 
 public sealed record AppearanceTheme(string Id, string French, string English, bool Dark, string Background, string Surface, string Text, string Muted, string Accent)
 {
+    public Dictionary<string, string> Colors { get; init; } = [];
     public override string ToString() => French;
 }
 
@@ -21,5 +22,20 @@ public static class AppearanceThemes
         new("electric-dark", "Electric sombre", "Electric dark", true, "#0E0F12", "#191D24", "#F2F8FA", "#AFBEC6", "#4CC9F0"),
         new("electric-light", "Electric clair", "Electric light", false, "#F0FAFD", "#FFFFFF", "#0E0F12", "#52636C", "#4CC9F0")
     ];
-    public static AppearanceTheme Get(string? id) => All.FirstOrDefault(x => x.Id == id) ?? All[0];
+    public static readonly string[] CustomColorKeys = [
+        "ControlStrokeColorDefaultBrush", "CardStrokeColorDefaultBrush", "ControlHoverBrush", "ControlPressedBrush",
+        "ControlSelectedBrush", "ControlSelectedHoverBrush", "ConversationHoverFillBrush", "ConversationHoverStrokeBrush",
+        "UserMessageFillBrush", "UserMessageStrokeBrush", "AssistantMessageFillBrush", "AssistantMessageStrokeBrush",
+        "ToolMessageFillBrush", "ToolMessageStrokeBrush", "ToolMessageTitleBrush", "ToolMessageErrorStrokeBrush"
+    ];
+    public static bool IsColor(string? value) => value is { Length: 7 } && value[0] == '#' && value.AsSpan(1).IndexOfAnyExcept("0123456789abcdefABCDEF") < 0;
+    public static bool IsCustomId(string? id) => id != null && id.StartsWith("custom-", StringComparison.Ordinal) && Guid.TryParseExact(id[7..], "N", out _);
+    public static bool IsValidCustom(AppearanceTheme? theme) => theme != null && IsCustomId(theme.Id)
+        && !string.IsNullOrWhiteSpace(theme.French) && theme.French.Length <= 60 && !theme.French.Any(char.IsControl)
+        && !string.IsNullOrWhiteSpace(theme.English) && theme.English.Length <= 60 && !theme.English.Any(char.IsControl)
+        && new[] { theme.Background, theme.Surface, theme.Text, theme.Muted, theme.Accent }.All(IsColor)
+        && theme.Colors != null && theme.Colors.All(x => CustomColorKeys.Contains(x.Key) && IsColor(x.Value));
+    public static IReadOnlyList<AppearanceTheme> WithCustom(IEnumerable<AppearanceTheme>? custom) =>
+        All.Concat((custom ?? []).Where(IsValidCustom).DistinctBy(x => x.Id).Take(50)).ToList();
+    public static AppearanceTheme Get(string? id, IEnumerable<AppearanceTheme>? custom = null) => WithCustom(custom).FirstOrDefault(x => x.Id == id) ?? All[0];
 }

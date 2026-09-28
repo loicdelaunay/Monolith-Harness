@@ -62,11 +62,11 @@ public sealed partial class MainWindow
                     var directory = OpenCodeDirectory(run.Project);
                     var isolated = new Provider { Kind = run.Provider.Kind, BaseUrl = run.Provider.BaseUrl, Username = run.Provider.Username, Model = run.Provider.Model, OpenCodeTools = false };
                     var session = await openCodeEngine.CreateSessionAsync(isolated, secret, directory, "Compactage manuel", token);
-                    result = await openCodeEngine.PromptAsync(isolated, secret, directory, session, text, ContextDetails.SummaryInstruction, [], _ => { }, token);
+                    result = await openCodeEngine.PromptAsync(isolated, secret, directory, session, text, ContextDetails.SummaryInstruction, [], _ => { }, token, retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
                 }
                 else result = await engine.StreamAsync(run.Provider, secret, new JsonArray(
                     new JsonObject { ["role"] = "system", ["content"] = ContextDetails.SummaryInstruction },
-                    new JsonObject { ["role"] = "user", ["content"] = text }), [], _ => { }, token);
+                    new JsonObject { ["role"] = "user", ["content"] = text }), [], _ => { }, token, retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
                 return result.Message["content"]?.GetValue<string>() ?? "";
             }, ct);
             if (changed)

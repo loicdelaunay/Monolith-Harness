@@ -28,7 +28,7 @@ public sealed class CliOptions
                 case "--help" or "-h": result.Help = true; break;
                 case "--version" or "-v": result.Version = true; break;
                 case "--render-demo": result.RenderDemo = true; break;
-                case "--theme": result.Theme = Value(); if (!CliThemes.IsValid(result.Theme)) throw new ArgumentException("Unknown CLI theme: " + result.Theme); break;
+                case "--theme": result.Theme = Value(); if (!CliThemes.IsValid(result.Theme) && !OhMyHarness.Core.AppearanceThemes.IsCustomId(result.Theme)) throw new ArgumentException("Unknown CLI theme: " + result.Theme); break;
                 case "--database": result.Database = Path.GetFullPath(Value()); break;
                 case "--project": result.Directory = Path.GetFullPath(Value()); break;
                 case "--chat": result.Chat = Positive(Value()); break;
