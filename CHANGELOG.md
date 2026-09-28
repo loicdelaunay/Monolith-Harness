@@ -6,7 +6,7 @@
 - Added Customize under Theme: create named copies of built-in or custom themes, edit 21 individual colors with a color picker or hexadecimal input, preview messages and contrast, and delete custom palettes. Optional colors can follow the base palette automatically. Custom themes are saved in portable settings; Cancel discards the draft.
 - Custom palettes are restored at startup and supported by the shared CLI palette. The version chip continues to derive a readable gradient from the active theme.
 - Moved GitHub updates and log settings to About, anchored at the bottom of settings navigation. Automatic conversation naming and its model remain in General.
-- Aligned GUI, CLI and desktop host versions at 1.26.0.
+- Aligned the displayed version and update checks with GUI, CLI and desktop host version 1.26.0.
 
 ## 1.25.0 - 2026-09-28
 
