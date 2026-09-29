@@ -4,7 +4,7 @@ namespace OhMyHarness.Core;
 
 public static class SourceTools
 {
-    public static bool CanRead(string skills) => new[] { "sources", "write_sources", "code_search", "patch_sources", GitTools.SkillId, FileIndexTools.SkillId }.Any(s => Skills.Enabled(skills, s));
+    public static bool CanRead(string skills) => GitTools.ReadEnabled(skills) || new[] { "sources", "write_sources", "code_search", "patch_sources", FileIndexTools.SkillId }.Any(s => Skills.Enabled(skills, s));
     public static bool Handles(string name) => GitTools.Handles(name) || FileIndexTools.Handles(name) || name is "glob_sources" or "grep_sources" or "patch_sources";
     public static string PermissionTitle(string name) => GitTools.Handles(name) ? "GIT · " + name : FileIndexTools.Handles(name) ? "FILE INDEX · " + name : "Patch multi-fichiers / Multi-file patch";
     public static void AddDefinitions(JsonArray definitions, bool sources, string skills, bool child = false)
@@ -12,12 +12,6 @@ public static class SourceTools
         if (!sources) return;
         GitTools.AddDefinitions(definitions, skills);
         FileIndexTools.AddDefinitions(definitions, skills);
-        if (child)
-            for (int i = definitions.Count - 1; i >= 0; i--)
-            {
-                var name = definitions[i]?["function"]?["name"]?.GetValue<string>() ?? "";
-                if (GitTools.Handles(name) && !GitTools.IsReadOnly(name)) definitions.RemoveAt(i);
-            }
         void Add(string name, string description, JsonObject properties, params string[] required) => definitions.Add(new JsonObject {
             ["type"] = "function", ["function"] = new JsonObject { ["name"] = name, ["description"] = description,
                 ["parameters"] = new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = new JsonArray(required.Select(x => (JsonNode?)JsonValue.Create(x)).ToArray()), ["additionalProperties"] = false } } });

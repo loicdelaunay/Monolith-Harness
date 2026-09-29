@@ -93,7 +93,7 @@ public sealed partial class MainWindow
         if (chat == null || project == null) return;
         var validated = ProjectResources.Validate(paths);
         chat.ResourcePathsJson = ProjectResources.Serialize(validated);
-        project.SetSourceFolders(validated);
+        project = ProjectResources.Effective(chat, db.Projects.Local.FirstOrDefault(x => x.Id == project.Id) ?? project);
         await db.SaveChangesAsync();
         UpdateSourceLabel(); UpdateFloatingAssets(); ResetWorkspaceTools();
         ShowStatus(WorkflowText("Ressources associées à cette conversation · disponibles au prochain envoi.", "Resources attached to this conversation · available on the next send."));
@@ -106,7 +106,7 @@ public sealed partial class MainWindow
         {
             if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
             var deferred = e.GetDeferral(); e.Handled = true;
-            try { await Guard(async () => { var items = await e.DataView.GetStorageItemsAsync(); await SaveConversationResourcesAsync((project?.GetSourceFolders() ?? []).Concat(items.Select(x => x.Path))); }); }
+            try { await Guard(async () => { var items = await e.DataView.GetStorageItemsAsync(); await SaveConversationResourcesAsync(CurrentResourcePaths().Concat(items.Select(x => x.Path))); }); }
             finally { deferred.Complete(); }
         };
     }
@@ -115,10 +115,12 @@ public sealed partial class MainWindow
         var picker = new FileOpenPicker(); picker.FileTypeFilter.Add("*");
         InitializePicker(picker, this);
         var selected = await picker.PickMultipleFilesAsync();
-        if (selected.Count > 0) await SaveConversationResourcesAsync((project?.GetSourceFolders() ?? []).Concat(selected.Select(x => x.Path)));
+        if (selected.Count > 0) await SaveConversationResourcesAsync(CurrentResourcePaths().Concat(selected.Select(x => x.Path)));
     }
+    IEnumerable<string> CurrentResourcePaths() => chat != null && project != null ? ProjectResources.For(chat, project) : [];
     void AddHistoryActions(Message message, Border? card)
     {
+        if (card != null) chatSearchAnchors[message.Id] = new(card);
         if (card?.Child is not StackPanel || message.Role is not ("user" or "assistant")) return;
         var actions = EnsureMessageActionMenu(card);
         if (message.Role == "user") AddMessageCopyAction(actions, () => message.Content);

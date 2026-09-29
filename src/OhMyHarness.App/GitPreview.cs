@@ -72,7 +72,7 @@ public sealed partial class MainWindow
                 Grid.SetColumn(cell, column); Grid.SetRow(cell, index); table.Children.Add(cell);
             }
         }
-        Add(state.Language == "en" ? "Before · HEAD" : "Avant · HEAD", state.Language == "en" ? "After · Working tree" : "Après · Dossier de travail", "header");
+        Add(WorkflowText("Avant · HEAD", "Before · HEAD"), WorkflowText("Après · Dossier de travail", "After · Working tree"), "header");
         foreach (var row in preview.Rows)
             Add(row.Before == null ? null : $"{row.BeforeLine,5} {row.Before}", row.After == null ? null : $"{row.AfterLine,5} {row.After}", row.Kind);
         gitDiff.Children.Add(table);

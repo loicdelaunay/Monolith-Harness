@@ -11,6 +11,7 @@ public sealed partial class MainWindow
     Window? tasksWindow;
     void StartScheduler()
     {
+        if (scheduler != null) return;
         scheduler = new(HarnessDb.DatabasePath, ExecuteScheduledTask);
         scheduleTimer.Tick += async (_, _) =>
         {
@@ -22,6 +23,7 @@ public sealed partial class MainWindow
     }
     async Task<string> ExecuteScheduledTask(ScheduledTask task, CancellationToken ct)
     {
+        if (databaseMaintenanceBusy) throw new InvalidOperationException("Maintenance de la base en cours.");
         var input=await ScheduledTaskInput.PrepareAsync(HarnessDb.DatabasePath,task,id=>conversationRuns.ContainsKey(id),ct);
         var conversation=input.Chat;var owner=input.Project;var target=input.Provider;var options=input.Options;var configured=input.Providers;
         // A visible history panel must finish materializing before an agent appends to it.

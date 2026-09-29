@@ -29,6 +29,7 @@ public sealed partial class MainWindow
         root.RequestedTheme = theme.Dark ? ElementTheme.Dark : ElementTheme.Light;
         root.Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
         shell.PaneBackground = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
+        ApplyBranding(theme.Dark);
         FluentDesign.WindowChrome(this);
         if (settingsWindow?.Content is FrameworkElement settingsRoot)
         { settingsRoot.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(settingsWindow); }

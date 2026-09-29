@@ -25,6 +25,11 @@ public sealed partial class MainWindow
         public bool Submitted { get; set; }
         public bool Failed { get; set; }
         public bool IsScheduled { get; init; }
+        public bool WaitingForModel { get; set; }
+        public DateTimeOffset LastModelProgress { get; set; } = DateTimeOffset.UtcNow;
+        public string ProgressText { get; set; } = "";
+        public string ProgressReasoning { get; set; } = "";
+        public int? ProgressTokens { get; set; }
     }
 
     readonly Dictionary<int, ConversationRun> conversationRuns = [];
@@ -62,6 +67,7 @@ public sealed partial class MainWindow
         stop.IsEnabled = ActiveRun != null;
         composer.IsEnabled = selectedSubagent == null;
         RefreshConversationProgress();
+        RefreshModelActivity();
     }
 
     static TElement? FindConversationElement<TElement>(DependencyObject parent, string tag) where TElement : FrameworkElement
@@ -138,6 +144,11 @@ public sealed partial class MainWindow
     void SetRunStatus(ConversationRun run, string text, StatusKind kind = StatusKind.Activity)
     {
         run.Status = text;
+        var wasWaiting = run.WaitingForModel;
+        run.WaitingForModel = text == T("Le modèle réfléchit…") || text == T("OpenCode réfléchit…");
+        if (run.WaitingForModel && !wasWaiting)
+        { run.LastModelProgress = DateTimeOffset.UtcNow; run.ProgressText = run.ProgressReasoning = ""; run.ProgressTokens = null; }
+        RefreshModelActivity();
         run.StatusMode = kind;
         run.StatusExpiresAt = StatusExpiry(text, kind);
         conversationStatuses[run.Chat.Id] = new(text, kind, run.StatusExpiresAt);
@@ -189,6 +200,8 @@ public sealed partial class MainWindow
 
     async Task SendAsync()
     {
+        if (databaseMaintenanceBusy) return;
+        if (await ExecuteSlashCommandAsync()) return;
         if (!conversationReady || conversationLoading || chat == null || provider == null || project == null) return;
         if(!ProviderModels.Visible(provider).Contains(provider.Model)) { ShowStatus(WorkflowText("Cochez un modèle dans les réglages des fournisseurs.","Select a model in provider settings."), StatusKind.Error); return; }
         if (string.IsNullOrWhiteSpace(composer.Text) && pendingImages.Count == 0) return;

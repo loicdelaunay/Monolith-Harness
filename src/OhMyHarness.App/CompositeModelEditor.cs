@@ -56,7 +56,7 @@ public sealed partial class MainWindow
             }
         }
         Render();
-        panel.Children.Add(Action("＋ Sous-agent / Subagent",()=>{if(config.Agents.Count<6){config.Agents.Add(new(){Name="Agent "+(config.Agents.Count+1),Task="Analyser les sources utiles à la demande et rapporter les résultats."});Render();Save();}return Task.CompletedTask;}));
+        panel.Children.Add(Action("＋ Sous-agent / Subagent",()=>{if(config.Agents.Count<ConversationAgents.MaximumTeamSize){config.Agents.Add(new(){Name="Agent "+(config.Agents.Count+1),Task="Analyser les sources utiles à la demande et rapporter les résultats."});Render();Save();}return Task.CompletedTask;}));
         Save();return panel;
     }
 }

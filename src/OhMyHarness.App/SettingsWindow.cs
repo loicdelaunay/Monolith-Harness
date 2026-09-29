@@ -80,6 +80,7 @@ public sealed partial class MainWindow
         panel.Children.Add(actions);
         save.Click += (_, _) =>
         {
+            if (databaseMaintenanceBusy) return;
             if (!validate()) return;
             completed.TrySetResult(true);
             window.Close();

@@ -27,7 +27,7 @@ public static class AgentPolicy
             ? "\nPLAN MODE: Analyze, inspect and propose a plan. All writes, shell commands, navigation/interaction and external MCP calls are technically disabled. Do not attempt alternate tools to bypass this. User must switch to Execution for implementation."
             : "\nEXECUTION MODE: Implement the user request within the enabled tools and permission rules.") +
         (Orchestration(orchestration) == "disabled" ? "\nDelegation disabled: do the work yourself." :
-            "\nDelegate independent, bounded subtasks with delegate_tasks when useful. You remain responsible for reviewing and integrating their results. Do not delegate overlapping writes. Subagents cannot delegate recursively.");
+            "\nCoordinate independent subtasks with delegate_tasks. Use parallel teams and additional waves within the shared run budget; subagents may delegate independent portions of their task within the configured depth. Review and integrate actual results. Assign exclusive file ownership and avoid overlapping writes or shared browser/desktop interactions. Do not delegate the entire task unchanged or form delegation cycles.");
 }
 
 public sealed record OpenCodeRunPolicy(string Mode, string Orchestration);

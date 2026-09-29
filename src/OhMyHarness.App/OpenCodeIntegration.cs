@@ -488,15 +488,20 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             run.Workflow = CreateWorkflow(run);
 
-            var agent = CreateAgentRuntime(run, password);
+            await using var agentMcp = CreateMcpSession(run.Chat.Id);
+            var agent = CreateAgentRuntime(run, password, agentMcp);
 
             system += await agent.InitializeAsync(ct);
+            system += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
+            system += "\n" + Skills.ReplyLanguage(run.Options.Language);
 
-            if (run.Chat.OrchestrationMode == "forced")
+            if (run.Chat.OrchestrationMode != "disabled")
 
             {
 
-                var report = await agent.ForcedAsync(ct);
+                var report = await agent.StartAsync(ct);
+                if (report.Length > 0)
+                {
 
                 system += "\nSubagent findings:\n" + report;
 
@@ -505,6 +510,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
                 db.Messages.Add(delegated); await db.SaveChangesAsync(ct);
 
                 AddAssistantMessage(delegated.Content, target: run.Messages, sourceProject: run.Project);
+                }
 
             }
 
@@ -575,6 +581,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                         active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.Seconds = update.Seconds;
 
+                        ModelProgress(run, update);
                         var tokens = update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning);
 
                         run.Tracker?.AddSample(update.Seconds, tokens);
@@ -589,6 +596,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                     }, ct, (permission, token) => AuthorizeOpenCodePermissionAsync(provider, directory, permission, token), new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
 
+                    run.WaitingForModel = false; RefreshModelActivity();
                     break;
 
                 }

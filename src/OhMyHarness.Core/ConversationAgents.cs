@@ -14,7 +14,9 @@ public sealed class ConversationAgents
     public bool AutomaticRoles { get; set; } = true;
     public int Count { get; set; } = 2;
     public List<AgentRole> Roles { get; set; } = [];
-    public int Limit => AutomaticCount ? AutomaticRoles ? 6 : Math.Clamp(Roles.Count, 1, 6) : Math.Clamp(Count, 1, 6);
+    public const int MaximumTeamSize = 512;
+    // Team size applies to each wave. The runtime separately enforces the shared run budget.
+    public int? BatchSize => AutomaticCount ? AutomaticRoles ? null : Roles.Count : Count;
     public static ConversationAgents Read(string? json)
     {
         try { var value = JsonSerializer.Deserialize<ConversationAgents>(json ?? "{}"); value?.Validate(); return value ?? new(); }
@@ -22,15 +24,15 @@ public sealed class ConversationAgents
     }
     public void Validate()
     {
-        if (Count is < 1 or > 6 || Roles == null || Roles.Count > 6) throw new ArgumentException("Choisissez entre 1 et 6 agents / Choose 1 to 6 agents.");
+        if (Count is < 1 or > MaximumTeamSize || Roles == null || Roles.Count > MaximumTeamSize) throw new ArgumentException("Nombre d’agents invalide / Invalid agent count.");
         if (Roles.Any(r => r == null || string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 80 || string.IsNullOrWhiteSpace(r.Instruction) || r.Instruction.Length > 4000) || Roles.Select(r => r.Name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != Roles.Count)
             throw new ArgumentException("Chaque rôle doit avoir un nom unique et une consigne / Each role needs a unique name and instructions.");
         if (!AutomaticRoles && (Roles.Count == 0 || !AutomaticCount && Count > Roles.Count))
             throw new ArgumentException("Ajoutez un rôle pour chaque agent demandé / Add a role for every requested agent.");
     }
     public string Json() { Validate(); return JsonSerializer.Serialize(this); }
-    public string Instructions => $"\nSUBAGENT CONFIGURATION: At most {Limit} children per user turn. " +
-        (AutomaticCount ? "Choose a useful count within that limit. " : $"The user selected {Count} agents. ") +
+    public string Instructions => "\nSUBAGENT CONFIGURATION: " +
+        (AutomaticCount ? "Choose a useful team size within the shared run budget. " : $"The user selected {Count} agents per wave. ") +
         (AutomaticRoles ? "Choose distinct roles appropriate to the task." : "Use only these named roles and follow their instructions: " + JsonSerializer.Serialize(Roles));
 }
 

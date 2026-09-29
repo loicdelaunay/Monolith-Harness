@@ -172,14 +172,14 @@ public sealed partial class MainWindow
                 ShowStatus(T("Mode appliqué au prochain envoi : ") + agentsPicker.SelectionBoxItem);
             });
             var agentConfig = ConversationAgents.Read(selectedChat.AgentOptionsJson);
-            var agentCount = new NumberBox { Minimum = 1, Maximum = 6, Value = agentConfig.Count, Width = 70,
+            var agentCount = new NumberBox { Minimum = 1, Maximum = ConversationAgents.MaximumTeamSize, Value = agentConfig.Count, Width = 70,
                 SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact, IsEnabled = !agentConfig.AutomaticCount && provider?.IsComposite != true };
             ToolTipService.SetToolTip(agentCount, agentConfig.AutomaticCount ? WorkflowText("Nombre automatique · modifier dans les réglages à droite", "Automatic count · change in the settings on the right") : WorkflowText("Nombre d’agents", "Agent count"));
             agentCount.ValueChanged += async (_, _) => await Guard(async () =>
             {
                 if (!double.IsFinite(agentCount.Value)) return;
                 var options = ConversationAgents.Read(selectedChat.AgentOptionsJson);
-                options.Count = Math.Clamp((int)agentCount.Value, 1, 6);
+                options.Count = (int)Math.Clamp(agentCount.Value, 1, ConversationAgents.MaximumTeamSize);
                 selectedChat.AgentOptionsJson = options.Json(); await db.SaveChangesAsync();
             });
             var configureAgents = new Button { Width = 32, Height = 32, Padding = new(0), IsEnabled = provider?.IsComposite != true };
@@ -197,7 +197,7 @@ public sealed partial class MainWindow
         var skillMenu = Section("Skills · " + WorkflowText($"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} actifs", $"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} enabled"));
         foreach (var skill in availableSkills)
         {
-            var toggle = new CheckBox { Content = new TextBlock { Text = state.Language == "en" ? skill.EnglishName : skill.FrenchName, TextWrapping = TextWrapping.Wrap }, IsChecked = Skills.Enabled(state.EnabledSkills, skill.Id) };
+            var toggle = new CheckBox { Content = new TextBlock { Text = WorkflowText(skill.FrenchName, skill.EnglishName), TextWrapping = TextWrapping.Wrap }, IsChecked = Skills.Enabled(state.EnabledSkills, skill.Id) };
             toggle.Click += async (_, _) => await Guard(async () =>
             {
                 var enabled = state.EnabledSkills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();

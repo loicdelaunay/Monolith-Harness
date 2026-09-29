@@ -40,7 +40,7 @@ internal sealed partial class ModelToolsWindow : Window
     Action refreshActions = () => { };
     internal Func<Provider, ModelToolRequest, Action<GenerationUpdate>, CancellationToken, Task<ModelToolResult>>? SmokeRequest;
 
-    internal static string L(string fr, string en) => UiText.Language == "en" ? en : fr;
+    internal static string L(string fr, string en) => UiText.Resolve(fr, en);
     internal static string TitleFor(ModelToolKind kind) => kind switch
     { ModelToolKind.Translator => L("Traducteur", "Translator"), ModelToolKind.Proofreader => L("Correcteur d’orthographe", "Proofreader"), _ => L("Benchmark de modèle", "Model benchmark") };
 

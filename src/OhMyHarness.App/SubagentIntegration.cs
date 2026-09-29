@@ -34,7 +34,7 @@ public sealed partial class MainWindow
     {
         var activity = child.Activity;
         foreach (var pair in new[] { ("Réflexion / Thinking", "Réflexion", "Thinking"), ("Démarrage / Starting", "Démarrage", "Starting"), ("Réponse reçue / Response received", "Réponse reçue", "Response received"), ("Outil / Tool", "Outil", "Tool") })
-            activity = activity.Replace(pair.Item1, state.Language == "en" ? pair.Item3 : pair.Item2);
+            activity = activity.Replace(pair.Item1, WorkflowText(pair.Item2, pair.Item3));
         return child.Status == "running" ? activity : ChildStatus(child);
     }
     FrameworkElement ChildCard(SubagentRecord child, bool compact)

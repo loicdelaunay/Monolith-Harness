@@ -109,6 +109,8 @@ public sealed partial class MainWindow
         if (chatNotices.Count > 100) chatNotices.RemoveAt(0);
         RefreshNotificationBell(); RefreshConversationProgress();
         if (settings.NotificationSound) _ = NotificationAudio.PlayAsync(settings.NotificationTone, settings.NotificationVolume);
+        if (settings.NotificationOs) _ = SystemNotifications.ShowAsync(DisplayApplicationName, run.Chat.Title,
+            actionRequired ? WorkflowText("Action requise", "Action required") : WorkflowText("Conversation terminée", "Conversation completed"));
     }
     void AcknowledgeChatNotice(int id, bool actionResolved = false)
     {

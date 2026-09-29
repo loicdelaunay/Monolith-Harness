@@ -1,6 +1,6 @@
 namespace OhMyHarness.App;
 
-public static class UiText
+public static partial class UiText
 {
     public static string Language { get; set; } = "fr";
     public static readonly Dictionary<string, string> English = new()
@@ -356,6 +356,6 @@ public static class UiText
     public static string T(string text)
     {
         var key = English.ContainsKey(text) ? text : English.FirstOrDefault(x => x.Value == text).Key ?? text;
-        return Language == "en" ? English.GetValueOrDefault(key, text) : key;
+        return Resolve(key, English.GetValueOrDefault(key, text), Language);
     }
 }

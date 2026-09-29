@@ -50,7 +50,7 @@ function compositeForm(provider){
   assignment(form,config.Orchestrator,L('Orchestrateur','Orchestrator'));
   const children=el('div');form.append(children);
   function render(){children.replaceChildren();for(const agent of config.Agents){const card=assignment(children,agent,L('Sous-agent','Subagent'));const name=field(card,L('Nom','Name'),'text',agent.Name),task=field(card,L('Tâche','Task'),'textarea',agent.Task);name.required=task.required=true;name.oninput=()=>agent.Name=name.value;task.oninput=()=>agent.Task=task.value;button(card,L('Supprimer','Remove'),()=>{config.Agents.splice(config.Agents.indexOf(agent),1);render();});}}
-  render();button(form,L('＋ Sous-agent','＋ Subagent'),()=>{if(config.Agents.length<6){config.Agents.push({Name:'Agent '+(config.Agents.length+1),Task:''});render();}});
+  render();button(form,L('＋ Sous-agent','＋ Subagent'),()=>{if(config.Agents.length<512){config.Agents.push({Name:'Agent '+(config.Agents.length+1),Task:''});render();}});
   const error=el('p',null,'error');form.append(error);const save=el('button',L('Enregistrer','Save'),'accent');save.type='submit';form.append(save);button(form,L('Retour','Back'),()=>renderSettings());
   form.onsubmit=e=>{e.preventDefault();guard(async()=>{save.disabled=true;try{await call('provider.save',{id:provider.id||0,kind:'composite',name:name.value,compositeJson:JSON.stringify(config)});await refresh();renderSettings();}catch(ex){error.textContent=ex.message;}finally{save.disabled=false;}});};
 }

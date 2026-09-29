@@ -7,8 +7,8 @@
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.27.0">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.27.0">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.29.0">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.29.0">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -22,15 +22,19 @@
 
 OhMyHarness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows, macOS and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.27.0) · [CLI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.27.0) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.29.0) · [CLI download](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.29.0) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
-Version **1.27.0** is available as GUI and CLI downloads for Windows x64, macOS Apple Silicon, macOS Intel and Fedora Linux x64. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
+Version **1.29.0** is available as GUI and CLI downloads for Windows x64, macOS Apple Silicon, macOS Intel and Fedora Linux x64. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
 
 The chat model itself is **not** bundled: cloud providers need network access and, depending on the service, an API key. Git, Docker/Podman, OpenCode, and Chrome MCP are optional integrations with their own prerequisites. The core app does not require a separate OhMyHarness server.
 
 ## New in the current downloads
+
+**New in 1.29.0:** Auto evaluates delegation before starting a request. Settings → Agents explains Selective, Balanced, Proactive and Swarm behavior and lets you configure coordination instructions and shared budgets. Teams can launch additional waves and descendants with inherited tool permissions, context compaction and cancellation. Defaults are 64 agents per request, 8 parallel model requests, 3 delegation levels and 200 steps per worker. OpenCode workers retain a restriction on native nested delegation.
+
+**Also included from 1.28.0:** light/dark logos, multiple default project folders, optional OS notifications, German and Spanish languages, thinking activity and a stalled-response counter, slash autocomplete, independent Git read/write permissions, database maintenance and Ctrl+F chat search.
 
 **New in 1.27.0:** Enable the GIT skill to inspect repositories, stage selected files, commit and synchronize branches with the application's permission controls. FILE INDEX creates a searchable `index.ohm` describing files and folders and keeps it current as the project changes. See the [GIT and FILE INDEX guide](docs/git-file-index.md).
 
@@ -52,7 +56,7 @@ The chat model itself is **not** bundled: cloud providers need network access an
 
 **Since 1.9.0:** the complete-design skill helps guide projects from discovery through implementation and testing; browser access choices now persist with other skills; the GUI question tool has a clearer step-by-step choice card; and the CLI logo follows the selected theme. GUI and CLI archives remain available for Windows x64, both Mac architectures and Fedora Linux x64. Unix archives use `.tar.gz` to preserve executable permissions; see the [Mac guide](docs/macos.md) and [Fedora guide](docs/fedora.md).
 
-Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.27.0 and CLI v1.27.0** package the same shared engine for all four supported platform targets.
+Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.29.0 and CLI v1.29.0** package the same shared engine for all four supported platform targets.
 
 - **Response styles:** DEFAULT, SHORT, PRAGMATIC, DETAILED and FUN, shared between GUI General settings and CLI `/settings`.
 - **CLI editing:** selection, word navigation, copy/cut/paste and undo/redo; ordinary Backspace deletes one character.
@@ -64,7 +68,7 @@ Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/relea
 - **Fresh portable workspaces:** launching the executable in a new folder creates fresh data instead of importing previous AppData conversations.
 - **Guided work:** Complete design coordinates questions, choices, implementation, optional subagents and verification; the GUI question card presents one decision at a time.
 
-See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.27.0.
+See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.29.0.
 
 ## Take a look
 
@@ -157,7 +161,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.27.0), or choose the [CLI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.27.0) for a terminal workspace. The 1.27.0 archives cover Windows x64, macOS Apple Silicon and Intel, and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.29.0), or choose the [CLI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.29.0) for a terminal workspace. The 1.29.0 archives cover Windows x64, macOS Apple Silicon and Intel, and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>OhMyHarness.App.exe</code> on Windows or <code>./OhMyHarness.App</code> on macOS/Linux. The app creates its skills folder beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.

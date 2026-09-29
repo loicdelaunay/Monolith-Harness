@@ -51,7 +51,7 @@ public sealed partial class MainWindow
         pinnedTasks.Child = FluentDesign.Surface(content, 10);
         pinnedTasks.Visibility = Visibility.Visible;
     }
-    string WorkflowText(string fr, string en) => state.Language == "en" ? en : fr;
+    string WorkflowText(string fr, string en) => UiText.Resolve(fr, en, state.Language);
     WorkflowTools CreateWorkflow(ConversationRun run) => new(
         async (questions, ct) =>
         {

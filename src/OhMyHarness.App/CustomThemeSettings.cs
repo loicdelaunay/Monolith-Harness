@@ -8,7 +8,7 @@ namespace OhMyHarness.App;
 public sealed partial class MainWindow
 {
     static AppearanceTheme CopyTheme(AppearanceTheme theme) => theme with { Colors = new(theme.Colors) };
-    sealed record ThemeChoice(string Id, string Name) { public override string ToString() => Name; }
+    sealed record ThemeChoice(string Id, string Name, bool Dark) { public override string ToString() => (Dark ? "☾  " : "☀  ") + Name; }
 
     (StackPanel Panel, Action<FeatureSettings> Save) BuildAppearanceSettings(Window owner)
     {
@@ -21,7 +21,7 @@ public sealed partial class MainWindow
         void Refresh()
         {
             refreshing = true;
-            var choices = AppearanceThemes.WithCustom(custom).Select(x => new ThemeChoice(x.Id, state.Language == "en" ? x.English : x.French)).ToList();
+            var choices = AppearanceThemes.WithCustom(custom).Select(x => new ThemeChoice(x.Id, WorkflowText(x.French, x.English), x.Dark)).ToList();
             selector.ItemsSource = choices; selector.SelectedItem = choices.First(x => x.Id == selected);
             refreshing = false;
         }
@@ -196,9 +196,9 @@ public sealed partial class MainWindow
         void Load()
         {
             filling = true;
-            var choices = AppearanceThemes.WithCustom(drafts).Select(x => new ThemeChoice(x.Id, state.Language == "en" ? x.English : x.French)).ToList();
+            var choices = AppearanceThemes.WithCustom(drafts).Select(x => new ThemeChoice(x.Id, WorkflowText(x.French, x.English), x.Dark)).ToList();
             choice.ItemsSource = choices; choice.SelectedItem = choices.First(x => x.Id == current.Id);
-            name.Text = state.Language == "en" ? current.English : current.French; name.IsReadOnly = !Editable(); dark.IsOn = current.Dark; dark.IsEnabled = Editable();
+            name.Text = WorkflowText(current.French, current.English); name.IsReadOnly = !Editable(); dark.IsOn = current.Dark; dark.IsEnabled = Editable();
             foreach (var slot in slots) { fields[slot.Key].Text = BaseColor(current, slot.Key); fields[slot.Key].IsReadOnly = !Editable(); }
             foreach (var button in colorButtons) button.IsEnabled = Editable();
             delete.IsEnabled = Editable();

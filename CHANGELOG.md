@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.29.0 - 2026-09-29
+
+- Auto agents now evaluate delegation before starting a request. Added an Agents settings page with Selective, Balanced, Proactive (default) and Swarm behavior, live explanations and additional coordination instructions.
+- Expanded swarm capacity beyond the previous six-agent/eight-step limits. Teams can launch additional waves and descendants with a shared, configurable run budget: 64 agents, 8 parallel model requests, 3 delegation levels and 200 steps per worker by default. Cancellation and repeated-call protection remain active.
+- Subagents inherit the conversation's enabled tools, including terminal, browser, desktop, MCP and permitted Git writes, while respecting Plan mode, sandbox boundaries and existing permissions. Shared host tools are serialized to protect interactive resources.
+- Long subagent work compacts its context instead of stopping when the context window fills. Descendants appear with their parent path and persist their tool results and transcripts.
+- Team sizes, presets, composite models and `/agents` no longer stop at six members. OpenCode workers can use their authorized native tools; native nested delegation remains disabled for application-managed workers because OpenCode descendants cannot be included in the shared budget.
+
+## 1.28.0 - 2026-09-29
+
+- Added optional separate application logos for light and dark themes, with immediate theme-aware selection. Theme lists now show a sun or moon icon.
+- Fixed multiple default project folders when the editor uses Windows line endings. Attaching resources to a conversation now preserves project defaults and retains its existing resources.
+- Added optional operating-system notifications for completed chats and requests for attention (Windows notification area, macOS notifications, Linux `notify-send`).
+- Added German and Spanish interface languages, with flags in the language picker and matching default response languages.
+- The model information area now displays thinking activity and a counter after 30 seconds without new model content. Provider-supplied reasoning also appears as a short single-line excerpt.
+- Added slash command autocomplete with Tab, keyboard navigation and `/help`. `/agents`, `/plan` and `/goal` configure the current conversation; `/model`, `/thinking`, `/theme`, `/retry`, `/settings` and `/stop` provide shortcuts. Conversation goals persist and apply to subsequent sends.
+- Added independent read and write controls under the GIT skill. Disabled capabilities are removed from exposed tools and rejected at execution time, including subagent requests.
+- Added a Reset settings page with SQLite compaction and optimization, plus a confirmed reset of project data, conversations, memories, tasks, templates and approvals. Reset retains application settings, providers and source files.
+- Added Ctrl+F to search the full chat history, including older pages, with previous/next navigation and highlighted messages.
+
+## 1.28.0 - 2026-09-29
+
+- Added optional separate application logos for light and dark themes, with immediate theme-aware selection. Theme lists now show a sun or moon icon.
+- Fixed multiple default project folders when the editor uses Windows line endings. Attaching resources to a conversation now preserves project defaults and retains its existing resources.
+- Added optional operating-system notifications for completed chats and requests for attention (Windows notification area, macOS notifications, Linux `notify-send`).
+- Added German and Spanish interface languages, with flags in the language picker and matching default response languages.
+- The model information area now displays thinking activity and a counter after 30 seconds without new model content. Provider-supplied reasoning also appears as a short single-line excerpt.
+- Added slash command autocomplete with Tab, keyboard navigation and `/help`. `/agents`, `/plan` and `/goal` configure the current conversation; `/model`, `/thinking`, `/theme`, `/retry`, `/settings` and `/stop` provide shortcuts. Conversation goals persist and apply to subsequent sends.
+- Added independent read and write controls under the GIT skill. Disabled capabilities are removed from exposed tools and rejected at execution time, including subagent requests.
+- Added a Reset settings page with SQLite compaction and optimization, plus a confirmed reset of project data, conversations, memories, tasks, templates and approvals. Reset retains application settings, providers and source files.
+- Added Ctrl+F to search the full chat history, including older pages, with previous/next navigation and highlighted messages.
+
+## 1.28.0 - 2026-09-29
+
+- Added optional separate application logos for light and dark themes, with immediate theme-aware selection. Theme lists now show a sun or moon icon.
+- Fixed multiple default project folders when the editor uses Windows line endings. Attaching resources to a conversation now preserves project defaults and retains its existing resources.
+- Added optional operating-system notifications for completed chats and requests for attention (Windows notification area, macOS notifications, Linux `notify-send`).
+- Added German and Spanish interface languages, with flags in the language picker and matching default response languages.
+- The model information area now displays thinking activity and a counter after 30 seconds without new model content. Provider-supplied reasoning also appears as a short single-line excerpt.
+- Added slash command autocomplete with Tab, keyboard navigation and `/help`. `/agents`, `/plan` and `/goal` configure the current conversation; `/model`, `/thinking`, `/theme`, `/retry`, `/settings` and `/stop` provide shortcuts. Conversation goals persist and apply to subsequent sends.
+- Added independent read and write controls under the GIT skill. Disabled capabilities are removed from exposed tools and rejected at execution time, including subagent requests.
+- Added a Reset settings page with SQLite compaction and optimization, plus a confirmed reset of project data, conversations, memories, tasks, templates and approvals. Reset retains application settings, providers and source files.
+- Added Ctrl+F to search the full chat history, including older pages, with previous/next navigation and highlighted messages.
+
 ## 1.27.0 - 2026-09-28
 
 - Added the GIT skill with repository status, diffs, history, branches, initialization, explicit file staging/unstaging, commits, and approved fetch/pull/push operations. Pulls only fast-forward; forced pushes and destructive reset/clean operations are not exposed. Plan mode and subagents only receive the Git read tools.

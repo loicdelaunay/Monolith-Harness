@@ -51,15 +51,19 @@ public sealed partial class HarnessService
                 BrowserSkillAccess.Enabled(options.EnabledSkills) && FeatureSettings.Read(options.FeaturesJson).BrowserMode == "embedded",
                 Skills.Enabled(options.EnabledSkills, "write_sources"));
             run.Workflow = CreateWorkflow(run);
-            var agent = CreateAgentRuntime(run, secret);
+            var agent = CreateAgentRuntime(run, secret, mcp);
             system += await agent.InitializeAsync(ct);
-            if (run.Chat.OrchestrationMode == "forced")
+            system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
+            if (run.Chat.OrchestrationMode != "disabled")
             {
-                var report = await agent.ForcedAsync(ct);
-                if (provider.IsOpenCode) system += "\nSubagent findings:\n" + report;
-                var delegated = AgentHandoff.Create(chat.Id, report);
-                run.Db.Messages.Add(delegated); await run.Db.SaveChangesAsync(ct); history.Add(delegated);
-                await emit(new { @event = "message", chatId = chat.Id, message = MessageView(delegated) });
+                var report = await agent.StartAsync(ct);
+                if (report.Length > 0)
+                {
+                    if (provider.IsOpenCode) system += "\nSubagent findings:\n" + report;
+                    var delegated = AgentHandoff.Create(chat.Id, report);
+                    run.Db.Messages.Add(delegated); await run.Db.SaveChangesAsync(ct); history.Add(delegated);
+                    await emit(new { @event = "message", chatId = chat.Id, message = MessageView(delegated) });
+                }
             }
             var engine = new ChatEngine(http);
             for (int round = 0; ; round++)

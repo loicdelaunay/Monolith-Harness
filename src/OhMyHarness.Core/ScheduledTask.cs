@@ -46,6 +46,16 @@ public sealed class TaskSchedulerService(string database, Func<ScheduledTask, Ca
     readonly SemaphoreSlim tickGate = new(1, 1);
     readonly CancellationTokenSource lifetime = new();
     FileStream? lease;
+    public async Task RunMaintenanceAsync(Func<Task> operation)
+    {
+        await tickGate.WaitAsync();
+        try
+        {
+            if (!running.IsEmpty) throw new InvalidOperationException("Terminez les tâches planifiées en cours avant la maintenance / Finish scheduled tasks before maintenance.");
+            await operation();
+        }
+        finally { tickGate.Release(); }
+    }
     public async Task TickAsync(DateTime nowUtc)
     {
         if (!await tickGate.WaitAsync(0)) return;

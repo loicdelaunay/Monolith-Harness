@@ -124,6 +124,7 @@ public sealed partial class MainWindow
 
     async Task SelectChat()
     {
+        if (chatFindBar.Visibility == Visibility.Visible) CloseChatFind();
         conversationLoad?.Cancel();
         using var cancellation = new CancellationTokenSource();
         conversationLoad = cancellation;

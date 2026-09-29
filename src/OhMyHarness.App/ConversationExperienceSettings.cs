@@ -29,10 +29,12 @@ public sealed partial class MainWindow
         var action = new ToggleSwitch { IsOn = config.NotifyActionRequired };
         var bell = new ToggleSwitch { IsOn = config.NotificationBell };
         var sound = new ToggleSwitch { IsOn = config.NotificationSound };
+        var os = new ToggleSwitch { IsOn = config.NotificationOs };
         panel.Children.Add(FluentDesign.Setting(WorkflowText("Conversation terminée", "Conversation completed"), "", completed));
         panel.Children.Add(FluentDesign.Setting(WorkflowText("Action requise", "Action required"), WorkflowText("Questions et demandes d’autorisation de l’agent.", "Agent questions and approval requests."), action));
         panel.Children.Add(FluentDesign.Setting(WorkflowText("Cloche de notification", "Notification bell"), WorkflowText("Affiche les alertes dans l’application et sur les conversations concernées.", "Show alerts in the app and beside their conversations."), bell));
         panel.Children.Add(FluentDesign.Setting(WorkflowText("Jouer un son", "Play a sound"), "", sound));
+        panel.Children.Add(FluentDesign.Setting(WorkflowText("Notifications du système", "System notifications"), WorkflowText("Affiche une notification Windows, macOS ou Linux, même quand l’application est en arrière-plan. Le système peut les masquer en mode Ne pas déranger.", "Show a Windows, macOS or Linux notification, including when the app is in the background. Do Not Disturb may hide it."), os));
         var sounds = NotificationSounds.All.ToList();
         var tone = new ComboBox { Header = WorkflowText("Son", "Sound"), ItemsSource = sounds.Select(x => WorkflowText(x.French, x.English)).ToArray(), SelectedIndex = Math.Max(0, sounds.FindIndex(x => x.Id == config.NotificationTone)), HorizontalAlignment = HorizontalAlignment.Stretch };
         string SelectedTone() => sounds[Math.Clamp(tone.SelectedIndex, 0, sounds.Count - 1)].Id;
@@ -45,6 +47,7 @@ public sealed partial class MainWindow
         return (panel, settings => {
             settings.NotifyCompleted = completed.IsOn; settings.NotifyActionRequired = action.IsOn;
             settings.NotificationBell = bell.IsOn; settings.NotificationSound = sound.IsOn;
+            settings.NotificationOs = os.IsOn;
             settings.NotificationTone = SelectedTone();
             settings.NotificationVolume = (int)volume.Value;
         });

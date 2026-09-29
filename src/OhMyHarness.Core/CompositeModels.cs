@@ -18,7 +18,7 @@ public sealed class CompositeModel
     public void Validate(IEnumerable<Provider> providers)
     {
         var available = providers.ToDictionary(x=>x.Id);
-        if (Agents.Count is < 1 or > 6) throw new ArgumentException("Un modèle composé requiert 1 à 6 sous-agents.");
+        if (Agents.Count is < 1 or > ConversationAgents.MaximumTeamSize) throw new ArgumentException("Nombre de sous-agents du modèle composé invalide.");
         foreach(var assignment in Agents.Prepend(Orchestrator))
             if (!available.TryGetValue(assignment.ProviderId,out var provider) || provider.IsComposite || string.IsNullOrWhiteSpace(assignment.Model))
                 throw new ArgumentException("Choisissez un fournisseur enregistré et un modèle pour chaque agent (sans composition imbriquée).");

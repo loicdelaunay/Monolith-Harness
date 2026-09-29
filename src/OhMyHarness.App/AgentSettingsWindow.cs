@@ -31,10 +31,10 @@ public sealed partial class MainWindow
         var mode = new ComboBox { Header = WorkflowText("Mode sous-agents", "Subagent mode"), ItemsSource = new[] { WorkflowText("Désactivés", "Disabled"), "Auto", WorkflowText("Forcés", "Forced") }, SelectedIndex = owner.OrchestrationMode == "forced" ? 2 : owner.OrchestrationMode == "auto" ? 1 : 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         body.Children.Add(mode);
         var autoCount = new ToggleSwitch { Header = WorkflowText("Nombre automatique", "Automatic count") };
-        var count = new NumberBox { Header = WorkflowText("Nombre d’agents (1 à 6)", "Agent count (1 to 6)"), Minimum = 1, Maximum = 6, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
+        var count = new NumberBox { Header = WorkflowText("Nombre d’agents par équipe", "Agents per team"), Minimum = 1, Maximum = ConversationAgents.MaximumTeamSize, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
         var autoRoles = new ToggleSwitch { Header = WorkflowText("Rôles automatiques", "Automatic roles") };
         body.Children.Add(autoCount); body.Children.Add(count); body.Children.Add(autoRoles);
-        body.Children.Add(Label(WorkflowText("Auto laisse le modèle décider quand déléguer. Forcés lance l’équipe avant la réponse principale. Le nombre choisi limite l’ensemble des agents de chaque envoi. Ces choix sont conservés avec cette conversation.", "Auto lets the model decide when to delegate. Forced starts the team before the main response. The selected count limits all agents for each message. These choices are saved with this conversation."), 12));
+        body.Children.Add(Label(WorkflowText("Auto évalue la délégation au début de la demande selon Réglages > Agents. Forcés lance l’équipe avant la réponse principale. Le nombre choisi définit la taille d’une équipe ; plusieurs vagues et des descendants sont possibles dans le budget global. Ces choix sont conservés avec cette conversation.", "Auto evaluates delegation at the start according to Settings > Agents. Forced starts the team before the main response. The selected count defines team size; additional waves and descendants are possible within the shared budget. These choices are saved with this conversation."), 12));
         var roles = new StackPanel { Spacing = 10 }; body.Children.Add(roles);
         var roleFields = new List<(TextBox Name, TextBox Instruction, Border Card)>();
         var addRole = new Button { Content = WorkflowText("Ajouter un rôle", "Add role"), HorizontalAlignment = HorizontalAlignment.Right }; body.Children.Add(addRole);
@@ -43,7 +43,7 @@ public sealed partial class MainWindow
         {
             count.IsEnabled = !autoCount.IsOn;
             roles.Visibility = addRole.Visibility = autoRoles.IsOn ? Visibility.Collapsed : Visibility.Visible;
-            addRole.IsEnabled = roleFields.Count < 6;
+            addRole.IsEnabled = roleFields.Count < ConversationAgents.MaximumTeamSize;
         }
         void AddRole(AgentRole value)
         {
@@ -69,14 +69,14 @@ public sealed partial class MainWindow
         }
         ConversationAgents Read()
         {
-            var options = new ConversationAgents { AutomaticCount = autoCount.IsOn, AutomaticRoles = autoRoles.IsOn, Count = double.IsFinite(count.Value) ? Math.Clamp((int)count.Value, 1, 6) : 2,
+            var options = new ConversationAgents { AutomaticCount = autoCount.IsOn, AutomaticRoles = autoRoles.IsOn, Count = double.IsFinite(count.Value) ? (int)Math.Clamp(count.Value, 1, ConversationAgents.MaximumTeamSize) : 2,
                 Roles = roleFields.Select(x => new AgentRole { Name = x.Name.Text.Trim(), Instruction = x.Instruction.Text.Trim() }).ToList() };
             options.Validate(); return options;
         }
         string Mode() => mode.SelectedIndex == 2 ? "forced" : mode.SelectedIndex == 1 ? "auto" : "disabled";
         void LoadPresets() => presets.ItemsSource = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         autoCount.Toggled += (_, _) => Refresh(); autoRoles.Toggled += (_, _) => Refresh();
-        addRole.Click += (_, _) => { if (roleFields.Count < 6) AddRole(new()); };
+        addRole.Click += (_, _) => { if (roleFields.Count < ConversationAgents.MaximumTeamSize) AddRole(new()); };
         presets.SelectionChanged += (_, _) =>
         {
             deletePreset.IsEnabled = presets.SelectedItem is AgentPreset;

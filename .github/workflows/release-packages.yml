@@ -1,0 +1,71 @@
+name: Release packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-15
+            rid: osx-arm64
+          - os: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish GUI
+        run: dotnet publish src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
+      - name: Publish CLI
+        run: dotnet publish src/OhMyHarness.Cli -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+      - name: Package clean portable downloads
+        shell: pwsh
+        run: ./build/package-release.ps1 -Runtime ${{ matrix.rid }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OhMyHarness-${{ matrix.rid }}
+          path: artifacts/TEMP/release-packages/GUI/*
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OhMyHarness-CLI-${{ matrix.rid }}
+          path: artifacts/TEMP/release-packages/CLI/*
+          if-no-files-found: error
+          compression-level: 0
+  fedora:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - name: Install build packages
+        run: dnf install -y git git-lfs dotnet-sdk-10.0 tar gzip
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Publish GUI
+        run: dotnet publish src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
+      - name: Publish CLI
+        run: dotnet publish src/OhMyHarness.Cli -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+      - name: Package clean Linux downloads
+        run: bash ./build/package-fedora.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OhMyHarness-linux-x64
+          path: artifacts/TEMP/release-packages/GUI/*
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OhMyHarness-CLI-linux-x64
+          path: artifacts/TEMP/release-packages/CLI/*
+          if-no-files-found: error
+          compression-level: 0
