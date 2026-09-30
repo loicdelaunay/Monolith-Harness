@@ -142,6 +142,8 @@ macOS and other terminals still display the theme's ANSI colors and borders; sel
 
 ## GitHub updates
 
+The repository is now [loicdelaunay/Monolith-Harness](https://github.com/loicdelaunay/Monolith-Harness). Versions up to 1.29.0 validate download URLs against the previous repository path and cannot install updates from the renamed repository. Install a 1.29.1 or later build manually once, keeping your portable database and resources; subsequent updates use the new repository. Executable and archive names remain unchanged.
+
 The interactive CLI checks for compatible updates at startup by default. `/update` lets you disable that check, check manually, or download and restart into a newer release. Non-interactive automation never checks or installs updates. The GUI has its own equivalent setting in **Settings → General**.
 
 Installation is user-triggered after the automatic check. The app waits for agents and drafts to be finished, verifies the official release asset's SHA-256, and replaces only its executable after shutdown; terminals/tools close with the app. SQLite, skills, MCP configuration and other user resources are preserved. A hidden Windows PowerShell helper performs the replacement without administrator rights. If another instance stays open, it cancels instead of stopping it. Save GUI settings before choosing to restart.

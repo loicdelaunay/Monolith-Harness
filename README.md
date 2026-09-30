@@ -6,6 +6,8 @@
 
 The project is now named **Monolith Harness** (previously OhMyHarness). Source and local builds from **1.29.1** use the new name. Existing **1.29.0** downloads below predate the rename. Executable and archive names stay compatible with existing portable workspaces.
 
+Older installations need a one-time manual update to a build from 1.29.1 before using automatic updates from the renamed repository. See the [update guide](docs/cli.md#github-updates).
+
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
