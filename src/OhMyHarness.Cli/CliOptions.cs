@@ -56,14 +56,14 @@ public sealed class CliOptions
     {OhMyHarness.Core.BrandingAssets.DefaultName} CLI {CurrentVersion}
     Your portable AI workspace, in the terminal.
 
-      omh [project-folder]                       Interactive terminal interface
-      omh --database X:\MonolithHarness\database.sqlite  Share the desktop workspace
-      omh run "Review this repository" --project .  One-shot, Plan mode by default
-      omh run "Implement the fix" --project . --execute
-      omh run "Explain the code" --project . --json
+      MonolithHarness [project-folder]                       Interactive terminal interface
+      MonolithHarness --database X:\MonolithHarness\database.sqlite  Share the desktop workspace
+      MonolithHarness run "Review this repository" --project .  One-shot, Plan mode by default
+      MonolithHarness run "Implement the fix" --project . --execute
+      MonolithHarness run "Explain the code" --project . --json
 
     Options
-      --database PATH   SQLite file (default: beside omh.exe)
+      --database PATH   SQLite file (default: beside MonolithHarness.exe)
       --project PATH    Attach this source folder to a project
       --chat ID         Resume an existing conversation
       --provider ID     Select a configured provider

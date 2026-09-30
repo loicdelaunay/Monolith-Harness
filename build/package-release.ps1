@@ -11,7 +11,7 @@ if (!$version -or $version -ne $cliVersion) { throw 'GUI and CLI versions must m
 $root = Join-Path $repo 'artifacts/TEMP/release-packages'
 $windows = $Runtime.StartsWith('win-')
 foreach ($channel in @('GUI', 'CLI')) {
-    $exe = if ($channel -eq 'GUI') { 'OhMyHarness.App' } else { 'omh' }
+    $exe = 'MonolithHarness'
     if ($windows) { $exe += '.exe' }
     $source = Join-Path $repo "artifacts/$channel/$exe"
     if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing executable: $source" }

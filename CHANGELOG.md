@@ -1,8 +1,15 @@
 # Changelog
 
+## 1.29.2 - 2026-09-30
+
+- Published GUI and CLI launchers are now named `MonolithHarness.exe` on Windows and `MonolithHarness` on macOS and Linux. Build scripts, clean release packages and update extraction use this name while retaining portable data and internal assembly identities.
+- Included the new illuminated M logo and refreshed GUI/CLI screenshots in the README. Download archives retain their existing names for update channel compatibility.
+- Versions up to 1.29.1 require a one-time manual transition to the newly named launcher; keep the existing database and resources when replacing the executable.
+
 ## 1.29.1 - 2026-09-30
 
 - Renamed the application and GitHub repository to Monolith Harness. GUI titles, CLI output, terminal profiles, documentation and desktop package metadata use the new name. Existing custom application names remain available.
+- The default logo now uses an illuminated M with the original cyan, violet and magenta palette. Desktop and executable icons include matching sizes, and the terminal header uses an M monogram in the selected theme's colors.
 - Updated GitHub update checks and download validation for the renamed repository. Existing portable data, application identifiers, executable names and release archive names are retained for compatibility.
 
 ## 1.29.0 - 2026-09-29

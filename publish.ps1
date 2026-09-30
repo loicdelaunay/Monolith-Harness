@@ -18,4 +18,4 @@ if (!(Test-Path -LiteralPath $skillsTarget)) {
     New-Item -ItemType Directory -Path (Join-Path $output 'skills') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'skills\exemple-revue') -Destination $skillsTarget -Recurse
 }
-Write-Host "Publication disponible : $output\OhMyHarness.App.exe"
+Write-Host "Publication disponible : $output\MonolithHarness.exe"

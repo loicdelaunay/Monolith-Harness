@@ -7,9 +7,9 @@ test -n "$version" && test "$version" = "$cli_version"
 root="$(pwd -P)/artifacts/TEMP/release-packages"
 mkdir -p "$root/GUI" "$root/CLI"
 for channel in GUI CLI; do
-  executable=OhMyHarness.App
+  executable=MonolithHarness
   prefix=OhMyHarness
-  if [[ "$channel" == CLI ]]; then executable=omh; prefix=OhMyHarness-CLI; fi
+  if [[ "$channel" == CLI ]]; then prefix=OhMyHarness-CLI; fi
   source="artifacts/$channel/$executable"
   test -s "$source"
   stage="$(mktemp -d "$root/stage-$channel-linux-x64.XXXXXXXX")"
@@ -22,7 +22,7 @@ for channel in GUI CLI; do
   trap cleanup EXIT
   cp "$source" "$stage/$executable"
   cp LICENSE "$stage/LICENSE"
-  if [[ "$channel" == GUI ]]; then start='Run ./OhMyHarness.App and open Settings > Providers.'; else start='Run ./omh from a terminal, then /connect to configure your provider.'; fi
+  if [[ "$channel" == GUI ]]; then start='Run ./MonolithHarness and open Settings > Providers.'; else start='Run ./MonolithHarness from a terminal, then /connect to configure your provider.'; fi
   cat > "$stage/README.txt" <<EOF
 Monolith Harness $channel $version (linux-x64)
 

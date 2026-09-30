@@ -1,6 +1,6 @@
 {
   "name": "monolith-harness-desktop",
-  "version": "1.29.1",
+  "version": "1.29.2",
   "private": true,
   "description": "Monolith Harness desktop host for macOS and Windows",
   "author": "Monolith Harness",
@@ -28,7 +28,7 @@
       "hardenedRuntime": true,
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
-      "binaries": ["Contents/Resources/service/OhMyHarness.App"],
+      "binaries": ["Contents/Resources/service/MonolithHarness"],
       "extendInfo": {
         "NSHighResolutionCapable": true,
         "NSAppleEventsUsageDescription": "Monolith Harness uses desktop tools only after your approval.",

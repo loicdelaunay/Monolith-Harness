@@ -10,6 +10,8 @@ Under **Settings → General**, open **Application name and logo**:
 
 The name appears in the sidebar and titles of the main, Settings and Scheduled tasks windows. The logo appears in the sidebar and also serves as the window icon on Windows. The EXE filename and application system identity remain unchanged.
 
+The default Monolith Harness logo uses an illuminated M in cyan, violet and magenta. Matching small PNGs and a Windows ICO are bundled with the GUI and CLI; the terminal draws an M using its theme colors. Custom logos and the light/dark logo settings continue to take precedence. The [generation prompt](logo-monolith-prompt.md) records the image source and instructions.
+
 ## Portable storage
 
 `ApplicationName` and `LogoPath` are stored in the JSON settings in `database.sqlite`, without a new migration. A logo already inside the executable directory or a subfolder is referenced by a relative path, such as `my-logo.png` or `images/logo.png`.

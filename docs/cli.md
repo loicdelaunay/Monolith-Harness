@@ -2,7 +2,7 @@
 
 The same agent engine in a terminal workspace. The CLI is a separate .NET 10 project, <code>src/OhMyHarness.Cli</code>, referencing <code>OhMyHarness.Core</code>. Its full-screen interface uses truecolor ANSI rendering, adapts to terminal width, and supports Windows and macOS builds.
 
-The header shows a symmetrical circular icon and the configured application name. The icon is drawn with Unicode half blocks and colors from the active CLI theme, so it remains visible without a terminal image protocol or an external image file. On Windows, `omh.exe` also carries the application icon in Explorer.
+The header shows an M monogram and the configured application name. The icon is drawn with Unicode half blocks and colors from the active CLI theme, so it remains visible without a terminal image protocol or an external image file. On Windows, `MonolithHarness.exe` also carries the application icon in Explorer.
 
 The interaction takes inspiration from the command palette and automation mode of [OpenCode](https://opencode.ai/v2/docs/cli) and the terminal agent workflow of [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli). This is a Monolith Harness client with its own shared engine.
 
@@ -15,8 +15,8 @@ dotnet run --project src/OhMyHarness.Cli -- "E:\Projects\MyProject"
 With a published build:
 
 ~~~powershell
-.\omh.exe "E:\Projects\MyProject"
-.\omh.exe --database "L:\OHM2\database.sqlite" --chat 12
+.\MonolithHarness.exe "E:\Projects\MyProject"
+.\MonolithHarness.exe --database "L:\OHM2\database.sqlite" --chat 12
 ~~~
 
 Without a project argument, the current working directory becomes the project's source folder. <code>--chat ID</code> resumes an existing chat without attaching the current directory. Each project folder is reused when already registered.
@@ -102,10 +102,10 @@ Selection is highlighted; typing or pasting replaces it. Masked credential field
 ## Automation
 
 ~~~powershell
-.\omh.exe run "Review this repository" --project .
-.\omh.exe run "Implement the requested fix" --project . --execute
-.\omh.exe run "Explain the architecture" --project . --json
-Get-Content prompt.txt -Raw | .\omh.exe run --project .
+.\MonolithHarness.exe run "Review this repository" --project .
+.\MonolithHarness.exe run "Implement the requested fix" --project . --execute
+.\MonolithHarness.exe run "Explain the architecture" --project . --json
+Get-Content prompt.txt -Raw | .\MonolithHarness.exe run --project .
 ~~~
 
 Each run creates a new conversation unless <code>--chat ID</code> is supplied. Non-interactive runs default to Plan. <code>--execute</code> enables modifying tools; sensitive operations are still denied unless <code>--allow-tools</code> is explicitly supplied. This override does not rewrite the shared permission policy. Project restrictions still apply.
@@ -127,9 +127,9 @@ Use `/theme` (or Settings → Theme) to select **CRT Green**, **CRT Amber**, **N
 Browse the theme list with ↑/↓ to preview each palette immediately, including when filtering the list. Enter saves the selection; Escape restores the previous theme. The preview also works when the session was started with `--theme`.
 
 ```powershell
-omh --theme crt-green
-omh --theme crt-amber
-omh --render-demo --theme neon-synthwave
+MonolithHarness --theme crt-green
+MonolithHarness --theme crt-amber
+MonolithHarness --render-demo --theme neon-synthwave
 ```
 
 `/font` selects a font **independently of the theme**, plus a size from 8 to 36 pt. Choose the bundled **VT323**, **Share Tech Mono** or **Space Mono**, a system font, or enter another installed font name. The original OFL licenses travel with the embedded fonts. A terminal application cannot universally change its host's font: saving the choice alone does not change the active tab.
@@ -142,7 +142,7 @@ macOS and other terminals still display the theme's ANSI colors and borders; sel
 
 ## GitHub updates
 
-The repository is now [loicdelaunay/Monolith-Harness](https://github.com/loicdelaunay/Monolith-Harness). Versions up to 1.29.0 validate download URLs against the previous repository path and cannot install updates from the renamed repository. Install a 1.29.1 or later build manually once, keeping your portable database and resources; subsequent updates use the new repository. Executable and archive names remain unchanged.
+The repository is now [loicdelaunay/Monolith-Harness](https://github.com/loicdelaunay/Monolith-Harness). Versions up to 1.29.0 reject the renamed repository's download URLs, and 1.29.1 expects the previous executable names. Install 1.29.2 or later manually once: close the app, back up your folder, remove the old launcher, and extract the new `MonolithHarness.exe` beside the existing database and resources. Subsequent updates use the new repository and executable name. Release archive names remain unchanged. GUI and CLI have separate downloads with the same launcher name; use separate folders if you keep both installed.
 
 The interactive CLI checks for compatible updates at startup by default. `/update` lets you disable that check, check manually, or download and restart into a newer release. Non-interactive automation never checks or installs updates. The GUI has its own equivalent setting in **Settings → General**.
 
@@ -150,7 +150,7 @@ Installation is user-triggered after the automatic check. The app waits for agen
 
 Automatic installation requires a published Windows standalone executable in a writable folder. Staging, the previous EXE (`previous.exe`), and installation result/error files live in `.updates` beside that EXE. They can be removed after a successful update once the old version is no longer needed. The backup covers the executable, not database migrations. Other platforms and development builds use manual downloads.
 
-Release maintainers: GUI tags must use `vX.Y.Z` or `gui-vX.Y.Z`; CLI tags use `cli-vX.Y.Z`. Assets must be named `OhMyHarness-…-win-x64.zip` (GUI), `OhMyHarness-CLI-…-win-x64.zip` (CLI), or the corresponding `win-arm64`/`.exe` variant. ZIPs must contain exactly one `OhMyHarness.App.exe` or `omh.exe`, respectively. Other archive contents are not installed. Drafts, previews, older versions, mismatched architectures and assets without a GitHub SHA-256 digest are excluded. Publish each channel's executable separately; the updater does not rely on GitHub's global “latest” release.
+Release maintainers: GUI tags must use `vX.Y.Z` or `gui-vX.Y.Z`; CLI tags use `cli-vX.Y.Z`. Assets must be named `OhMyHarness-…-win-x64.zip` (GUI), `OhMyHarness-CLI-…-win-x64.zip` (CLI), or the corresponding `win-arm64`/`.exe` variant. Each ZIP must contain exactly one `MonolithHarness.exe` from its channel. Other archive contents are not installed. Drafts, previews, older versions, mismatched architectures and assets without a GitHub SHA-256 digest are excluded. Publish each channel's executable separately; the updater does not rely on GitHub's global “latest” release.
 
 ## Publish and validate
 
@@ -173,7 +173,7 @@ Default output: <code>artifacts/release/cli/&lt;runtime&gt;</code>. The CLI uses
 ~~~powershell
 dotnet run --project tests/OhMyHarness.Cli.Tests -c Release
 dotnet run --project tests/OhMyHarness.Tests -c Release
-.\omh.exe --render-demo
+.\MonolithHarness.exe --render-demo
 ~~~
 
 The last command prints a deterministic ANSI example of the real renderer with clearly labelled fictional content. It makes no provider request and opens no database.

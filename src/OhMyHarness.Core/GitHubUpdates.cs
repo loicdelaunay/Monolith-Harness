@@ -14,12 +14,12 @@ public sealed record GitHubUpdate(string Version, string Tag, string Page, strin
 
 public sealed class GitHubUpdates(HttpClient http)
 {
-    public const string CurrentVersion = "1.29.1";
+    public const string CurrentVersion = "1.29.2";
     public const string Repository = "https://github.com/loicdelaunay/Monolith-Harness";
     public const string Api = "https://api.github.com/repos/loicdelaunay/Monolith-Harness/releases";
     const long MaxBytes = 1024L * 1024 * 1024;
     public static string Runtime => "win-" + (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64");
-    public static string Executable(UpdateChannel channel) => channel == UpdateChannel.Cli ? "omh.exe" : "OhMyHarness.App.exe";
+    public static string Executable(UpdateChannel channel) => "MonolithHarness.exe";
     public static bool CanInstall => OperatingSystem.IsWindows() && RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64;
     public static bool IsStandalone(System.Reflection.Assembly assembly) => assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
         .Cast<System.Reflection.AssemblyMetadataAttribute>().Any(a => a.Key == "OhMyHarness.SingleFile" && a.Value == "true");
@@ -80,7 +80,7 @@ public sealed class GitHubUpdates(HttpClient http)
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromMinutes(10));
-            using var request = new HttpRequestMessage(HttpMethod.Get, update.DownloadUrl); request.Headers.UserAgent.ParseAdd("OhMyHarness/" + CurrentVersion);
+            using var request = new HttpRequestMessage(HttpMethod.Get, update.DownloadUrl); request.Headers.UserAgent.ParseAdd("MonolithHarness/" + CurrentVersion);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token); response.EnsureSuccessStatusCode();
             await using (var input = await response.Content.ReadAsStreamAsync(timeout.Token))
             await using (var output = File.Create(archive))

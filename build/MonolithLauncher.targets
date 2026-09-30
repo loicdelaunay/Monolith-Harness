@@ -1,0 +1,13 @@
+<Project>
+  <!-- Rename the distributed launcher while retaining assembly and resource identities. -->
+  <Target Name="PublishMonolithLauncher" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_MonolithOriginalLauncher>$(PublishDir)$(AssemblyName)$(_NativeExecutableExtension)</_MonolithOriginalLauncher>
+      <_MonolithPublishedLauncher>$(PublishDir)MonolithHarness$(_NativeExecutableExtension)</_MonolithPublishedLauncher>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_MonolithOriginalLauncher)')" Text="Published launcher missing: $(_MonolithOriginalLauncher)" />
+    <Move SourceFiles="$(_MonolithOriginalLauncher)" DestinationFiles="$(_MonolithPublishedLauncher)" />
+    <ItemGroup><FileWrites Include="$(_MonolithPublishedLauncher)" /></ItemGroup>
+    <Message Importance="high" Text="Monolith Harness launcher: $(_MonolithPublishedLauncher)" />
+  </Target>
+</Project>

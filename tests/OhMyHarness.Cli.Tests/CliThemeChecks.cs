@@ -10,10 +10,10 @@ static class CliThemeChecks
     [DllImport("kernel32.dll")] static extern nint LocalFree(nint pointer);
     public static async Task Run(Action<bool, string> check)
     {
-        var ring = TerminalLogo.Outline;
-        check(ring.Length == 8 && ring.All(row => row.Length == TerminalLogo.Width && row.SequenceEqual(row.Reverse())) &&
-            ring.SequenceEqual(ring.Reverse()) && ring[3][3] == '.' && ring[4][4] == '.',
-            "CLI icon is a hollow circle symmetric on both axes");
+        var monogram = TerminalLogo.Outline;
+        check(monogram.Length == 8 && monogram.All(row => row.Length == TerminalLogo.Width && row.SequenceEqual(row.Reverse())) &&
+            monogram.All(row => row.StartsWith("##") && row.EndsWith("##")) && monogram[3][3] == '#' && monogram[4][3] == '.',
+            "CLI icon is an M monogram with symmetric stems and a central V");
         var picker = new UiDialog("Theme", "", [new("crt-green", "Vert"), new("crt-amber", "Ambre")]) { PreviewTheme = true, Selected = 1 };
         check(picker.ThemePreview == "crt-amber", "Theme picker previews the initially selected theme");
         picker.Selected = 0;

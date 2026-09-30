@@ -81,12 +81,12 @@ async function start() {
   profile.setPermissionRequestHandler((_, __, callback) => callback(false));
   profile.setPermissionCheckHandler(() => false);
   profile.on('will-download', event => event.preventDefault());
-  win = new BrowserWindow({ width: 1500, height: 960, minWidth: 760, minHeight: 580, show: !process.env.OHMYHARNESS_TEST_DATA, backgroundColor: '#202020', title: 'Monolith Harness',
+  win = new BrowserWindow({ width: 1500, height: 960, minWidth: 760, minHeight: 580, show: !process.env.OHMYHARNESS_TEST_DATA, backgroundColor: '#202020', title: 'Monolith Harness', icon: path.join(__dirname, 'ui', 'logo.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   browser = createBrowserPool(win);
-  const executable = process.platform === 'win32' ? 'OhMyHarness.App.exe' : 'OhMyHarness.App';
+  const executable = process.platform === 'win32' ? 'MonolithHarness.exe' : 'MonolithHarness';
   const serviceFile = app.isPackaged ? path.join(process.resourcesPath, 'service', executable)
     : path.join(__dirname, 'sidecar', `${process.platform === 'darwin' ? 'mac' : 'win'}-${process.arch}`, executable);
   await fs.mkdir(directory, { recursive: true });

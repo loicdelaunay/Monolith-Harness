@@ -11,8 +11,8 @@
     <Product>Monolith Harness</Product>
     <ApplicationId>com.ohmyharness.app</ApplicationId>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <ApplicationDisplayVersion>1.29.1</ApplicationDisplayVersion>
-    <ApplicationVersion>40</ApplicationVersion>
+    <ApplicationDisplayVersion>1.29.2</ApplicationDisplayVersion>
+    <ApplicationVersion>41</ApplicationVersion>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
@@ -40,6 +40,7 @@
     <ProjectReference Include="../OhMyHarness.Core/OhMyHarness.Core.csproj" GlobalPropertiesToRemove="TargetFrameworks" />
   </ItemGroup>
   <Import Project="../../build/PythonRuntime.targets" />
+  <Import Project="../../build/MonolithLauncher.targets" />
   <ItemGroup><AssemblyMetadata Include="OhMyHarness.SingleFile" Value="$(PublishSingleFile)" /></ItemGroup>
   <Target Name="ExcludePublishedDebugSymbols" BeforeTargets="_ComputeFilesToBundle" Condition="'$(PublishSingleFile)' == 'true'">
     <ItemGroup>

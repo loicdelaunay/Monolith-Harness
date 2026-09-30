@@ -6,7 +6,7 @@ See [the Uno, tasks and models guide](uno-tasks-models.md) for architecture and 
 
 ## Portable downloads
 
-[GUI v1.26.0](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.26.0) and [CLI v1.26.0](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.26.0) include `osx-arm64` (Apple Silicon) and `osx-x64` (Intel) archives. Choose your architecture and extract the `.tar.gz` into a writable folder with `tar -xzf <archive>`. Run `./OhMyHarness.App` for the GUI or `./omh` for the CLI; enter `/connect` to configure the CLI provider. Verify the archive against the release's `SHA256SUMS.txt`.
+[GUI v1.29.2](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.29.2) and [CLI v1.29.2](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.29.2) include `osx-arm64` (Apple Silicon) and `osx-x64` (Intel) archives. Choose your architecture and extract the `.tar.gz` into a writable folder with `tar -xzf <archive>`. Run `./MonolithHarness` for the GUI or `./MonolithHarness` for the CLI; enter `/connect` to configure the CLI provider. Verify the archive against the release's `SHA256SUMS.txt`.
 
 These builds are unsigned and not notarized, so macOS may block their first launch. Builds and automated engine/CLI tests run on both Mac architectures; this does not validate the native interactions listed below. Automatic executable replacement currently supports Windows only; on Mac, close the application and replace only the executable while preserving your portable data.
 
@@ -23,7 +23,7 @@ bash ./publish-macos.sh arm64 # Apple Silicon
 bash ./publish-macos.sh x64   # Intel
 ```
 
-The standalone publication is under `artifacts/release/osx-arm64` or `osx-x64`, with the `OhMyHarness.App` launcher. It requires neither installed .NET nor Electron. The script does not produce a signed DMG or configure Apple notarization. For public distribution, sign and notarize on Mac; retain native dependencies supplied with the publication.
+The standalone publication is under `artifacts/release/osx-arm64` or `osx-x64`, with the `MonolithHarness` launcher. It requires neither installed .NET nor Electron. The script does not produce a signed DMG or configure Apple notarization. For public distribution, sign and notarize on Mac; retain native dependencies supplied with the publication.
 
 On Windows, `publish.ps1` publishes Uno Desktop by default. Follow repository conventions with `./publish.ps1 -OutputDirectory artifacts/GUI`. `-NativeWinUI` targets native WinUI; validate startup on the target machine. Temporary validation publications belong in a dedicated folder under `artifacts/TEMP` and must be cleaned up afterward.
 

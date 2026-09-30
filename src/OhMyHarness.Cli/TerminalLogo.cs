@@ -1,18 +1,18 @@
 namespace OhMyHarness.Cli;
 
-/// <summary>A symmetric ring drawn with the active terminal theme.</summary>
+/// <summary>An M monogram drawn with the active terminal theme.</summary>
 internal static class TerminalLogo
 {
     internal static readonly string[] Outline =
     [
-        "..####..",
-        ".##..##.",
         "##....##",
-        "#......#",
-        "#......#",
+        "###..###",
+        "########",
+        "##.##.##",
         "##....##",
-        ".##..##.",
-        "..####.."
+        "##....##",
+        "##....##",
+        "##....##"
     ];
 
     public const int Width = 8;

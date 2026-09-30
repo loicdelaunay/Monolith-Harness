@@ -9,6 +9,7 @@
 - Après chaque mise à jour du logiciel (GUI, CLI ou moteur partagé), republier systématiquement **les deux interfaces**, même si la modification ne concerne directement qu’une seule interface.
 - Publier le CLI Windows dans `artifacts/CLI` avec `./publish-cli.ps1 -OutputDirectory artifacts/CLI`.
 - Publier aussi la GUI Windows dans `artifacts/GUI` avec `./publish.ps1 -OutputDirectory artifacts/GUI` (cible Uno Desktop par défaut). Une publication du CLI seul ne termine pas une mise à jour.
+- Le lanceur publié s’appelle `MonolithHarness.exe` sur Windows et `MonolithHarness` sur macOS/Linux, pour les deux interfaces dans leurs dossiers séparés. Conserver les identités internes des assemblies et les noms compatibles des archives de release.
 - Vérifier la réussite des deux publications et l’alignement de leurs versions avant de terminer. Une modification uniquement documentaire ne nécessite pas de reconstruire les exécutables.
 - `artifacts/TEMP` est réservé aux publications temporaires réalisées par l’IA pour ses tests. Utiliser un sous-dossier dédié à chaque test et supprimer les fichiers de publication créés une fois les tests terminés, même en cas d’échec.
 - Ne pas créer d’autres dossiers de publication dans `artifacts`. Avant tout nettoyage, vérifier que le chemin ciblé est bien dans `artifacts/TEMP` et supprimer uniquement les fichiers créés pour le test concerné ; préserver les autres fichiers et les données utilisateur.
