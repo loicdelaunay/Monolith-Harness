@@ -26,6 +26,11 @@ public partial class App : Application
                 PortableStorage.UseDatabase(Path.Combine(Path.GetFullPath(smoke), "database.sqlite"));
                 using var fixture = new HarnessDb(HarnessDb.DatabasePath);
                 await fixture.InitializeAsync();
+                var fixtureState = fixture.States.Single();
+                var fixtureSettings = FeatureSettings.Read(fixtureState.FeaturesJson);
+                fixtureSettings.WelcomeCompleted = true;
+                fixtureState.FeaturesJson = fixtureSettings.Json();
+                await fixture.SaveChangesAsync();
             }
             window = new MainWindow();
             window.Activate();

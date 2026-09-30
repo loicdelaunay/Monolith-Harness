@@ -100,7 +100,12 @@ jobs:
           Xvfb :99 -screen 0 1280x800x24 > "$smoke_dir/xvfb.log" 2>&1 &
           xvfb_pid=$!
           sleep 2
-          DISPLAY=:99 OHMYHARNESS_UI_SMOKE="$smoke_dir" OHMYHARNESS_UX_SMOKE=1 timeout 60s ./artifacts/GUI/MonolithHarness
+          if ! DISPLAY=:99 OHMYHARNESS_UI_SMOKE="$smoke_dir" OHMYHARNESS_UX_SMOKE=1 timeout 60s ./artifacts/GUI/MonolithHarness; then
+            if test -f "$smoke_dir/smoke-error.txt"; then cat "$smoke_dir/smoke-error.txt"; fi
+            cat "$smoke_dir/xvfb.log"
+            exit 1
+          fi
+          if test -f "$smoke_dir/smoke-error.txt"; then cat "$smoke_dir/smoke-error.txt"; exit 1; fi
           test -f "$smoke_dir/smoke-ok.txt"
           cat "$smoke_dir/smoke-ok.txt"
       - name: Package clean Fedora downloads
