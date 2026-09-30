@@ -1,5 +1,5 @@
 <Project>
-  <!-- Rename the distributed launcher while retaining assembly and resource identities. -->
+  <!-- Both interfaces use the same portable launcher name in their separate output folders. -->
   <Target Name="PublishMonolithLauncher" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true' and '$(RuntimeIdentifier)' != ''">
     <PropertyGroup>
       <_MonolithOriginalLauncher>$(PublishDir)$(AssemblyName)$(_NativeExecutableExtension)</_MonolithOriginalLauncher>

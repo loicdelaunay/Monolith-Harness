@@ -76,7 +76,7 @@ function createBrowser(win, chatId = 0) {
     const region = p.x == null ? bounds : { x:p.x,y:p.y,width:p.width,height:p.height };
     if (!Object.values(region).every(Number.isFinite) || region.width <= 0 || region.height <= 0 || region.width > 16384 || region.height > 16384) throw new Error('Invalid capture rectangle.');
     if (process.platform === 'darwin') {
-      const temp = await fs.mkdtemp(path.join(os.tmpdir(),'ohmyharness-capture-'));
+      const temp = await fs.mkdtemp(path.join(os.tmpdir(),'monolithharness-capture-'));
       try {
         const file = path.join(temp,'capture.png');
         await executeFile('/usr/sbin/screencapture',['-x','-C','-t','png','-R',`${region.x},${region.y},${region.width},${region.height}`,file],{timeout:15000});

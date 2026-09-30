@@ -1,4 +1,4 @@
-# OhMyHarness CLI 1.29.0
+# MonolithHarness CLI 1.29.0
 
 Choose `OhMyHarness-CLI-v1.29.0-win-x64.zip`, `OhMyHarness-CLI-v1.29.0-osx-arm64.tar.gz` (Apple Silicon), `OhMyHarness-CLI-v1.29.0-osx-x64.tar.gz` (Intel), or `OhMyHarness-CLI-v1.29.0-linux-x64.tar.gz`. Extract into a writable folder and run `omh` (`omh.exe` on Windows). Enter `/connect` to configure a provider. Check your archive against the attached `SHA256SUMS.txt`.
 

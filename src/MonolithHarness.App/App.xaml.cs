@@ -1,0 +1,49 @@
+using Microsoft.UI.Xaml;
+using MonolithHarness.Core;
+using System.Runtime.InteropServices;
+
+namespace MonolithHarness.App;
+public partial class App : Application
+{
+    Window? window;
+    public App()
+    {
+        if(OperatingSystem.IsMacOS())Environment.SetEnvironmentVariable("PATH","/opt/homebrew/bin:/usr/local/bin:"+Environment.GetEnvironmentVariable("PATH"));
+        InitializeComponent();
+        UnhandledException += (_, args) => AppLog.Write(AppLogLevel.Critical, "ui.unhandled", args.Exception);
+        FluentDesign.SetTheme("fluent-dark");
+    }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int MessageBoxW(nint window, string text, string caption, uint type);
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        try
+        {
+            PortableStorage.EnsureWritable();
+            var smoke = Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE");
+            if (!string.IsNullOrWhiteSpace(smoke))
+            {
+                PortableStorage.UseDatabase(Path.Combine(Path.GetFullPath(smoke), "database.sqlite"));
+                using var fixture = new HarnessDb(HarnessDb.DatabasePath);
+                await fixture.InitializeAsync();
+                var fixtureState = fixture.States.Single();
+                var fixtureSettings = FeatureSettings.Read(fixtureState.FeaturesJson);
+                fixtureSettings.WelcomeCompleted = true;
+                fixtureState.FeaturesJson = fixtureSettings.Json();
+                await fixture.SaveChangesAsync();
+            }
+            window = new MainWindow();
+            window.Activate();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write(AppLogLevel.Critical, "ui.startup_failed", ex);
+            if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE") is { Length: > 0 } output)
+            {
+                Directory.CreateDirectory(output); File.WriteAllText(Path.Combine(output,"smoke-error.txt"),ex.ToString()); Exit(); return;
+            }
+            if (OperatingSystem.IsWindows()) MessageBoxW(0, "Impossible d’ouvrir les données portables. Fermez les autres instances et vérifiez les droits du dossier. / Cannot open portable data.\n\n" + ex.Message, BrandingAssets.DefaultName, 0x10);
+            else { window = new Window { Title = BrandingAssets.DefaultName, Content = new Microsoft.UI.Xaml.Controls.TextBlock { Text = ex.Message, TextWrapping = TextWrapping.Wrap, Margin = new(30) } }; window.Activate(); }
+        }
+    }
+}

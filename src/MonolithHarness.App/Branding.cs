@@ -1,0 +1,181 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using MonolithHarness.Core;
+using SkiaSharp;
+using Windows.Storage.Pickers;
+using static MonolithHarness.App.UiText;
+
+namespace MonolithHarness.App;
+
+public sealed partial class MainWindow
+{
+    readonly Image brandLogo = new() { Width = 28, Height = 28, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
+    readonly AdaptiveApplicationTitle brandName = new();
+    string DisplayApplicationName => BrandingAssets.DisplayName(FeatureSettings.Read(state.FeaturesJson).ApplicationName);
+    static string DefaultLogo => Path.Combine(AppContext.BaseDirectory, "Assets", "logo-32.png");
+    void ApplyBrandingIcon(Window window)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var custom = Path.Combine(PortableStorage.Root, "branding", "window-icon.ico");
+        var path = !string.IsNullOrWhiteSpace(FeatureSettings.Read(state.FeaturesJson).LogoForTheme(root.RequestedTheme == ElementTheme.Dark)) && File.Exists(custom)
+            ? custom : Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+        try { if (File.Exists(path)) window.AppWindow.SetIcon(path); }
+        catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Window icon: " + ex.Message); }
+    }
+
+    static byte[] ReadLogo(string path)
+    {
+        var info = new FileInfo(path);
+        if (info.Length is <= 0 or > 10 * 1024 * 1024) throw new IOException("Logo : fichier vide ou supérieur à 10 Mo. / Empty logo or larger than 10 MB.");
+        var data = File.ReadAllBytes(path);
+        using var codec = SKCodec.Create(new MemoryStream(data));
+        if (codec == null || codec.Info.Width is <= 0 or > 4096 || codec.Info.Height is <= 0 or > 4096)
+            throw new IOException("Image invalide ou supérieure à 4096 × 4096 pixels. / Invalid image or larger than 4096 × 4096 pixels.");
+        return data;
+    }
+    static byte[] LogoPng(byte[] bytes)
+    {
+        using var bitmap = SKBitmap.Decode(bytes) ?? throw new IOException("Logo invalide / Invalid logo.");
+        var scale = Math.Min(1d, 256d / Math.Max(bitmap.Width, bitmap.Height));
+        using var resized = bitmap.Resize(new SKImageInfo(Math.Max(1, (int)(bitmap.Width * scale)), Math.Max(1, (int)(bitmap.Height * scale))), new SKSamplingOptions(SKFilterMode.Linear));
+        using var image = SKImage.FromBitmap(resized); using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+    static BitmapImage LogoImage(byte[] png)
+    {
+        var image = new BitmapImage();
+        using var stream = new MemoryStream(png); using var source = stream.AsRandomAccessStream(); image.SetSource(source);
+        return image;
+    }
+    void ApplyBranding(bool? dark = null)
+    {
+        var config = FeatureSettings.Read(state.FeaturesJson);
+        var logoPath = config.LogoForTheme(dark ?? root.RequestedTheme == ElementTheme.Dark);
+        brandName.TwoLines = config.ApplicationNameTwoLines;
+        Title = brandName.Text = DisplayApplicationName;
+        ToolTipService.SetToolTip(brandName, DisplayApplicationName);
+        if (settingsWindow != null) settingsWindow.Title = DisplayApplicationName + " · " + T("Réglages");
+        if (tasksWindow != null) tasksWindow.Title = DisplayApplicationName + " · " + WorkflowText("Tâches planifiées", "Scheduled tasks");
+        byte[]? png = null;
+        try { png = LogoPng(ReadLogo(string.IsNullOrWhiteSpace(logoPath) ? DefaultLogo : BrandingAssets.Resolve(logoPath))); ToolTipService.SetToolTip(brandLogo, DisplayApplicationName); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            try { png = LogoPng(ReadLogo(DefaultLogo)); } catch { }
+            ToolTipService.SetToolTip(brandLogo, WorkflowText("Logo indisponible : ", "Logo unavailable: ") + ex.Message);
+        }
+        brandLogo.Source = png == null ? null : LogoImage(png);
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+                if (logoPath.Length > 0 && png != null)
+                {
+                    var folder = Path.Combine(PortableStorage.Root, "branding"); Directory.CreateDirectory(folder);
+                    icon = Path.Combine(folder, "window-icon.ico");
+                    using var output = File.Create(icon); using var writer = new BinaryWriter(output);
+                    using var bitmap = SKBitmap.Decode(png);
+                    writer.Write((ushort)0); writer.Write((ushort)1); writer.Write((ushort)1);
+                    writer.Write((byte)(bitmap.Width == 256 ? 0 : bitmap.Width)); writer.Write((byte)(bitmap.Height == 256 ? 0 : bitmap.Height));
+                    writer.Write((byte)0); writer.Write((byte)0); writer.Write((ushort)1); writer.Write((ushort)32);
+                    writer.Write(png.Length); writer.Write(22); writer.Write(png);
+                }
+                if (File.Exists(icon)) { AppWindow.SetIcon(icon); settingsWindow?.AppWindow.SetIcon(icon); tasksWindow?.AppWindow.SetIcon(icon); }
+            }
+            catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Window icon: " + ex.Message); }
+        }
+    }
+    (StackPanel Panel, Func<FeatureSettings, Task> Save) BuildBrandingSettings()
+    {
+        var config = FeatureSettings.Read(state.FeaturesJson);
+        var name = new TextBox { Header = WorkflowText("Nom affiché de l’application", "Application display name"), Text = config.ApplicationName, MaxLength = 80, PlaceholderText = BrandingAssets.DefaultName };
+        var twoLines = new ToggleSwitch { IsOn = config.ApplicationNameTwoLines };
+        var nameLayout = FluentDesign.Setting(WorkflowText("Nom sur deux lignes", "Two-line application name"),
+            WorkflowText("Le premier mot s’affiche en titre, le reste en sous-titre plus petit. Sans espace, le nom reste sur une ligne.",
+                "The first word is the title, with the rest as a smaller subtitle. Names without spaces stay on one line."), twoLines);
+        var separate = new ToggleSwitch { IsOn = config.ThemeLogosEnabled };
+        var themed = new StackPanel { Spacing = 12 };
+        (StackPanel Panel, Func<Task<string>> Save, Action Reset) LogoChoice(string heading, string initial)
+        {
+            var value = initial;
+            string? filePath = null;
+            byte[]? bytes = null;
+            var image = new Image { Width = 56, Height = 56, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left };
+            var caption = new TextBlock { Text = value, TextWrapping = TextWrapping.Wrap };
+            void Show() { try { var shared = config.LogoPath.Length == 0 ? DefaultLogo : BrandingAssets.Resolve(config.LogoPath); image.Source = LogoImage(LogoPng(ReadLogo(value.Length == 0 ? shared : BrandingAssets.Resolve(value)))); } catch { image.Source = null; } }
+            Show();
+            var chooseLogo = new Button { Content = WorkflowText("Charger un logo…", "Choose logo…") };
+            var clearLogo = new Button { Content = WorkflowText("Logo commun", "Shared logo") };
+            var warning = Label("", 12);
+            void Reset() { value = ""; filePath = null; bytes = null; caption.Text = ""; Show(); }
+            clearLogo.Click += (_, _) => Reset();
+            chooseLogo.Click += async (_, _) =>
+            {
+                try
+                {
+                    var picker = new FileOpenPicker();
+                    foreach (var extension in new[] { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".ico" }) picker.FileTypeFilter.Add(extension);
+                    InitializePicker(picker, settingsWindow ?? this);
+                    var file = await picker.PickSingleFileAsync(); if (file == null) return;
+                    var data = ReadLogo(file.Path); image.Source = LogoImage(LogoPng(data));
+                    filePath = file.Path; bytes = data; caption.Text = Path.GetFileName(file.Path); warning.Text = "";
+                }
+                catch (Exception ex) { warning.Text = ex.Message; }
+            };
+            var group = new StackPanel { Spacing = 6 };
+            foreach (var element in new UIElement[] { Label(heading, 14), image, caption, Row(chooseLogo, clearLogo), warning }) group.Children.Add(element);
+            return (group, async () => filePath != null && bytes != null ? await BrandingAssets.SaveLogoAsync(filePath, bytes) : value, Reset);
+        }
+        var light = LogoChoice(WorkflowText("☀ Logo des thèmes clairs", "☀ Light theme logo"), config.LightLogoPath);
+        var dark = LogoChoice(WorkflowText("☾ Logo des thèmes sombres", "☾ Dark theme logo"), config.DarkLogoPath);
+        themed.Children.Add(light.Panel); themed.Children.Add(dark.Panel);
+        void RefreshSeparate() => themed.Visibility = separate.IsOn ? Visibility.Visible : Visibility.Collapsed;
+        separate.Toggled += (_, _) => RefreshSeparate(); RefreshSeparate();
+        var path = new TextBox { Header = WorkflowText("Logo personnalisé", "Custom logo"), Text = config.LogoPath, IsReadOnly = true, TextWrapping = TextWrapping.Wrap };
+        var preview = new Image { Width = 64, Height = 64, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left };
+        var error = Label("", 12); error.Tag = null;
+        var choose = new Button { Content = WorkflowText("Charger un logo…", "Choose logo…") };
+        var reset = new Button { Content = WorkflowText("Logo d’origine", "Default logo") };
+        var defaults = new Button { Content = WorkflowText("Rétablir le nom et le logo", "Reset name and logo") };
+        string? selectedFile = null; byte[]? selectedData = null;
+        void Preview(string value)
+        {
+            try { preview.Source = LogoImage(LogoPng(ReadLogo(value))); error.Text = ""; }
+            catch (Exception ex) { preview.Source = null; error.Text = ex.Message; }
+        }
+        try { Preview(config.LogoPath.Length == 0 ? DefaultLogo : BrandingAssets.Resolve(config.LogoPath)); }
+        catch (ArgumentException ex) { error.Text = ex.Message; }
+        choose.Click += async (_, _) =>
+        {
+            try
+            {
+                var picker = new FileOpenPicker(); foreach (var extension in new[] { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".ico" }) picker.FileTypeFilter.Add(extension);
+                InitializePicker(picker, settingsWindow ?? this);
+                var file = await picker.PickSingleFileAsync(); if (file == null) return;
+                var data = ReadLogo(file.Path); var image = LogoImage(LogoPng(data));
+                selectedFile = file.Path; selectedData = data; preview.Source = image; error.Text = "";
+                path.Text = BrandingAssets.RelativePath(file.Path) ?? WorkflowText("Copie dans branding/ à l’enregistrement · ", "Copy to branding/ on save · ") + Path.GetFileName(file.Path);
+            }
+            catch (Exception ex) { error.Text = ex.Message; }
+        };
+        void ResetLogo() { selectedFile = null; selectedData = null; path.Text = ""; Preview(DefaultLogo); }
+        reset.Click += (_, _) => ResetLogo();
+        defaults.Click += (_, _) => { name.Text = BrandingAssets.DefaultName; twoLines.IsOn = true; ResetLogo(); light.Reset(); dark.Reset(); separate.IsOn = false; };
+        var details = new StackPanel { Spacing = 12 };
+        foreach (var item in new UIElement[] { name, nameLayout, path, preview, Row(choose, reset), defaults, error,
+            Label(WorkflowText("PNG, JPEG, WebP, BMP ou ICO · 10 Mo maximum. Les logos externes sont copiés dans branding/. Les chemins sont relatifs au dossier de l’exécutable : copiez le dossier complet pour conserver votre personnalisation.", "PNG, JPEG, WebP, BMP or ICO · Maximum 10 MB. External logos are copied into branding/. Paths are relative to the executable folder: copy the whole folder to keep your customization."), 12) }) details.Children.Add(item);
+        var panel = new StackPanel(); panel.Children.Add(new Expander { Header = WorkflowText("Nom et logo de l’application", "Application name and logo"), Content = details, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
+        details.Children.Add(FluentDesign.Setting(WorkflowText("Logos selon le thème", "Theme-specific logos"), WorkflowText("Choisissez un logo clair et un logo sombre. Un choix vide utilise le logo commun.", "Choose light and dark logos. An empty choice uses the shared logo."), separate));
+        details.Children.Add(themed);
+        return (panel, async value =>
+        {
+            value.ApplicationName = BrandingAssets.DisplayName(name.Text);
+            value.ApplicationNameTwoLines = twoLines.IsOn;
+            value.ThemeLogosEnabled = separate.IsOn;
+            value.LightLogoPath = await light.Save(); value.DarkLogoPath = await dark.Save();
+            value.LogoPath = selectedFile != null && selectedData != null ? await BrandingAssets.SaveLogoAsync(selectedFile, selectedData) : path.Text;
+        });
+    }
+}

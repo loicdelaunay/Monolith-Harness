@@ -1,4 +1,4 @@
-using OhMyHarness.Core;
+using MonolithHarness.Core;
 using System.Text.Json.Nodes;
 
 int checks = 0;

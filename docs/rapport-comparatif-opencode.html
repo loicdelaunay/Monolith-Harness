@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OhMyHarness vs opencode — Rapport d'écart fonctionnel</title>
+<title>MonolithHarness vs opencode — Rapport d'écart fonctionnel</title>
 <style>
   :root{
     --bg:#11141a; --bg2:#171b23; --bg3:#1e232d; --line:#2a3140;
@@ -73,12 +73,12 @@
 
 <header class="hero">
   <div class="kicker">Rapport d'écart fonctionnel</div>
-  <h1>OhMyHarness vs <em>opencode</em>
-    <small>Ce que le code source d'OhMyHarness ne fait pas encore, et ce qu'il faudrait ajouter pour atteindre la parité agentique.</small>
+  <h1>MonolithHarness vs <em>opencode</em>
+    <small>Ce que le code source d'MonolithHarness ne fait pas encore, et ce qu'il faudrait ajouter pour atteindre la parité agentique.</small>
   </h1>
   <div class="meta">
     <span><b>Date :</b> 20/09/2026</span>
-    <span><b>Projet :</b> E:\Projects\OhMyHarness</span>
+    <span><b>Projet :</b> E:\Projects\MonolithHarness</span>
     <span><b>Périmètre :</b> src/, desktop/, tests/, docs/</span>
     <span><b>Type :</b> analyse statique du code (lecture + recherche textuelle)</span>
   </div>
@@ -89,7 +89,7 @@
   <ol>
     <li><a href="#exec">Résumé exécutif</a></li>
     <li><a href="#methode">Méthode et périmètre</a></li>
-    <li><a href="#existant">Ce que OhMyHarness fait déjà</a></li>
+    <li><a href="#existant">Ce que MonolithHarness fait déjà</a></li>
     <li><a href="#moteur">Moteur agent et extensibilité</a></li>
     <li><a href="#outils">Outils de code et qualité</a></li>
     <li><a href="#sessions">Sessions et cycle de vie</a></li>
@@ -107,12 +107,12 @@
 <div class="grid">
   <div class="kpi"><div class="n bad">28</div><div class="l">écarts fonctionnels identifiés face à opencode</div></div>
   <div class="kpi"><div class="n warn">6</div><div class="l">écarts classés P0 (bloquants pour la parité agentique)</div></div>
-  <div class="kpi"><div class="n ok">7</div><div class="l">capacités d'OhMyHarness absentes d'opencode (avantage propre)</div></div>
+  <div class="kpi"><div class="n ok">7</div><div class="l">capacités d'MonolithHarness absentes d'opencode (avantage propre)</div></div>
   <div class="kpi"><div class="n">~3&nbsp;800</div><div class="l">lignes de C# utiles hors migrations et code généré</div></div>
 </div>
 
 <p>
-OhMyHarness est aujourd'hui un <b>client de chat multimodal très complet</b> avec une couche d'outils
+MonolithHarness est aujourd'hui un <b>client de chat multimodal très complet</b> avec une couche d'outils
 réelle (sources, éditeur de fichiers, terminal, Git en lecture, navigateur intégré avec accès DOM,
 automatisation souris/clavier/captures, permissions persistantes). Il sait aussi <b>piloter un serveur
 opencode local</b> via HTTP et lui déléguer la boucle agentique.
@@ -132,34 +132,34 @@ catalogue de modèles avec coûts, et configuration portable hors base SQLite.
     <tr><th style="width:56px">Id</th><th>Écart</th><th style="width:96px">Priorité</th><th style="width:110px">Effort</th><th style="width:250px">Point d'ancrage principal</th></tr>
   </thead>
   <tbody>
-    <tr><td>G1</td><td>Serveurs MCP (local et distant, OAuth)</td><td><span class="badge p0">P0</span></td><td class="eff">M&nbsp;· 1-2 sem.</td><td class="path">src/OhMyHarness.Service/Tools.cs</td></tr>
-    <tr><td>G2</td><td>Fichiers de règles projet (<code>AGENTS.md</code>, instructions)</td><td><span class="badge p0">P0</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/OhMyHarness.Core/Skills.cs</td></tr>
-    <tr><td>G3</td><td>Recherche de code <code>glob</code> / <code>grep</code></td><td><span class="badge p0">P0</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/OhMyHarness.Core/SourceAccess.cs</td></tr>
-    <tr><td>G4</td><td>Patch multi-fichiers avec diff visible avant application</td><td><span class="badge p0">P0</span></td><td class="eff">M&nbsp;· 1-2 sem.</td><td class="path">src/OhMyHarness.Core/SourceAccess.cs</td></tr>
-    <tr><td>G5</td><td>Annulation / restauration (snapshots, <code>/undo</code>, <code>/redo</code>)</td><td><span class="badge p0">P0</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/OhMyHarness.Service/Generations.cs</td></tr>
-    <tr><td>G6</td><td>Configuration portable versionnable (équivalent <code>opencode.json</code>)</td><td><span class="badge p0">P0</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/OhMyHarness.Core/Storage.cs</td></tr>
-    <tr><td>G7</td><td>Sous-agents et délégation (<code>task</code>, agents primaires build/plan)</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1-2 sem.</td><td class="path">src/OhMyHarness.Service/Generations.cs</td></tr>
-    <tr><td>G8</td><td>Agents personnalisés définis par l'utilisateur</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/OhMyHarness.Core/Storage.cs</td></tr>
-    <tr><td>G9</td><td>Commandes personnalisées avec arguments et injection</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 3-5 j</td><td class="path">src/OhMyHarness.Core/Storage.cs</td></tr>
-    <tr><td>G10</td><td>Diagnostics LSP après édition</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-4 sem.</td><td class="path">src/OhMyHarness.Service/Tools.cs</td></tr>
-    <tr><td>G11</td><td>Écriture atomique et sauvegardes de fichiers</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/OhMyHarness.Core/SourceAccess.cs</td></tr>
-    <tr><td>G12</td><td>Reprise, régénération et édition d'un message</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 4-6 j</td><td class="path">src/OhMyHarness.Service/Generations.cs</td></tr>
+    <tr><td>G1</td><td>Serveurs MCP (local et distant, OAuth)</td><td><span class="badge p0">P0</span></td><td class="eff">M&nbsp;· 1-2 sem.</td><td class="path">src/MonolithHarness.Service/Tools.cs</td></tr>
+    <tr><td>G2</td><td>Fichiers de règles projet (<code>AGENTS.md</code>, instructions)</td><td><span class="badge p0">P0</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/MonolithHarness.Core/Skills.cs</td></tr>
+    <tr><td>G3</td><td>Recherche de code <code>glob</code> / <code>grep</code></td><td><span class="badge p0">P0</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/MonolithHarness.Core/SourceAccess.cs</td></tr>
+    <tr><td>G4</td><td>Patch multi-fichiers avec diff visible avant application</td><td><span class="badge p0">P0</span></td><td class="eff">M&nbsp;· 1-2 sem.</td><td class="path">src/MonolithHarness.Core/SourceAccess.cs</td></tr>
+    <tr><td>G5</td><td>Annulation / restauration (snapshots, <code>/undo</code>, <code>/redo</code>)</td><td><span class="badge p0">P0</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/MonolithHarness.Service/Generations.cs</td></tr>
+    <tr><td>G6</td><td>Configuration portable versionnable (équivalent <code>opencode.json</code>)</td><td><span class="badge p0">P0</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/MonolithHarness.Core/Storage.cs</td></tr>
+    <tr><td>G7</td><td>Sous-agents et délégation (<code>task</code>, agents primaires build/plan)</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1-2 sem.</td><td class="path">src/MonolithHarness.Service/Generations.cs</td></tr>
+    <tr><td>G8</td><td>Agents personnalisés définis par l'utilisateur</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/MonolithHarness.Core/Storage.cs</td></tr>
+    <tr><td>G9</td><td>Commandes personnalisées avec arguments et injection</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 3-5 j</td><td class="path">src/MonolithHarness.Core/Storage.cs</td></tr>
+    <tr><td>G10</td><td>Diagnostics LSP après édition</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-4 sem.</td><td class="path">src/MonolithHarness.Service/Tools.cs</td></tr>
+    <tr><td>G11</td><td>Écriture atomique et sauvegardes de fichiers</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/MonolithHarness.Core/SourceAccess.cs</td></tr>
+    <tr><td>G12</td><td>Reprise, régénération et édition d'un message</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 4-6 j</td><td class="path">src/MonolithHarness.Service/Generations.cs</td></tr>
     <tr><td>G13</td><td>File d'attente de messages / pilotage pendant une génération</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">desktop/ui/app.js</td></tr>
-    <tr><td>G14</td><td>Export / import / partage / fork de session</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 4-6 j</td><td class="path">src/OhMyHarness.Service/Program.cs</td></tr>
-    <tr><td>G15</td><td>Compaction manuelle et budget de contexte piloté</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/OhMyHarness.Core/ContextWindow.cs</td></tr>
-    <tr><td>G16</td><td>Authentification OAuth (abonnements Anthropic, Copilot, Google…)</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/OhMyHarness.App/ProviderEditor.cs</td></tr>
-    <tr><td>G17</td><td>Catalogue de modèles (capacités + coûts) au lieu de listes figées</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/OhMyHarness.Core/ModelCatalog.cs</td></tr>
-    <tr><td>G18</td><td>Suivi du coût monétaire par session</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/OhMyHarness.Service/Generations.cs</td></tr>
-    <tr><td>G19</td><td>Permissions par motif (commandes, chemins) au lieu d'un flag par portée</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/OhMyHarness.Core/Storage.cs</td></tr>
-    <tr><td>G20</td><td>CLI headless et API HTTP publique (équivalent <code>opencode run</code> / <code>serve</code>)</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/OhMyHarness.Service/Program.cs</td></tr>
-    <tr><td>G21</td><td>Plugins et hooks utilisateur</td><td><span class="badge p2">P2</span></td><td class="eff">L&nbsp;· 2-4 sem.</td><td class="path">src/OhMyHarness.Service/Tools.cs</td></tr>
-    <tr><td>G22</td><td>Outils personnalisés fournis par l'utilisateur</td><td><span class="badge p2">P2</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/OhMyHarness.Service/Tools.cs</td></tr>
-    <tr><td>G23</td><td>Skills à chargement progressif (<code>SKILL.md</code>)</td><td><span class="badge p2">P2</span></td><td class="eff">M&nbsp;· 4-6 j</td><td class="path">src/OhMyHarness.Core/Skills.cs</td></tr>
-    <tr><td>G24</td><td>Formateurs automatiques après édition</td><td><span class="badge p2">P2</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/OhMyHarness.Service/Tools.cs</td></tr>
-    <tr><td>G25</td><td>Liste de tâches (<code>todo</code>) persistée et affichée</td><td><span class="badge p2">P2</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/OhMyHarness.Core/Storage.cs</td></tr>
-    <tr><td>G26</td><td>Thèmes, raccourcis configurables, mode TUI/vim, mise à jour automatique</td><td><span class="badge p2">P2</span></td><td class="eff">L&nbsp;· 2-4 sem.</td><td class="path">src/OhMyHarness.App/MainWindow.cs</td></tr>
-    <tr><td>G27</td><td>Lecture d'images par l'outil de lecture</td><td><span class="badge p2">P2</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/OhMyHarness.Core/SourceAccess.cs</td></tr>
-    <tr><td>G28</td><td>Confinement du terminal exécuté par l'IA</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/OhMyHarness.Core/WorkspaceTools.cs</td></tr>
+    <tr><td>G14</td><td>Export / import / partage / fork de session</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 4-6 j</td><td class="path">src/MonolithHarness.Service/Program.cs</td></tr>
+    <tr><td>G15</td><td>Compaction manuelle et budget de contexte piloté</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/MonolithHarness.Core/ContextWindow.cs</td></tr>
+    <tr><td>G16</td><td>Authentification OAuth (abonnements Anthropic, Copilot, Google…)</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/MonolithHarness.App/ProviderEditor.cs</td></tr>
+    <tr><td>G17</td><td>Catalogue de modèles (capacités + coûts) au lieu de listes figées</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/MonolithHarness.Core/ModelCatalog.cs</td></tr>
+    <tr><td>G18</td><td>Suivi du coût monétaire par session</td><td><span class="badge p1">P1</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/MonolithHarness.Service/Generations.cs</td></tr>
+    <tr><td>G19</td><td>Permissions par motif (commandes, chemins) au lieu d'un flag par portée</td><td><span class="badge p1">P1</span></td><td class="eff">M&nbsp;· 1 sem.</td><td class="path">src/MonolithHarness.Core/Storage.cs</td></tr>
+    <tr><td>G20</td><td>CLI headless et API HTTP publique (équivalent <code>opencode run</code> / <code>serve</code>)</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/MonolithHarness.Service/Program.cs</td></tr>
+    <tr><td>G21</td><td>Plugins et hooks utilisateur</td><td><span class="badge p2">P2</span></td><td class="eff">L&nbsp;· 2-4 sem.</td><td class="path">src/MonolithHarness.Service/Tools.cs</td></tr>
+    <tr><td>G22</td><td>Outils personnalisés fournis par l'utilisateur</td><td><span class="badge p2">P2</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/MonolithHarness.Service/Tools.cs</td></tr>
+    <tr><td>G23</td><td>Skills à chargement progressif (<code>SKILL.md</code>)</td><td><span class="badge p2">P2</span></td><td class="eff">M&nbsp;· 4-6 j</td><td class="path">src/MonolithHarness.Core/Skills.cs</td></tr>
+    <tr><td>G24</td><td>Formateurs automatiques après édition</td><td><span class="badge p2">P2</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/MonolithHarness.Service/Tools.cs</td></tr>
+    <tr><td>G25</td><td>Liste de tâches (<code>todo</code>) persistée et affichée</td><td><span class="badge p2">P2</span></td><td class="eff">S&nbsp;· 2-3 j</td><td class="path">src/MonolithHarness.Core/Storage.cs</td></tr>
+    <tr><td>G26</td><td>Thèmes, raccourcis configurables, mode TUI/vim, mise à jour automatique</td><td><span class="badge p2">P2</span></td><td class="eff">L&nbsp;· 2-4 sem.</td><td class="path">src/MonolithHarness.App/MainWindow.cs</td></tr>
+    <tr><td>G27</td><td>Lecture d'images par l'outil de lecture</td><td><span class="badge p2">P2</span></td><td class="eff">S&nbsp;· 1-2 j</td><td class="path">src/MonolithHarness.Core/SourceAccess.cs</td></tr>
+    <tr><td>G28</td><td>Confinement du terminal exécuté par l'IA</td><td><span class="badge p1">P1</span></td><td class="eff">L&nbsp;· 2-3 sem.</td><td class="path">src/MonolithHarness.Core/WorkspaceTools.cs</td></tr>
   </tbody>
 </table>
 
@@ -173,13 +173,13 @@ catalogue de modèles avec coûts, et configuration portable hors base SQLite.
 <h2 id="methode">2. Méthode et périmètre</h2>
 <p>Trois passes ont été effectuées, en lecture seule :</p>
 <ol class="tight">
-  <li><b>Lecture ciblée</b> des fichiers structurants : <span class="path">src/OhMyHarness.Core/Skills.cs</span>,
+  <li><b>Lecture ciblée</b> des fichiers structurants : <span class="path">src/MonolithHarness.Core/Skills.cs</span>,
     <span class="path">ChatEngine.cs</span>, <span class="path">SourceAccess.cs</span>, <span class="path">WorkspaceTools.cs</span>,
     <span class="path">Storage.cs</span>, <span class="path">ModelCatalog.cs</span>, <span class="path">ContextWindow.cs</span>,
     <span class="path">ConversationSession.cs</span>, <span class="path">OpenCodeEngine.cs</span>,
-    <span class="path">src/OhMyHarness.Service/Tools.cs</span>, <span class="path">HarnessService.cs</span>,
+    <span class="path">src/MonolithHarness.Service/Tools.cs</span>, <span class="path">HarnessService.cs</span>,
     <span class="path">Generations.cs</span>, <span class="path">Program.cs</span>,
-    <span class="path">src/OhMyHarness.App/UiText.cs</span>, <span class="path">desktop/ui/app.js</span>,
+    <span class="path">src/MonolithHarness.App/UiText.cs</span>, <span class="path">desktop/ui/app.js</span>,
     <span class="path">README.md</span>.</li>
   <li><b>Recherche textuelle</b> sur <code>src</code>, <code>desktop</code>, <code>tests</code>, <code>docs</code>
     (hors <code>obj</code>, <code>bin</code>, <code>dist</code>, <code>node_modules</code>) des motifs :
@@ -195,18 +195,18 @@ catalogue de modèles avec coûts, et configuration portable hors base SQLite.
   <b>Périmètre de la comparaison.</b> Les fonctionnalités attribuées à opencode reposent sur la connaissance
   publique de ce projet (sst/opencode) et <u>n'ont pas pu être revérifiées en ligne</u> : l'accès navigateur est
   désactivé dans cette session. Aucune affirmation sur opencode n'est utilisée pour trancher un détail
-  d'implémentation d'OhMyHarness ; tous les constats côté OhMyHarness sont, eux, appuyés sur un fichier et une
+  d'implémentation d'MonolithHarness ; tous les constats côté MonolithHarness sont, eux, appuyés sur un fichier et une
   construction de code précise.
 </div>
 
-<h2 id="existant">3. Ce que OhMyHarness fait déjà</h2>
+<h2 id="existant">3. Ce que MonolithHarness fait déjà</h2>
 <p>Il faut le poser avant les manques, car plusieurs briques sont déjà au niveau d'opencode, voire au-delà.</p>
 
 <div class="grid">
   <div class="card keep">
     <h3>Boucle d'outils native multi-tours</h3>
     <p>Jusqu'à 12 tours d'appels d'outils par envoi, journal visible, résultats persistés
-      (<span class="path">src/OhMyHarness.Service/Generations.cs</span>).</p>
+      (<span class="path">src/MonolithHarness.Service/Generations.cs</span>).</p>
   </div>
   <div class="card keep">
     <h3>Permissions granulaires et révocables</h3>
@@ -242,7 +242,7 @@ catalogue de modèles avec coûts, et configuration portable hors base SQLite.
 
 <h2 id="moteur">4. Moteur agent et extensibilité</h2>
 <p>
-C'est la famille de manques la plus lourde : OhMyHarness possède un <b>ensemble fermé</b> d'outils et un
+C'est la famille de manques la plus lourde : MonolithHarness possède un <b>ensemble fermé</b> d'outils et un
 prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendable sans recompiler.
 </p>
 
@@ -253,16 +253,16 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <p><b>Impact.</b> Impossible de brancher un serveur d'outils externe (base de données, Jira, Figma,
     Playwright, serveurs distants authentifiés). opencode en fait son principal mécanisme d'extension ;
     ici, chaque nouveau besoin d'outil implique une modification du C# et une nouvelle publication.</p>
-  <p><b>Piste.</b> Un client MCP (stdio + HTTP/SSE) dans <span class="path">src/OhMyHarness.Core/</span>, une entité
+  <p><b>Piste.</b> Un client MCP (stdio + HTTP/SSE) dans <span class="path">src/MonolithHarness.Core/</span>, une entité
     <code>McpServer</code> dans <span class="path">Storage.cs</span> + migration, l'agrégation des outils distants
-    dans <code>Definitions()</code> de <span class="path">src/OhMyHarness.Service/Tools.cs</span>, et la
+    dans <code>Definitions()</code> de <span class="path">src/MonolithHarness.Service/Tools.cs</span>, et la
     réutilisation du flux d'approbation existant (<code>Approve()</code>) pour chaque appel d'outil MCP.</p>
 </div>
 
 <div class="card gap">
   <h3><span class="id">G2</span> Règles projet <code>AGENTS.md</code> <span class="badge p0">P0</span> <span class="eff">S · 1-2 jours</span></h3>
   <p><b>Constat.</b> 0 occurrence de <code>AGENTS.md</code>. Le prompt système est assemblé en dur par
-    <code>Skills.Prompt()</code> (<span class="path">src/OhMyHarness.Core/Skills.cs</span>) et
+    <code>Skills.Prompt()</code> (<span class="path">src/MonolithHarness.Core/Skills.cs</span>) et
     <code>PlatformSupport.SystemPrompt</code>; aucune lecture d'un fichier d'instructions du dépôt.</p>
   <p><b>Impact.</b> Les conventions d'un projet (style, architecture, commandes de build) doivent être répétées à
     chaque session ou collées dans un template. C'est le levier de qualité le moins coûteux d'opencode, et il
@@ -289,12 +289,12 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <p><b>Constat.</b> Une seule boucle, un seul rôle assistant. La liste d'outils ne contient aucun équivalent de
     <code>task</code> : les identifiants opencode <code>task</code>, <code>glob</code>, <code>grep</code>,
     <code>todowrite</code> n'apparaissent que dans la liste de désactivation
-    (<span class="path">src/OhMyHarness.Core/OpenCodeEngine.cs</span>, méthode <code>DisabledToolsAsync</code>).</p>
+    (<span class="path">src/MonolithHarness.Core/OpenCodeEngine.cs</span>, méthode <code>DisabledToolsAsync</code>).</p>
   <p><b>Impact.</b> Pas de séparation exploration / édition, pas de sous-agent spécialisé, pas de parallélisme
     intra-conversation : chaque tâche longue sature la fenêtre de contexte principale.</p>
   <p><b>Piste.</b> Ouvrir la notion d'agent (prompt, modèle, liste d'outils, permissions) et un outil
     <code>task</code> qui démarre un <code>ConversationSession</code> enfant dans
-    <span class="path">src/OhMyHarness.Service/Generations.cs</span>.</p>
+    <span class="path">src/MonolithHarness.Service/Generations.cs</span>.</p>
 </div>
 
 <div class="card gap">
@@ -308,13 +308,13 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
     ni un agent par projet. C'est pourtant le principal garde-fou d'opencode.</p>
   <p><b>Piste.</b> Ajouter <code>Agent</code> (nom, prompt, outil autorisé, modèle, mode) + migration, et
     remplacer la lecture directe de <code>State.EnabledSkills</code> dans
-    <span class="path">src/OhMyHarness.Service/Tools.cs</span> par une résolution « agent → outils ».</p>
+    <span class="path">src/MonolithHarness.Service/Tools.cs</span> par une résolution « agent → outils ».</p>
 </div>
 
 <div class="card gap">
   <h3><span class="id">G21</span> Plugins et hooks <span class="badge p2">P2</span> <span class="eff">L · 2-4 semaines</span></h3>
   <p><b>Constat.</b> 0 occurrence de <code>plugin</code>. Aucun point d'extension entre l'appel du modèle et
-    l'exécution d'un outil : dans <span class="path">src/OhMyHarness.Service/Generations.cs</span>, l'exécution
+    l'exécution d'un outil : dans <span class="path">src/MonolithHarness.Service/Generations.cs</span>, l'exécution
     est en ligne (<code>try { result = await Tool(...) }</code>).</p>
   <p><b>Impact.</b> Pas de garde-fou utilisateur (bloquer <code>rm -rf</code>, masquer un secret, formater après
     écriture) sans modifier et recompiler l'application.</p>
@@ -327,8 +327,8 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <h3><span class="id">G22</span> Outils fournis par l'utilisateur <span class="badge p2">P2</span> <span class="eff">L · 2-3 semaines</span></h3>
   <p><b>Constat.</b> Le catalogue d'outils est écrit à la main en deux endroits qui se recouvrent partiellement :
     <code>ChatEngine.ToolDefinitions(sources, browser, writeSources)</code>
-    (<span class="path">src/OhMyHarness.Core/ChatEngine.cs</span>) et <code>HarnessService.Definitions()</code>
-    (<span class="path">src/OhMyHarness.Service/Tools.cs</span>). Le tri se fait par un <code>switch</code> sur le
+    (<span class="path">src/MonolithHarness.Core/ChatEngine.cs</span>) et <code>HarnessService.Definitions()</code>
+    (<span class="path">src/MonolithHarness.Service/Tools.cs</span>). Le tri se fait par un <code>switch</code> sur le
     nom dans <code>Tool()</code>.</p>
   <p><b>Impact.</b> Aucun moyen d'ajouter un outil métier sans publier une nouvelle version de l'application.</p>
   <p><b>Piste.</b> Introduire un registre d'outils (<code>ITool</code> : nom, schéma JSON, skill requis,
@@ -340,7 +340,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <h3><span class="id">G23</span> Skills à chargement progressif <span class="badge p2">P2</span> <span class="eff">M · 4-6 jours</span></h3>
   <p><b>Constat.</b> Un skill est un simple interrupteur : <code>Skills.Enabled(selection, id)</code> teste
     l'appartenance à une chaîne séparée par des virgules
-    (<span class="path">src/OhMyHarness.Core/Skills.cs</span>), et toutes les instructions des skills actifs sont
+    (<span class="path">src/MonolithHarness.Core/Skills.cs</span>), et toutes les instructions des skills actifs sont
     concaténées dans le prompt système.</p>
   <p><b>Impact.</b> Chaque skill actif consomme des tokens à chaque appel, même inutilisé ; impossible d'en
     installer beaucoup.</p>
@@ -354,7 +354,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <h3><span class="id">G3</span> Recherche de code <code>glob</code> / <code>grep</code> <span class="badge p0">P0</span> <span class="eff">S · 2-3 jours</span></h3>
   <p><b>Constat.</b> La surface d'exploration se limite à <code>list_sources</code> et <code>read_source</code>.
     <code>SourceAccess</code> n'expose que <code>List()</code>, <code>ReadAsync()</code>, <code>WriteAsync()</code>,
-    <code>ModifyAsync()</code> (<span class="path">src/OhMyHarness.Core/SourceAccess.cs</span>).</p>
+    <code>ModifyAsync()</code> (<span class="path">src/MonolithHarness.Core/SourceAccess.cs</span>).</p>
   <p><b>Impact.</b> Sur un dépôt réel, l'agent doit deviner les chemins ou parcourir dossier par dossier :
     coût en tours d'outils et en tokens très élevé, avec une fenêtre de 12 tours seulement.</p>
   <p><b>Piste.</b> <code>search_sources(pattern, glob?)</code> renvoyant les correspondances avec numéros de
@@ -438,7 +438,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <h3><span class="id">G5</span> Annulation et restauration <span class="badge p0">P0</span> <span class="eff">M · 1 semaine</span></h3>
   <p><b>Constat.</b> 0 occurrence de <code>undo</code> et de <code>revert</code>. L'intégration Git est
     strictement en lecture : <code>GitChangesAsync</code> n'appelle que <code>status</code>, <code>diff</code> et
-    <code>diff --cached</code> (<span class="path">src/OhMyHarness.Core/WorkspaceTools.cs</span>). Aucun
+    <code>diff --cached</code> (<span class="path">src/MonolithHarness.Core/WorkspaceTools.cs</span>). Aucun
     <code>snapshot</code> de dépôt (les 46 occurrences de « snapshot » concernent le curseur de souris et les
     captures d'écran).</p>
   <p><b>Impact.</b> Après une série d'écritures de l'IA, revenir en arrière demande un <code>git checkout</code>
@@ -462,7 +462,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
 <div class="card gap">
   <h3><span class="id">G14</span> Export, import, partage, fork <span class="badge p1">P1</span> <span class="eff">M · 4-6 jours</span></h3>
   <p><b>Constat.</b> Le protocole du service est un JSON-RPC sur entrée/sortie standard
-    (<span class="path">src/OhMyHarness.Service/Program.cs</span>, ligne à ligne sur
+    (<span class="path">src/MonolithHarness.Service/Program.cs</span>, ligne à ligne sur
     <code>Console.In.ReadLineAsync</code>) : il n'expose ni export de session, ni import, ni lien de partage.
     Les conversations vivent uniquement dans <code>database.sqlite</code>.</p>
   <p><b>Impact.</b> Impossible de transmettre une session à un collègue, de l'archiver, de la rejouer comme test
@@ -502,8 +502,8 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <h3><span class="id">G16</span> Authentification OAuth et abonnements <span class="badge p1">P1</span> <span class="eff">L · 2-3 semaines</span></h3>
   <p><b>Constat.</b> Le seul mode d'authentification est la clé API / le mot de passe, stocké chiffré :
     <code>Provider.ProtectedKey</code> + <code>KeyVault</code> DPAPI sur Windows, Keychain via l'hôte sur macOS
-    (<span class="path">src/OhMyHarness.Core/Storage.cs</span>,
-    <span class="path">src/OhMyHarness.Service/HarnessService.cs</span>).</p>
+    (<span class="path">src/MonolithHarness.Core/Storage.cs</span>,
+    <span class="path">src/MonolithHarness.Service/HarnessService.cs</span>).</p>
   <p><b>Impact.</b> Pas d'accès aux offres par abonnement (Claude Pro/Max, GitHub Copilot, Google), qui
     représentent souvent l'essentiel du quota réel des utilisateurs. Le partage de clé par compte devient
     la seule option.</p>
@@ -514,7 +514,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
 
 <div class="card gap">
   <h3><span class="id">G17</span> Catalogue de modèles et capacités <span class="badge p1">P1</span> <span class="eff">M · 1 semaine</span></h3>
-  <p><b>Constat.</b> <span class="path">src/OhMyHarness.Core/ModelCatalog.cs</span> est une liste figée
+  <p><b>Constat.</b> <span class="path">src/MonolithHarness.Core/ModelCatalog.cs</span> est une liste figée
     (30 modèles DeepSeek, 10 OpenAI, 12 génériques, 6 opencode) et
     <code>GetDefaultContextLimit</code> devine la fenêtre par sous-chaîne du nom
     (<code>if (m.Contains("gpt-4o")) return 128_000;</code>). Le README assume que la limite est une
@@ -530,7 +530,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <h3><span class="id">G18</span> Coût monétaire par session <span class="badge p1">P1</span> <span class="eff">S · 2-3 jours</span></h3>
   <p><b>Constat.</b> Le suivi est en tokens et tokens/s :
     <code>Message { InputTokens, OutputTokens, Seconds }</code>, <code>GenerationSpeedTracker</code>,
-    <code>SpeedStats</code> (<span class="path">src/OhMyHarness.Core/ChatEngine.cs</span>). Aucun prix n'est
+    <code>SpeedStats</code> (<span class="path">src/MonolithHarness.Core/ChatEngine.cs</span>). Aucun prix n'est
     stocké ni affiché, et les tarifs ne sont pas dans le catalogue de modèles.</p>
   <p><b>Impact.</b> Impossible de savoir ce qu'a coûté une session ou une compaction automatique — alors qu'une
     compaction déclenche un appel de modèle supplémentaire payant, fait notable et invisible
@@ -544,11 +544,11 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
 <div class="card gap">
   <h3><span class="id">G6</span> Configuration portable et versionnable <span class="badge p0">P0</span> <span class="eff">S · 2-3 jours</span></h3>
   <p><b>Constat.</b> Toute la configuration vit dans SQLite via EF Core et des migrations
-    versionnées (<span class="path">Storage.cs</span>, dossier <span class="path">src/OhMyHarness.Core/Migrations</span>).
+    versionnées (<span class="path">Storage.cs</span>, dossier <span class="path">src/MonolithHarness.Core/Migrations</span>).
     Aucun équivalent d'<code>opencode.json</code> (~0 occurrence de <code>keybind</code>, <code>theme</code>).</p>
   <p><b>Impact.</b> On ne peut pas committer la configuration d'un projet, la partager, ni la relire. Une
     équipe ne peut pas normaliser les fournisseurs, agents, commandes et permissions d'un dépôt.</p>
-  <p><b>Piste.</b> Fichier <code>ohmyharness.json</code> (schéma + validation) au niveau utilisateur et au
+  <p><b>Piste.</b> Fichier <code>monolithharness.json</code> (schéma + validation) au niveau utilisateur et au
     niveau projet, fusionné au-dessus des valeurs SQLite, avec les secrets <b>exclus</b> du fichier.</p>
 </div>
 
@@ -569,7 +569,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
 <div class="card gap">
   <h3><span class="id">G26</span> TUI, thèmes, raccourcis, mise à jour automatique <span class="badge p2">P2</span> <span class="eff">L · 2-4 semaines</span></h3>
   <p><b>Constat.</b> 0 occurrence de <code>keybind</code>, <code>theme</code> ; les libellés sont figés dans le
-    code de l'IHM (<span class="path">src/OhMyHarness.App/MainWindow.cs</span>, 1 940 lignes) et traduits par un
+    code de l'IHM (<span class="path">src/MonolithHarness.App/MainWindow.cs</span>, 1 940 lignes) et traduits par un
     dictionnaire statique (voir §9). Aucun mécanisme de mise à jour.</p>
   <p><b>Impact.</b> Pas d'usage sur un serveur distant sans interface graphique, pas de personnalisation, et
     chaque correctif exige de republier et de faire réinstaller l'application.</p>
@@ -584,7 +584,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
   <p><b>Constat.</b> Une autorisation est stockée comme une chaîne de portée unique
     (<code>PermissionGrant { Scope, Name, Details }</code>, index unique sur <code>Scope</code>) et testée par
     égalité exacte : <code>await db.PermissionGrants.AnyAsync(x =&gt; x.Scope == scope)</code> dans
-    <code>Approve()</code> (<span class="path">src/OhMyHarness.Service/Tools.cs</span>). Les portées sont
+    <code>Approve()</code> (<span class="path">src/MonolithHarness.Service/Tools.cs</span>). Les portées sont
     construites par concaténation : <code>"terminal|" + directory</code>, <code>"preview|" + folder</code>,
     <code>"opencode|{id}|{directory}|{action}|…"</code>.</p>
   <p><b>Impact.</b> Le choix est binaire par dossier : autoriser <code>git status</code> dans un projet autorise
@@ -613,7 +613,7 @@ prompt système <b>construit dans le code</b>. Rien de tout cela n'est étendabl
 
 <div class="card gap">
   <h3>Traduction par correspondance inverse de chaîne</h3>
-  <p><span class="path">src/OhMyHarness.App/UiText.cs</span> :</p>
+  <p><span class="path">src/MonolithHarness.App/UiText.cs</span> :</p>
   <pre><code>var key = English.ContainsKey(text) ? text : English.FirstOrDefault(x =&gt; x.Value == text).Key ?? text;
 return Language == "en" ? English.GetValueOrDefault(key, text) : key;</code></pre>
   <p>La clé du dictionnaire est <b>la chaîne française elle-même</b>, et la traduction inverse se fait en
@@ -628,7 +628,7 @@ return Language == "en" ? English.GetValueOrDefault(key, text) : key;</code></pr
 <div class="card gap">
   <h3>Prompt et descriptions d'outils non localisés</h3>
   <p>Les descriptions d'outils de <code>ChatEngine.ToolDefinitions</code>
-    (<span class="path">src/OhMyHarness.Core/ChatEngine.cs</span>) sont <b>en français uniquement</b>, tandis que
+    (<span class="path">src/MonolithHarness.Core/ChatEngine.cs</span>) sont <b>en français uniquement</b>, tandis que
     celles de <code>HarnessService.Definitions()</code> (<span class="path">Tools.cs</span>) sont en anglais. Le
     prompt système mélange également les deux : en mode anglais, le renvoi d'aide cite les libellés français —
     « inform them to open the <i>'Navigateur'</i> panel and enable the <i>'Accès IA au navigateur'</i> switch »
@@ -687,7 +687,7 @@ return Language == "en" ? English.GetValueOrDefault(key, text) : key;</code></pr
     </tr>
     <tr>
       <td><b>1</b><br><span class="eff">1 sem.</span></td>
-      <td>Configuration portable <code>ohmyharness.json</code>, règles projet <code>AGENTS.md</code> avec
+      <td>Configuration portable <code>monolithharness.json</code>, règles projet <code>AGENTS.md</code> avec
         injection dans le prompt et affichage de ce qui est chargé, commandes personnalisées avec arguments.</td>
       <td>G2, G6, G9</td>
       <td>Un dépôt contenant <code>AGENTS.md</code> modifie le comportement de l'agent ; le fichier de
@@ -779,7 +779,7 @@ return Language == "en" ? English.GetValueOrDefault(key, text) : key;</code></pr
 <footer>
   Rapport généré le 20/09/2026 à partir de la lecture de
   <code>src/</code>, <code>desktop/</code>, <code>tests/</code> et <code>docs/</code>.
-  Toutes les affirmations sur OhMyHarness renvoient à un fichier du dépôt ; les affirmations sur opencode
+  Toutes les affirmations sur MonolithHarness renvoient à un fichier du dépôt ; les affirmations sur opencode
   reposent sur une connaissance générale non revérifiée en ligne.
 </footer>
 

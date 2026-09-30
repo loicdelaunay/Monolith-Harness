@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.36.0 - 2026-09-30
+
+- Automated publication is temporarily limited to Windows x64 and Linux x64 for both GUI and CLI. macOS platform code and already published historical downloads remain available.
+
+- Renamed all .NET projects, namespaces, assemblies, embedded resources, application identifiers and build references to MonolithHarness. GUI and CLI keep their separate portable folders and the same MonolithHarness launcher name.
+- New release packaging uses MonolithHarness archive names; Windows packages also retain compatibility aliases for automatic updates from previously installed versions. The updater recognizes both naming schemes and prefers the new name.
+- Existing databases, Windows/Linux encrypted keys, macOS Keychain entries and index.ohm files remain readable. New macOS keys and file-index writes use the new product identifiers; custom application names remain unchanged.
+
+## 1.35.0 - 2026-09-30
+
+- New Settings → Compaction tab: automatic compaction toggle, trigger threshold and context target, Gentle/Balanced/Strong/Custom strength, custom summary ratio and token budget, custom instructions and three strategies (recent exchanges, entire history, tool exchanges first). Recent exchanges can be prioritized, and invalid percentages keep settings open with an explanation. Default: trigger at 90%, target 60%, Balanced strength.
+- GUI, CLI and compatible subagents share the same compaction policy. CLI `/settings` also exposes these preferences; the context popover displays the configured threshold and target. Settings apply to subsequent requests and manual compaction remains available when automation is off.
+- Compaction summarizes all selected segments without silent truncation, merges partial summaries to fit its budget and validates the final reduction against the target before archiving anything. Completed tool calls remain paired with their results; previous summaries no longer block compaction of long autonomous runs. Original messages remain in the database on failure or an unreachable target.
+- OpenCode GUI compaction also captures native tool outcomes before producing bounded summaries and starts a fresh continuation session only after successful compaction.
+
+## 1.34.0 - 2026-09-30
+
+- The Windows CLI executable now has its own terminal-window icon around the Monolith M, making it easy to distinguish from the GUI executable.
+- Thinking is shown as an animated bar in the empty composer. Typing immediately restores the editor, so a follow-up message can still be prepared and queued while the model works.
+- Plain Up/Down recalls previous messages and commands for the current conversation, restoring the unfinished draft when returning past the latest entry. Saved user messages remain available after restarting; multiline editing and slash completion keep their navigation shortcuts.
+- Subagents have a dedicated live panel with one animated activity bar per worker and its current action. Completed, failed and stopped workers are distinguished; Alt+PageUp/PageDown pages through larger teams. Active bars are indeterminate rather than treating the step budget as a completion percentage.
+
 ## 1.33.1 - 2026-09-30
 
 - Project creation now uses the same editor as Manage project: name, icon, icon color with preview, multiple default folders and optional permission-file import. The first conversation inherits the selected folders immediately.
@@ -304,7 +326,7 @@
 
 ## 1.1.0 — 2026-09-24
 
-- Added OhMyHarness CLI, a full-screen terminal workspace with searchable commands and conversations, concurrent streaming chats, model/provider selection, Plan/Execution modes, approvals, agent questions, task lists, subagent inspection, memory, MCP, Git diffs, terminals, attachments, queue/steering and Markdown exports. It reuses the shared agent engine and portable SQLite storage.
+- Added MonolithHarness CLI, a full-screen terminal workspace with searchable commands and conversations, concurrent streaming chats, model/provider selection, Plan/Execution modes, approvals, agent questions, task lists, subagent inspection, memory, MCP, Git diffs, terminals, attachments, queue/steering and Markdown exports. It reuses the shared agent engine and portable SQLite storage.
 - Added non-interactive runs with plain text or JSON events, explicit execution/approval options, and standalone CLI publishing for Windows and macOS.
 
 ## 1.0.1 — 2026-09-23

@@ -1,4 +1,4 @@
-# OhMyHarness CLI v1.8.0
+# MonolithHarness CLI v1.8.0
 
 The terminal application is released alongside [GUI v1.8.0](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.8.0), using the same shared engine.
 

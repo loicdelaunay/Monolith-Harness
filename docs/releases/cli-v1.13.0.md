@@ -1,4 +1,4 @@
-# OhMyHarness CLI v1.13.0
+# MonolithHarness CLI v1.13.0
 
 The optional **Asset generator** skill now lets the AI create layered SVG scenes, refine shapes and colors, inspect a canvas capture and export SVG, PNG, WebP, JPEG or PDF directly from a terminal conversation. The matching [GUI v1.13.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.13.0) adds a live preview with palette and layer controls. See the [asset guide](../asset-generator.md) for the five AI tools and examples.
 

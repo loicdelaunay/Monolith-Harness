@@ -1,18 +1,18 @@
 <p align="center">
-  <img src="src/OhMyHarness.App/Assets/logo-256.png" alt="Monolith Harness logo" width="112">
+  <img src="src/MonolithHarness.App/Assets/logo-256.png" alt="Monolith Harness logo" width="112">
 </p>
 
 <h1 align="center">Monolith Harness</h1>
 
-The project is now named **Monolith Harness** (previously OhMyHarness). Current downloads are **1.33.1** and publish both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on macOS/Linux. Portable data and release archive names stay compatible with existing workspaces.
+**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.36.0**; portable data remains compatible with existing workspaces.
 
 Installations up to 1.29.1 need a one-time manual update to the new launcher before using subsequent automatic updates. Keep your database and resources. See the [update guide](docs/cli.md#github-updates).
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.33.1">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.33.1">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.36.0">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.36.0">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -24,13 +24,13 @@ Installations up to 1.29.1 need a one-time manual update to the new launcher bef
 >
 > **Why build it this way?** I needed something straightforward enough to use at work, without a stack of extra services. And I thought it would be nice to share it, too. :)
 
-Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows, macOS and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
+Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.33.1) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.33.1) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.36.0) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.36.0) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
-Version **1.33.1** is available as GUI and CLI downloads for Windows x64, macOS Apple Silicon, macOS Intel and Fedora Linux x64. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
+Version **1.36.0** is available as GUI and CLI downloads for Windows x64 and Fedora Linux x64. macOS publications are temporarily paused. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
 
 The chat model itself is **not** bundled: cloud providers need network access and, depending on the service, an API key. Git, Docker/Podman, OpenCode, and Chrome MCP are optional integrations with their own prerequisites. The core app does not require a separate Monolith Harness server.
 
@@ -79,7 +79,13 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 ## New in the current downloads
 
-**New in 1.33.1:** creating a project now opens the same editor as Manage project, including icon, color preview, multiple default folders and optional permission-file import. The first conversation inherits the selected folders immediately.
+**New in 1.36.0:** all projects, assemblies and embedded resources now use MonolithHarness names. Current GUI and CLI releases target Windows x64 and Linux x64; macOS publication is temporarily suspended. Existing portable data remains compatible.
+
+**Since 1.35.0:** Settings → Compaction controls automatic triggering, context targets, summary strength, custom instructions and recent/full-history/tool-first strategies. GUI, CLI and compatible subagents share the policy; failed compaction preserves the original messages.
+
+**Since 1.34.0:** the CLI has a distinct terminal icon, an animated thinking composer, Up/Down message history and a live activity panel for each subagent.
+
+**Since 1.33.1:** creating a project now opens the same editor as Manage project, including icon, color preview, multiple default folders and optional permission-file import. The first conversation inherits the selected folders immediately.
 
 **Since 1.33.0:** **Tools → AI Generated detector** connects to the real [SlopTotal](https://github.com/pablocaeg/sloptotal) service for text, URLs and documents. Compare live detector results, global and paragraph scores, or website-builder fingerprints. A local or remote service is required; the optional local installer needs Docker and downloads models only when explicitly started. Detection scores are indicators, not proof of authorship.
 
@@ -113,9 +119,9 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 **Also new in 1.12.0:** Web research can now fetch pages and call APIs directly through the built-in .NET HTTP client in both GUI and CLI. Configure timeout, response limits, redirects, cookies, decompression, user agent and proxy without opening a browser. Requests follow application permissions. See the [HTTP tools guide](docs/web-http.md).
 
-**Since 1.9.0:** the complete-design skill helps guide projects from discovery through implementation and testing; browser access choices now persist with other skills; the GUI question tool has a clearer step-by-step choice card; and the CLI logo follows the selected theme. GUI and CLI archives remain available for Windows x64, both Mac architectures and Fedora Linux x64. Unix archives use `.tar.gz` to preserve executable permissions; see the [Mac guide](docs/macos.md) and [Fedora guide](docs/fedora.md).
+**Since 1.9.0:** the complete-design skill helps guide projects from discovery through implementation and testing; browser access choices now persist with other skills; the GUI question tool has a clearer step-by-step choice card; and the CLI logo follows the selected theme. Current GUI and CLI archives are available for Windows x64 and Fedora Linux x64. Linux archives use `.tar.gz` to preserve executable permissions; see the [Fedora guide](docs/fedora.md). The [Mac guide](docs/macos.md) covers historical releases and source builds while publication is paused.
 
-Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.33.1 and CLI v1.33.1** package the same shared engine for all four supported platform targets.
+Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.36.0 and CLI v1.36.0** package the same shared engine for Windows x64 and Linux x64.
 
 - **Response styles:** DEFAULT, SHORT, PRAGMATIC, DETAILED and FUN, shared between GUI General settings and CLI `/settings`.
 - **CLI editing:** selection, word navigation, copy/cut/paste and undo/redo; ordinary Backspace deletes one character.
@@ -127,7 +133,7 @@ Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/
 - **Fresh portable workspaces:** launching the executable in a new folder creates fresh data instead of importing previous AppData conversations.
 - **Guided work:** Complete design coordinates questions, choices, implementation, optional subagents and verification; the GUI question card presents one decision at a time.
 
-See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.33.1.
+See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.36.0.
 
 ## Built-in skills — one click to enable
 
@@ -177,12 +183,12 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.33.1), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.33.1) for a terminal workspace. The 1.33.1 archives cover Windows x64, macOS Apple Silicon and Intel, and Fedora Linux x64.
-2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on macOS/Linux. The app creates its skills folder beside the executable.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.36.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.36.0) for a terminal workspace. The 1.36.0 archives cover Windows x64 and Fedora Linux x64.
+2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its skills folder beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
 
-For the CLI, put `MonolithHarness.exe` (Windows) or `MonolithHarness` (macOS/Linux) in a writable folder, launch it from your project directory, and enter `/connect`. GUI and CLI have separate downloads. Type `/` to discover commands; use ↑/↓ and Tab to complete them. No .NET installation is required for the published executables.
+For the CLI, put `MonolithHarness.exe` (Windows) or `MonolithHarness` (Linux) in a writable folder, launch it from your project directory, and enter `/connect`. GUI and CLI have separate downloads. Type `/` to discover commands; use ↑/↓ and Tab to complete them. No .NET installation is required for the published executables.
 
 The integrated browser uses the system Web engine: Edge WebView2 on Windows, WebKit on macOS and WebKitGTK on Linux. Fedora GUI needs X11 and GTK3/WebKitGTK; see the [Fedora guide](docs/fedora.md). Git, container sandboxing, OpenCode, and Chrome MCP only need installation when you enable those integrations. Scheduled tasks run while Monolith Harness is open; they do not wake a sleeping computer.
 
@@ -201,7 +207,7 @@ The bundled RAG embedding model runs locally and supports French and English. It
 Monolith Harness also includes a [modern CLI](docs/cli.md) with a responsive full-screen interface, searchable commands, concurrent chats, approvals, agent questions, tools and streaming context indicators. It uses the same engine and SQLite data as the desktop app.
 
 ~~~powershell
-dotnet run --project src/OhMyHarness.Cli -- "E:\Projects\MyProject"
+dotnet run --project src/MonolithHarness.Cli -- "E:\Projects\MyProject"
 .\publish-cli.ps1 -OutputDirectory artifacts\CLI
 # Then: artifacts\CLI\MonolithHarness.exe
 ~~~
@@ -210,7 +216,7 @@ Use <code>MonolithHarness run "Review this project" --project . --json</code> fo
 
 ### Desktop application
 
-The shared application is built with **Uno Platform and .NET 10**. The published Windows x64 release uses Uno Desktop; a native WinUI 3 target is also available. GUI and CLI downloads also include unsigned macOS Intel and Apple Silicon builds. Automated builds and tests run on both architectures; native interactions still need validation on a real Mac. The macOS downloads are not signed or notarized.
+The shared application is built with **Uno Platform and .NET 10**. The published Windows x64 release uses Uno Desktop; a native WinUI 3 target is also available. Automated publications currently target Windows x64 and Fedora Linux x64. macOS publication is temporarily paused; platform code and historical downloads remain available.
 
 For a Windows source build, install the .NET 10 SDK and Git LFS. The native WinUI target additionally needs the Windows/WinUI development tools.
 
@@ -218,7 +224,7 @@ For a Windows source build, install the .NET 10 SDK and Git LFS. The native WinU
 git clone https://github.com/loicdelaunay/Monolith-Harness.git
 cd Monolith-Harness
 git lfs pull
-dotnet run --project tests/OhMyHarness.Tests -c Release
+dotnet run --project tests/MonolithHarness.Tests -c Release
 .\publish.ps1 -OutputDirectory artifacts\GUI
 ~~~
 

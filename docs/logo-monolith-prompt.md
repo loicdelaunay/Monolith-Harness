@@ -1,6 +1,6 @@
 # Monolith Harness logo
 
-Created with the built-in `image_gen` tool on 2026-09-30, using the previous O logo as the edit target. The generated PNG is saved as `src/OhMyHarness.App/Assets/logo.png`; smaller PNG and Windows ICO versions are exported from it while retaining its alpha channel.
+Created with the built-in `image_gen` tool on 2026-09-30, using the previous O logo as the edit target. The generated PNG is saved as `src/MonolithHarness.App/Assets/logo.png`; smaller PNG and Windows ICO versions are exported from it while retaining its alpha channel.
 
 ## Generation prompt
 

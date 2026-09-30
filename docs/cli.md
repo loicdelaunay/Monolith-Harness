@@ -1,6 +1,6 @@
 # Monolith Harness CLI
 
-The same agent engine in a terminal workspace. The CLI is a separate .NET 10 project, <code>src/OhMyHarness.Cli</code>, referencing <code>OhMyHarness.Core</code>. Its full-screen interface uses truecolor ANSI rendering, adapts to terminal width, and supports Windows and macOS builds.
+The same agent engine in a terminal workspace. The CLI is a separate .NET 10 project, <code>src/MonolithHarness.Cli</code>, referencing <code>MonolithHarness.Core</code>. Its full-screen interface uses truecolor ANSI rendering, adapts to terminal width, and supports Windows and macOS builds.
 
 The header shows an M monogram and the configured application name. The icon is drawn with Unicode half blocks and colors from the active CLI theme, so it remains visible without a terminal image protocol or an external image file. On Windows, `MonolithHarness.exe` also carries the application icon in Explorer.
 
@@ -9,7 +9,7 @@ The interaction takes inspiration from the command palette and automation mode o
 ## Start
 
 ~~~powershell
-dotnet run --project src/OhMyHarness.Cli -- "E:\Projects\MyProject"
+dotnet run --project src/MonolithHarness.Cli -- "E:\Projects\MyProject"
 ~~~
 
 With a published build:
@@ -70,6 +70,10 @@ Existing OpenCode and composed providers configured in the desktop app are usabl
 
 The timeline distinguishes user, assistant and tool messages, colors code fences, and displays response speed and context usage. This is lightweight terminal Markdown rendering. User and tool content is sanitized before reaching the terminal.
 
+While the model thinks, an animated activity bar replaces the empty composer. Start typing to bring the editor back immediately and prepare or queue another message. Each subagent has its own live activity bar and current action in a panel that stays visible when scrolling the conversation. These bars show activity, not a guessed percentage; completed, stopped and failed workers have distinct states. Larger teams can be paged with Alt+PageUp/PageDown.
+
+Up/Down recalls earlier messages and commands for the selected conversation. Returning past the newest entry restores your unfinished draft; switching conversations also preserves that draft. Saved user messages are loaded from the conversation history after restarting. In a multiline draft, arrows still move between lines until reaching its top or bottom; slash-completion suggestions keep their own Up/Down navigation.
+
 Favorite chats stay at the top with a star. AI naming is off by default; choose a provider/model in settings before enabling it or using <code>/name</code>. It sends a short text excerpt after the first successful answer. OpenCode naming requires its service to be running. Completed responses include their generation time. Queued lines expose clickable edit, delete and steer icons; <code>/queue</code> remains available from the keyboard.
 
 Vision settings accept custom instructions and a component mode with labelled rectangles/polygons. The agent can override these per <code>analyze_image</code> call using <code>instruction</code> and <code>mode</code>. Bounds are approximate image coordinates, not direct screen coordinates or actual image crops.
@@ -82,7 +86,9 @@ Diagnostic JSONL logs live in <code>logs</code> in the portable data directory. 
 | Ctrl+N / Ctrl+O / Ctrl+B | New conversation / chat search / models |
 | Enter | Send or queue |
 | Ctrl+J or Alt+Enter | Newline (Ctrl+Enter where the terminal supports it) |
-| Arrows, Home/End, Backspace/Delete | Move and edit; Home/End stay within the current line |
+| Up / Down | Recall previous / next inputs; restore the draft after the newest entry; move between lines within a multiline draft |
+| Left/Right, Home/End, Backspace/Delete | Move and edit; Home/End stay within the current line |
+| Alt+PgUp / Alt+PgDn | Previous / next page of subagent activity bars |
 | Ctrl+A | Select the entire draft or dialog input |
 | Shift+arrows / Ctrl+Shift+Left/Right | Extend selection by character / word |
 | Ctrl+Left/Right, Ctrl+Home/End | Move by word / to the beginning or end of the draft |
@@ -136,7 +142,7 @@ MonolithHarness --render-demo --theme neon-synthwave
 
 Choose **Save and install font + profile** on Windows to install the bundled font for the current user and create a dedicated Windows Terminal profile. Open **Monolith Harness · …** in a new tab (restart Windows Terminal if needed) to apply the font and experimental CRT scanlines/glow. **Export** writes the profile and font/license beside the portable database; macOS users can install the exported TTF with their font manager. Missing system/custom fonts use the host terminal's fallback. Fonts installed for Windows are machine-local, under the user's Windows Fonts directory and HKCU font registration; exported copies remain portable.
 
-The portable JSON is kept under `terminal-profiles` beside the database. Installation adds only a Monolith Harness fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\OhMyHarness`; it does not rewrite `settings.json` or change your default terminal profile. Delete the exported fragment there to uninstall it. Regenerate after moving the portable application: launch paths are absolute. This optional terminal integration is machine-local; other application data remains portable.
+The portable JSON is kept under `terminal-profiles` beside the database. Installation adds only a Monolith Harness fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\MonolithHarness`; it does not rewrite `settings.json` or change your default terminal profile. Delete the exported fragment there to uninstall it. Regenerate after moving the portable application: launch paths are absolute. This optional terminal integration is machine-local; other application data remains portable.
 
 macOS and other terminals still display the theme's ANSI colors and borders; select fonts in that terminal's preferences. CRT glow is host-dependent, not simulated with flashing text. See [Windows Terminal appearance](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-appearance) and [profile fragments](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions).
 
@@ -144,23 +150,23 @@ macOS and other terminals still display the theme's ANSI colors and borders; sel
 
 The repository is now [loicdelaunay/Monolith-Harness](https://github.com/loicdelaunay/Monolith-Harness). Versions up to 1.29.0 reject the renamed repository's download URLs, and 1.29.1 expects the previous executable names. Install 1.29.2 or later manually once: close the app, back up your folder, remove the old launcher, and extract the new `MonolithHarness.exe` beside the existing database and resources. Subsequent updates use the new repository and executable name. Release archive names remain unchanged. GUI and CLI have separate downloads with the same launcher name; use separate folders if you keep both installed.
 
-The interactive CLI checks for compatible updates at startup by default. `/update` lets you disable that check, check manually, or download and restart into a newer release. Non-interactive automation never checks or installs updates. The GUI has its own equivalent setting in **Settings → General**.
+The interactive CLI checks for compatible updates at startup by default. `/update` lets you disable that check, check manually, or download and restart into a newer release. Non-interactive automation never checks or installs updates. The GUI has its own equivalent setting in **Settings → About**.
 
 Installation is user-triggered after the automatic check. The app waits for agents and drafts to be finished, verifies the official release asset's SHA-256, and replaces only its executable after shutdown; terminals/tools close with the app. SQLite, skills, MCP configuration and other user resources are preserved. A hidden Windows PowerShell helper performs the replacement without administrator rights. If another instance stays open, it cancels instead of stopping it. Save GUI settings before choosing to restart.
 
 Automatic installation requires a published Windows standalone executable in a writable folder. Staging, the previous EXE (`previous.exe`), and installation result/error files live in `.updates` beside that EXE. They can be removed after a successful update once the old version is no longer needed. The backup covers the executable, not database migrations. Other platforms and development builds use manual downloads.
 
-Release maintainers: GUI tags must use `vX.Y.Z` or `gui-vX.Y.Z`; CLI tags use `cli-vX.Y.Z`. Assets must be named `OhMyHarness-…-win-x64.zip` (GUI), `OhMyHarness-CLI-…-win-x64.zip` (CLI), or the corresponding `win-arm64`/`.exe` variant. Each ZIP must contain exactly one `MonolithHarness.exe` from its channel. Other archive contents are not installed. Drafts, previews, older versions, mismatched architectures and assets without a GitHub SHA-256 digest are excluded. Publish each channel's executable separately; the updater does not rely on GitHub's global “latest” release.
+Release maintainers: GUI tags must use `vX.Y.Z` or `gui-vX.Y.Z`; CLI tags use `cli-vX.Y.Z`. Assets must be named `MonolithHarness-…-win-x64.zip` (GUI), `MonolithHarness-CLI-…-win-x64.zip` (CLI), or the corresponding `win-arm64`/`.exe` variant. Each ZIP must contain exactly one `MonolithHarness.exe` from its channel. Other archive contents are not installed. Drafts, previews, older versions, mismatched architectures and assets without a GitHub SHA-256 digest are excluded. Publish each channel's executable separately; the updater does not rely on GitHub's global “latest” release. Windows release packaging also creates historical-name aliases (defined in `build/LegacyReleaseNames.json`) with the same checksums for previously installed update clients. Attach both names to the corresponding release; current clients prefer MonolithHarness assets.
 
 ## Publish and validate
 
 ~~~powershell
 .\publish-cli.ps1
 .\publish-cli.ps1 -Runtime win-arm64
-.\publish-cli.ps1 -OutputDirectory L:\OhMyHarnessCLI
+.\publish-cli.ps1 -OutputDirectory L:\MonolithHarnessCLI
 ~~~
 
-On a Mac with .NET 10 and Git LFS:
+macOS release publication is temporarily suspended. Manual source builds remain possible on a Mac with .NET 10 and Git LFS:
 
 ~~~bash
 git lfs pull
@@ -171,8 +177,8 @@ bash ./publish-cli.sh osx-arm64
 Default output: <code>artifacts/release/cli/&lt;runtime&gt;</code>. The CLI uses the same bundled Python and local embedding model as the desktop app. Windows behavior is checked locally; macOS publishing/native integrations require a real Mac for runtime validation. Signing and notarization are separate.
 
 ~~~powershell
-dotnet run --project tests/OhMyHarness.Cli.Tests -c Release
-dotnet run --project tests/OhMyHarness.Tests -c Release
+dotnet run --project tests/MonolithHarness.Cli.Tests -c Release
+dotnet run --project tests/MonolithHarness.Tests -c Release
 .\MonolithHarness.exe --render-demo
 ~~~
 
@@ -183,3 +189,11 @@ The last command prints a deterministic ANSI example of the real renderer with c
 Open `/settings` and choose **Response style**. DEFAULT adds no style instruction; SHORT asks for the minimum answer, PRAGMATIC for fairly short actionable answers, DETAILED for useful depth, and FUN for appropriate light humor. This preference is shared with GUI Settings → General and saved in SQLite. It applies to the next send, including OpenCode sessions, without changing an active generation or tool permissions.
 
 Ordinary Backspace removes one character/grapheme, whether the terminal sends BS or DEL. If your host does not transmit a distinct Ctrl+Backspace sequence, use Ctrl+W to delete the previous word.
+
+## Compaction
+
+Open `/settings` → **Compaction** to configure automatic compaction, the trigger threshold and target context percentage, strength and strategy. Defaults are 90% → 60%, Balanced strength and priority for two recent exchanges. The target must be lower than the trigger. Turning automation off keeps `/compact` available.
+
+Gentle retains more detail (desired summary size 40%, up to 4,000 estimated tokens); Balanced targets 20% / 2,000 tokens; Strong targets 10% / 1,000 tokens. Custom lets you set the size, maximum token budget and summarization instructions. The final budget is reduced when needed to meet the global target. Strategies summarize older exchanges, the entire history, or tool exchanges first. Recent exchanges are prioritized when the target allows it; the current user request remains intact during automatic compaction.
+
+Selected history is summarized in full across bounded segments, with partial summaries merged as needed. No original message is archived unless the result reduces the context and meets the configured target. If the current request or fixed instructions alone exceed the target, compaction leaves history unchanged and reports that the target cannot be met. Token counts and budgets remain estimates; compaction itself consumes model tokens. Preferences apply to subsequent requests.

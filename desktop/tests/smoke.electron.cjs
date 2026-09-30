@@ -2,15 +2,15 @@
 const {app,BrowserWindow,webContents,clipboard,dialog}=require('electron');
 const fs=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const directory=path.resolve(__dirname,'../.smoke');
-process.env.OHMYHARNESS_TEST_DATA=path.join(directory,'run-'+Date.now());
+process.env.MONOLITHHARNESS_TEST_DATA=path.join(directory,'run-'+Date.now());
 require('../main.cjs');
-assert.equal(app.getPath('userData'), path.join(process.env.OHMYHARNESS_TEST_DATA, 'browser'));
-assert.equal(app.getPath('sessionData'), path.join(process.env.OHMYHARNESS_TEST_DATA, 'browser'));
-assert.equal(app.getPath('temp'), path.join(process.env.OHMYHARNESS_TEST_DATA, 'temp'));
-assert.equal(app.getPath('crashDumps'), path.join(process.env.OHMYHARNESS_TEST_DATA, 'crashes'));
+assert.equal(app.getPath('userData'), path.join(process.env.MONOLITHHARNESS_TEST_DATA, 'browser'));
+assert.equal(app.getPath('sessionData'), path.join(process.env.MONOLITHHARNESS_TEST_DATA, 'browser'));
+assert.equal(app.getPath('temp'), path.join(process.env.MONOLITHHARNESS_TEST_DATA, 'temp'));
+assert.equal(app.getPath('crashDumps'), path.join(process.env.MONOLITHHARNESS_TEST_DATA, 'crashes'));
 let server, finishResponse;
-const fixtureSources=path.join(process.env.OHMYHARNESS_TEST_DATA,'sources');
-const gitFixture=path.join(process.env.OHMYHARNESS_TEST_DATA,'git-fixture');
+const fixtureSources=path.join(process.env.MONOLITHHARNESS_TEST_DATA,'sources');
+const gitFixture=path.join(process.env.MONOLITHHARNESS_TEST_DATA,'git-fixture');
 async function waitFor(fn){const until=Date.now()+25000;while(Date.now()<until){const result=await fn();if(result)return result;await new Promise(r=>setTimeout(r,80));}throw new Error('Smoke test timed out');}
 (async()=>{
   await fs.mkdir(directory,{recursive:true});
@@ -41,7 +41,7 @@ async function waitFor(fn){const until=Date.now()+25000;while(Date.now()<until){
   await app.whenReady();
   const win=await waitFor(()=>BrowserWindow.getAllWindows()[0]);
   const evaluate=source=>win.webContents.executeJavaScript(source,true);
-  async function captureSettings(name){if(!process.env.OHMYHARNESS_DESIGN_QA)return;const dir=path.resolve(__dirname,'../../artifacts/design');await fs.mkdir(dir,{recursive:true});await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await new Promise(r=>setTimeout(r,350));await fs.writeFile(path.join(dir,name+'.png'),(await win.webContents.capturePage()).toPNG());}
+  async function captureSettings(name){if(!process.env.MONOLITHHARNESS_DESIGN_QA)return;const dir=path.resolve(__dirname,'../../artifacts/design');await fs.mkdir(dir,{recursive:true});await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await new Promise(r=>setTimeout(r,350));await fs.writeFile(path.join(dir,name+'.png'),(await win.webContents.capturePage()).toPNG());}
   await waitFor(()=>evaluate('!!window.harness && document.getElementById("platform")?.textContent.length > 0').catch(()=>false));
   assert.equal(webContents.getAllWebContents().length,1,'No browser process/view is created at startup');
   await evaluate('showTools(true);selectTab("terminal");selectTab("web");showTools(false)');
@@ -143,7 +143,7 @@ async function waitFor(fn){const until=Date.now()+25000;while(Date.now()<until){
   await evaluate(`document.querySelector('[data-skill="vision_bridge"]').checked=false;document.querySelector('[data-skill="vision_bridge"]').dispatchEvent(new Event('change'));[...document.querySelectorAll('#settings-content button')].find(x=>x.textContent==='Enregistrer'||x.textContent==='Save').click()`);
   await waitFor(()=>evaluate(`!snapshot.state.enabledSkills.split(',').includes('vision_bridge')`));
   assert.equal(await evaluate(`document.querySelector('[data-vision-settings]').hidden`),true);
-  if(process.env.OHMYHARNESS_DESIGN_QA){
+  if(process.env.MONOLITHHARNESS_DESIGN_QA){
     const output=path.resolve(__dirname,'../../artifacts/design');await fs.mkdir(output,{recursive:true});
     async function capture(name){await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await new Promise(r=>setTimeout(r,350));await fs.writeFile(path.join(output,name+'.png'),(await win.webContents.capturePage()).toPNG());}
     await capture('electron-skills');
@@ -279,7 +279,7 @@ async function waitFor(fn){const until=Date.now()+25000;while(Date.now()<until){
     assert.ok(copied.includes('workflow smoke') && copied.includes('Workflow finished'));
     await waitFor(()=>evaluate(`!document.getElementById('export-chat').disabled`));
     clipboard.writeText=()=>{throw new Error('Clipboard unavailable');};
-    const exportPath=path.join(process.env.OHMYHARNESS_TEST_DATA,'export.md');
+    const exportPath=path.join(process.env.MONOLITHHARNESS_TEST_DATA,'export.md');
     dialog.showSaveDialog=async()=>({canceled:false,filePath:exportPath});
     await evaluate(`document.getElementById('export-chat').click()`);
     await waitFor(async()=>{try{return(await fs.readFile(exportPath,'utf8')).includes('Workflow finished');}catch{return false;}});

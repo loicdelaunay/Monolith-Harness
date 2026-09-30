@@ -1,0 +1,67 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using MonolithHarness.Core;
+
+namespace MonolithHarness.App;
+
+public sealed partial class MainWindow
+{
+    (StackPanel Browser, StackPanel Rag, StackPanel Vision, Func<string> Save) BuildFeatureSettings()
+    {
+        var config = FeatureSettings.Read(state.FeaturesJson);
+        var browser = new StackPanel { Spacing=12 };
+        var browserLabel=WorkflowText("WebView2 intégré","Embedded WebView2");
+#if !WINDOWS
+        browser.Children.Add(Label(WorkflowText("Sur Uno Desktop, WebView2 reste dans l’onglet Web. Les interactions IA utilisent le DOM de cette page ; certains raccourcis ou sites qui exigent des événements clavier/souris natifs peuvent nécessiter Chrome · MCP.", "On Uno Desktop, WebView2 stays in the Web tab. AI interactions use the page DOM; some shortcuts or sites requiring native input events may need Chrome · MCP."),13));
+#endif
+        var mode = new ComboBox { Header=WorkflowText("Navigateur", "Browser"), ItemsSource=new[] { browserLabel, "Chrome · MCP", WorkflowText("Désactivé", "Disabled") }, SelectedIndex=config.BrowserMode=="chrome"?1:config.BrowserMode=="disabled"?2:0 };
+        var executable = new TextBox { Header=WorkflowText("Chemin de Chrome (facultatif)", "Chrome path (optional)"), Text=config.ChromePath };
+        browser.Children.Add(mode);browser.Children.Add(executable);
+        browser.Children.Add(Label(WorkflowText("Le panneau Outils fonctionne sans navigateur. WebView2 démarre uniquement à la demande. En mode Chrome, l’IA utilise Chrome DevTools MCP dans une fenêtre externe, avec un profil par conversation. Chrome et Node.js doivent être installés. Les autorisations MCP restent applicables.", "Tools work without a browser. Chrome mode uses an external MCP browser with a per-conversation profile; Chrome and Node.js are required."),13));
+        var rag = new StackPanel { Spacing=12 };
+        var ragMode = new ComboBox { Header="Embeddings", ItemsSource=new[] { WorkflowText("MiniLM multilingue · CPU", "Multilingual MiniLM · CPU"), "OpenAI v1 API" }, SelectedIndex=config.RagMode=="api"?1:0 };
+        var providers = db.Providers.Local.Where(x=>!x.IsOpenCode&&!x.IsComposite).ToList();
+        var provider = new ComboBox { Header=WorkflowText("Fournisseur d’embeddings", "Embeddings provider"), ItemsSource=providers, SelectedItem=providers.FirstOrDefault(x=>x.Id==config.RagProviderId) ?? providers.FirstOrDefault() };
+        var model = new TextBox { Header=WorkflowText("Modèle API", "API model"), Text=config.RagModel };
+        var maxFiles = new NumberBox { Header=WorkflowText("Nombre maximum de fichiers", "Maximum files"), Minimum=1,Maximum=2000,Value=config.RagMaxFiles };
+        var topK = new NumberBox { Header=WorkflowText("Nombre de résultats", "Results"), Minimum=1,Maximum=20,Value=config.RagTopK };
+        foreach(var element in new Control[] {ragMode,provider,model,maxFiles,topK}) { element.HorizontalAlignment=HorizontalAlignment.Stretch; rag.Children.Add(element); }
+        void RefreshApiFields() { provider.Visibility = model.Visibility = ragMode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed; }
+        ragMode.SelectionChanged += (_, _) => RefreshApiFields(); RefreshApiFields();
+        rag.Children.Add(Label(WorkflowText("Activez le skill RAG, puis demandez une indexation à l’IA. MiniLM multilingue (quantifié, ~118 Mo) fonctionne hors ligne en français et en anglais, avec recherche entre les langues. L’index reste dans SQLite. Réindexez vos sources après le passage de l’ancien modèle anglais au modèle multilingue, ou après modification des fichiers. En mode API, les textes sélectionnés sont transmis après autorisation.", "Enable RAG and ask the agent to index. Multilingual MiniLM (~118 MB) works offline in French and English, including cross-language search. Re-index after upgrading from the English model or editing sources. API transmission requires approval."),13));
+        var targetProjectId=project?.Id;
+        rag.Children.Add(Label(WorkflowText("Tous formats : extraction texte PDF/Office ; métadonnées et chaînes lisibles pour les binaires inconnus. Pas d’OCR pour les PDF scannés. Limites : 32 Mio et 500 000 caractères extraits par fichier.", "All formats: PDF/Office text extraction; metadata and printable strings for unknown binaries. No OCR for scanned PDFs. Limits: 32 MiB and 500,000 extracted characters per file."), 12));
+        rag.Children.Add(Action(WorkflowText("Effacer l’index du projet", "Clear project index"), async()=> { if(targetProjectId!=null) {await using var context=new HarnessDb();await context.RagChunks.Where(x=>x.ProjectId==targetProjectId).ExecuteDeleteAsync();} }));
+        var vision = new StackPanel { Spacing = 10 };
+        var visionProvider = new ComboBox { Header = WorkflowText("Fournisseur vision", "Vision provider"), ItemsSource = providers,
+            SelectedItem = providers.FirstOrDefault(x=>x.Id==config.VisionProviderId), HorizontalAlignment = HorizontalAlignment.Stretch };
+        var visionModel = new ComboBox { Header = WorkflowText("Modèle vision", "Vision model"), IsEditable = true, Text = config.VisionModel, HorizontalAlignment = HorizontalAlignment.Stretch };
+        SettingsModelPicker.Connect(visionProvider, visionModel, config.VisionModel);
+        vision.Children.Add(visionProvider); vision.Children.Add(visionModel);
+        var visionInstruction = new TextBox { Header = WorkflowText("Instruction personnalisée", "Custom instruction"), Text = config.VisionInstruction, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 80, MaxHeight = 200, MaxLength = 8000 };
+        var visionComponents = new CheckBox { Content = WorkflowText("Décomposer en composants et formes avec coordonnées", "Describe components and shapes with coordinates"), IsChecked = config.VisionComponents };
+        vision.Children.Add(visionInstruction); vision.Children.Add(visionComponents);
+        vision.Children.Add(Label(WorkflowText("Coordonnées relatives à l’image : X, Y, X2, Y2 et polygones. Ce sont des estimations visuelles, pas des coordonnées absolues du bureau ni des fichiers découpés.", "Image-relative X, Y, X2, Y2 and polygons. These are visual estimates, not absolute desktop coordinates or cropped files."), 12));
+        vision.Children.Add(Action(WorkflowText("Charger les modèles", "Load models"), async()=>
+        {
+            if (visionProvider.SelectedItem is not Provider selected) return;
+            var available = await engine.ModelsAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), CancellationToken.None);
+            if ((visionProvider.SelectedItem as Provider)?.Id == selected.Id)
+                SettingsModelPicker.Populate(visionModel, available, SettingsModelPicker.Read(visionModel));
+        }));
+        vision.Children.Add(Label(WorkflowText("Choisissez un modèle acceptant les images. Les images jointes et captures sont décrites automatiquement si le modèle principal n’a pas la vision. L’outil analyze_image permet une question ciblée, même avec un modèle principal vision. Les images sont envoyées au fournisseur choisi après autorisation et peuvent être facturées. Les descriptions peuvent être inexactes. OpenCode conserve ses propres outils ; ce relais y couvre seulement les images jointes.", "Choose an image-capable model. Attachments and screenshots are described automatically for non-vision main models. analyze_image supports focused questions even with a vision main model. Images are sent to the selected provider after approval and may incur charges. Descriptions can be inaccurate. OpenCode retains its own tools; this bridge only covers its attachments."),12));
+        return (browser,rag,vision,()=> {
+            config.BrowserMode=mode.SelectedIndex==1?"chrome":mode.SelectedIndex==2?"disabled":"embedded"; config.ChromePath=executable.Text.Trim();
+            config.RagMode=ragMode.SelectedIndex==1?"api":"local";config.RagProviderId=(provider.SelectedItem as Provider)?.Id??0;config.RagModel=model.Text.Trim();config.RagMaxFiles=(int)maxFiles.Value;config.RagTopK=(int)topK.Value;
+            config.VisionProviderId=(visionProvider.SelectedItem as Provider)?.Id??0;config.VisionModel=SettingsModelPicker.Read(visionModel);config.VisionInstruction=visionInstruction.Text;config.VisionComponents=visionComponents.IsChecked==true;
+            return config.Json(); });
+    }
+    readonly TextBlock browserNotice = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(20), Text="Navigateur arrêté. Utilisez → pour démarrer. / Browser stopped. Use → to start." };
+    void ShowBrowserNotice(string? error=null)
+    {
+        var mode=FeatureSettings.Read(state.FeaturesJson).BrowserMode;
+        browserNotice.Text=error ?? (mode=="chrome" ? "Chrome externe : demandez à l’IA d’utiliser les outils Chrome DevTools MCP. / Ask the agent to use Chrome DevTools MCP." : mode=="disabled" ? "Navigateur désactivé / Browser disabled" : "Navigateur arrêté. Utilisez → pour démarrer. / Browser stopped. Use → to start.");
+        if(!browserHost.Children.Contains(browserNotice))browserHost.Children.Add(browserNotice);
+    }
+}

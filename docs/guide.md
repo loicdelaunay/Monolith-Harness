@@ -29,7 +29,7 @@ The skill uses existing capabilities: attach your project sources and enable the
 
 ### Connect a provider
 
-Launch `artifacts\GUI\OhMyHarness.App.exe`, then **Settings → Providers**. Each connection has its own card, key, URL and catalog. **Test connection** detects models, selects them all and automatically saves the provider. **Refresh models** preserves existing choices; manual edits are committed with **Save**. The chat picker groups checked models from all connections and automatically switches providers. Multiple connections of the same type stay independent. For APIs without `/models`, a model can be entered manually in the editor and selected in the card.
+Launch `artifacts\GUI\MonolithHarness.exe`, then **Settings → Providers**. Each connection has its own card, key, URL and catalog. **Test connection** detects models, selects them all and automatically saves the provider. **Refresh models** preserves existing choices; manual edits are committed with **Save**. The chat picker groups checked models from all connections and automatically switches providers. Multiple connections of the same type stay independent. For APIs without `/models`, a model can be entered manually in the editor and selected in the card.
 
 **Scheduled tasks**, within a project, creates a CRON schedule with a picker, instruction, model, thinking, resources, skills and a choice of fresh conversation or continued history. Tasks run while the application is open; they do not wake the PC.
 
@@ -93,7 +93,7 @@ The native embedded browser is scoped per conversation: page, in-session navigat
 
 **Export**, beside **Tools**, copies the conversation as Markdown up to 512 KiB UTF-8. Above that, or if the clipboard is unavailable, it offers a `.md` file. Export includes all retained messages (including turns before compaction), stored reasoning, tool calls/results, counters and base64-embedded images. Image display depends on the Markdown reader. An active generation continues and its current text is included as a partial snapshot. Exported settings reflect export time, not per-message history. API keys and configuration secrets are excluded; exchange content and tool results are retained unchanged.
 
-`database.sqlite`, in the same folder as `OhMyHarness.App.exe`, contains configuration, application navigation state, conversations, tool messages, images and permanent grants. **EF Core applies migrations at startup** through `Database.MigrateAsync()`; migrations and snapshots are versioned. If the file does not exist, a new database is created with application tables and initial values. No old AppData database is imported automatically.
+`database.sqlite`, in the same folder as `MonolithHarness.exe`, contains configuration, application navigation state, conversations, tool messages, images and permanent grants. **EF Core applies migrations at startup** through `Database.MigrateAsync()`; migrations and snapshots are versioned. If the file does not exist, a new database is created with application tables and initial values. No old AppData database is imported automatically.
 
 The executable directory must be writable. For portable use, put the EXE in a user folder rather than `Program Files`.
 
@@ -112,9 +112,9 @@ Each conversation has its own browser view in Tools. Native Windows uses WebView
 Development prerequisites: Windows 10 1809+ / Windows 11, .NET 10 SDK, Git LFS for the local RAG model, Windows SDK and WinUI development tools installed through Visual Studio. Open `MonolithHarness.slnx` in Visual Studio/Rider or use:
 
 ```powershell
-dotnet build src/OhMyHarness.App -c Release
-dotnet run --project src/OhMyHarness.App -f net10.0-desktop -c Release
-dotnet run --project tests/OhMyHarness.Tests -c Release
+dotnet build src/MonolithHarness.App -c Release
+dotnet run --project src/MonolithHarness.App -f net10.0-desktop -c Release
+dotnet run --project tests/MonolithHarness.Tests -c Release
 .\publish.ps1 -OutputDirectory artifacts\GUI
 .\publish-cli.ps1 -OutputDirectory artifacts\CLI
 ```
@@ -129,19 +129,19 @@ To add a migration:
 
 ```powershell
 dotnet tool install --global dotnet-ef --version 10.0.9
-dotnet ef migrations add MigrationName --project src/OhMyHarness.Core --output-dir Migrations
+dotnet ef migrations add MigrationName --project src/MonolithHarness.Core --output-dir Migrations
 ```
 
 ## Structure
 
 | Project | Purpose |
 | --- | --- |
-| `src/OhMyHarness.Core` | EF Core, agents, providers, Windows/macOS tools, CRON, compatibility JSON service in `Hosting` |
-| `src/OhMyHarness.App` | Uno Platform Windows/macOS interface, browser, settings and tasks |
-| `src/OhMyHarness.Cli` | Terminal interface and non-interactive automation |
+| `src/MonolithHarness.Core` | EF Core, agents, providers, Windows/macOS tools, CRON, compatibility JSON service in `Hosting` |
+| `src/MonolithHarness.App` | Uno Platform Windows/macOS interface, browser, settings and tasks |
+| `src/MonolithHarness.Cli` | Terminal interface and non-interactive automation |
 | `desktop` | Legacy Electron interface and integration tests, retained for compatibility |
 | `MonolithHarness.Desktop.slnx` | Portable solution without WinUI dependency, for macOS |
-| `tests/OhMyHarness.Tests` | Offline test executable without API keys |
+| `tests/MonolithHarness.Tests` | Offline test executable without API keys |
 
 ## Validation and limitations
 

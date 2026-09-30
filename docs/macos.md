@@ -1,6 +1,8 @@
 # Windows and macOS with Uno Platform
 
-The GUI solution uses two projects: `OhMyHarness.Core` and `OhMyHarness.App`. The latter uses Uno Platform to share the interface, settings, conversations and tools between Windows and macOS. The former JSON service lives in `Core/Hosting`; the Electron `desktop` folder is retained for compatibility and is not required by the new publication. A separate `OhMyHarness.Cli` project provides the terminal interface.
+> macOS publication is temporarily suspended starting with 1.36.0. This guide remains available for historical downloads and manual source builds. Current published releases target Windows and Linux.
+
+The GUI solution uses two projects: `MonolithHarness.Core` and `MonolithHarness.App`. The latter uses Uno Platform to share the interface, settings, conversations and tools between Windows and macOS. The former JSON service lives in `Core/Hosting`; the Electron `desktop` folder is retained for compatibility and is not required by the new publication. A separate `MonolithHarness.Cli` project provides the terminal interface.
 
 See [the Uno, tasks and models guide](uno-tasks-models.md) for architecture and features.
 
@@ -15,9 +17,9 @@ These builds are unsigned and not notarized, so macOS may block their first laun
 On Mac, install the .NET 10 SDK and Xcode command-line tools:
 
 ```bash
-dotnet build src/OhMyHarness.App -f net10.0-desktop -c Release
-dotnet run --project src/OhMyHarness.App -f net10.0-desktop -c Release
-dotnet run --project tests/OhMyHarness.Tests -c Release
+dotnet build src/MonolithHarness.App -f net10.0-desktop -c Release
+dotnet run --project src/MonolithHarness.App -f net10.0-desktop -c Release
+dotnet run --project tests/MonolithHarness.Tests -c Release
 
 bash ./publish-macos.sh arm64 # Apple Silicon
 bash ./publish-macos.sh x64   # Intel

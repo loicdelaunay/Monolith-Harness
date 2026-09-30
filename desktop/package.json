@@ -1,6 +1,6 @@
 {
   "name": "monolith-harness-desktop",
-  "version": "1.33.1",
+  "version": "1.36.0",
   "private": true,
   "description": "Monolith Harness desktop host for macOS and Windows",
   "author": "Monolith Harness",
@@ -16,7 +16,7 @@
   },
   "devDependencies": { "electron": "44.4.2", "electron-builder": "26.15.3" },
   "build": {
-    "appId": "com.ohmyharness.desktop",
+    "appId": "com.monolithharness.desktop",
     "productName": "Monolith Harness",
     "asar": true,
     "files": ["main.cjs", "preload.cjs", "browser.cjs", "application-capture.cjs", "policy.cjs", "ui/**", "package.json"],

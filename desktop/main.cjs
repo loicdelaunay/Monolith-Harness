@@ -6,7 +6,7 @@ const readline = require('node:readline');
 const { pathToFileURL } = require('node:url');
 const { createBrowserPool } = require('./browser.cjs');
 // Set Chromium paths before ready: never use the per-user AppData profile.
-const directory = app.isPackaged ? (process.platform === 'darwin' ? path.resolve(path.dirname(process.execPath), '../../..') : path.dirname(process.execPath)) : (process.env.OHMYHARNESS_TEST_DATA || path.join(__dirname, '.data'));
+const directory = app.isPackaged ? (process.platform === 'darwin' ? path.resolve(path.dirname(process.execPath), '../../..') : path.dirname(process.execPath)) : (process.env.MONOLITHHARNESS_TEST_DATA || path.join(__dirname, '.data'));
 let storageError;
 try {
   for (const [name, folder] of Object.entries({userData:'browser',sessionData:'browser',temp:'temp',crashDumps:'crashes'})) {
@@ -81,7 +81,7 @@ async function start() {
   profile.setPermissionRequestHandler((_, __, callback) => callback(false));
   profile.setPermissionCheckHandler(() => false);
   profile.on('will-download', event => event.preventDefault());
-  win = new BrowserWindow({ width: 1500, height: 960, minWidth: 760, minHeight: 580, show: !process.env.OHMYHARNESS_TEST_DATA, backgroundColor: '#202020', title: 'Monolith Harness', icon: path.join(__dirname, 'ui', 'logo.png'),
+  win = new BrowserWindow({ width: 1500, height: 960, minWidth: 760, minHeight: 580, show: !process.env.MONOLITHHARNESS_TEST_DATA, backgroundColor: '#202020', title: 'Monolith Harness', icon: path.join(__dirname, 'ui', 'logo.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());

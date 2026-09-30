@@ -47,7 +47,7 @@ On the first approved script launch, the runtime is extracted into the portable
 profile beside the Windows EXE (or the profile supplied by the Electron host):
 
 ```text
-OhMyHarness.App.exe
+MonolithHarness.exe
 database.sqlite
 skills/
 runtimes/python/3.13.15-20260901-win-x64/python/...

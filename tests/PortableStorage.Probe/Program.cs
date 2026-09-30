@@ -1,4 +1,4 @@
-using OhMyHarness.Core;
+using MonolithHarness.Core;
 
 var expected = Path.GetFullPath(args.Single());
 if (!PlatformSupport.PathComparer.Equals(expected, PortableStorage.Root))

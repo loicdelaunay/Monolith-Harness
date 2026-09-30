@@ -9,9 +9,9 @@ esac
 repo_dir="$(cd "$(dirname "$0")" && pwd)"
 output="$repo_dir/artifacts/release/cli/$runtime"
 if (( $# > 1 )); then output="$2"; fi
-dotnet publish "$repo_dir/src/OhMyHarness.Cli/OhMyHarness.Cli.csproj" \
+dotnet publish "$repo_dir/src/MonolithHarness.Cli/MonolithHarness.Cli.csproj" \
   -c Release -r "$runtime" --self-contained true \
   -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true \
   -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false \
   -o "$output"
-echo "OhMyHarness CLI available in $output"
+echo "MonolithHarness CLI available in $output"

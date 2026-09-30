@@ -1,6 +1,6 @@
-# OhMyHarness CLI v1.6.1
+# MonolithHarness CLI v1.6.1
 
-The first standalone CLI release brings the OhMyHarness agent engine to a compact terminal workspace. Choose GUI or CLI: the existing [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0) remains available separately.
+The first standalone CLI release brings the MonolithHarness agent engine to a compact terminal workspace. Choose GUI or CLI: the existing [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0) remains available separately.
 
 ## Download and start
 

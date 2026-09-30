@@ -20,4 +20,4 @@ Le vent reprend ses vieux refrains,
 Et l'homme, seul avec sa main,
 Rallume un rêve, et va plus loin.
 
-*— pour OhMyHarness*
+*— pour MonolithHarness*

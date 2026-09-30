@@ -1,5 +1,5 @@
 <Solution>
-  <Project Path="src/OhMyHarness.Core/OhMyHarness.Core.csproj" />
-  <Project Path="src/OhMyHarness.Cli/OhMyHarness.Cli.csproj" />
-  <Project Path="src/OhMyHarness.App/OhMyHarness.App.csproj" />
+  <Project Path="src/MonolithHarness.Core/MonolithHarness.Core.csproj" />
+  <Project Path="src/MonolithHarness.Cli/MonolithHarness.Cli.csproj" />
+  <Project Path="src/MonolithHarness.App/MonolithHarness.App.csproj" />
 </Solution>

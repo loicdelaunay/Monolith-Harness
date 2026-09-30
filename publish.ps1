@@ -1,12 +1,12 @@
 param([ValidateSet('win-x64','win-arm64')][string]$Runtime = 'win-x64', [string]$OutputDirectory = 'artifacts\official', [switch]$UnoDesktop, [switch]$NativeWinUI, [switch]$NoRestore)
 $ErrorActionPreference = 'Stop'
 if ($UnoDesktop -and $NativeWinUI) { throw 'Choisissez Uno Desktop ou WinUI natif, pas les deux.' }
-$project = Join-Path $PSScriptRoot 'src\OhMyHarness.App\OhMyHarness.App.csproj'
+$project = Join-Path $PSScriptRoot 'src\MonolithHarness.App\MonolithHarness.App.csproj'
 $output = if ([IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory } else { Join-Path $PSScriptRoot $OutputDirectory }
 $platform = if ($Runtime -eq 'win-arm64') { 'ARM64' } else { 'x64' }
 $useUnoDesktop = -not $NativeWinUI.IsPresent
 $framework = if ($useUnoDesktop) { 'net10.0-desktop' } else { 'net10.0-windows10.0.19041.0' }
-$publishArgs = @($project, '-f', $framework, "-p:OhMyHarnessDesktopOnly=$($useUnoDesktop.ToString().ToLowerInvariant())",
+$publishArgs = @($project, '-f', $framework, "-p:MonolithHarnessDesktopOnly=$($useUnoDesktop.ToString().ToLowerInvariant())",
     '-c', 'Release', '-r', $Runtime, '--self-contained', 'true', "-p:PlatformTarget=$platform",
     '-p:PublishSingleFile=true', '-p:IncludeAllContentForSelfExtract=true',
     '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', '-p:DebugSymbols=false', '-o', $output)

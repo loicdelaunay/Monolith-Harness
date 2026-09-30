@@ -22,8 +22,8 @@
     <PythonRuntimeManifest>$(IntermediateOutputPath)python-runtime.json</PythonRuntimeManifest>
   </PropertyGroup>
   <ItemGroup Condition="'$(PythonRuntimeTarget)' != ''">
-    <EmbeddedResource Include="$(PythonRuntimeArchive)" LogicalName="OhMyHarness.Python.archive.tar.gz" />
-    <EmbeddedResource Include="$(PythonRuntimeManifest)" LogicalName="OhMyHarness.Python.manifest.json" />
+    <EmbeddedResource Include="$(PythonRuntimeArchive)" LogicalName="MonolithHarness.Python.archive.tar.gz" />
+    <EmbeddedResource Include="$(PythonRuntimeManifest)" LogicalName="MonolithHarness.Python.manifest.json" />
   </ItemGroup>
   <Target Name="PrepareBundledPython" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
     <Error Condition="'$(PythonRuntimeTarget)' == ''" Text="No bundled Python for $(PythonRuntimeRid). Supported: win-x64, win-arm64, osx-x64, osx-arm64, linux-x64." />

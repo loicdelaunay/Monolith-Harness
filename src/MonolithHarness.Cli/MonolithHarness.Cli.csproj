@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MonolithHarness.Cli</AssemblyName>
+    <RootNamespace>MonolithHarness.Cli</RootNamespace>
+    <Version>1.36.0</Version>
+    <AssemblyTitle>Monolith Harness CLI</AssemblyTitle>
+    <Product>Monolith Harness</Product>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishTrimmed>false</PublishTrimmed>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../MonolithHarness.Core/MonolithHarness.Core.csproj" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="MonolithHarness.Cli.Tests" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Fonts/**/*" /></ItemGroup>
+  <ItemGroup><AssemblyMetadata Include="MonolithHarness.SingleFile" Value="$(PublishSingleFile)" /></ItemGroup>
+  <Import Project="../../build/PythonRuntime.targets" />
+  <Import Project="../../build/MonolithLauncher.targets" />
+</Project>

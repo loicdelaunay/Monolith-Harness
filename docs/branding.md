@@ -1,9 +1,9 @@
 # Name, logo and Fly themes
 
-Under **Settings → General**, open **Application name and logo**:
+Under **Settings → Appearance**, open **Application name and logo**:
 
 - Enter the displayed name, up to 80 characters. An empty field restores Monolith Harness.
-- The previous default, OhMyHarness, automatically becomes Monolith Harness; other custom names are preserved.
+- The previous default application name automatically becomes Monolith Harness; other custom names are preserved.
 - Choose a PNG, JPEG, WebP, BMP or ICO logo (maximum 10 MB, 4096 × 4096 pixels). A preview lets you check the image before saving.
 - **Original logo** restores only the logo. **Reset name and logo** resets both fields.
 - Click **Save** to apply. Cancel keeps the previous customization.
@@ -22,6 +22,6 @@ If a logo is missing or unreadable, the interface uses the original logo; Settin
 
 ## Fly dark and Fly light
 
-Both themes are available under **General → Theme**, in French and English. **Fly dark** combines a near-black background with deep-blue surfaces; **Fly light** combines a white background with neutral surfaces. Airbus blue **#00205B** marks actions and selections in both themes, without a light-blue accent. Text on blue buttons stays white for readability.
+Both themes are available under **Appearance → Theme**, in French and English. **Fly dark** combines a near-black background with deep-blue surfaces; **Fly light** combines a white background with neutral surfaces. Airbus blue **#00205B** marks actions and selections in both themes, without a light-blue accent. Text on blue buttons stays white for readability.
 
 The reference color is published in the [official Airbus Brand Centre](https://www.brand.airbus.com/en/asset-library/airbus-logo). These themes are inspired by that palette; the application does not include an Airbus logo.

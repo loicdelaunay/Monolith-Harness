@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {spawn}=require('node:child_process'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),http=require('node:http'),readline=require('node:readline');
 test('desktop service: SQLite, providers, skills, permissions and simultaneous conversations', {timeout:60000},async t=>{
   const directory=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'omh-service-test-')));
-  const executable=path.resolve(__dirname,'../../src/OhMyHarness.App/bin/Release/net10.0-desktop/OhMyHarness.App.dll');
+  const executable=path.resolve(__dirname,'../../src/MonolithHarness.App/bin/Release/net10.0-desktop/MonolithHarness.App.dll');
   const child=spawn('dotnet',[executable,'--service','--database',path.join(directory,'database.sqlite')],{stdio:['pipe','pipe','pipe'],windowsHide:true});
   let index=0,stderr='',readyResolve,readyReject;const replies=new Map(),events=[],hosts=[];
   const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});

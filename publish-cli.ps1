@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot "artifacts\release\cli\$Runtime" }
 $output = if ([IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory } else { Join-Path $PSScriptRoot $OutputDirectory }
-$publishArgs = @((Join-Path $PSScriptRoot 'src\OhMyHarness.Cli\OhMyHarness.Cli.csproj'), '-c', 'Release', '-r', $Runtime,
+$publishArgs = @((Join-Path $PSScriptRoot 'src\MonolithHarness.Cli\MonolithHarness.Cli.csproj'), '-c', 'Release', '-r', $Runtime,
     '--self-contained', 'true', '-p:PublishSingleFile=true', '-p:IncludeAllContentForSelfExtract=true',
     '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None', '-p:DebugSymbols=false', '-o', $output)
 if ($NoRestore) { $publishArgs += '--no-restore' }

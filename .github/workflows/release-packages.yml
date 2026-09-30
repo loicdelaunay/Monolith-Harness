@@ -11,10 +11,6 @@ jobs:
         include:
           - os: windows-latest
             rid: win-x64
-          - os: macos-15
-            rid: osx-arm64
-          - os: macos-15-intel
-            rid: osx-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -24,21 +20,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Publish GUI
-        run: dotnet publish src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
+        run: dotnet publish src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
       - name: Publish CLI
-        run: dotnet publish src/OhMyHarness.Cli -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+        run: dotnet publish src/MonolithHarness.Cli -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
       - name: Package clean portable downloads
         shell: pwsh
         run: ./build/package-release.ps1 -Runtime ${{ matrix.rid }}
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-${{ matrix.rid }}
+          name: MonolithHarness-${{ matrix.rid }}
           path: artifacts/TEMP/release-packages/GUI/*
           if-no-files-found: error
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-CLI-${{ matrix.rid }}
+          name: MonolithHarness-CLI-${{ matrix.rid }}
           path: artifacts/TEMP/release-packages/CLI/*
           if-no-files-found: error
           compression-level: 0
@@ -52,20 +48,20 @@ jobs:
         with:
           lfs: true
       - name: Publish GUI
-        run: dotnet publish src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
+        run: dotnet publish src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
       - name: Publish CLI
-        run: dotnet publish src/OhMyHarness.Cli -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+        run: dotnet publish src/MonolithHarness.Cli -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
       - name: Package clean Linux downloads
         run: bash ./build/package-fedora.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-linux-x64
+          name: MonolithHarness-linux-x64
           path: artifacts/TEMP/release-packages/GUI/*
           if-no-files-found: error
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-CLI-linux-x64
+          name: MonolithHarness-CLI-linux-x64
           path: artifacts/TEMP/release-packages/CLI/*
           if-no-files-found: error
           compression-level: 0

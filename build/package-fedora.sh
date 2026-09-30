@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version="$(sed -n 's/.*<ApplicationDisplayVersion>\([^<]*\)<\/ApplicationDisplayVersion>.*/\1/p' src/OhMyHarness.App/OhMyHarness.App.csproj | head -n 1)"
-cli_version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/OhMyHarness.Cli/OhMyHarness.Cli.csproj | head -n 1)"
+version="$(sed -n 's/.*<ApplicationDisplayVersion>\([^<]*\)<\/ApplicationDisplayVersion>.*/\1/p' src/MonolithHarness.App/MonolithHarness.App.csproj | head -n 1)"
+cli_version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/MonolithHarness.Cli/MonolithHarness.Cli.csproj | head -n 1)"
 test -n "$version" && test "$version" = "$cli_version"
 root="$(pwd -P)/artifacts/TEMP/release-packages"
 mkdir -p "$root/GUI" "$root/CLI"
 for channel in GUI CLI; do
   executable=MonolithHarness
-  prefix=OhMyHarness
-  if [[ "$channel" == CLI ]]; then prefix=OhMyHarness-CLI; fi
+  prefix=MonolithHarness
+  if [[ "$channel" == CLI ]]; then prefix=MonolithHarness-CLI; fi
   source="artifacts/$channel/$executable"
   test -s "$source"
   stage="$(mktemp -d "$root/stage-$channel-linux-x64.XXXXXXXX")"

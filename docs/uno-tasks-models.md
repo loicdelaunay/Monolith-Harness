@@ -2,10 +2,10 @@
 
 The GUI application consists of two projects:
 
-- `src/OhMyHarness.Core`: SQLite/EF data, migrations, providers, agents, tools, CRON scheduling and desktop adapters. The former JSON service remains under `Hosting` for tests and compatibility with the old interface.
-- `src/OhMyHarness.App`: shared Uno Platform 6.7 interface in C#/XAML. Targets: `net10.0-windows10.0.19041.0` (Windows WinUI) and `net10.0-desktop` (Skia Windows/macOS). Test projects remain separate from the application solution.
+- `src/MonolithHarness.Core`: SQLite/EF data, migrations, providers, agents, tools, CRON scheduling and desktop adapters. The former JSON service remains under `Hosting` for tests and compatibility with the old interface.
+- `src/MonolithHarness.App`: shared Uno Platform 6.7 interface in C#/XAML. Targets: `net10.0-windows10.0.19041.0` (Windows WinUI) and `net10.0-desktop` (Skia Windows/macOS). Test projects remain separate from the application solution.
 
-The terminal interface is provided by the additional `src/OhMyHarness.Cli` project.
+The terminal interface is provided by the additional `src/MonolithHarness.Cli` project.
 
 `database.sqlite`, skills, MCP.json, embedded Python, browser profiles and resources remain in the executable's portable directory. Migrations add tasks and catalogs without removing conversations. Do not run an older application against an already migrated database without a backup.
 
@@ -41,9 +41,9 @@ The terminal uses PowerShell on Windows and zsh on macOS. Git, Docker and MCP se
 ## Build and verify
 
 ```powershell
-dotnet run --project tests/OhMyHarness.Tests -c Release
-dotnet build src/OhMyHarness.App -f net10.0-windows10.0.19041.0 -c Release
-dotnet build src/OhMyHarness.App -f net10.0-desktop -c Release
+dotnet run --project tests/MonolithHarness.Tests -c Release
+dotnet build src/MonolithHarness.App -f net10.0-windows10.0.19041.0 -c Release
+dotnet build src/MonolithHarness.App -f net10.0-desktop -c Release
 # Repository GUI publication:
 .\publish.ps1 -OutputDirectory artifacts\GUI
 # Temporary native WinUI validation; remove this dedicated output after testing:
@@ -52,12 +52,12 @@ dotnet build src/OhMyHarness.App -f net10.0-desktop -c Release
 
 On Mac: `./publish-macos.sh arm64` or `./publish-macos.sh x64`. The script publishes standalone Uno Desktop without Electron. Apple signing/notarization is still needed for signed distribution.
 
-The repository property `-p:OhMyHarnessDesktopOnly=true` restricts RID builds to Uno Desktop without imposing this TFM on Core. Publishing scripts apply it. Cross-compilation example:
+The repository property `-p:MonolithHarnessDesktopOnly=true` restricts RID builds to Uno Desktop without imposing this TFM on Core. Publishing scripts apply it. Cross-compilation example:
 
 ```powershell
-dotnet build src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -r osx-arm64 -c Release
+dotnet build src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -r osx-arm64 -c Release
 ```
 
-An isolated UI test is available with `OHMYHARNESS_UI_SMOKE=<new temporary folder>`: it starts with a test database, checks model checkboxes and the picker, saves a task, runs two turns through a simulated local provider with tools/history, captures screens and closes only that instance. `dotnet run --project tests/OhMyHarness.Tests -c Release -- --browser-smoke` tests two headless Chromium profiles without using personal profiles.
+An isolated UI test is available with `MONOLITHHARNESS_UI_SMOKE=<new temporary folder>`: it starts with a test database, checks model checkboxes and the picker, saves a task, runs two turns through a simulated local provider with tools/history, captures screens and closes only that instance. `dotnet run --project tests/MonolithHarness.Tests -c Release -- --browser-smoke` tests two headless Chromium profiles without using personal profiles.
 
 References: [Uno SDK and shared project](https://platform.uno/docs/articles/features/using-the-uno-sdk.html), [Desktop publishing](https://platform.uno/docs/articles/uno-publishing-desktop.html), [WebView capabilities and limits](https://platform.uno/docs/articles/controls/WebView.html).

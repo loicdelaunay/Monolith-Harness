@@ -11,22 +11,11 @@ jobs:
         include:
           - os: windows-latest
             rid: win-x64
-          - os: macos-15
-            rid: osx-arm64
-          - os: macos-15-intel
-            rid: osx-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
-      - name: Use a physical temporary directory on macOS
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          # /var and /tmp can be symlinks on macOS; sandbox fixtures reject linked ancestors.
-          physical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
-          printf 'TMPDIR=%s/\n' "$physical_temp" >> "$GITHUB_ENV"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -35,31 +24,31 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
-      - run: dotnet build src/OhMyHarness.App -f net10.0-desktop -c Release
+      - run: dotnet build src/MonolithHarness.App -f net10.0-desktop -c Release
       - if: runner.os == 'Windows'
-        run: dotnet build src/OhMyHarness.App -f net10.0-windows10.0.19041.0 -c Release
-      - run: dotnet run --project tests/OhMyHarness.Tests -c Release
-      - run: dotnet run --project tests/OhMyHarness.Cli.Tests -c Release
+        run: dotnet build src/MonolithHarness.App -f net10.0-windows10.0.19041.0 -c Release
+      - run: dotnet run --project tests/MonolithHarness.Tests -c Release
+      - run: dotnet run --project tests/MonolithHarness.Cli.Tests -c Release
       - run: npm ci
         working-directory: desktop
       - run: npm test
         working-directory: desktop
       - name: Publish GUI
-        run: dotnet publish src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
+        run: dotnet publish src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
       - name: Publish CLI
-        run: dotnet publish src/OhMyHarness.Cli -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+        run: dotnet publish src/MonolithHarness.Cli -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
       - name: Package clean portable downloads
         shell: pwsh
         run: ./build/package-release.ps1 -Runtime ${{ matrix.rid }}
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-${{ matrix.rid }}
+          name: MonolithHarness-${{ matrix.rid }}
           path: artifacts/TEMP/release-packages/GUI/*
           if-no-files-found: error
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-CLI-${{ matrix.rid }}
+          name: MonolithHarness-CLI-${{ matrix.rid }}
           path: artifacts/TEMP/release-packages/CLI/*
           if-no-files-found: error
           compression-level: 0
@@ -77,22 +66,22 @@ jobs:
           cat /etc/fedora-release
           dotnet --version
           node --version
-      - run: dotnet build src/OhMyHarness.App -f net10.0-desktop -c Release
-      - run: dotnet run --project tests/OhMyHarness.Tests -c Release
-      - run: dotnet run --project tests/OhMyHarness.Cli.Tests -c Release
+      - run: dotnet build src/MonolithHarness.App -f net10.0-desktop -c Release
+      - run: dotnet run --project tests/MonolithHarness.Tests -c Release
+      - run: dotnet run --project tests/MonolithHarness.Cli.Tests -c Release
       - run: npm ci
         working-directory: desktop
       - run: npm test
         working-directory: desktop
       - name: Publish GUI
-        run: dotnet publish src/OhMyHarness.App -f net10.0-desktop -p:OhMyHarnessDesktopOnly=true -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
+        run: dotnet publish src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
       - name: Publish CLI
-        run: dotnet publish src/OhMyHarness.Cli -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+        run: dotnet publish src/MonolithHarness.Cli -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
       - name: Smoke-test Fedora executables
         shell: bash
         run: |
           set -euo pipefail
-          version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/OhMyHarness.Cli/OhMyHarness.Cli.csproj | head -n 1)"
+          version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' src/MonolithHarness.Cli/MonolithHarness.Cli.csproj | head -n 1)"
           test -n "$version"
           ./artifacts/CLI/MonolithHarness --version | grep -F "$version"
           smoke_dir="$(mktemp -d)"
@@ -100,7 +89,7 @@ jobs:
           Xvfb :99 -screen 0 1280x800x24 > "$smoke_dir/xvfb.log" 2>&1 &
           xvfb_pid=$!
           sleep 2
-          if ! DISPLAY=:99 OHMYHARNESS_UI_SMOKE="$smoke_dir" OHMYHARNESS_UX_SMOKE=1 timeout 60s ./artifacts/GUI/MonolithHarness; then
+          if ! DISPLAY=:99 MONOLITHHARNESS_UI_SMOKE="$smoke_dir" MONOLITHHARNESS_UX_SMOKE=1 timeout 60s ./artifacts/GUI/MonolithHarness; then
             if test -f "$smoke_dir/smoke-error.txt"; then cat "$smoke_dir/smoke-error.txt"; fi
             cat "$smoke_dir/xvfb.log"
             exit 1
@@ -112,13 +101,13 @@ jobs:
         run: bash ./build/package-fedora.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-linux-x64
+          name: MonolithHarness-linux-x64
           path: artifacts/TEMP/release-packages/GUI/*
           if-no-files-found: error
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: OhMyHarness-CLI-linux-x64
+          name: MonolithHarness-CLI-linux-x64
           path: artifacts/TEMP/release-packages/CLI/*
           if-no-files-found: error
           compression-level: 0

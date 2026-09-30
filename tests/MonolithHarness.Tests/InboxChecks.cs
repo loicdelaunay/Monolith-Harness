@@ -1,0 +1,47 @@
+using MonolithHarness.Core;
+using Microsoft.EntityFrameworkCore;
+
+static class InboxChecks
+{
+    public static async Task Run(Action<bool,string> check)
+    {
+        var folder=Path.Combine(Path.GetTempPath(),"omh-inbox-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);var file=Path.Combine(folder,"database.sqlite");
+        try
+        {
+            await using var db=new HarnessDb(file);await db.InitializeAsync();
+            var chat=await db.Chats.FirstAsync();var project=await db.Projects.FirstAsync();var provider=await db.Providers.FirstAsync();var options=await db.States.SingleAsync();
+            var other=new Chat{ProjectId=project.Id};db.Chats.Add(other);await db.SaveChangesAsync();
+            await ConversationInbox.AddAsync(file,chat.Id,provider.Id,"next",[],"queued");
+            await ConversationInbox.AddAsync(file,chat.Id,provider.Id,"steer",[new(){Name="test.png",Mime="image/png",Data=[1,2,3]}],"steering");
+            await ConversationInbox.AddAsync(file,other.Id,provider.Id,"other",[],"steering");
+            await using(var reopened=new HarnessDb(file))check(await reopened.PendingInputs.CountAsync()==3,"File d’attente et consignes persistées après réouverture SQLite");
+            using var run=new ConversationSession(chat,project,provider,options,"next",[],file);
+            var added=await ConversationInbox.ApplySteeringAsync(run,default);
+            check(added.Count==1 && added[0].Content=="steer" && added[0].Attachments[0].Data.SequenceEqual(new byte[]{1,2,3}),"Consigne et image transférées à la conversation en cours");
+            check(await db.PendingInputs.CountAsync()==2 && (await ConversationInbox.ApplySteeringAsync(run,default)).Count==0,"Consigne consommée une fois, file et autre conversation préservées");
+            var queued=await db.PendingInputs.SingleAsync(x=>x.ChatId==chat.Id);run.PendingInputId=queued.Id;
+            await ConversationInbox.ConsumeAsync(run,default);
+            check(await db.PendingInputs.AnyAsync(x=>x.Id==queued.Id),"Envoi en attente conservé jusqu’à la sauvegarde du message utilisateur");
+            run.Db.Messages.Add(new(){ChatId=chat.Id,Content=queued.Text});await run.Db.SaveChangesAsync();
+            check(!await db.PendingInputs.AnyAsync(x=>x.Id==queued.Id),"Suppression atomique du message en attente lors de son envoi");
+            var editable = await ConversationInbox.AddAsync(file,chat.Id,provider.Id,"original",[new(){Name="keep.png",Mime="image/png",Data=[4,5]}],"queued");
+            await ConversationInbox.UpdateAsync(file,chat.Id,editable.Id,"original","edited\nsecond line");
+            await ConversationInbox.UpdateAsync(file,chat.Id,editable.Id,"edited\nsecond line","edited\nsecond line",true,provider.Id);
+            var changed = await db.PendingInputs.AsNoTracking().SingleAsync(x=>x.Id==editable.Id);
+            check(changed.Mode=="steering" && changed.Text=="edited\nsecond line" && changed.Images()[0].Data.SequenceEqual(new byte[]{4,5}),"Modifier puis Steer conserve les retours à la ligne et les images");
+            bool stale=false;try{await ConversationInbox.UpdateAsync(file,chat.Id,editable.Id,"original","lost");}catch(InvalidOperationException){stale=true;}
+            check(stale,"Édition obsolète refusée sans écraser la version courante");
+            bool wrongChat=false;try{await ConversationInbox.UpdateAsync(file,other.Id,editable.Id,changed.Text,"lost");}catch(InvalidOperationException){wrongChat=true;}
+            check(wrongChat,"Impossible de modifier la file d’une autre conversation");
+            var steered=await ConversationInbox.ApplySteeringAsync(run,default);
+            check(steered.Count==1 && steered[0].Content==changed.Text,"Message modifié transmis une seule fois à l’agent");
+            bool consumed=false;try{await ConversationInbox.UpdateAsync(file,chat.Id,editable.Id,changed.Text,"lost");}catch(InvalidOperationException){consumed=true;}
+            check(consumed,"Message déjà transmis non recréé lors d’une édition tardive");
+            var composed=new Provider{Id=999,Kind="composite",CompositeJson=new CompositeModel{Orchestrator=new(){ProviderId=provider.Id,Model="orchestrator"},Agents=[new(){ProviderId=provider.Id,Model="reviewer",Name="Review",Task="Inspect"}]}.Json()};
+            using var team=new ConversationSession(chat,project,composed,options,"Inspect",[],file,[provider]);
+            provider.Model="changed after capture";
+            check(team.Provider.Model=="orchestrator" && team.AgentProviders["Review"].Model=="reviewer" && team.SelectedProviderId==999,"Modèles composés figent le routage de l’orchestrateur et du sous-agent");
+        }
+        finally{Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();Directory.Delete(folder,true);}
+    }
+}
