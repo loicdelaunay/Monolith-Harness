@@ -201,7 +201,7 @@ internal sealed class ConsumptionWindow : Window
         entry.ProviderId is int id ? $"{entry.ProviderName} · #{id}" : entry.ProviderName;
     static string ActivityName(string value) => value switch { "chat" => L("Conversations", "Chats"), "agent" => L("Agents", "Agents"), "naming" => L("Nommage", "Naming"),
         "vision" => L("Vision", "Vision"), "compaction" => L("Compactage", "Compaction"), "translator" => L("Traduction", "Translation"),
-        "proofreader" => L("Correction / reformulation", "Proofreading / rephrasing"), "benchmark" => L("Benchmark", "Benchmark"), _ => value };
+        "proofreader" => L("Correction / reformulation", "Proofreading / rephrasing"), "benchmark" => L("Benchmark", "Benchmark"), "ai_detector" => L("Détection IA", "AI detection"), _ => value };
     void RenderModels()
     {
         modelBars.Children.Clear(); if (report == null) return;

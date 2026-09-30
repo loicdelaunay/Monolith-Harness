@@ -47,14 +47,22 @@ public sealed partial class MainWindow
         ApplyBrandingIcon(window); ObserveTextZoom(window.Panel); window.Activate(); await window.RefreshAsync();
     }
 
-    Task ShowAiDetectorAsync()
+    async Task ShowAiDetectorAsync()
     {
-        if (aiDetectorWindow is { } existing) { existing.Activate(); return Task.CompletedTask; }
-        var window = new AiDetectorWindow(FeatureSettings.Read(state.FeaturesJson).AiDetectorEndpoint, root.RequestedTheme,
-            async address => { var features = FeatureSettings.Read(state.FeaturesJson); features.AiDetectorEndpoint = address; state.FeaturesJson = features.Json(); await db.SaveChangesAsync(); }, InitializePicker)
+        if (aiDetectorWindow is { } existing) { existing.Activate(); return; }
+        Task<List<Provider>> Models() => ReadStoreAsync(store => store.Providers.AsNoTracking().Where(p => p.Kind != "composite").OrderBy(p => p.Name).ToList());
+        var configured = await Models();
+        if (aiDetectorWindow is { } reopened) { reopened.Activate(); return; }
+        var settings = FeatureSettings.Read(state.FeaturesJson);
+        var window = new AiDetectorWindow(settings.AiDetectorEndpoint, root.RequestedTheme,
+            async address => { var features = FeatureSettings.Read(state.FeaturesJson); features.AiDetectorEndpoint = address; state.FeaturesJson = features.Json(); await db.SaveChangesAsync(); }, InitializePicker,
+            configured, settings.AiDetectorProviderId, settings.AiDetectorModel, Models,
+            async (selected, ct) => { if (selected.IsOpenCode) await EnsureOpenCodeServerAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), ct); },
+            async (id, model) => { var features = FeatureSettings.Read(state.FeaturesJson); features.AiDetectorProviderId = id; features.AiDetectorModel = model; state.FeaturesJson = features.Json(); await db.SaveChangesAsync(); },
+            () => FeatureSettings.Read(state.FeaturesJson), db.FilePath)
             { Title = DisplayApplicationName + " · AI Generated detector" };
         aiDetectorWindow = window; window.Closed += (_, _) => aiDetectorWindow = null;
-        ApplyBrandingIcon(window); ObserveTextZoom(window.Panel); window.Activate(); return Task.CompletedTask;
+        ApplyBrandingIcon(window); ObserveTextZoom(window.Panel); window.Activate();
     }
 
     async Task ShowDedicatedTool(ModelToolKind kind)

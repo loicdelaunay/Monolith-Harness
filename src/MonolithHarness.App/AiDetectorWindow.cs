@@ -11,12 +11,24 @@ using Windows.Storage.Pickers;
 
 namespace MonolithHarness.App;
 
-internal sealed class AiDetectorWindow : Window
+internal sealed partial class AiDetectorWindow : Window
 {
     sealed record Choice(string Id, string Name) { public override string ToString() => Name; }
     internal Grid Panel { get; } = new() { Padding = new(24), RowSpacing = 14, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
     readonly TextBox endpoint = new(), text = new(), url = new();
-    readonly ComboBox source = new(), filter = new();
+    readonly ComboBox source = new(), filter = new(), detectionService = new(), detectionModel = new();
+    readonly StackPanel slopSettings;
+    readonly Button reloadModels;
+    Button saveModel = null!;
+    List<Provider> providers;
+    readonly Func<Task<List<Provider>>> loadModels;
+    readonly Func<Provider, CancellationToken, Task> prepare;
+    readonly Func<int, string, Task> saveDetection;
+    readonly Func<FeatureSettings>? readSettings;
+    readonly string consumptionDatabase;
+    readonly HttpClient modelHttp = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
+    internal Func<Provider, ModelToolRequest, CancellationToken, Task<ModelToolResult>>? SmokeRequest;
+    Provider? SelectedProvider => providers.FirstOrDefault(p => p.Id.ToString() == Selected(detectionService));
     readonly CheckBox heatmap = new();
     readonly TextBlock status = Text("", 13), destination = Text("", 12, true), count = Text("", 12, true), filename = Text("", 13, true);
     readonly TextBlock score = Text("—", 32), verdict = Text("", 17), summary = Text("", 12, true), caution = Text("", 12, true);
@@ -45,12 +57,25 @@ internal sealed class AiDetectorWindow : Window
     static double N(JsonObject obj, string key) => SlopTotalClient.Number(obj, key);
     static string Selected(ComboBox box) => (box.SelectedItem as Choice)?.Id ?? "";
 
-    internal AiDetectorWindow(string address, ElementTheme theme, Func<string, Task> saveEndpoint, Action<object, Window> initializePicker)
+    internal AiDetectorWindow(string address, ElementTheme theme, Func<string, Task> saveEndpoint, Action<object, Window> initializePicker,
+        List<Provider>? providers = null, int providerId = 0, string? selectedModel = null, Func<Task<List<Provider>>>? loadModels = null,
+        Func<Provider, CancellationToken, Task>? prepare = null, Func<int, string, Task>? saveDetection = null,
+        Func<FeatureSettings>? readSettings = null, string? consumptionDatabase = null)
     {
         this.saveEndpoint = saveEndpoint; this.initializePicker = initializePicker; Panel.RequestedTheme = theme;
+        this.providers = providers ?? []; this.loadModels = loadModels ?? (() => Task.FromResult(this.providers));
+        this.prepare = prepare ?? ((_, _) => Task.CompletedTask); this.saveDetection = saveDetection ?? ((_, _) => Task.CompletedTask);
+        this.readSettings = readSettings; this.consumptionDatabase = consumptionDatabase ?? HarnessDb.DatabasePath;
+        detectionService.Header = L("Service de détection", "Detection service"); detectionService.HorizontalAlignment = HorizontalAlignment.Stretch;
+        detectionModel.Header = L("Modèle du fournisseur", "Provider model"); detectionModel.HorizontalAlignment = HorizontalAlignment.Stretch;
+        reloadModels = Action(L("Actualiser les fournisseurs", "Refresh providers"), async () => await RunAsync(async _ =>
+        {
+            var current = SelectedProvider?.Id ?? 0; var model = detectionModel.SelectedItem as string;
+            this.providers = await this.loadModels(); PopulateDetection(current, model);
+        }));
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto }) Panel.RowDefinitions.Add(new() { Height = height });
-        Panel.Children.Add(Stack(Text("AI Generated detector", 27), Text(L("Comparez plusieurs détecteurs pour repérer les indices de texte généré par IA.",
-            "Compare multiple detectors for signs of AI-generated text."), 14, true)));
+        Panel.Children.Add(Stack(Text("AI Generated detector", 27), Text(L("Examinez le texte avec des détecteurs spécialisés ou l’un de vos modèles IA.",
+            "Examine text with specialized detectors or one of your AI models."), 14, true)));
 
         endpoint.Text = string.IsNullOrWhiteSpace(address) ? SlopTotalClient.DefaultEndpoint : address;
         endpoint.MaxLength = 2048;
@@ -73,9 +98,20 @@ internal sealed class AiDetectorWindow : Window
             for (int i = 0; i < (3 + columns - 1) / columns; i++) localActions.RowDefinitions.Add(new() { Height = GridLength.Auto });
             for (int i = 0; i < 3; i++) { Grid.SetColumn(serviceButtons[i], i % columns); Grid.SetRow(serviceButtons[i], i / columns); }
         };
-        connection = new Expander { Header = L("Service de détection · configuration", "Detection service · setup"), HorizontalAlignment = HorizontalAlignment.Stretch,
-            Content = Stack(endpoint, localActions, Text(L("Local : Docker doit être installé et démarré. Le premier lancement télécharge les dépendances et plusieurs Go de modèles. Le service reste lancé après fermeture de cette fenêtre ; utilisez Arrêter pour libérer ses ressources. Ses modèles et rapports sont conservés dans les volumes Docker.",
-                "Local: Docker must be installed and running. First start downloads dependencies and several GB of models. The service keeps running after this window closes; use Stop to free its resources. Models and reports are retained in Docker volumes."), 12, true), links), IsExpanded = false };
+        slopSettings = Stack(endpoint, localActions, Text(L("Local : Docker doit être installé et démarré. Le premier lancement télécharge les dépendances et plusieurs Go de modèles. Le service reste lancé après fermeture de cette fenêtre ; utilisez Arrêter pour libérer ses ressources. Ses modèles et rapports sont conservés dans les volumes Docker.",
+                "Local: Docker must be installed and running. First start downloads dependencies and several GB of models. The service keeps running after this window closes; use Stop to free its resources. Models and reports are retained in Docker volumes."), 12, true), links);
+        connection = new Expander { Header = L("Service de détection · configuration", "Detection service · setup"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = Stack(detectionService, detectionModel, reloadModels, slopSettings), IsExpanded = false };
+        // Saving an AI selection is explicit and makes no paid test request.
+        saveModel = Action(L("Enregistrer la sélection", "Save selection"), async () => await RunAsync(async _ =>
+        {
+            if (SelectedProvider is not { } provider || detectionModel.SelectedItem is not string model) throw new ArgumentException(L("Choisissez un modèle.", "Select a model."));
+            await this.saveDetection(provider.Id, model); status.Text = L("Sélection enregistrée.", "Selection saved.");
+        }));
+        var modelActions = Stack(detectionModel, saveModel); ((StackPanel)connection.Content).Children.Remove(detectionModel);
+        ((StackPanel)connection.Content).Children.Insert(1, modelActions);
+        detectionService.SelectionChanged += (_, _) => { UpdateDetectionMode(); modelActions.Visibility = SelectedProvider == null ? Visibility.Collapsed : Visibility.Visible; };
+        detectionModel.SelectionChanged += (_, _) => { UpdateDestination(); if (analyze != null) analyze.IsEnabled = !analyzing && (SelectedProvider == null || detectionModel.SelectedItem != null); };
         Grid.SetRow(connection, 1); Panel.Children.Add(connection);
 
         source.Header = L("Source à analyser", "Source to analyze"); source.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -132,13 +168,40 @@ internal sealed class AiDetectorWindow : Window
         copy.HorizontalAlignment = HorizontalAlignment.Left; actions.Children.Add(copy); Grid.SetColumn(primaryActions, 1); actions.Children.Add(primaryActions);
         actions.SizeChanged += (_, e) => { bool narrow = e.NewSize.Width < 450 * TextZoom.ForWindow(Panel) / 100d; Grid.SetColumnSpan(copy, narrow ? 2 : 1); Grid.SetRow(primaryActions, narrow ? 1 : 0); };
         Grid.SetRow(actions, 4); Panel.Children.Add(actions);
+        PopulateDetection(providerId, selectedModel);
         UpdateWordCount(); UpdateDestination(); RenderEngines();
         Content = Panel; FluentDesign.WindowChrome(this); AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1260, Height = 960 });
-        Closed += (_, _) => { closed = true; request?.Cancel(); };
+        Closed += (_, _) => { closed = true; request?.Cancel(); modelHttp.Dispose(); };
     }
 
+    void PopulateDetection(int providerId, string? selectedModel)
+    {
+        providers = providers.Where(p => !p.IsComposite).ToList();
+        detectionService.ItemsSource = new[] { new Choice("sloptotal", "SlopTotal · " + L("Détecteurs spécialisés", "Specialized detectors")) }
+            .Concat(providers.Select(p => new Choice(p.Id.ToString(), p.Name + " · #" + p.Id))).ToArray();
+        detectionService.SelectedIndex = Math.Max(0, providers.FindIndex(p => p.Id == providerId) + 1);
+        if (SelectedProvider != null && detectionModel.ItemsSource is IEnumerable<string> names && names.Contains(selectedModel)) detectionModel.SelectedItem = selectedModel;
+    }
+    void UpdateDetectionMode()
+    {
+        var provider = SelectedProvider;
+        slopSettings.Visibility = provider == null ? Visibility.Visible : Visibility.Collapsed;
+        detectionModel.ItemsSource = provider == null ? Array.Empty<string>() : ProviderModels.Visible(provider).ToArray();
+        detectionModel.SelectedIndex = provider == null ? -1 : 0;
+        var previous = Selected(source);
+        source.ItemsSource = new[] { new Choice("text", L("Texte", "Text")), new Choice("document", L("Document", "Document")) }
+            .Concat(provider == null ? new[] { new Choice("url", L("Texte d’une page web", "Web page text")), new Choice("site", L("Site créé avec un outil IA", "AI-built website")) } : Array.Empty<Choice>()).ToArray();
+        source.SelectedItem = ((Choice[])source.ItemsSource).FirstOrDefault(c => c.Id == previous) ?? ((Choice[])source.ItemsSource)[0];
+        UpdateDestination();
+    }
     void UpdateDestination()
     {
+        if (SelectedProvider is { } provider)
+        {
+            destination.Text = L("Le texte analysé sera envoyé à votre fournisseur : ", "Analyzed text will be sent to your provider: ") + provider.Name + " · " + detectionModel.SelectedItem + ". " +
+                L("Analyse du texte collé et des documents. Les pages web et traces de sites sont disponibles avec SlopTotal. Le score du modèle est une appréciation non étalonnée.", "Pasted text and document analysis. Web pages and site fingerprints are available with SlopTotal. Model scores are uncalibrated assessments.");
+            return;
+        }
         try
         {
             var server = SlopTotalClient.NormalizeEndpoint(endpoint.Text); var local = server.IsLoopback;
@@ -155,7 +218,9 @@ internal sealed class AiDetectorWindow : Window
     }
     void SetBusy(bool value)
     {
-        analyzing = value; endpoint.IsEnabled = source.IsEnabled = text.IsEnabled = url.IsEnabled = heatmap.IsEnabled = choose.IsEnabled = check.IsEnabled = startLocal.IsEnabled = stopLocal.IsEnabled = analyze.IsEnabled = !value;
+        analyzing = value; detectionService.IsEnabled = detectionModel.IsEnabled = reloadModels.IsEnabled = saveModel.IsEnabled = !value;
+        endpoint.IsEnabled = source.IsEnabled = text.IsEnabled = url.IsEnabled = heatmap.IsEnabled = choose.IsEnabled = check.IsEnabled = startLocal.IsEnabled = stopLocal.IsEnabled = analyze.IsEnabled = !value;
+        analyze.IsEnabled = !value && (SelectedProvider == null || detectionModel.SelectedItem != null);
         cancel.Visibility = progress.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
         copy.IsEnabled = !value && report != null;
     }
@@ -165,14 +230,14 @@ internal sealed class AiDetectorWindow : Window
         using var operation = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(15)); request = operation; SetBusy(true);
         status.Foreground = FluentDesign.Secondary;
         try { await action(operation.Token); }
-        catch (OperationCanceledException) { if (!closed) status.Text = L("Suivi arrêté ou délai dépassé. Le service peut encore terminer l’analyse en arrière-plan.", "Stopped or timed out. The service may still finish the analysis in the background."); }
+        catch (OperationCanceledException) { if (!closed) status.Text = L("Analyse arrêtée ou délai dépassé.", "Analysis stopped or timed out."); }
         catch (Exception ex)
         {
             if (!closed)
             {
                 status.Foreground = FluentDesign.Resource("ToolMessageErrorStrokeBrush");
                 var message = ex.Message.Length > 900 ? ex.Message[..900] + "…" : ex.Message;
-                status.Text = ex is HttpRequestException ? L("Le service a refusé la demande ou n’est pas joignable. Vérifiez son adresse et son démarrage. ", "The service rejected the request or is unreachable. Check its address and whether it is running. ") + message : message;
+                status.Text = ex is HttpRequestException ? L("La connexion a refusé la demande ou n’est pas joignable. Vérifiez sa configuration. ", "The connection rejected the request or is unreachable. Check its configuration. ") + message : message;
                 if (ex is HttpRequestException) connection.IsExpanded = true;
             }
         }
@@ -182,7 +247,7 @@ internal sealed class AiDetectorWindow : Window
     {
         status.Text = L("Connexion au service…", "Connecting to service…");
         using var client = new SlopTotalClient(endpoint.Text); var health = await client.HealthAsync(ct); catalog = await client.EnginesAsync(ct);
-        await saveEndpoint(client.Endpoint.ToString().TrimEnd('/'));
+        await saveEndpoint(client.Endpoint.ToString().TrimEnd('/')); await saveDetection(0, "");
         status.Text = L("Service joignable", "Service reachable") + " · " + catalog.Count + " " + L("moteurs annoncés", "listed engines")
             + (S(health, "status") == "healthy" ? "" : " · " + L("Service dégradé", "Degraded service"));
         RenderEngines();
@@ -229,12 +294,13 @@ internal sealed class AiDetectorWindow : Window
     }
     async Task AnalyzeAsync() => await RunAsync(async ct =>
     {
+        if (SelectedProvider != null) { await AnalyzeProviderAsync(ct); return; }
         using var client = new SlopTotalClient(endpoint.Text); var mode = Selected(source); var input = mode == "text" ? text.Text.Trim() : ""; var address = mode is "url" or "site" ? url.Text.Trim() : "";
         if (mode == "text" && input.Length < 50) throw new ArgumentException(L("Collez au moins 50 caractères pour lancer l’analyse.", "Paste at least 50 characters to start analysis."));
         if (mode == "document" && document == null) throw new ArgumentException(L("Choisissez un document à analyser.", "Choose a document to analyze."));
         if (mode is "url" or "site" && address.Length == 0) throw new ArgumentException(L("Renseignez l’URL de la page.", "Enter the page URL."));
         status.Text = L("Connexion aux détecteurs…", "Connecting to detectors…");
-        await client.HealthAsync(ct); catalog = await client.EnginesAsync(ct); await saveEndpoint(client.Endpoint.ToString().TrimEnd('/'));
+        await client.HealthAsync(ct); catalog = await client.EnginesAsync(ct); await saveEndpoint(client.Endpoint.ToString().TrimEnd('/')); await saveDetection(0, "");
         report = null; liveEngines.Clear(); score.Text = "—"; gauge.Value = 0; summary.Text = caution.Text = "";
         verdict.Text = L("Analyse en cours…", "Analyzing…"); site.Children.Clear(); paragraphs.Children.Clear(); siteSection.Visibility = paragraphsSection.Visibility = Visibility.Collapsed; RenderEngines();
         var timer = Stopwatch.StartNew(); bool fullReceived = false;
@@ -275,6 +341,44 @@ internal sealed class AiDetectorWindow : Window
         status.Text = L("Analyse terminée en ", "Analysis completed in ") + timer.Elapsed.TotalSeconds.ToString("0.0") + " s";
     });
 
+    async Task AnalyzeProviderAsync(CancellationToken ct)
+    {
+        var configured = SelectedProvider ?? throw new ArgumentException(L("Choisissez un fournisseur.", "Select a provider."));
+        var selectedModel = detectionModel.SelectedItem as string ?? throw new ArgumentException(L("Choisissez un modèle.", "Select a model."));
+        var selected = CompositeModel.Resolve(new AgentModel { ProviderId = configured.Id, Model = selectedModel }, [configured]);
+        var mode = Selected(source);
+        if (mode is not ("text" or "document")) throw new ArgumentException(L("Choisissez du texte ou un document.", "Select text or a document."));
+        if (mode == "document" && document == null) throw new ArgumentException(L("Choisissez un document.", "Select a document."));
+        status.Text = L("Préparation du texte…", "Preparing text…");
+        var input = mode == "document" ? await AiTextDetection.ReadDocumentAsync(document!, ct) : text.Text.Trim();
+        var byParagraph = heatmap.IsChecked == true;
+        var prompt = AiTextDetection.Request(input, byParagraph, UiText.Language);
+        await saveDetection(configured.Id, selectedModel);
+        report = null; catalog = []; liveEngines.Clear(); score.Text = "—"; gauge.Value = 0; summary.Text = caution.Text = "";
+        verdict.Text = L("Analyse du modèle en cours…", "Model analysis in progress…");
+        site.Children.Clear(); paragraphs.Children.Clear(); siteSection.Visibility = paragraphsSection.Visibility = Visibility.Collapsed; RenderEngines();
+        var watch = Stopwatch.StartNew();
+        using var consumption = SmokeRequest == null ? TokenConsumption.Begin(consumptionDatabase, "ai_detector") : null;
+        if (SmokeRequest == null) await prepare(selected, ct);
+        var last = DateTime.MinValue;
+        void Update(GenerationUpdate update)
+        {
+            if ((DateTime.UtcNow - last).TotalMilliseconds < 200) return;
+            last = DateTime.UtcNow;
+            DispatcherQueue.TryEnqueue(() => { if (!closed && request?.Token == ct && !ct.IsCancellationRequested) status.Text = update.Retry is { } retry ? retry.Describe(UiText.Language) : L("Analyse du modèle…", "Model analysis…"); });
+        }
+        var result = SmokeRequest != null ? await SmokeRequest(selected, prompt, ct)
+            : await new ModelToolClient(modelHttp).RunAsync(selected, KeyVault.Decrypt(selected.ProtectedKey), prompt, Update, ct, readSettings?.Invoke());
+        var parsed = await Task.Run(() => AiTextDetection.Report(input, result.Text, byParagraph, configured.Name + " · " + selectedModel), ct);
+        ct.ThrowIfCancellationRequested(); if (closed) return;
+        parsed["provider_id"] = configured.Id; parsed["provider_name"] = configured.Name; parsed["model"] = selectedModel;
+        parsed["input_tokens"] = result.InputTokens; parsed["output_tokens"] = result.OutputTokens; parsed["tokens_estimated"] = result.Estimated;
+        parsed["client_elapsed_seconds"] = watch.Elapsed.TotalSeconds;
+        report = parsed; RenderFull(report);
+        if (byParagraph && report["paragraph_analysis"] is JsonObject detail) RenderParagraphs(detail);
+        status.Text = L("Analyse terminée en ", "Analysis completed in ") + watch.Elapsed.TotalSeconds.ToString("0.0") + " s";
+    }
+
     void RenderFull(JsonObject result)
     {
         liveEngines.Clear(); if (result["engine_results"] is JsonArray items) foreach (var engine in items.OfType<JsonObject>()) liveEngines[S(engine, "engine_name")] = engine;
@@ -287,6 +391,8 @@ internal sealed class AiDetectorWindow : Window
             + " · " + flagged + " " + L("signalent des indices IA", "flag AI signals");
         caution.Text = incomplete ? L("Certains détecteurs sont absents ou en erreur. Le score du service peut être biaisé ; ne concluez pas sur son verdict global.", "Some detectors are missing or failed. The service score may be biased; do not rely on its overall verdict.")
             : N(result, "word_count") < 200 ? L("Texte court : résultat à interpréter avec prudence.", "Short text: interpret the result with care.") : L("Score calibré fourni par SlopTotal. Comparez les moteurs avant de tirer une conclusion.", "Calibrated score supplied by SlopTotal. Compare engines before drawing a conclusion.");
+        if (S(result, "detection_method") == "language_model")
+            caution.Text = L("Appréciation d’un modèle, non étalonnée : ce score n’est ni une probabilité mesurée ni une preuve d’auteur. Il peut varier avec le modèle et sa réponse.", "Uncalibrated model assessment: this score is neither a measured probability nor proof of authorship. It can vary by model and response.");
         RenderEngines();
     }
     static string Verdict(string value) => value switch
@@ -320,12 +426,12 @@ internal sealed class AiDetectorWindow : Window
     void RenderParagraphs(JsonObject detail)
     {
         paragraphs.Children.Clear(); paragraphsSection.Visibility = Visibility.Visible;
-        paragraphs.Children.Add(Text(L("Ces scores rapides par passage sont distincts du rapport complet. Le service peut regrouper les paragraphes courts et tronquer l’extrait affiché.", "These quick passage scores are separate from the full report. The service may merge short paragraphs and truncate displayed excerpts."), 12, true));
+        paragraphs.Children.Add(Text(S(report ?? new(), "detection_method") == "language_model" ? L("Appréciation du même modèle par paragraphe ; scores non étalonnés.", "Per-paragraph assessment by the same model; uncalibrated scores.") : L("Ces scores rapides par passage sont distincts du rapport complet. Le service peut regrouper les paragraphes courts et tronquer l’extrait affiché.", "These quick passage scores are separate from the full report. The service may merge short paragraphs and truncate displayed excerpts."), 12, true));
         if (detail["paragraphs"] is not JsonArray items || items.Count == 0) { paragraphs.Children.Add(Text(L("Aucun paragraphe exploitable.", "No usable paragraphs."))); return; }
         foreach (var item in items.OfType<JsonObject>())
         {
-            var value = N(item, "score"); var caption = "#" + (N(item, "index") + 1) + " · " + value.ToString("0.0") + " / 100 · " + Verdict(S(item, "verdict"));
-            var card = FluentDesign.Surface(Stack(Text(caption, 13), new ProgressBar { Minimum = 0, Maximum = 100, Value = Math.Clamp(value, 0, 100), Height = 5, Foreground = ScoreBrush(value) }, Text(S(item, "text"), 13)), 12);
+            var value = N(item, "score"); var caption = "#" + (N(item, "index") + 1) + " · " + (item["score"] == null ? "—" : value.ToString("0.0")) + " / 100 · " + Verdict(S(item, "verdict"));
+            var card = FluentDesign.Surface(Stack(Text(caption, 13), new ProgressBar { Minimum = 0, Maximum = 100, Value = Math.Clamp(value, 0, 100), Height = 5, Foreground = ScoreBrush(value), Visibility = item["score"] == null ? Visibility.Collapsed : Visibility.Visible }, Text(S(item, "text"), 13), Text(S(item, "explanation"), 12, true)), 12);
             card.BorderBrush = ScoreBrush(value); card.BorderThickness = new(3, 0, 0, 0); paragraphs.Children.Add(card);
         }
     }

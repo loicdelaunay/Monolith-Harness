@@ -8,6 +8,8 @@ public sealed class FeatureSettings
     public bool WelcomeCompleted { get; set; } = true;
     // Cutoff captured by the usage migration; newer interrupted messages aren't legacy history.
     public int ConsumptionLegacyMessageId { get; set; }
+    public int AiDetectorProviderId { get; set; }
+    public string AiDetectorModel { get; set; } = "";
     public string AiDetectorEndpoint { get; set; } = SlopTotalClient.DefaultEndpoint;
     public string Theme { get; set; } = "fluent-dark";
     public List<AppearanceTheme> CustomThemes { get; set; } = [];

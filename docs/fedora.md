@@ -1,14 +1,14 @@
 # Fedora Linux x64
 
-Monolith Harness 1.36.0 provides GUI and CLI archives for Fedora 44 x64 in the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.36.0) and [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.36.0). Choose the `linux-x64.tar.gz` asset, check its SHA-256 against the attached `SHA256SUMS.txt`, and extract it into a **writable, private** folder:
+Monolith Harness 1.37.0 provides GUI and CLI archives for Fedora 44 x64 in the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.37.0) and [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.37.0). Choose the `linux-x64.tar.gz` asset, check its SHA-256 against the attached `SHA256SUMS.txt`, and extract it into a **writable, private** folder:
 
 ```bash
 mkdir -p ~/Applications/MonolithHarness
-tar -xzf MonolithHarness-v1.36.0-linux-x64.tar.gz -C ~/Applications/MonolithHarness
+tar -xzf MonolithHarness-v1.37.0-linux-x64.tar.gz -C ~/Applications/MonolithHarness
 ~/Applications/MonolithHarness/MonolithHarness
 ```
 
-For the CLI, extract `MonolithHarness-CLI-v1.36.0-linux-x64.tar.gz` into a folder and run `./MonolithHarness` from your project directory. Enter `/connect` to configure a provider. Both downloads bundle .NET, Python and the multilingual embedding model. They create their own SQLite database and resources beside the executable; no user data ships in the archive.
+For the CLI, extract `MonolithHarness-CLI-v1.37.0-linux-x64.tar.gz` into a folder and run `./MonolithHarness` from your project directory. Enter `/connect` to configure a provider. Both downloads bundle .NET, Python and the multilingual embedding model. They create their own SQLite database and resources beside the executable; no user data ships in the archive.
 
 The GUI uses Uno's X11 desktop backend. A Fedora Workstation Wayland session can use XWayland. Install system graphics, font, DBus, GTK3 and WebKitGTK packages if absent, for example `sudo dnf install libXrandr libXi mesa-libGL fontconfig dbus-daemon gtk3 webkit2gtk4.1`. Set `GDK_BACKEND=x11` if WebKitGTK does not appear under Wayland. The embedded browser uses the system WebKitGTK runtime. [Uno's Linux desktop guide](https://platform.uno/docs/articles/features/using-skia-desktop.html) and [WebView requirements](https://platform.uno/docs/articles/controls/WebView.html) describe these system components.
 

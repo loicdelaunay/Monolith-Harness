@@ -2,8 +2,8 @@
 <html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-__NONCE__'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
 <style>
-html,body{margin:0;height:100%;background:#fff;color:#202124;font:16px/1.5 'Segoe UI',sans-serif}
-*{box-sizing:border-box}#editor{padding:16px;min-height:100%;outline:none;overflow-wrap:anywhere;white-space:pre-wrap}
+html,body{margin:0;height:100%;overflow:hidden;background:#fff;color:#202124;font:16px/1.5 'Segoe UI',sans-serif}
+*{box-sizing:border-box}#editor{padding:16px;height:100%;overflow:auto;overscroll-behavior:contain;outline:none;overflow-wrap:anywhere;white-space:pre-wrap}
 #editor:empty:before{content:attr(data-placeholder);color:#777;pointer-events:none}table{max-width:100%}img{max-width:100%;height:auto}
 #editor[aria-disabled=true]{cursor:wait}::selection{background:#b8d6ff;color:#111}
 </style></head><body><div id="editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"></div>
@@ -15,85 +15,149 @@ html,body{margin:0;height:100%;background:#fff;color:#202124;font:16px/1.5 'Sego
  const dropped=new Set('SCRIPT STYLE IFRAME FRAME OBJECT EMBED SVG MATH FORM INPUT BUTTON TEXTAREA SELECT LINK META BASE NOSCRIPT TEMPLATE'.split(' '));
  const properties=new Set('color background-color font-family font-size font-weight font-style font-variant text-decoration text-decoration-line text-decoration-color text-align vertical-align line-height letter-spacing word-spacing white-space direction unicode-bidi margin margin-top margin-bottom margin-left margin-right padding padding-top padding-bottom padding-left padding-right border border-width border-style border-color border-collapse border-spacing border-top border-bottom border-left border-right width max-width height list-style-type text-indent'.split(' '));
  const blocks=new Set('DIV P LI BLOCKQUOTE PRE H1 H2 H3 H4 H5 H6 TR TABLE UL OL'.split(' '));
- let revision=0, lastGood='', readOnly=false, enabled=true;
- function clean(html) {
-   const source=new DOMParser().parseFromString(html,'text/html');
-   function copy(node) {
-     if(node.nodeType===3)return document.createTextNode(node.data);
-     if(node.nodeType!==1)return document.createDocumentFragment();
-     if(dropped.has(node.tagName))return document.createDocumentFragment();
-     const target=tags.has(node.tagName)?document.createElement(node.tagName.toLowerCase()):document.createDocumentFragment();
-     if(target.nodeType===1){
-       for(const key of node.style){const value=node.style.getPropertyValue(key); if(properties.has(key)&&!/(url\s*\(|expression|@import|javascript:|behavior)/i.test(value))target.style.setProperty(key,value);}
-       for(const key of ['colspan','rowspan','start','type','dir','align','valign','cellpadding','cellspacing','width','height','color','face','size','bgcolor']){
-         const value=node.getAttribute(key);if(value && value.length<200 && !/[<>]/.test(value))target.setAttribute(key,value);
+ const maxText=20000, maxHtml=3000000, maxNodes=12000, maxDepth=128;
+ let revision=0, readOnly=false, enabled=true, cached=null, pasteJob=0, pasting=false;
+ const notify=(kind,message)=>window.chrome?.webview?.postMessage({kind,message});
+ const failure=message=>notify('error',message);
+ const limit=()=>readOnly?maxText*4:maxText;
+ function* sanitize(html) {
+   if(html.length>maxHtml)throw new Error('Collage trop volumineux / Paste is too large.');
+   const source=new DOMParser().parseFromString(html,'text/html'), result=document.createElement('div');
+   const stack=[...source.body.childNodes].reverse().map(node=>({node,parent:result,depth:0}));
+   let count=0, characters=0;
+   while(stack.length){
+     const {node,parent,depth}=stack.pop();
+     if(++count>maxNodes||depth>maxDepth)throw new Error('Mise en forme trop complexe. Collez un extrait plus court / Formatting is too complex; paste a shorter excerpt.');
+     if(node.nodeType===3){
+       characters+=node.data.length;
+       if(characters>limit())throw new Error('Texte trop long / Text is too long (20 000 caractères / characters).');
+       parent.append(document.createTextNode(node.data));
+     }else if(node.nodeType===1&&!dropped.has(node.tagName)){
+       const target=tags.has(node.tagName)?document.createElement(node.tagName.toLowerCase()):document.createDocumentFragment();
+       if(target.nodeType===1){
+         for(let i=0;i<node.style.length;i++){
+           const key=node.style.item(i), value=node.style.getPropertyValue(key);
+           if(properties.has(key)&&!/(url\s*\(|expression|@import|javascript:|behavior)/i.test(value))target.style.setProperty(key,value);
+         }
+         for(const key of ['colspan','rowspan','start','type','dir','align','valign','cellpadding','cellspacing','width','height','color','face','size','bgcolor']){
+           const value=node.getAttribute(key);if(value&&value.length<200&&!/[<>]/.test(value))target.setAttribute(key,value);
+         }
+         if(node.tagName==='A'){
+           const href=node.getAttribute('href')||'';
+           if(/^(https?:|mailto:|tel:)/i.test(href))target.setAttribute('href',href);
+         }
+         if(node.tagName==='IMG'){
+           const src=node.getAttribute('src')||'';
+           if((/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src)&&src.length<2000000)||/^(https?:|cid:)/i.test(src))target.setAttribute('src',src);
+           else {parent.append(document.createTextNode(node.getAttribute('alt')||'[image]'));continue;}
+           if(node.hasAttribute('alt'))target.setAttribute('alt',node.getAttribute('alt'));
+         }
        }
-       if(node.tagName==='A'){
-         const href=node.getAttribute('href')||'';
-         if(/^(https?:|mailto:|tel:)/i.test(href))target.setAttribute('href',href);
-       }
-       if(node.tagName==='IMG'){
-         const src=node.getAttribute('src')||'';
-         if((/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src)&&src.length<2000000)||/^(https?:|cid:)/i.test(src))target.setAttribute('src',src);
-         else {const alt=node.getAttribute('alt')||'[image]';return document.createTextNode(alt);}
-         if(node.hasAttribute('alt'))target.setAttribute('alt',node.getAttribute('alt'));
+       // Append fragments only after their children: appending an empty fragment loses them.
+       if(target.nodeType===11){
+         for(let i=node.childNodes.length-1;i>=0;i--)stack.push({node:node.childNodes[i],parent,depth:depth+1});
+       }else{
+         parent.append(target);
+         for(let i=node.childNodes.length-1;i>=0;i--)stack.push({node:node.childNodes[i],parent:target,depth:depth+1});
        }
      }
-     for(const child of node.childNodes)target.append(copy(child));
-     return target;
+     if(count%128===0)yield;
    }
-   const result=document.createElement('div');for(const child of source.body.childNodes)result.append(copy(child));
-   return result.innerHTML;
+   return result;
  }
- function snapshot() {
-   const root=editor.cloneNode(true), runs=[];let id=0, negative=-1;
+ function clean(html){const job=sanitize(html);let step;do{step=job.next();}while(!step.done);return step.value;}
+ function visit(root,entry,exit){
+   const stack=[...root.childNodes].reverse().map(node=>({node,leaving:false}));let count=0;
+   while(stack.length){
+     const item=stack.pop();
+     if(item.leaving){exit(item.node);continue;}
+     if(++count>maxNodes)throw new Error('Mise en forme trop complexe / Formatting is too complex.');
+     entry(item.node);
+     if(item.node.nodeType===1){
+       stack.push({node:item.node,leaving:true});
+       for(let i=item.node.childNodes.length-1;i>=0;i--)stack.push({node:item.node.childNodes[i],leaving:false});
+     }
+   }
+ }
+ function snapshot(root=editor){
+   const clone=root.cloneNode(true), runs=[];let id=0, negative=-1;
    function boundary(text){if(!runs.length||runs[runs.length-1].Text.endsWith('\n'))return;runs.push({Id:negative--,Text:text,Structural:true});}
-   function walk(node){
+   visit(clone,node=>{
      if(node.nodeType===3){const run={Id:id++,Text:node.data,Structural:false};runs.push(run);node.replaceWith(document.createComment('omh-text-'+run.Id));return;}
      if(node.nodeType!==1)return;
      if(node.tagName==='BR'){runs.push({Id:negative--,Text:'\n',Structural:true});return;}
      if(blocks.has(node.tagName))boundary('\n');
-     for(const child of [...node.childNodes])walk(child);
+   },node=>{
      if(blocks.has(node.tagName))boundary('\n');
      if(node.tagName==='TD'||node.tagName==='TH')boundary('\t');
-   }
-   for(const child of [...root.childNodes])walk(child);
-   while(runs.length && runs[runs.length-1].Structural)runs.pop();
-   if(!runs.length){runs.push({Id:0,Text:'',Structural:false});root.append(document.createComment('omh-text-0'));}
-   return {Template:root.innerHTML,Runs:runs};
+   });
+   while(runs.length&&runs[runs.length-1].Structural)runs.pop();
+   if(!runs.length){runs.push({Id:0,Text:'',Structural:false});clone.append(document.createComment('omh-text-0'));}
+   return {Template:clone.innerHTML,Runs:runs};
  }
- function changed(){
-   const value=snapshot();
-   if(value.Runs.reduce((n,r)=>n+r.Text.length,0)>20000 && !readOnly){editor.innerHTML=lastGood;return;}
-   lastGood=editor.innerHTML;revision++;
- }
+ function changed(){revision++;cached=null;notify('changed');}
  editor.addEventListener('input',changed);
+ editor.addEventListener('beforeinput',e=>{
+   if(!readOnly&&e.inputType.startsWith('insert')&&e.data&&editor.textContent.length-(getSelection()?.toString().length||0)+e.data.length>maxText){e.preventDefault();failure('Texte trop long / Text is too long (20 000 caractères / characters).');}
+ });
  editor.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();});
  editor.addEventListener('drop',e=>e.preventDefault());
- editor.addEventListener('paste',e=>{
-   if(readOnly||!enabled)return;
-   e.preventDefault();const data=e.clipboardData;
-   const html=data.getData('text/html');const text=data.getData('text/plain');
-   if((html||text).length>3000000)return;
-   if(html)document.execCommand('insertHTML',false,clean(html));else document.execCommand('insertText',false,text);
-   changed();
+ editor.addEventListener('paste',async e=>{
+   if(readOnly||!enabled){e.preventDefault();return;}
+   e.preventDefault();const data=e.clipboardData;if(!data)return;
+   const html=data.getData('text/html'), text=data.getData('text/plain');
+   const selection=getSelection(), range=selection?.rangeCount?selection.getRangeAt(0).cloneRange():null;
+   if(!range||!editor.contains(range.commonAncestorContainer))return;
+   const job=++pasteJob, version=revision;
+   pasting=true;editor.setAttribute('aria-busy','true');
+   try{
+     if((html||text).length>maxHtml||text.length>maxText)throw new Error('Collage trop volumineux / Paste is too large (20 000 caractères / characters).');
+     const iterator=html?sanitize(html):null;let prepared;
+     // Yield between batches before touching the visible document; caret and scroll remain stable.
+     if(iterator){
+       let step;
+       do{step=iterator.next();if(!step.done)await new Promise(resolve=>setTimeout(resolve,0));if(job!==pasteJob)return;}while(!step.done);
+       prepared=step.value;
+     }else{prepared=document.createElement('div');prepared.textContent=text;}
+     const incoming=snapshot(prepared).Runs.reduce((n,r)=>n+r.Text.length,0);
+     const current=(cached||snapshot()).Runs.reduce((n,r)=>n+r.Text.length,0);
+     if(current-range.toString().length+incoming>maxText)throw new Error('Texte trop long / Text is too long (20 000 caractères / characters).');
+     if(version!==revision)throw new Error('Le texte a changé pendant le collage. Réessayez / Text changed during paste; please retry.');
+     editor.focus();selection.removeAllRanges();selection.addRange(range);
+     const before=revision;
+     // A tool can disable its controls while waiting for this pending paste to finish.
+     editor.contentEditable='true';
+     const inserted=document.execCommand(html?'insertHTML':'insertText',false,html?prepared.innerHTML:text);
+     editor.contentEditable=String(!readOnly&&enabled);
+     if(!inserted)throw new Error('Collage indisponible. Réessayez / Paste unavailable; please retry.');
+     if(revision===before)changed();
+   }catch(error){failure(error.message);}
+   finally{if(job===pasteJob){pasting=false;editor.setAttribute('aria-busy','false');}}
  });
  window.omhEditor={
    configure(placeholder,ro){readOnly=ro;editor.dataset.placeholder=placeholder;editor.setAttribute('aria-label',placeholder);this.enable(enabled);},
    enable(value){enabled=value;editor.contentEditable=String(!readOnly&&enabled);editor.setAttribute('aria-readonly',String(readOnly));editor.setAttribute('aria-disabled',String(!enabled));},
-   set(html){editor.innerHTML=clean(html);lastGood=editor.innerHTML;revision++;return this.read(-1);},
-   read(previous){return previous===revision?null:JSON.stringify({Revision:revision,Document:snapshot()});},
+   set(html){
+     ++pasteJob;pasting=false;editor.setAttribute('aria-busy','false');
+     const prepared=clean(html), value=prepared.innerHTML;
+     if(editor.innerHTML!==value){editor.innerHTML=value;cached=null;revision++;}
+     return revision;
+   },
+   read(previous){
+     if(pasting)return JSON.stringify({Pending:true});
+     if(previous===revision)return null;
+     cached??=snapshot();
+     return JSON.stringify({Revision:revision,Document:cached});
+   },
    select(start,length){
      const entries=[];let offset=0;
      function boundary(value){if(!offset||entries[entries.length-1]?.break==='\n')return;entries.push({break:value,start:offset,length:value.length});offset+=value.length;}
-     function walk(node){
+     visit(editor,node=>{
        if(node.nodeType===3){entries.push({node,start:offset,length:node.length});offset+=node.length;return;}
        if(node.nodeType!==1)return;
        if(node.tagName==='BR'){entries.push({break:'\n',start:offset,length:1});offset++;return;}
-       if(blocks.has(node.tagName))boundary('\n');for(const child of node.childNodes)walk(child);
-       if(blocks.has(node.tagName))boundary('\n');if(node.tagName==='TD'||node.tagName==='TH')boundary('\t');
-     }
-     for(const child of editor.childNodes)walk(child);
+       if(blocks.has(node.tagName))boundary('\n');
+     },node=>{if(blocks.has(node.tagName))boundary('\n');if(node.tagName==='TD'||node.tagName==='TH')boundary('\t');});
      const nodes=entries.filter(e=>e.node);if(!nodes.length)return;
      function point(pos){const entry=nodes.find(e=>pos<=e.start+e.length)||nodes[nodes.length-1];return [entry.node,Math.max(0,Math.min(entry.length,pos-entry.start))];}
      const range=document.createRange();range.setStart(...point(start));range.setEnd(...point(start+length));

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.37.0 - 2026-09-30
+
+- Translator and proofreader editors synchronize after changes rather than polling continuously. Formatted paste is processed in bounded batches, with stack-safe traversal and explicit size/complexity errors that preserve existing text. Redundant editor replacements and layout changes are avoided to keep windows responsive and prevent blinking.
+- AI Generated detector can use a configured provider and model instead of SlopTotal for pasted text and locally extracted TXT/MD/PDF/DOCX documents. The selection is saved, requests use the configured connection and retry settings, cancellation is supported and token consumption is recorded. Model assessments are labeled as uncalibrated; scores, paragraph references and exact source quotations are validated. SlopTotal retains web-page and site fingerprint analysis.
+
 ## 1.36.0 - 2026-09-30
 
 - Automated publication is temporarily limited to Windows x64 and Linux x64 for both GUI and CLI. macOS platform code and already published historical downloads remain available.

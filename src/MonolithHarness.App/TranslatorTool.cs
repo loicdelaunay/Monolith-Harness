@@ -10,7 +10,7 @@ internal sealed partial class ModelToolsWindow
     ComboBox sourceLanguage = null!, targetLanguage = null!;
     bool swappingTranslation;
     string? translatedInputKey;
-    string TranslationInputKey => sourceLanguage.SelectedIndex + "\0" + targetLanguage.SelectedIndex + "\0" + translationInput.Document.Html;
+    string TranslationInputKey => sourceLanguage.SelectedIndex + "\0" + targetLanguage.SelectedIndex + "\0" + translationInput.DocumentVersion;
 
     UIElement BuildTranslator()
     {

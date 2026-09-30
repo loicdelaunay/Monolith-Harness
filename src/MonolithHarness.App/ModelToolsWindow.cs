@@ -259,8 +259,9 @@ internal sealed partial class ModelToolsWindow : Window
             var changedMode = wasNarrow != narrow; wasNarrow = narrow;
             viewer.VerticalScrollBarVisibility = narrow ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
             viewer.VerticalScrollMode = narrow ? ScrollMode.Enabled : ScrollMode.Disabled;
-            grid.MinHeight = 0;
-            grid.Height = narrow ? double.NaN : Math.Max(0, viewer.ActualHeight - 4);
+            var height = narrow ? double.NaN : Math.Max(0, viewer.ActualHeight - 4);
+            if (double.IsNaN(height) != double.IsNaN(grid.Height) || (!double.IsNaN(height) && Math.Abs(grid.Height - height) > 1)) grid.Height = height;
+            if (!changedMode) return;
             grid.ColumnDefinitions[1].Width = narrow ? new(0) : new(rightWeight, GridUnitType.Star);
             grid.RowDefinitions[0].Height = narrow ? GridLength.Auto : new(1, GridUnitType.Star);
             grid.RowDefinitions[1].Height = GridLength.Auto;

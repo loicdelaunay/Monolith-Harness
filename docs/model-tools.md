@@ -96,3 +96,16 @@ La note reste **provisoire** pendant une exécution ou après interruption. Les 
 Le débit agrégé est la somme des tokens de sortie divisée par la somme des durées des requêtes complètes, latence incluse. La vérification locale des pages n’entre pas dans ce calcul. Les compteurs viennent du fournisseur ; à défaut, ils sont estimés et marqués **≈**. Les requêtes interrompues ou en erreur peuvent consommer des tokens non remontés.
 
 **Copier le rapport JSON** inclut versions, niveau, série, sélection, délai, modèle, sources, réponses, corrigés, note, contrôles individuels, métriques et HTML des applications, sans clé API. Les requêtes utilisent la connexion configurée et sa tarification habituelle. **Arrêter** ou fermer la fenêtre annule le travail en cours.
+
+
+## AI Generated detector : service ou fournisseur IA
+
+Dans **Service de détection · configuration**, choisissez **SlopTotal** ou un fournisseur configuré, puis son modèle. **Enregistrer la sélection** mémorise ce choix sans envoyer de requête de test ; une analyse le mémorise aussi. **Actualiser les fournisseurs** reprend les modèles cochés dans Réglages. Ce choix est indépendant du modèle de la conversation.
+
+Le mode fournisseur analyse le texte collé et les documents TXT, MD, PDF et DOCX, extraits localement. Les pages web et empreintes de constructeurs de sites restent disponibles dans le mode SlopTotal. Un document scanné nécessite un OCR préalable. Les entrées sont limitées à 100 000 caractères et 10 Mo par document ; le contexte du modèle peut imposer une limite inférieure. L’analyse par paragraphe accepte jusqu’à 128 paragraphes ; désactivez-la pour un rapport global sur un texte plus fragmenté.
+
+Les scores produits par un modèle sont des **appréciations non étalonnées**, pas des probabilités mesurées ni des preuves d’auteur. Le rapport indique le fournisseur, le modèle et ses explications ; les citations doivent correspondre au texte original. Une réponse invalide affiche une erreur, et une réponse sans indices suffisants reste indéterminée. Les réglages de retry, l’annulation et les compteurs de consommation s’appliquent. Aucun outil d’agent n’est autorisé dans ces requêtes.
+
+### Collage dans le traducteur et le correcteur
+
+Les champs formatés se synchronisent après modification, sans lecture périodique au repos. Le collage conserve les styles, paragraphes, tableaux et liens ; il traite les gros contenus par lots. Les contenus dépassant 20 000 caractères ou une complexité raisonnable sont refusés avec une explication, en conservant le texte déjà présent. Copiez le résultat avec **Copier** pour obtenir le texte et son format HTML.
