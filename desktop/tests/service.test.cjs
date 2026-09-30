@@ -51,9 +51,9 @@ test('desktop service: SQLite, providers, skills, permissions and simultaneous c
       res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta}]})+'\n\ndata: [DONE]\n\n');return;
     }
     if(body.model==='handoff-model'){
-      const last=body.messages.at(-1),isChild=body.messages[0].content.includes('You are a bounded subagent');
+      const last=body.messages.at(-1),isChild=body.messages[0].content.includes('You are subagent ');
       active--;
-      if(body.messages[0].content.includes('Plan independent bounded subtasks')){res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta:{content:JSON.stringify({tasks:[{name:'Exploration',prompt:'Inspect project sources'},{name:'Validation',prompt:'Review findings'}]})}}]})+'\n\ndata: [DONE]\n\n');return;}
+      if(body.messages[0].content.includes('Evaluate the request and plan concrete independent subtasks.')){res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta:{content:JSON.stringify({tasks:[{name:'Exploration',prompt:'Inspect project sources'},{name:'Validation',prompt:'Review findings'}]})}}]})+'\n\ndata: [DONE]\n\n');return;}
       if(last.role==='assistant'){res.writeHead(400,{'Content-Type':'application/json'});res.end('{"error":{"message":"last assistant is not a valid continuation"}}');return;}
       const delta=isChild?{content:'Analysis completed in Plan mode. No edits.'}:last.role==='tool'?{content:'Parent resumed and finished.'}:{tool_calls:[{index:0,id:'parent-read',type:'function',function:{name:'list_sources',arguments:'{"path":"."}'}}]};
       res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta}]})+'\n\ndata: [DONE]\n\n');return;
@@ -232,9 +232,9 @@ test('desktop service: SQLite, providers, skills, permissions and simultaneous c
   assert.ok(forcedHistory.some(x=>x.role==='tool'&&x.content.startsWith('list_sources')));
   assert.equal((await rpc('subagents',{chatId:forcedChat.id})).length,2,'Forced children run once, then the parent continues');
   const handoffRequests=requestLog.filter(x=>x.body.model==='handoff-model');
-  const parentRequest=handoffRequests.find(x=>!x.body.messages[0].content.includes('You are a bounded subagent')&&!x.body.messages[0].content.includes('Plan independent bounded subtasks'));
+  const parentRequest=handoffRequests.find(x=>!x.body.messages[0].content.includes('You are subagent ')&&!x.body.messages[0].content.includes('Evaluate the request and plan concrete independent subtasks.'));
   assert.equal(parentRequest.body.messages.at(-1).role,'user');assert.ok(parentRequest.body.tools.some(x=>x.function.name==='write_source'),'Parent retains Execute tools');
-  assert.ok(handoffRequests.filter(x=>x.body.messages[0].content.includes('You are a bounded subagent')).every(x=>x.body.tools.some(t=>t.function.name==='write_source')),'Forced children inherit Execute permissions');
+  assert.ok(handoffRequests.filter(x=>x.body.messages[0].content.includes('You are subagent ')).every(x=>x.body.tools.some(t=>t.function.name==='write_source')),'Forced children inherit Execute permissions');
   const failureProvider=await rpc('provider.save',{name:'Error regression',kind:'openai',baseUrl:provider.baseUrl,model:'failure-model'});
   const failureChat=await rpc('chat.save',{projectId:project.id,title:'Failure detail'});
   await assert.rejects(rpc('send',{chatId:failureChat.id,providerId:failureProvider.id,text:'Test error'}),/HTTP 400/);

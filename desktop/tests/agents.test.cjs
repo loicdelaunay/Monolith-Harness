@@ -18,7 +18,7 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
   const tool=(name,args)=>({tool_calls:[{index:0,id:'call'+calls,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
   const server=http.createServer(async(req,res)=>{
     const parts=[];for await(const part of req)parts.push(part);const body=JSON.parse(Buffer.concat(parts));payloads.push(body);calls++;
-    const isChild=body.messages[0].content.includes('You are a bounded subagent');if(isChild)childCalls++;else rootCalls++;
+    const isChild=body.messages[0].content.includes('You are subagent ');if(isChild)childCalls++;else rootCalls++;
     const previous=body.messages.filter(x=>x.role==='tool');let delta={content:'Done'};
     if(scenario==='plan'){
       if(previous.length===0)delta=tool('write_source',{path:'blocked.md',content:'must not write'});
@@ -31,7 +31,7 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
       if(isChild)delta=toolOrFinish();
       else if(!previous.length)delta=tool('delegate_tasks',{tasks:[{name:'Review',prompt:'Inspect conventions'}]});
     }else if(scenario==='disabled'&&!previous.length)delta=tool('delegate_tasks',{tasks:[{name:'Forbidden',prompt:'Should never start'}]});
-    else if(scenario==='forced'&&body.messages[0].content.includes('Plan independent bounded subtasks'))delta={content:JSON.stringify({tasks:[{name:'Exploration',prompt:'Inspect project conventions'},{name:'Validation',prompt:'Review project sources'}]})};
+    else if(scenario==='forced'&&body.messages[0].content.includes('Evaluate the request and plan concrete independent subtasks.'))delta={content:JSON.stringify({tasks:[{name:'Exploration',prompt:'Inspect project conventions'},{name:'Validation',prompt:'Review project sources'}]})};
     else if(scenario==='forced'&&isChild)delta=toolOrFinish();
     else if(scenario==='execute'&&!previous.length)delta=tool('write_source',{path:'allowed.md',content:'written'});
     function toolOrFinish(){return previous.length?{content:'Child verified sources'}:tool('read_source',{path:'AGENTS.md'});}

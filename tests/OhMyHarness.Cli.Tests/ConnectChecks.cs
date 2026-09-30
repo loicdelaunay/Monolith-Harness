@@ -52,7 +52,7 @@ static class ConnectChecks
                 string frame = Regex.Replace(TerminalUi.DemoFrame(width: size.Item1, height: size.Item2, commands: commands), "\x1b\\[[0-9;]*m", "");
                 var lines = frame.TrimEnd('\r', '\n').Split('\n');
                 check(lines.Length == size.Item2 && lines.All(l => TerminalText.Width(l.TrimEnd('\r')) == size.Item1), $"Minimal layout fits {size}, commands={commands}");
-                check(frame.Contains("OhMyHarness CLI") && !frame.Contains("╭") && !frame.Contains("╔") && !frame.Contains("TERMINAL WORKSPACE"), "Minimal layout has no sidebar or panel boxes");
+                check(frame.Contains("Monolith Harness CLI") && !frame.Contains("╭") && !frame.Contains("╔") && !frame.Contains("TERMINAL WORKSPACE"), "Minimal layout has no sidebar or panel boxes");
                 check(frame.Split('\n').Take(5).Any(line => line.Contains('▀') || line.Contains('▄')),
                     "Application icon fits the CLI header at " + size);
             }
