@@ -23,7 +23,7 @@ async function waitFor(fn){const until=Date.now()+25000;while(Date.now()<until){
   server=http.createServer(async(req,res)=>{
     if(req.url.startsWith('/page')){res.setHeader('Content-Type','text/html');res.end('<!doctype html><h1>Browser fixture</h1><input id="name"><button id="click" onclick="this.textContent=\'Clicked\'">Click me</button>');return;}
     const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=JSON.parse(Buffer.concat(chunks));
-    if(body.messages[0].content.startsWith('Summarize this conversation segment')){
+    if(body.messages[0].content.startsWith('Summarize for future continuation')){
       res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta:{content:'Résumé : rapport HTML demandé et validé.'}}]})+'\n\ndata: [DONE]\n\n');return;
     }
     if(body.messages.filter(x=>x.role==='user').at(-1)?.content==='workflow smoke'){

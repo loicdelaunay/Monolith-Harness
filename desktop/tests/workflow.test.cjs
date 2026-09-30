@@ -19,7 +19,7 @@ test('structured tasks, interactive questions, concurrent chats and loop decisio
   const questions=[{question:'Format ?',options:[{label:'HTML',description:'Standalone'},{label:'Texte',description:'Simple'}],custom:false},{question:'Titre ?',options:[]}];
   const server=http.createServer(async(req,res)=>{
     const chunks=[];for await(const c of req)chunks.push(c);const body=JSON.parse(Buffer.concat(chunks));payloads.push(body);
-    if(body.messages[0].content.startsWith('Summarize this conversation segment')){
+    if(body.messages[0].content.startsWith('Summarize for future continuation')){
       const finish=()=>{res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta:{content:emptySummary?'':'Résumé compact.'}}]})+'\n\ndata: [DONE]\n\n');};
       if(holdSummary){summaryPending=true;releaseSummary=finish;}else finish();return;
     }
@@ -81,6 +81,8 @@ test('structured tasks, interactive questions, concurrent chats and loop decisio
   const g=await create();const dismissed=send(g,'questions');const dismissedQ=await waitFor(()=>events.find(x=>x.event==='question'&&x.chatId===g.id));await rpc('question.answer',{id:dismissedQ.id,chatId:g.id,cancelled:true,answers:[]});await dismissed;
   assert.ok((await rpc('history',{chatId:g.id})).some(x=>x.role==='tool'&&x.content.includes('"cancelled":true')));
   const before=await rpc('context.details',{chatId:c.id,providerId:provider.id});assert.ok(before.activeMessages>0&&before.tools>0);
+  // This scenario verifies full compaction; the default strategy can retain recent turns.
+  await rpc('state.save',{featuresJson:JSON.stringify({Compaction:{Strategy:'full'}})});
   const compact=await rpc('context.compact',{chatId:c.id,providerId:provider.id});assert.equal(compact.changed,true);assert.ok(compact.details.used<before.used);
   const compacted=await rpc('history',{chatId:c.id});assert.ok(compacted.some(x=>x.state==='compacted'));assert.equal(compacted.filter(x=>x.state==='complete').length,1);assert.ok(compacted.some(x=>x.role==='tasks'));
   assert.equal((await rpc('context.compact',{chatId:c.id,providerId:provider.id})).changed,false);
