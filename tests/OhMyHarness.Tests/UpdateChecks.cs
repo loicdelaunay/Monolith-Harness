@@ -34,15 +34,16 @@ static class UpdateChecks
         {
             string target = Path.Combine(folder, "omh.exe"); await File.WriteAllTextAsync(target, "old executable");
             string database = Path.Combine(folder, "database.sqlite"); await File.WriteAllTextAsync(database, "user data");
+            string releaseExecutable = GitHubUpdates.Executable(UpdateChannel.Cli);
             byte[] Archive(bool duplicate = false)
             {
                 using var output = new MemoryStream();
                 using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
                 {
-                    using (var exe = zip.CreateEntry("app/omh.exe").Open()) exe.Write([77, 90, 1, 2]);
+                    using (var exe = zip.CreateEntry($"app/{releaseExecutable}").Open()) exe.Write([77, 90, 1, 2]);
                     using (var data = new StreamWriter(zip.CreateEntry("database.sqlite").Open())) data.Write("do not install");
                     using (var traversal = new StreamWriter(zip.CreateEntry("../../escape.txt").Open())) traversal.Write("do not extract");
-                    if (duplicate) { using var second = zip.CreateEntry("other/omh.exe").Open(); second.Write([77, 90]); }
+                    if (duplicate) { using var second = zip.CreateEntry($"other/{releaseExecutable}").Open(); second.Write([77, 90]); }
                 }
                 return output.ToArray();
             }
@@ -61,7 +62,7 @@ static class UpdateChecks
             await Reject(async () => await updater.DownloadAsync(update with { Sha256 = new string('0', 64) }, UpdateChannel.Cli, target), "Updates: bad checksum prevents install");
             await Reject(async () => await updater.DownloadAsync(update with { Size = bytes.Length + 1 }, UpdateChannel.Cli, target), "Updates: incomplete download rejected");
             string duplicateZip = Path.Combine(folder, "duplicate.zip"); await File.WriteAllBytesAsync(duplicateZip, Archive(true));
-            await Reject(() => GitHubUpdates.ExtractExecutableAsync(duplicateZip, Path.Combine(folder, "staged.exe"), "omh.exe"), "Updates: ambiguous archive rejected");
+            await Reject(() => GitHubUpdates.ExtractExecutableAsync(duplicateZip, Path.Combine(folder, "staged.exe"), releaseExecutable), "Updates: ambiguous archive rejected");
             try { GitHubUpdates.InstallAfterExit(staged, target, [], false); throw new Exception("Development install accepted"); }
             catch (InvalidOperationException) { check(true, "Updates: development builds cannot replace themselves"); }
             check(Directory.GetFiles(folder, "download.bin", SearchOption.AllDirectories).Length == 0, "Updates: temporary downloads cleaned after success and failure");
