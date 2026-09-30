@@ -12,7 +12,7 @@ public sealed class FeatureSettings
     public int CliFontSize { get; set; } = 14;
     public bool GuiCheckUpdates { get; set; } = true;
     public bool CliCheckUpdates { get; set; } = true;
-    public string ApplicationName { get; set; } = "OhMyHarness";
+    public string ApplicationName { get; set; } = BrandingAssets.DefaultName;
     public string LogoPath { get; set; } = "";
     public bool ThemeLogosEnabled { get; set; }
     public string LightLogoPath { get; set; } = "";
@@ -71,7 +71,16 @@ public sealed class FeatureSettings
             if(name.StartsWith("browser_") || name is "browse" or "read_page" or "inspect_dom" or "open_local_file") tools.RemoveAt(i);
         }
     }
-    public static FeatureSettings Read(string json) { try { return JsonSerializer.Deserialize<FeatureSettings>(json) ?? new(); } catch { return new(); } }
+    public static FeatureSettings Read(string json)
+    {
+        try
+        {
+            var settings = JsonSerializer.Deserialize<FeatureSettings>(json) ?? new();
+            settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
+            return settings;
+        }
+        catch { return new(); }
+    }
     public string Json()
     {
         if (ChatGoals == null || ChatGoals.Any(x => x.Key <= 0 || x.Value == null || x.Value.Length > 4000))

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.29.1 - 2026-09-30
+
+- Renamed the application and GitHub repository to Monolith Harness. GUI titles, CLI output, terminal profiles, documentation and desktop package metadata use the new name. Existing custom application names remain available.
+- Updated GitHub update checks and download validation for the renamed repository. Existing portable data, application identifiers, executable names and release archive names are retained for compatibility.
+
 ## 1.29.0 - 2026-09-29
 
 - Auto agents now evaluate delegation before starting a request. Added an Agents settings page with Selective, Balanced, Proactive (default) and Swarm behavior, live explanations and additional coordination instructions.

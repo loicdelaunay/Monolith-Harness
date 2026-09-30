@@ -1,9 +1,9 @@
 {
-  "name": "ohmyharness-desktop",
-  "version": "1.29.0",
+  "name": "monolith-harness-desktop",
+  "version": "1.29.1",
   "private": true,
-  "description": "OhMyHarness desktop host for macOS and Windows",
-  "author": "OhMyHarness",
+  "description": "Monolith Harness desktop host for macOS and Windows",
+  "author": "Monolith Harness",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
@@ -17,7 +17,7 @@
   "devDependencies": { "electron": "44.4.2", "electron-builder": "26.15.3" },
   "build": {
     "appId": "com.ohmyharness.desktop",
-    "productName": "OhMyHarness",
+    "productName": "Monolith Harness",
     "asar": true,
     "files": ["main.cjs", "preload.cjs", "browser.cjs", "application-capture.cjs", "policy.cjs", "ui/**", "package.json"],
     "extraResources": [{ "from": "sidecar/${os}-${arch}", "to": "service" }],
@@ -31,7 +31,7 @@
       "binaries": ["Contents/Resources/service/OhMyHarness.App"],
       "extendInfo": {
         "NSHighResolutionCapable": true,
-        "NSAppleEventsUsageDescription": "OhMyHarness uses desktop tools only after your approval.",
+        "NSAppleEventsUsageDescription": "Monolith Harness uses desktop tools only after your approval.",
         "NSScreenCaptureUsageDescription": "Share screenshots with your AI provider only after approval."
       }
     },

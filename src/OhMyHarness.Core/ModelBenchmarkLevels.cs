@@ -46,7 +46,7 @@ public static class ModelBenchmarkLevels
             var taskId = "HumanEval/" + id;
             var original = humanEval.RootElement.EnumerateArray().Single(e => e.GetProperty("task_id").GetString() == taskId).GetProperty("prompt").GetString();
             return new("humaneval-bug-" + id, "bug", "HumanEval · " + titleFr, "HumanEval · " + titleEn,
-                "Original HumanEval specification:\n" + original + "\nBug-fixing adaptation (the bug is introduced by OhMyHarness):\n" + code,
+                "Original HumanEval specification:\n" + original + "\nBug-fixing adaptation (the bug is introduced by Monolith Harness):\n" + code,
                 expected, explanation, patches, "HumanEval · MIT", $"https://github.com/openai/human-eval/blob/{HumanEvalCommit}/data/HumanEval.jsonl.gz",
                 taskId, "Original specification; locally introduced bug and fixed regression inputs. Exact patch matching, no code execution; not HumanEval pass@1.");
         }

@@ -482,9 +482,9 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             var system = state.Language == "en"
 
-                ? "You are connected through OpenCode inside OhMyHarness. Answer the user directly. Respect every permission denial from the application."
+                ? "You are connected through OpenCode inside Monolith Harness. Answer the user directly. Respect every permission denial from the application."
 
-                : "Tu es connecté à travers OpenCode dans OhMyHarness. Réponds directement à l’utilisateur en français. Respecte chaque refus d’autorisation de l’application.";
+                : "Tu es connecté à travers OpenCode dans Monolith Harness. Réponds directement à l’utilisateur en français. Respecte chaque refus d’autorisation de l’application.";
 
             run.Workflow = CreateWorkflow(run);
 
@@ -524,7 +524,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             {
 
-                var transcript = new StringBuilder("\n\nHistorique précédent de cette conversation OhMyHarness :\n");
+                var transcript = new StringBuilder("\n\nHistorique précédent de cette conversation Monolith Harness :\n");
 
                 foreach (var item in priorHistory.TakeLast(20))
 
@@ -641,7 +641,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                     {
 
-                        var transcript = new StringBuilder("\n\nHistorique précédent de cette conversation OhMyHarness :\n");
+                        var transcript = new StringBuilder("\n\nHistorique précédent de cette conversation Monolith Harness :\n");
 
                         foreach (var item in priorHistory.TakeLast(20))
 

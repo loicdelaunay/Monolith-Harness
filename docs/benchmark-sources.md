@@ -18,7 +18,7 @@ Les fichiers suivants sont intégrés au moteur partagé, avec leurs licences MI
 - [Publication](https://arxiv.org/abs/2107.03374) ; [licence MIT](https://github.com/openai/human-eval/blob/6d43fb980f9fee3c892a914eda09951f772ad10d/LICENSE).
 - Notice : `Benchmarks/HumanEval.LICENSE.txt`, Copyright (c) OpenAI.
 - Spécifications sources des tâches `HumanEval/10`, `/12`, `/20`, `/32`, `/115` et `/129` dans `Benchmarks/humaneval-source.json`.
-- OhMyHarness ajoute les bugs, les entrées de régression et les formats de réponse utilisés dans l’interface. Le code généré n’est pas exécuté ; une liste d’expressions acceptées et les sorties attendues servent à la correction. Le résultat n’est donc pas HumanEval pass@1.
+- Monolith Harness ajoute les bugs, les entrées de régression et les formats de réponse utilisés dans l’interface. Le code généré n’est pas exécuté ; une liste d’expressions acceptées et les sorties attendues servent à la correction. Le résultat n’est donc pas HumanEval pass@1.
 
 ## Reproductibilité
 
@@ -33,7 +33,7 @@ Le rapport exporté inclut la suite `omh-model-tools-v3-frontier`, le niveau, la
 - Les entrées et sorties d’exemples sont transmises, ainsi que les seules **entrées** de test. Les sorties attendues restent dans le correcteur. Il exige tous les pixels et toutes les dimensions exacts, en **une tentative**. Le protocole diffère donc du score officiel ARC et de ses règles de plusieurs essais.
 - Le jeu est public et peut avoir été vu par certains modèles. Ni le sous-ensemble ni les transformations n’ont été calibrés sur un panel de modèles frontier. Les métriques publiées pour d’autres protocoles ne s’appliquent pas à cette application.
 
-## Épreuves originales OhMyHarness
+## Épreuves originales Monolith Harness
 
 Le niveau difficile complète ARC avec une tournée asymétrique sur 14 sommets (optimum calculé par programmation dynamique Held–Karp), 190 clauses 3-SAT sur 42 variables et un Killer Sudoku construit depuis une grille valide. Les solutions soumises sont contrôlées par contraintes : une autre solution valide est acceptée, et une tournée non optimale échoue. Trois régressions d’algorithmes exigent des tableaux de résultats complets : plus courts chemins, compositions affines et composantes fortement connexes.
 

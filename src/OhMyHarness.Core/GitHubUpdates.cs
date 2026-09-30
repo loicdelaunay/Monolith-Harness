@@ -14,9 +14,9 @@ public sealed record GitHubUpdate(string Version, string Tag, string Page, strin
 
 public sealed class GitHubUpdates(HttpClient http)
 {
-    public const string CurrentVersion = "1.29.0";
-    public const string Repository = "https://github.com/loicdelaunay/OhMyHarness";
-    public const string Api = "https://api.github.com/repos/loicdelaunay/OhMyHarness/releases";
+    public const string CurrentVersion = "1.29.1";
+    public const string Repository = "https://github.com/loicdelaunay/Monolith-Harness";
+    public const string Api = "https://api.github.com/repos/loicdelaunay/Monolith-Harness/releases";
     const long MaxBytes = 1024L * 1024 * 1024;
     public static string Runtime => "win-" + (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64");
     public static string Executable(UpdateChannel channel) => channel == UpdateChannel.Cli ? "omh.exe" : "OhMyHarness.App.exe";
@@ -31,7 +31,7 @@ public sealed class GitHubUpdates(HttpClient http)
         for (int page = 1; page <= 5; page++)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, Api + "?per_page=100&page=" + page);
-            request.Headers.UserAgent.ParseAdd("OhMyHarness/" + CurrentVersion);
+            request.Headers.UserAgent.ParseAdd("MonolithHarness/" + CurrentVersion);
             using var response = await http.SendAsync(request, timeout.Token); response.EnsureSuccessStatusCode();
             var releases = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeout.Token))!.AsArray();
             var candidate = Select(releases, channel, CurrentVersion, Runtime);
@@ -67,7 +67,9 @@ public sealed class GitHubUpdates(HttpClient http)
         return candidates.OrderByDescending(c => Version.Parse(c.Version)).FirstOrDefault();
     }
     static bool OfficialAssetUrl(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "github.com"
-        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath.StartsWith("/loicdelaunay/OhMyHarness/releases/download/", StringComparison.Ordinal);
+        && uri.IsDefaultPort && uri.UserInfo.Length == 0
+        && (uri.AbsolutePath.StartsWith("/loicdelaunay/Monolith-Harness/releases/download/", StringComparison.Ordinal)
+            || uri.AbsolutePath.StartsWith("/loicdelaunay/OhMyHarness/releases/download/", StringComparison.Ordinal));
 
     public async Task<string> DownloadAsync(GitHubUpdate update, UpdateChannel channel, string executable, IProgress<int>? progress = null, CancellationToken ct = default)
     {

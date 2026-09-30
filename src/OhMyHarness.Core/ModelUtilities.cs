@@ -57,7 +57,7 @@ public sealed class ModelToolClient(HttpClient http)
                 isolated.OpenCodeTools = false;
                 var directory = Path.Combine(PortableStorage.Temporary, "model-tools");
                 Directory.CreateDirectory(directory);
-                var session = await openCode.CreateSessionAsync(isolated, secret, directory, "OhMyHarness · Model tool", timeout.Token);
+                var session = await openCode.CreateSessionAsync(isolated, secret, directory, BrandingAssets.DefaultName + " · Model tool", timeout.Token);
                 try
                 {
                     completion = await openCode.PromptAsync(isolated, secret, directory, session,

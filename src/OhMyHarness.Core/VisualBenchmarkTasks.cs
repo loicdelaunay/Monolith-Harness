@@ -103,6 +103,6 @@ public sealed record VisualBenchmarkTask(string Kind, string Brief, string Contr
         var task = new VisualBenchmarkTask(kind, brief, contract);
         return new("visual-" + kind, "visual", fr, en, brief + "\n\n" + contract, null,
             "The application executes functional probes against an independent local oracle. Visual appearance and ergonomic quality require inspection in the preview.",
-            Source: "OhMyHarness · applications interactives", SourceItem: kind, Adaptation: "Original offline HTML coding task, single generation. Functional checks are not a visual-quality score.") { Visual = task };
+            Source: "Monolith Harness · applications interactives", SourceItem: kind, Adaptation: "Original offline HTML coding task, single generation. Functional checks are not a visual-quality score.") { Visual = task };
     }
 }

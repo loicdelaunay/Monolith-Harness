@@ -1,6 +1,6 @@
 # Fedora Linux x64
 
-OhMyHarness 1.26.0 provides GUI and CLI archives for Fedora 44 x64 in the [GUI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.26.0) and [CLI release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.26.0). Choose the `linux-x64.tar.gz` asset, check its SHA-256 against the attached `SHA256SUMS.txt`, and extract it into a **writable, private** folder:
+Monolith Harness 1.26.0 provides GUI and CLI archives for Fedora 44 x64 in the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.26.0) and [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.26.0). Choose the `linux-x64.tar.gz` asset, check its SHA-256 against the attached `SHA256SUMS.txt`, and extract it into a **writable, private** folder:
 
 ```bash
 mkdir -p ~/Applications/OhMyHarness

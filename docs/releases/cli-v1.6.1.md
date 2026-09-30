@@ -1,6 +1,6 @@
 # OhMyHarness CLI v1.6.1
 
-The first standalone CLI release brings the OhMyHarness agent engine to a compact terminal workspace. Choose GUI or CLI: the existing [GUI v1.0.0 release](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.0.0) remains available separately.
+The first standalone CLI release brings the OhMyHarness agent engine to a compact terminal workspace. Choose GUI or CLI: the existing [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0) remains available separately.
 
 ## Download and start
 
@@ -33,4 +33,4 @@ Configure a model provider to chat; the chat model is not bundled. Git, Docker/P
 - Published Windows x64 executable verified with `--version` (`1.6.1`).
 - No macOS binary or macOS runtime validation is included.
 
-See the [CLI guide](https://github.com/loicdelaunay/OhMyHarness/blob/main/docs/cli.md) and [full changelog](https://github.com/loicdelaunay/OhMyHarness/blob/main/CHANGELOG.md).
+See the [CLI guide](https://github.com/loicdelaunay/Monolith-Harness/blob/main/docs/cli.md) and [full changelog](https://github.com/loicdelaunay/Monolith-Harness/blob/main/CHANGELOG.md).

@@ -134,7 +134,7 @@ public static class DesktopInput
         }
         static void Access()
         {
-            if (!AXIsProcessTrusted()) throw new UnauthorizedAccessException("macOS : autorisez OhMyHarness dans Réglages Système > Confidentialité et sécurité > Accessibilité, puis relancez l’application. Application approval does not grant macOS Accessibility permission.");
+            if (!AXIsProcessTrusted()) throw new UnauthorizedAccessException("macOS : autorisez Monolith Harness dans Réglages Système > Confidentialité et sécurité > Accessibilité, puis relancez l’application. Application approval does not grant macOS Accessibility permission.");
         }
         static void Post(nint ev, Action<nint>? configure = null)
         {

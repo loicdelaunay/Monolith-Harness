@@ -53,11 +53,11 @@ public sealed class CliOptions
     }
 
     public static readonly string HelpText = $"""
-    OhMyHarness CLI {CurrentVersion}
+    {OhMyHarness.Core.BrandingAssets.DefaultName} CLI {CurrentVersion}
     Your portable AI workspace, in the terminal.
 
       omh [project-folder]                       Interactive terminal interface
-      omh --database X:\OhMyHarness\database.sqlite  Share the desktop workspace
+      omh --database X:\MonolithHarness\database.sqlite  Share the desktop workspace
       omh run "Review this repository" --project .  One-shot, Plan mode by default
       omh run "Implement the fix" --project . --execute
       omh run "Explain the code" --project . --json

@@ -1,10 +1,10 @@
-# OhMyHarness CLI
+# Monolith Harness CLI
 
 The same agent engine in a terminal workspace. The CLI is a separate .NET 10 project, <code>src/OhMyHarness.Cli</code>, referencing <code>OhMyHarness.Core</code>. Its full-screen interface uses truecolor ANSI rendering, adapts to terminal width, and supports Windows and macOS builds.
 
 The header shows a symmetrical circular icon and the configured application name. The icon is drawn with Unicode half blocks and colors from the active CLI theme, so it remains visible without a terminal image protocol or an external image file. On Windows, `omh.exe` also carries the application icon in Explorer.
 
-The interaction takes inspiration from the command palette and automation mode of [OpenCode](https://opencode.ai/v2/docs/cli) and the terminal agent workflow of [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli). This is an OhMyHarness client with its own shared engine.
+The interaction takes inspiration from the command palette and automation mode of [OpenCode](https://opencode.ai/v2/docs/cli) and the terminal agent workflow of [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli). This is a Monolith Harness client with its own shared engine.
 
 ## Start
 
@@ -134,9 +134,9 @@ omh --render-demo --theme neon-synthwave
 
 `/font` selects a font **independently of the theme**, plus a size from 8 to 36 pt. Choose the bundled **VT323**, **Share Tech Mono** or **Space Mono**, a system font, or enter another installed font name. The original OFL licenses travel with the embedded fonts. A terminal application cannot universally change its host's font: saving the choice alone does not change the active tab.
 
-Choose **Save and install font + profile** on Windows to install the bundled font for the current user and create a dedicated Windows Terminal profile. Open **OhMyHarness · …** in a new tab (restart Windows Terminal if needed) to apply the font and experimental CRT scanlines/glow. **Export** writes the profile and font/license beside the portable database; macOS users can install the exported TTF with their font manager. Missing system/custom fonts use the host terminal's fallback. Fonts installed for Windows are machine-local, under the user's Windows Fonts directory and HKCU font registration; exported copies remain portable.
+Choose **Save and install font + profile** on Windows to install the bundled font for the current user and create a dedicated Windows Terminal profile. Open **Monolith Harness · …** in a new tab (restart Windows Terminal if needed) to apply the font and experimental CRT scanlines/glow. **Export** writes the profile and font/license beside the portable database; macOS users can install the exported TTF with their font manager. Missing system/custom fonts use the host terminal's fallback. Fonts installed for Windows are machine-local, under the user's Windows Fonts directory and HKCU font registration; exported copies remain portable.
 
-The portable JSON is kept under `terminal-profiles` beside the database. Installation adds only an OhMyHarness fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\OhMyHarness`; it does not rewrite `settings.json` or change your default terminal profile. Delete the exported fragment there to uninstall it. Regenerate after moving the portable application: launch paths are absolute. This optional terminal integration is machine-local; other application data remains portable.
+The portable JSON is kept under `terminal-profiles` beside the database. Installation adds only a Monolith Harness fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\OhMyHarness`; it does not rewrite `settings.json` or change your default terminal profile. Delete the exported fragment there to uninstall it. Regenerate after moving the portable application: launch paths are absolute. This optional terminal integration is machine-local; other application data remains portable.
 
 macOS and other terminals still display the theme's ANSI colors and borders; select fonts in that terminal's preferences. CRT glow is host-dependent, not simulated with flashing text. See [Windows Terminal appearance](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-appearance) and [profile fragments](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions).
 

@@ -26,7 +26,7 @@ public static class TerminalProfiles
         var id = SHA256.HashData(Encoding.UTF8.GetBytes(executable + "\n" + database + "\n" + theme.Id));
         var p = theme.Palette;
         return new JsonObject { ["profiles"] = new JsonArray(new JsonObject {
-            ["guid"] = new Guid(id.AsSpan(0, 16)).ToString("B"), ["name"] = "OhMyHarness · " + theme.Name,
+            ["guid"] = new Guid(id.AsSpan(0, 16)).ToString("B"), ["name"] = OhMyHarness.Core.BrandingAssets.DefaultName + " · " + theme.Name,
             ["commandline"] = string.Join(' ', args.Select(QuoteArgument)), ["startingDirectory"] = Path.GetFullPath(directory),
             ["font"] = new JsonObject { ["face"] = theme.Font, ["size"] = theme.FontSize, ["weight"] = theme.Crt ? "semi-bold" : "normal" },
             ["background"] = $"#{p.Background:X6}", ["foreground"] = $"#{p.Foreground:X6}", ["cursorColor"] = $"#{p.Accent:X6}",

@@ -48,7 +48,7 @@ async function host(method, p) {
   }
   if (method === 'permission') {
     const show = async () => {
-      const answer = await dialog.showMessageBox(win, { type: 'question', title: 'OhMyHarness · Autorisation / Permission', message: p.title,
+      const answer = await dialog.showMessageBox(win, { type: 'question', title: 'Monolith Harness · Autorisation / Permission', message: p.title,
         detail: String(p.details).slice(0, 20000), buttons: ['Refuser / Deny', 'Autoriser / Allow once', 'Toujours autoriser / Always allow'], defaultId: 0, cancelId: 0, noLink: true });
       return ['deny','allow','always'][answer.response];
     };
@@ -81,7 +81,7 @@ async function start() {
   profile.setPermissionRequestHandler((_, __, callback) => callback(false));
   profile.setPermissionCheckHandler(() => false);
   profile.on('will-download', event => event.preventDefault());
-  win = new BrowserWindow({ width: 1500, height: 960, minWidth: 760, minHeight: 580, show: !process.env.OHMYHARNESS_TEST_DATA, backgroundColor: '#202020', title: 'OhMyHarness',
+  win = new BrowserWindow({ width: 1500, height: 960, minWidth: 760, minHeight: 580, show: !process.env.OHMYHARNESS_TEST_DATA, backgroundColor: '#202020', title: 'Monolith Harness',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
@@ -124,6 +124,6 @@ async function start() {
   await win.loadFile(path.join(__dirname, 'ui/index.html'));
   await ready;
 }
-app.whenReady().then(start).catch(async error => { dialog.showErrorBox('OhMyHarness', `${error.message}\nPlace the application in a writable folder beside database.sqlite.`); closing = true; service?.kill(); app.quit(); });
+app.whenReady().then(start).catch(async error => { dialog.showErrorBox('Monolith Harness', `${error.message}\nPlace the application in a writable folder beside database.sqlite.`); closing = true; service?.kill(); app.quit(); });
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => { closing = true; service?.stdin.end(); });

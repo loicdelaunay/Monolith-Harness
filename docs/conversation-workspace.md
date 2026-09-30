@@ -30,10 +30,10 @@ Place this file in a default project folder, then use **Manage project → Read/
 
 - Values: `allow`, `ask`, `deny`.
 - A key can name a tool, a request family (`terminal`, `python`, `desktop`, `rag-api`, `source-patch`) or an exact scope such as `desktop|mouse`. `*` is the default rule.
-- A denial by tool name is checked before execution, including in OhMyHarness subagents. Allowing a tool name does not bypass internal checks, a disabled skill, Plan mode or the sandbox.
+- A denial by tool name is checked before execution, including in Monolith Harness subagents. Allowing a tool name does not bypass internal checks, a disabled skill, Plan mode or the sandbox.
 - For additional requests: exact scope, then family, then `*`. Global **Deny all** retains priority; `deny` remains a denial even with automatic approval. `ask` requires a dialog even if a permanent grant exists.
 - If multiple files define the same key, `deny` wins. Maximum size: 32 KB per file. Removing rules restores the usual policy.
-- Tools run by the OpenCode server remain subject to its rules; requests relayed to OhMyHarness pass through the project profile.
+- Tools run by the OpenCode server remain subject to its rules; requests relayed to Monolith Harness pass through the project profile.
 
 ## Resume and fork
 

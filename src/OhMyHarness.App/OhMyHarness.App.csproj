@@ -6,11 +6,13 @@
     <UnoFeatures>SkiaRenderer;WebView</UnoFeatures>
     <UnoDisableWinAppRunSupport>true</UnoDisableWinAppRunSupport>
     <WinAppSdkVersion>1.8.251106002</WinAppSdkVersion>
-    <ApplicationTitle>OhMyHarness</ApplicationTitle>
+    <ApplicationTitle>Monolith Harness</ApplicationTitle>
+    <AssemblyTitle>Monolith Harness</AssemblyTitle>
+    <Product>Monolith Harness</Product>
     <ApplicationId>com.ohmyharness.app</ApplicationId>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <ApplicationDisplayVersion>1.29.0</ApplicationDisplayVersion>
-    <ApplicationVersion>39</ApplicationVersion>
+    <ApplicationDisplayVersion>1.29.1</ApplicationDisplayVersion>
+    <ApplicationVersion>40</ApplicationVersion>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

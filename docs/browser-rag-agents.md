@@ -8,7 +8,7 @@ The **Web** pane has independent tabs like Terminal. Use **+** to open one, clic
 
 Under Settings → Browser, choose embedded WebView2, Chrome MCP or Disabled. Chrome MCP exposes Chrome DevTools tools to the agent in an external window; WebView2 tools are removed from its catalog. Chrome and Node.js/npm must be installed. A custom Chrome path is optional. The first connection asks for MCP approval and may download the npm package. MCP tool permissions and Plan mode remain enforced. Chrome profiles are separated by conversation in `Chrome/chat-<id>` beside the executable. MCP closes at generation completion; its profile is retained. Do not manually launch two instances against the same profile.
 
-This handling uses [WebView2 process events](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/process-related-events) and [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp). It cannot prevent security software from terminating OhMyHarness itself. No antivirus-policy bypass is installed.
+This handling uses [WebView2 process events](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/process-related-events) and [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp). It cannot prevent security software from terminating Monolith Harness itself. No antivirus-policy bypass is installed.
 
 ## Sources and Markdown
 
@@ -35,7 +35,7 @@ Model: [paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-t
 
 ## Subagents
 
-Subagents created by the OhMyHarness orchestrator appear as chat bubbles and, while working, as children of the conversation in the left sidebar. Clicking opens their task, activity and exchanges. Back returns to the parent. Parent input is disabled in this view to avoid sending to the wrong recipient; parent generation continues.
+Subagents created by the Monolith Harness orchestrator appear as chat bubbles and, while working, as children of the conversation in the left sidebar. Clicking opens their task, activity and exchanges. Back returns to the parent. Parent input is disabled in this view to avoid sending to the wrong recipient; parent generation continues.
 
 On completion, the sidebar entry disappears and the bubble remains accessible. Exchanges are stored in SQLite and reloaded with the conversation. Work still marked active after a restart is shown as interrupted. Subagents internal to the OpenCode server are not exposed in this view.
 
@@ -47,7 +47,7 @@ Under **Providers → + Composite model**, choose a saved provider and model for
 
 At the start of each turn, configured tasks run in parallel with the user's request; the orchestrator receives their results and continues. Selecting a composition implies Forced orchestration. Keys belong to referenced providers; they are not copied into the composition. Active generations keep their configuration if settings change.
 
-Subagents retain OhMyHarness orchestrator limits: 8 steps each, 6 total per turn, inherited source access and permissions, no terminal/MCP/browser or recursion. OpenCode subagents remain read-only/in Plan. OpenCode, including as a subagent, stays unavailable in the sandbox. Choose independent tasks to avoid writes to the same files.
+Subagents retain Monolith Harness orchestrator limits: 8 steps each, 6 total per turn, inherited source access and permissions, no terminal/MCP/browser or recursion. OpenCode subagents remain read-only/in Plan. OpenCode, including as a subagent, stays unavailable in the sandbox. Choose independent tasks to avoid writes to the same files.
 
 ## Messages during generation
 

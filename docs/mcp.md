@@ -27,7 +27,7 @@ In WinUI, **Test MCP connection** uses the draft; **Save** applies all changes. 
 
 Tools from enabled servers are added to **OpenAI-compatible and DeepSeek** provider calls. Each server has a separate namespace to prevent collisions between identically named tools. Text/structured results are sent to the model; a PNG/JPEG/WebP image up to 8 MB may also be attached if the model accepts images. MCP resources and prompts do not yet have a dedicated explorer, and interactive OAuth authentication is not implemented: use headers or variables supplied by the server.
 
-**OpenCode keeps its own MCP servers and tool loop.** Servers configured here are not copied into its configuration. The continuation option concerns the twelve-call limit imposed by OhMyHarness on Chat Completions-compatible providers.
+**OpenCode keeps its own MCP servers and tool loop.** Servers configured here are not copied into its configuration. The continuation option concerns the twelve-call limit imposed by Monolith Harness on Chat Completions-compatible providers.
 
 Connections and tool execution respect **Ask / Deny all / Automatic approval**. “Always allow” remains scoped to the server and, for an action, to the relevant tool; changing command, URL, arguments or secrets invalidates the previous scope. Approvals remain revocable in Settings.
 

@@ -54,7 +54,7 @@ public sealed partial class TerminalUi
         if (command is "/quit" or "/exit") { RequestQuit(); return; }
         if (command is "/commands" or "/help" or "/")
         {
-            Work(async () => { var selected = await Prompt("OhMyHarness · " + L("Commandes", "Commands"), "Ctrl+J / Alt+Entrée : nouvelle ligne · PgUp/PgDn : historique", Commands.ToList()); if (selected != null) Post(() => Command(selected)); }); return;
+            Work(async () => { var selected = await Prompt(BrandingAssets.DefaultName + " · " + L("Commandes", "Commands"), "Ctrl+J / Alt+Entrée : nouvelle ligne · PgUp/PgDn : historique", Commands.ToList()); if (selected != null) Post(() => Command(selected)); }); return;
         }
         if (workspace == null || CurrentChat == null) { notice = L("Chargement en cours…", "Still loading…"); return; }
         int id = chatId, selectedProvider = providerId, projectId = CurrentChat.ProjectId;

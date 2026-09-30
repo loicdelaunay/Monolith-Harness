@@ -24,7 +24,7 @@ for channel in GUI CLI; do
   cp LICENSE "$stage/LICENSE"
   if [[ "$channel" == GUI ]]; then start='Run ./OhMyHarness.App and open Settings > Providers.'; else start='Run ./omh from a terminal, then /connect to configure your provider.'; fi
   cat > "$stage/README.txt" <<EOF
-OhMyHarness $channel $version (linux-x64)
+Monolith Harness $channel $version (linux-x64)
 
 Extract into a writable, private folder. $start
 Linux GUI uses X11 or XWayland; install GTK3 and WebKitGTK for its browser.
@@ -35,7 +35,7 @@ database.sqlite, keys and existing resources. This download has no user data.
 The chat model is not bundled; configure a provider. Optional integrations
 such as Git, Docker/Podman, OpenCode and MCP retain their own prerequisites.
 
-https://github.com/loicdelaunay/OhMyHarness
+https://github.com/loicdelaunay/Monolith-Harness
 EOF
   chmod +x "$stage/$executable"
   archive="$root/$channel/$prefix-v$version-linux-x64.tar.gz"

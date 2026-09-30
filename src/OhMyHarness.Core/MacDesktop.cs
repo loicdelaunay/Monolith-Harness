@@ -27,6 +27,6 @@ public static class MacDesktop
     }
     public static void DemandScreenCapture()
     {
-        if(!CGPreflightScreenCaptureAccess())throw new UnauthorizedAccessException("Autorisez OhMyHarness dans Réglages système → Confidentialité → Enregistrement de l’écran, puis relancez l’application.");
+        if(!CGPreflightScreenCaptureAccess())throw new UnauthorizedAccessException("Autorisez Monolith Harness dans Réglages système → Confidentialité → Enregistrement de l’écran, puis relancez l’application.");
     }
 }

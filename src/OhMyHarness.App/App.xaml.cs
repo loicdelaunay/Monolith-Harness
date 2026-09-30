@@ -37,8 +37,8 @@ public partial class App : Application
             {
                 Directory.CreateDirectory(output); File.WriteAllText(Path.Combine(output,"smoke-error.txt"),ex.ToString()); Exit(); return;
             }
-            if (OperatingSystem.IsWindows()) MessageBoxW(0, "Impossible d’ouvrir les données portables. Fermez les autres instances et vérifiez les droits du dossier. / Cannot open portable data.\n\n" + ex.Message, "OhMyHarness", 0x10);
-            else { window = new Window { Title = "OhMyHarness", Content = new Microsoft.UI.Xaml.Controls.TextBlock { Text = ex.Message, TextWrapping = TextWrapping.Wrap, Margin = new(30) } }; window.Activate(); }
+            if (OperatingSystem.IsWindows()) MessageBoxW(0, "Impossible d’ouvrir les données portables. Fermez les autres instances et vérifiez les droits du dossier. / Cannot open portable data.\n\n" + ex.Message, BrandingAssets.DefaultName, 0x10);
+            else { window = new Window { Title = BrandingAssets.DefaultName, Content = new Microsoft.UI.Xaml.Controls.TextBlock { Text = ex.Message, TextWrapping = TextWrapping.Wrap, Margin = new(30) } }; window.Activate(); }
         }
     }
 }

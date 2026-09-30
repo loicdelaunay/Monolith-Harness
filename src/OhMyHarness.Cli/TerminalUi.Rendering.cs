@@ -66,7 +66,7 @@ public sealed partial class TerminalUi
     public static string DemoFrame(string? theme = null, int width = 118, int height = 36, bool commands = false, string input = "")
     {
         using var ui = new TerminalUi(new() { Theme = theme });
-        ui.workspace = new(new AppState(), [new Project { Id = 1, Name = "OhMyHarness", SourceFolder = "E:/Projects/OhMyHarness" }],
+        ui.workspace = new(new AppState(), [new Project { Id = 1, Name = "Monolith Harness", SourceFolder = "E:/Projects/OhMyHarness" }],
             [new Chat { Id = 1, ProjectId = 1, Title = "Une interface terminal pour mes agents" }, new Chat { Id = 2, ProjectId = 1, Title = "Revue du moteur partagé" }],
             [new Provider { Id = 1, Name = "DeepSeek", Model = "deepseek-flash" }], []);
         ui.chatId = ui.providerId = 1;

@@ -4,11 +4,13 @@ namespace OhMyHarness.Core;
 
 public static class BrandingAssets
 {
-    public const string DefaultName = "OhMyHarness";
+    public const string DefaultName = "Monolith Harness";
     public static string DisplayName(string? value)
     {
         var name = string.Join(" ", (value ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        return name.Length == 0 ? DefaultName : name[..Math.Min(name.Length, 80)];
+        // Upgrade the previous default while retaining the user's own application name.
+        return name.Length == 0 || name.Equals("OhMyHarness", StringComparison.OrdinalIgnoreCase)
+            ? DefaultName : name[..Math.Min(name.Length, 80)];
     }
     public static string Resolve(string path, string? root = null)
     {

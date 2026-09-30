@@ -1,6 +1,6 @@
 # OhMyHarness CLI v1.8.0
 
-The terminal application is released alongside [GUI v1.8.0](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.8.0), using the same shared engine.
+The terminal application is released alongside [GUI v1.8.0](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.8.0), using the same shared engine.
 
 ## Download
 
@@ -17,7 +17,7 @@ To upgrade, close the CLI and replace only `omh.exe` in its existing portable fo
 - Shared response-style selection in `/settings`: DEFAULT, SHORT, PRAGMATIC, DETAILED and FUN.
 - English documentation across `docs/`, with updated keyboard, font, update and settings guides.
 
-See the [CLI guide](https://github.com/loicdelaunay/OhMyHarness/blob/main/docs/cli.md) and [changelog](https://github.com/loicdelaunay/OhMyHarness/blob/main/CHANGELOG.md).
+See the [CLI guide](https://github.com/loicdelaunay/Monolith-Harness/blob/main/docs/cli.md) and [changelog](https://github.com/loicdelaunay/Monolith-Harness/blob/main/CHANGELOG.md).
 
 ## Requirements and validation
 

@@ -12,4 +12,4 @@ $publishArgs = @((Join-Path $PSScriptRoot 'src\OhMyHarness.Cli\OhMyHarness.Cli.c
 if ($NoRestore) { $publishArgs += '--no-restore' }
 dotnet publish @publishArgs
 if ($LASTEXITCODE -ne 0) { throw 'CLI publication failed.' }
-Write-Host "OhMyHarness CLI available in $output"
+Write-Host "Monolith Harness CLI available in $output"

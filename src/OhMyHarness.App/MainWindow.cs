@@ -114,7 +114,7 @@ public sealed partial class MainWindow : Window
     {
         engine = new(http);
         openCodeEngine = new(http);
-        Title = "OhMyHarness";
+        Title = BrandingAssets.DefaultName;
         AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1440, Height = 940 });
         var iconFile = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
         if (File.Exists(iconFile)) AppWindow.SetIcon(iconFile);

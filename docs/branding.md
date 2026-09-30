@@ -2,7 +2,8 @@
 
 Under **Settings → General**, open **Application name and logo**:
 
-- Enter the displayed name, up to 80 characters. An empty field restores OhMyHarness.
+- Enter the displayed name, up to 80 characters. An empty field restores Monolith Harness.
+- The previous default, OhMyHarness, automatically becomes Monolith Harness; other custom names are preserved.
 - Choose a PNG, JPEG, WebP, BMP or ICO logo (maximum 10 MB, 4096 × 4096 pixels). A preview lets you check the image before saving.
 - **Original logo** restores only the logo. **Reset name and logo** resets both fields.
 - Click **Save** to apply. Cancel keeps the previous customization.

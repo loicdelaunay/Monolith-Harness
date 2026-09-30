@@ -1,8 +1,8 @@
-# OhMyHarness
+# Monolith Harness
 
 **Tired of full-featured AI harnesses that require lengthy configuration, multiple services and tools to install before your first chat? What if one portable EXE did most of the work?**
 
-OhMyHarness brings conversations, agents, sources and tools together in a desktop application. On Windows, it is distributed as a **standalone EXE**: place it in a writable folder, launch it and configure your provider. The application creates `database.sqlite` and its resources beside the executable. To move your workspace, close the application and copy the whole folder.
+Monolith Harness brings conversations, agents, sources and tools together in a desktop application. On Windows, it is distributed as a **standalone EXE**: place it in a writable folder, launch it and configure your provider. The application creates `database.sqlite` and its resources beside the executable. To move your workspace, close the application and copy the whole folder.
 
 The interface uses **Uno Platform / .NET 10**. It targets Windows (Uno Desktop or native WinUI) and macOS (Uno Desktop). The [macOS workflow](macos.md) still needs validation on a real Mac. A separate [CLI](cli.md) shares the agent engine and portable data.
 
@@ -15,7 +15,7 @@ The interface uses **Uno Platform / .NET 10**. It targets Windows (Uno Desktop o
 - **Recover useful context**: conversation or shared memory, RAG search with a local multilingual model or embedding provider, images and a fallback vision model, token counts, speed and context compaction.
 - **Customize your workspace**: per-project scheduled tasks, light/dark themes, French/English, custom name and logo, Markdown export and SQLite with EF Core migrations.
 
-**Cloud providers** require network access and, depending on the service, an API key; the chat model does not run inside the EXE. Optional integrations retain their prerequisites: Git for Git view, Docker/Podman for sandbox, OpenCode for its dedicated connection, or Chrome/Node.js for Chrome MCP. The embedded browser uses the system web engine (Edge WebView2 on Windows, WebKit on macOS). The application core does not require a separate OhMyHarness server.
+**Cloud providers** require network access and, depending on the service, an API key; the chat model does not run inside the EXE. Optional integrations retain their prerequisites: Git for Git view, Docker/Podman for sandbox, OpenCode for its dedicated connection, or Chrome/Node.js for Chrome MCP. The embedded browser uses the system web engine (Edge WebView2 on Windows, WebKit on macOS). The application core does not require a separate Monolith Harness server.
 
 The guides for [agents](agent-modes.md), [browser and RAG](browser-rag-agents.md), [memory](memory.md), [custom skills](skill-authoring.md) and [sandbox](sandbox.md) describe these features and their limits.
 
@@ -97,7 +97,7 @@ The native embedded browser is scoped per conversation: page, in-session navigat
 
 The executable directory must be writable. For portable use, put the EXE in a user folder rather than `Program Files`.
 
-OhMyHarness-managed data is grouped in this folder: `database.sqlite` (and SQLite journals), `skills/`, `MCP.json`, `WebView2/` for native Windows, `Browser/` for older external Chromium profiles, `sandboxes/`, `temp/`, Python and `OpenCodeWorkspaces/`/`opencode-runner.mjs` work files. There is no AppData fallback if the directory is unwritable. Old AppData folders are no longer copied automatically.
+Data managed by Monolith Harness is grouped in this folder: `database.sqlite` (and SQLite journals), `skills/`, `MCP.json`, `WebView2/` for native Windows, `Browser/` for older external Chromium profiles, `sandboxes/`, `temp/`, Python and `OpenCodeWorkspaces/`/`opencode-runner.mjs` work files. There is no AppData fallback if the directory is unwritable. Old AppData folders are no longer copied automatically.
 
 To back up or move the application, close all instances and copy **the entire folder**. Attached source folders remain references to external projects. External software (OpenCode server, MCP, Docker/Podman and executed commands) retains its own installation/storage; portable mode is not a system sandbox. The single-file .NET runtime may extract components into the system temporary cache. Keys remain tied to the system account as described below.
 
@@ -109,7 +109,7 @@ Each conversation has its own browser view in Tools. Native Windows uses WebView
 
 ## Build and publish
 
-Development prerequisites: Windows 10 1809+ / Windows 11, .NET 10 SDK, Git LFS for the local RAG model, Windows SDK and WinUI development tools installed through Visual Studio. Open `OhMyHarness.slnx` in Visual Studio/Rider or use:
+Development prerequisites: Windows 10 1809+ / Windows 11, .NET 10 SDK, Git LFS for the local RAG model, Windows SDK and WinUI development tools installed through Visual Studio. Open `MonolithHarness.slnx` in Visual Studio/Rider or use:
 
 ```powershell
 dotnet build src/OhMyHarness.App -c Release
@@ -140,7 +140,7 @@ dotnet ef migrations add MigrationName --project src/OhMyHarness.Core --output-d
 | `src/OhMyHarness.App` | Uno Platform Windows/macOS interface, browser, settings and tasks |
 | `src/OhMyHarness.Cli` | Terminal interface and non-interactive automation |
 | `desktop` | Legacy Electron interface and integration tests, retained for compatibility |
-| `OhMyHarness.Desktop.slnx` | Portable solution without WinUI dependency, for macOS |
+| `MonolithHarness.Desktop.slnx` | Portable solution without WinUI dependency, for macOS |
 | `tests/OhMyHarness.Tests` | Offline test executable without API keys |
 
 ## Validation and limitations

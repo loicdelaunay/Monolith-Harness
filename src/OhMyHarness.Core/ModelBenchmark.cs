@@ -6,7 +6,7 @@ namespace OhMyHarness.Core;
 
 public sealed record ModelBenchmarkCase(string Id, string Category, string FrenchTitle, string EnglishTitle,
     string Prompt, string? ExpectedJson, string Explanation, string[]? AcceptedPatches = null,
-    string Source = "OhMyHarness", string? SourceUrl = null, string? SourceItem = null, string? Adaptation = null)
+    string Source = BrandingAssets.DefaultName, string? SourceUrl = null, string? SourceItem = null, string? Adaptation = null)
 {
     [JsonIgnore] public Func<JsonObject, BenchmarkJudgment>? Validator { get; init; }
     [JsonIgnore] public VisualBenchmarkTask? Visual { get; init; }
@@ -74,7 +74,7 @@ public static class ModelBenchmark
 
 public sealed record ModelBenchmarkEntry(string Id, string Category, string Title, string Prompt,
     ModelToolResult? Result, bool? Passed, string? Error, string Expected, string Explanation,
-    string Source = "OhMyHarness", string? SourceUrl = null, string? SourceItem = null, string? Adaptation = null,
+    string Source = BrandingAssets.DefaultName, string? SourceUrl = null, string? SourceItem = null, string? Adaptation = null,
     IReadOnlyList<BenchmarkCheck>? Checks = null, string? PreviewHtml = null, double? ElapsedSeconds = null);
 
 public sealed record BenchmarkCheck(string Name, bool Passed, string Detail = "");

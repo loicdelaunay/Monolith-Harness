@@ -14,7 +14,7 @@ Enable **Web research** in GUI Settings → Skills or CLI `/skills`. The agent c
 | `follow_redirects` | false | Maximum 5 redirects; permissions checked for each destination |
 | `decompress` | true | Automatic gzip, deflate and Brotli support |
 | `use_cookies` | false | Isolated cookie jar for this agent run |
-| `user_agent` | `OhMyHarness/1.0` | Custom valid User-Agent, maximum 256 characters |
+| `user_agent` | `MonolithHarness/1.0` | Custom valid User-Agent, maximum 256 characters |
 | `proxy_url` | empty | System proxy by default; explicit HTTP(S) proxy origin without credentials |
 
 Settings and connections are reused during the current agent run and disposed at its end. Changing configuration clears the cookie jar. Headers and request bodies are never saved as client defaults. This client does not share provider API keys, browser cookies or operating-system credentials.

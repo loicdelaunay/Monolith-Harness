@@ -30,7 +30,7 @@ foreach ($channel in @('GUI', 'CLI')) {
             'macOS build: unsigned and not notarized. Native GUI interactions still need manual validation on a real Mac. Extract with tar -xzf to preserve executable permissions. No separate .NET or Python installation is required.'
         }
         @"
-OhMyHarness $channel $version ($Runtime)
+Monolith Harness $channel $version ($Runtime)
 
 Extract into a writable folder. $start
 $platformNote
@@ -40,7 +40,7 @@ database.sqlite and existing resources. This download includes no user data.
 The chat model is not bundled; configure a provider. Optional integrations
 such as Git, Docker/Podman, OpenCode and MCP retain their own prerequisites.
 
-https://github.com/loicdelaunay/OhMyHarness
+https://github.com/loicdelaunay/Monolith-Harness
 "@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding utf8
         $prefix = if ($channel -eq 'GUI') { 'OhMyHarness' } else { 'OhMyHarness-CLI' }
         $extension = if ($windows) { 'zip' } else { 'tar.gz' }

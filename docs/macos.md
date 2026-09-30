@@ -6,7 +6,7 @@ See [the Uno, tasks and models guide](uno-tasks-models.md) for architecture and 
 
 ## Portable downloads
 
-[GUI v1.26.0](https://github.com/loicdelaunay/OhMyHarness/releases/tag/v1.26.0) and [CLI v1.26.0](https://github.com/loicdelaunay/OhMyHarness/releases/tag/cli-v1.26.0) include `osx-arm64` (Apple Silicon) and `osx-x64` (Intel) archives. Choose your architecture and extract the `.tar.gz` into a writable folder with `tar -xzf <archive>`. Run `./OhMyHarness.App` for the GUI or `./omh` for the CLI; enter `/connect` to configure the CLI provider. Verify the archive against the release's `SHA256SUMS.txt`.
+[GUI v1.26.0](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.26.0) and [CLI v1.26.0](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.26.0) include `osx-arm64` (Apple Silicon) and `osx-x64` (Intel) archives. Choose your architecture and extract the `.tar.gz` into a writable folder with `tar -xzf <archive>`. Run `./OhMyHarness.App` for the GUI or `./omh` for the CLI; enter `/connect` to configure the CLI provider. Verify the archive against the release's `SHA256SUMS.txt`.
 
 These builds are unsigned and not notarized, so macOS may block their first launch. Builds and automated engine/CLI tests run on both Mac architectures; this does not validate the native interactions listed below. Automatic executable replacement currently supports Windows only; on Mac, close the application and replace only the executable while preserving your portable data.
 

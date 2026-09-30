@@ -61,7 +61,7 @@ public sealed partial class TerminalUi
             destination = await TerminalProfiles.SaveAsync(fragment, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows Terminal", "Fragments", "OhMyHarness"), lifetime.Token);
         }
         await Show(L("Profil prêt", "Profile ready"), destination + "\n\n" + L(
-            "Profil : OhMyHarness · " + theme.Name + "\nOuvrez ce profil dans un nouvel onglet Windows Terminal (relancez le terminal si nécessaire). La session actuelle continue avec sa police actuelle.\nCopie portable : " + portable + "\nAprès déplacement du dossier portable, régénérez ce profil. Si la police n’est pas installée, le terminal utilise sa police de secours.",
-            "Profile: OhMyHarness · " + theme.Name + "\nOpen this profile in a new Windows Terminal tab (restart the terminal if needed). This session keeps its current font.\nPortable copy: " + portable + "\nRegenerate after moving the portable folder. Missing fonts use the terminal fallback."));
+            "Profil : Monolith Harness · " + theme.Name + "\nOuvrez ce profil dans un nouvel onglet Windows Terminal (relancez le terminal si nécessaire). La session actuelle continue avec sa police actuelle.\nCopie portable : " + portable + "\nAprès déplacement du dossier portable, régénérez ce profil. Si la police n’est pas installée, le terminal utilise sa police de secours.",
+            "Profile: Monolith Harness · " + theme.Name + "\nOpen this profile in a new Windows Terminal tab (restart the terminal if needed). This session keeps its current font.\nPortable copy: " + portable + "\nRegenerate after moving the portable folder. Missing fonts use the terminal fallback."));
     }
 }

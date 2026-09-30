@@ -83,7 +83,7 @@ function createBrowser(win, chatId = 0) {
         const image = nativeImage.createFromBuffer(await fs.readFile(file));
         if (image.isEmpty()) throw new Error('Screen capture failed. Enable Screen Recording in macOS System Settings.');
         return await imageResult(image,region,null,p); // -C draws the actual macOS cursor.
-      } catch (error) { throw new Error(`Screen capture: ${error.message}. macOS: enable Screen Recording for OhMyHarness, then relaunch.`); }
+      } catch (error) { throw new Error(`Screen capture: ${error.message}. macOS: enable Screen Recording for Monolith Harness, then relaunch.`); }
       finally { await fs.rm(temp,{recursive:true,force:true}); }
     }
     if (!display || region.x < bounds.x || region.y < bounds.y || region.x+region.width > bounds.x+bounds.width || region.y+region.height > bounds.y+bounds.height)
