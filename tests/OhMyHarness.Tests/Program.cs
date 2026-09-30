@@ -625,7 +625,7 @@ try
         var childRequests = 0; var policyDenials = 0;
         var runtime = new AgentRuntime(session, customSkills, (wire, tools, ct) => {
             Interlocked.Increment(ref childRequests);
-            Check(!tools.Any(x => x?["function"]?["name"]?.GetValue<string>() is "write_source" or "delegate_tasks"), "Sous-agent Plan sans écriture ni récursion");
+            Check(!tools.Any(x => x?["function"]?["name"]?.GetValue<string>() == "write_source"), "Sous-agent Plan sans écriture, avec délégation swarm autorisée");
             if (wire.Count == 2) return Task.FromResult(new Completion(new JsonObject { ["role"] = "assistant", ["tool_calls"] = new JsonArray(new JsonObject {
                 ["id"] = "bad-child", ["type"] = "function", ["function"] = new JsonObject { ["name"] = "write_source", ["arguments"] = "{\"path\":\"forbidden.md\",\"content\":\"bad\"}" } }) }, 1, 1, 1));
             if (wire.Last()?["content"]?.GetValue<string>().Contains("Mode Plan") == true) Interlocked.Increment(ref policyDenials);

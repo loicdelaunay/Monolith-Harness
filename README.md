@@ -177,7 +177,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.29.2), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.29.2) for a terminal workspace. The 1.29.0 archives cover Windows x64, macOS Apple Silicon and Intel, and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.33.1), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.33.1) for a terminal workspace. The 1.33.1 archives cover Windows x64, macOS Apple Silicon and Intel, and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on macOS/Linux. The app creates its skills folder beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
