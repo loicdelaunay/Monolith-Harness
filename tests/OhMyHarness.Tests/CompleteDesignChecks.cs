@@ -22,11 +22,14 @@ static class CompleteDesignChecks
         Directory.CreateDirectory(root);
         try
         {
+            string database = Path.Combine(root, "test.sqlite");
+            await using (var setup = new HarnessDb(database))
+                await setup.InitializeAsync();
             foreach (string mode in new[] { "plan", "execute" })
                 foreach (string orchestration in new[] { "disabled", "auto" })
                 {
                     using var run = new ConversationSession(new Chat { Id = 1, ExecutionMode = mode, OrchestrationMode = orchestration },
-                        new Project(), new Provider(), new AppState { EnabledSkills = CompleteDesignSkill.Id }, "Design a project", [], Path.Combine(root, "test.sqlite"));
+                        new Project(), new Provider(), new AppState { EnabledSkills = CompleteDesignSkill.Id }, "Design a project", [], database);
                     var runtime = new AgentRuntime(run, new CustomSkills(Path.Combine(root, "skills")),
                         (_, _, _) => throw new Exception("No model call expected"), (_, _, _) => Task.FromResult(false), _ => Task.CompletedTask);
                     string prompt = await runtime.InitializeAsync(default);
@@ -38,7 +41,9 @@ static class CompleteDesignChecks
                         "Design grants no tools and respects orchestration: " + mode + "/" + orchestration);
                     var childDefinitions = new JsonArray();
                     runtime.AddDefinitions(childDefinitions, child: true);
-                    check(childDefinitions.Count == 0, "Design does not grant recursive child delegation");
+                    var childNames = childDefinitions.Select(x => x!["function"]!["name"]!.GetValue<string>()).ToArray();
+                    check(childNames.SequenceEqual(orchestration == "disabled" ? Array.Empty<string>() : new[] { "delegate_tasks" }),
+                        "Design preserves configured swarm delegation without granting other tools");
                 }
         }
         finally { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(root, true); }

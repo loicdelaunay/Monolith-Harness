@@ -32,7 +32,7 @@ internal sealed class ConsumptionWindow : Window
     {
         var stack = new StackPanel { Spacing = 10 }; foreach (var child in children) stack.Children.Add(child); return stack;
     }
-    static Grid TwoColumns(UIElement left, UIElement right)
+    static Grid TwoColumns(FrameworkElement left, FrameworkElement right)
     {
         var grid = new Grid { ColumnSpacing = 12 }; grid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); grid.Children.Add(left); Grid.SetColumn(right, 1); grid.Children.Add(right); return grid;
