@@ -26,10 +26,11 @@ public sealed class MarkdownRenderer
     private SolidColorBrush Brush(byte r, byte g, byte b) => FluentDesign.Adapt(r,g,b);
 
     readonly Func<string, Task>? openFile;
+    readonly Func<string, MenuFlyout>? fileMenu;
     sealed class RenderState { public List<string> Keys = []; }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
-    MarkdownRenderer(Func<string, Task>? openFile) { this.openFile = openFile; }
-    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null)
+    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null) { this.openFile = openFile; this.fileMenu = fileMenu; }
+    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null)
     {
         markdown ??= "";
         var state = states.GetOrCreateValue(container);
@@ -40,7 +41,7 @@ public sealed class MarkdownRenderer
         // Build changed blocks off-tree, then replace only those blocks. Already completed
         // paragraphs keep their visual objects, selection and scroll position during streaming.
         var replacements = new List<UIElement>();
-        var renderer = new MarkdownRenderer(openFile);
+        var renderer = new MarkdownRenderer(openFile, fileMenu);
         foreach (var block in blocks.Skip(shared))
         {
             var blockPanel = new StackPanel { Spacing = 4 };
@@ -50,6 +51,7 @@ public sealed class MarkdownRenderer
                 renderer.AppendText(block, flow, 0); blockPanel.Children.Add(flow);
             }
             else if (renderer.RenderBlock(block) is { } element) blockPanel.Children.Add(element);
+            if (fileMenu != null) ChatPathMenus.Attach(blockPanel, fileMenu);
             replacements.Add(blockPanel);
         }
         for (int i = 0; i < replacements.Count; i++)
@@ -61,6 +63,25 @@ public sealed class MarkdownRenderer
         while (container.Children.Count > keys.Count) container.Children.RemoveAt(container.Children.Count - 1);
         state.Keys = keys;
         AppTypography.Apply(container);
+    }
+    public static void RenderPathText(TextBlock target, string text, Func<string, Task> openFile, Func<string, MenuFlyout> fileMenu)
+    {
+        var renderer = new MarkdownRenderer(openFile, fileMenu);
+        target.IsTextSelectionEnabled = true;
+        target.Inlines.Clear(); target.Text = "";
+        int offset = 0;
+        foreach (var match in LocalFileLinks.Find(text))
+        {
+            if (match.Index > offset) target.Inlines.Add(new Run { Text = text[offset..match.Index] });
+            var link = new Hyperlink { Foreground = renderer.Brush(120, 175, 255), UnderlineStyle = UnderlineStyle.Single };
+            link.Inlines.Add(new Run { Text = text.Substring(match.Index, match.Length) });
+            ChatPathMenus.Register(link, match.Path);
+            link.Click += async (_, _) => { if (!ChatPathMenus.IsSecondaryPress(link)) await openFile(match.Path); };
+            target.Inlines.Add(link);
+            offset = match.Index + match.Length;
+        }
+        if (offset < text.Length) target.Inlines.Add(new Run { Text = text[offset..] });
+        ChatPathMenus.Attach(target, fileMenu);
     }
     void Render(Panel container, string? markdown)
     {
@@ -339,11 +360,31 @@ public sealed class MarkdownRenderer
         };
         try
         {
-            foreach (var token in CodeHighlight.Tokens(code, language))
+            var tokens = CodeHighlight.Tokens(code, language).ToArray();
+            int position = 0, tokenIndex = 0, tokenOffset = 0;
+            void AppendUntil(int end, InlineCollection target)
             {
-                var color = token.Color;
-                codeText.Inlines.Add(new Run { Text = token.Text, Foreground = Brush(Convert.ToByte(color.Substring(1,2),16), Convert.ToByte(color.Substring(3,2),16), Convert.ToByte(color.Substring(5,2),16)) });
+                while (position < end && tokenIndex < tokens.Length)
+                {
+                    var token = tokens[tokenIndex];
+                    var length = Math.Min(end - position, token.Text.Length - tokenOffset);
+                    var color = token.Color;
+                    target.Add(new Run { Text = token.Text.Substring(tokenOffset, length), Foreground = Brush(Convert.ToByte(color.Substring(1,2),16), Convert.ToByte(color.Substring(3,2),16), Convert.ToByte(color.Substring(5,2),16)) });
+                    position += length; tokenOffset += length;
+                    if (tokenOffset == token.Text.Length) { tokenIndex++; tokenOffset = 0; }
+                }
             }
+            if (openFile != null && fileMenu != null)
+                foreach (var path in LocalFileLinks.Find(code))
+                {
+                    AppendUntil(path.Index, codeText.Inlines);
+                    var link = new Hyperlink { UnderlineStyle = UnderlineStyle.Single };
+                    ChatPathMenus.Register(link, path.Path);
+                    link.Click += async (_, _) => { if (!ChatPathMenus.IsSecondaryPress(link)) await openFile(path.Path); };
+                    AppendUntil(path.Index + path.Length, link.Inlines);
+                    codeText.Inlines.Add(link);
+                }
+            AppendUntil(code.Length, codeText.Inlines);
         }
         catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { codeText.Inlines.Clear(); codeText.Text = code; }
         scroll.Content = codeText;
@@ -561,7 +602,8 @@ public sealed class MarkdownRenderer
                     };
                     if (LocalFileLinks.PathFromUrl(link.Url) is string path && openFile != null)
                     {
-                        hyperlink.Click += async (_, _) => await openFile(path);
+                        if (fileMenu != null) ChatPathMenus.Register(hyperlink, path);
+                        hyperlink.Click += async (_, _) => { if (!ChatPathMenus.IsSecondaryPress(hyperlink)) await openFile(path); };
                     }
                     else if (Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http" or "mailto")
                     {
@@ -581,7 +623,12 @@ public sealed class MarkdownRenderer
                     Foreground = Brush(120, 175, 255),
                     UnderlineStyle = UnderlineStyle.Single
                 };
-                if (Uri.TryCreate(autolink.Url, UriKind.Absolute, out var autoUri))
+                if (LocalFileLinks.PathFromUrl(autolink.Url) is string autoPath && openFile != null)
+                {
+                    if (fileMenu != null) ChatPathMenus.Register(autoHyperlink, autoPath);
+                    autoHyperlink.Click += async (_, _) => { if (!ChatPathMenus.IsSecondaryPress(autoHyperlink)) await openFile(autoPath); };
+                }
+                else if (Uri.TryCreate(autolink.Url, UriKind.Absolute, out var autoUri))
                 {
                     autoHyperlink.Click += async (_, _) =>
                     {

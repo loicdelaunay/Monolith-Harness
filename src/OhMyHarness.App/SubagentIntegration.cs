@@ -94,7 +94,8 @@ public sealed partial class MainWindow
             transcript+="\n### "+(message?["role"]?.GetValue<string>()??"")+"\n"+(message?["content"]?.GetValue<string>()??"")+"\n";
             if(message?["tool_calls"]!=null)transcript+="\n```json\n"+message["tool_calls"]!.ToJsonString()+"\n```\n";
         }
-        MarkdownRenderer.RenderTo(content,transcript);
+        var messageProject = chat == null || project == null ? project : ProjectResources.Effective(chat, project);
+        MarkdownRenderer.RenderTo(content,transcript,path=>OpenChatFileAsync(path,messageProject),path=>CreateChatFileMenu(path,messageProject));
         ScrollToBottom();
     }
     async Task LoadSubagents(int chatId)

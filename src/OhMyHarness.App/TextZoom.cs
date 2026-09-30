@@ -51,6 +51,7 @@ static class TextZoom
     static void ApplyTree(DependencyObject node, double factor)
     {
         if (node is IconElement) return;
+        if (node is AdaptiveApplicationTitle title) { title.SetScale(factor); return; }
         if (node is Control control && double.IsFinite(control.Height))
         {
             var basis = dimensions.GetValue(control, _ => new(control.Height));

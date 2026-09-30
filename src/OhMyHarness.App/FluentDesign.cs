@@ -115,25 +115,27 @@ internal static partial class FluentDesign
         CornerRadius = new(8), Padding = new(padding), HorizontalAlignment = HorizontalAlignment.Stretch
     };
 
-    public static Border Setting(string title, string description, Control control, FrameworkElement? details = null)
+    public static Border Setting(string title, string description, Control control, FrameworkElement? details = null, FrameworkElement? caption = null, Button? information = null)
     {
         AutomationProperties.SetName(control, title);
         var copy = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        copy.Children.Add(new TextBlock { Text = title, FontSize = 14, Foreground = Primary,
+        copy.Children.Add(caption ?? new TextBlock { Text = title, FontSize = 14, Foreground = Primary,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (!string.IsNullOrWhiteSpace(description))
             copy.Children.Add(new TextBlock { Text = description, FontSize = 12, Foreground = Secondary, TextWrapping = TextWrapping.Wrap });
         var row = new Grid { ColumnSpacing = 24, RowSpacing = 0 };
         row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        if (information != null) row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         row.RowDefinitions.Add(new() { Height = GridLength.Auto });
         row.RowDefinitions.Add(new() { Height = GridLength.Auto });
         row.RowDefinitions.Add(new() { Height = GridLength.Auto });
         row.Children.Add(copy);
         control.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(control, 1); row.Children.Add(control);
+        if (information != null) { Grid.SetColumn(information, 2); row.Children.Add(information); }
         if (details != null)
-        { Grid.SetRow(details, 1); Grid.SetColumnSpan(details, 2); row.Children.Add(details); }
+        { Grid.SetRow(details, 1); Grid.SetColumnSpan(details, row.ColumnDefinitions.Count); row.Children.Add(details); }
         row.SizeChanged += (_, e) =>
         {
             bool narrow = e.NewSize.Width < 420;

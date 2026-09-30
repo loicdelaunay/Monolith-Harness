@@ -4,6 +4,11 @@ namespace OhMyHarness.Core;
 
 public sealed class FeatureSettings
 {
+    // Older profiles skip onboarding; newly created profiles explicitly opt in.
+    public bool WelcomeCompleted { get; set; } = true;
+    // Cutoff captured by the usage migration; newer interrupted messages aren't legacy history.
+    public int ConsumptionLegacyMessageId { get; set; }
+    public string AiDetectorEndpoint { get; set; } = SlopTotalClient.DefaultEndpoint;
     public string Theme { get; set; } = "fluent-dark";
     public List<AppearanceTheme> CustomThemes { get; set; } = [];
     public string ResponseStyle { get; set; } = "default";
@@ -13,6 +18,7 @@ public sealed class FeatureSettings
     public bool GuiCheckUpdates { get; set; } = true;
     public bool CliCheckUpdates { get; set; } = true;
     public string ApplicationName { get; set; } = BrandingAssets.DefaultName;
+    public bool ApplicationNameTwoLines { get; set; } = true;
     public string LogoPath { get; set; } = "";
     public bool ThemeLogosEnabled { get; set; }
     public string LightLogoPath { get; set; } = "";

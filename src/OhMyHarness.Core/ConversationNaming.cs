@@ -13,6 +13,7 @@ public static class ConversationNaming
         var config = FeatureSettings.Read(state.FeaturesJson);
         if (automatic && !config.AutoNameConversations) return null;
         var chat = await db.Chats.AsNoTracking().SingleAsync(c => c.Id == chatId, ct);
+        using var consumption = TokenConsumption.Begin(database, "naming", await db.Projects.AsNoTracking().SingleAsync(x => x.Id == chat.ProjectId, ct), chat);
         if (automatic && chat.Title is not ("Nouvelle conversation" or "New conversation")) return null;
         var userCount = await db.Messages.CountAsync(m => m.ChatId == chatId && m.Role == "user", ct);
         if (automatic && userCount != 1) return null;

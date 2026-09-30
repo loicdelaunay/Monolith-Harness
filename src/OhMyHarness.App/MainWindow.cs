@@ -56,12 +56,10 @@ public sealed partial class MainWindow : Window
     };
     readonly StackPanel assetsBar = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
     readonly ScrollViewer assetsScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Visibility = Visibility.Collapsed, Padding = new Thickness(0, 2, 0, 2) };
-    readonly ComboBox modelSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch, IsEditable = false, Height = 32 };
-    readonly TextBlock modelHeaderLabel = Label("MODÈLE", 9);
+    readonly ComboBox modelSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch, IsEditable = false, MinHeight = 44 };
     readonly TextBlock modelProviderSubtitle = Label("", 9);
     readonly Button refreshModelsBtn = new() { Content = "↻", Width = 32, Height = 32, Padding = new Thickness(0) };
-    readonly ComboBox thinkingSelector = new() { MinWidth = 105, Height = 32 };
-    readonly TextBlock thinkingHeaderLabel = Label("THINKING", 9);
+    readonly ComboBox thinkingSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 36 };
     readonly TextBlock speedHeaderLabel = Label("DÉBIT", 9);
     readonly TextBlock speedValueText = Label("⚡ — tok/s", 12);
     readonly TextBlock speedOutputText = Label("Sortie : —", 10);
@@ -70,7 +68,7 @@ public sealed partial class MainWindow : Window
     readonly Dictionary<int, GenerationSpeedTracker> messageTrackers = [];
     readonly TextBlock contextHeaderLabel = Label("CONTEXTE", 9);
     readonly TextBlock contextPercentText = Label("0 %", 10);
-    readonly ProgressBar contextBar = new() { Minimum = 0, Maximum = 100, Height = 3, Value = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+    readonly ProgressBar contextBar = new() { Minimum = 0, Maximum = 100, Height = 2, Value = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
     readonly TextBlock contextValueText = Label("— / 128 000 tokens", 10);
     readonly TextBlock status = Label("", 12);
     bool updatingModelSelector, updatingThinkingSelector;
@@ -192,7 +190,7 @@ public sealed partial class MainWindow : Window
         foot.Children.Add(settingsButton);
         Grid.SetRow(foot, 3); panel.Children.Add(foot);
         shell.Pane = panel;
-        idleOnly.AddRange([projects, chats, archivedChats, providers, modelSelector, refreshModelsBtn, thinkingSelector]);
+        idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector]);
         projects.SelectionChanged += async (_, _) => { if (!loading) await Guard(SelectProject); };
         chatSearch.TextChanged += (_, _) => { if (!loading) ApplyChatSearch(chat?.Id, scrollToFirst: true); };
         chats.SelectionChanged += async (_, _) => await Guard(() => ConversationSelectionChangedAsync(chats));
@@ -299,9 +297,7 @@ public sealed partial class MainWindow : Window
     }
     Border BuildFloatingInfoBar()
     {
-        modelHeaderLabel.Foreground = FluentDesign.Secondary;
-        modelHeaderLabel.Tag = "MODÈLE";
-        modelProviderSubtitle.Foreground = Brush(130, 180, 255);
+        modelProviderSubtitle.Foreground = FluentDesign.Secondary;
 
         speedHeaderLabel.Foreground = FluentDesign.Secondary;
         speedHeaderLabel.Tag = "DÉBIT";
@@ -315,47 +311,11 @@ public sealed partial class MainWindow : Window
 
         ToolTipService.SetToolTip(refreshModelsBtn, T("Recharger les modèles de l’API"));
 
-        var grid = new Grid { ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Center };
-        grid.ColumnDefinitions.Add(new() { Width = new(1.8, GridUnitType.Star) });
+        var grid = new Grid { ColumnSpacing = 16, VerticalAlignment = VerticalAlignment.Center };
+        grid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new() { Width = new(0.8, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new() { Width = new(1.0, GridUnitType.Star) });
-
-        var modelStack = new Grid { VerticalAlignment = VerticalAlignment.Center, ColumnSpacing = 6 };
-        modelStack.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        modelStack.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        modelStack.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        modelStack.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-
-        var modelTagStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1 };
-        modelTagStack.Children.Add(modelHeaderLabel);
-        modelTagStack.Children.Add(modelProviderSubtitle);
-        modelStack.Children.Add(modelTagStack);
-
-        Grid.SetColumn(modelSelector, 1);
-        modelStack.Children.Add(modelSelector);
-
-        Grid.SetColumn(refreshModelsBtn, 2);
-        modelStack.Children.Add(refreshModelsBtn);
-
-        var thinkingTagStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1 };
-        thinkingHeaderLabel.Foreground = FluentDesign.Secondary;
-        thinkingHeaderLabel.Tag = "THINKING";
-        thinkingTagStack.Children.Add(thinkingHeaderLabel);
-
-        var thinkingBox = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
-        thinkingBox.Children.Add(thinkingTagStack);
-        thinkingBox.Children.Add(thinkingSelector);
-        Grid.SetColumn(thinkingBox, 3);
-        modelStack.Children.Add(thinkingBox);
-        var modelChip = new StackPanel { Spacing = 3 };
-        modelChip.Children.Add(modelStack); modelChip.Children.Add(modelActivityLabel);
-        grid.Children.Add(modelChip);
-
-        var sep1 = MakeSeparator();
-        Grid.SetColumn(sep1, 1);
-        grid.Children.Add(sep1);
+        grid.Children.Add(BuildModelOptions());
 
         speedStack.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         var speedTop = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
@@ -363,17 +323,13 @@ public sealed partial class MainWindow : Window
         speedTop.Children.Add(speedValueText);
         speedStack.Children.Add(speedTop);
         speedStack.Children.Add(speedOutputText);
-        Grid.SetColumn(speedStack, 2);
+        Grid.SetColumn(speedStack, 1);
         grid.Children.Add(speedStack);
         AttachSpeedPopover();
         RefreshSpeedTooltip();
 
-        var sep2 = MakeSeparator();
-        Grid.SetColumn(sep2, 3);
-        grid.Children.Add(sep2);
-
         var contextStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        var contextTop = new Grid();
+        var contextTop = new Grid { ColumnSpacing = 8 };
         contextTop.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         contextTop.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         contextTop.Children.Add(contextHeaderLabel);
@@ -382,20 +338,28 @@ public sealed partial class MainWindow : Window
         contextStack.Children.Add(contextTop);
         contextStack.Children.Add(contextBar);
         contextStack.Children.Add(contextValueText);
-        Grid.SetColumn(contextStack, 4);
+        Grid.SetColumn(contextStack, 2);
         grid.Children.Add(contextStack);
         AttachContextPopover(contextStack);
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.SizeChanged += (_, e) =>
         {
-            bool compact = e.NewSize.Width < 920;
-            grid.RowSpacing = compact ? 10 : 0;
-            Grid.SetColumnSpan(modelStack, compact ? 5 : 1);
-            Grid.SetRow(speedStack, compact ? 1 : 0); Grid.SetColumn(speedStack, compact ? 0 : 2);
-            Grid.SetRow(contextStack, compact ? 1 : 0); Grid.SetColumn(contextStack, compact ? 2 : 4);
-            Grid.SetColumnSpan(contextStack, compact ? 3 : 1);
-            sep1.Visibility = sep2.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            var scale = TextZoom.ForWindow(root) / 100d;
+            bool compact = e.NewSize.Width < 760 * scale;
+            bool narrow = e.NewSize.Width < 320 * scale;
+            grid.ColumnDefinitions[0].Width = compact && !narrow ? GridLength.Auto : new(1, GridUnitType.Star);
+            grid.ColumnDefinitions[1].Width = compact && !narrow ? new(1, GridUnitType.Star) : GridLength.Auto;
+            grid.RowSpacing = compact ? 8 : 0;
+            Grid.SetColumnSpan(modelOptionsButton, compact ? 3 : 1);
+            Grid.SetRow(speedStack, compact ? 1 : 0); Grid.SetColumn(speedStack, compact ? 0 : 1);
+            Grid.SetColumnSpan(speedStack, narrow ? 3 : 1);
+            Grid.SetRow(contextStack, narrow ? 2 : compact ? 1 : 0); Grid.SetColumn(contextStack, narrow ? 0 : 2);
+            Grid.SetColumnSpan(contextStack, narrow ? 3 : 1);
+            contextStack.Width = Math.Min(Math.Max(0, e.NewSize.Width), (compact ? 148 : 184) * scale);
+            contextStack.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            contextValueText.Visibility = speedHeaderLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         };
 
         assetsScroll.Content = assetsBar;
@@ -414,7 +378,7 @@ public sealed partial class MainWindow : Window
                 provider=selected;state.ProviderId=selected.Id;
                 var priorLoading=loading;loading=true;providers.SelectedItem=selected;loading=priorLoading;
                 await OnModelSelectedAsync(choice.Model);
-                UpdateProvider();modelProviderSubtitle.Text=selected.Name;await db.SaveChangesAsync();
+                UpdateProvider();modelProviderSubtitle.Text=selected.Name; RefreshModelOptions(); await db.SaveChangesAsync();
             });
         };
 
@@ -430,6 +394,7 @@ public sealed partial class MainWindow : Window
                 _ => "auto"
             };
             state.ThinkingLevel = level;
+            RefreshModelOptions();
             await Guard(() => db.SaveChangesAsync());
             ShowStatus(T("Niveau de thinking : ") + (thinkingSelector.SelectedItem?.ToString() ?? level));
         };
@@ -684,6 +649,7 @@ public sealed partial class MainWindow : Window
         PopulateModelSelector();
         PopulateThinkingSelector();
         await SelectProject();
+        if (!FeatureSettings.Read(state.FeaturesJson).WelcomeCompleted) await ShowWelcomeAsync();
         StartScheduler();
         StartUpdateCheck();
         if(Environment.GetEnvironmentVariable("OHMYHARNESS_UI_SMOKE") is {Length:>0} smoke)
@@ -715,6 +681,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             updatingThinkingSelector = false;
+            RefreshModelOptions();
         }
     }
     void UpdateProvider()
@@ -731,7 +698,7 @@ public sealed partial class MainWindow : Window
             if (item.Role == "tasks") { RenderTasks(item.Content, messages); }
             else if (item.Role == "user")
             {
-                actionCard = AddMessage("user", item.Content, item.Attachments, messages);
+                actionCard = AddMessage("user", item.Content, item.Attachments, messages, sourceProject);
             }
             else if (item.Role == "assistant")
             {
@@ -781,14 +748,14 @@ public sealed partial class MainWindow : Window
                     catch { }
                 }
                 var attach = item.Attachments.FirstOrDefault();
-                AddToolMessage(toolName, toolArgs, result, attach?.Data, attach?.Mime, messages);
+                AddToolMessage(toolName, toolArgs, result, attach?.Data, attach?.Mime, messages, sourceProject);
             }
             else
             {
-                AddMessage(item.Role, item.Content, item.Attachments, messages);
+                AddMessage(item.Role, item.Content, item.Attachments, messages, sourceProject);
             }
             AddHistoryActions(item, actionCard);
-            if (item.CompatibilityNotice.Length > 0) AddMessage("info", item.CompatibilityNotice, [], messages);
+            if (item.CompatibilityNotice.Length > 0) AddMessage("info", item.CompatibilityNotice, [], messages, sourceProject);
         }
     }
     readonly List<WeakReference<AssistantMessageUi>> reasoningViews = [];
@@ -823,6 +790,7 @@ public sealed partial class MainWindow : Window
         }
         public string CurrentText { get; private set; } = "";
         public Func<string, Task>? OpenFile { get; init; }
+        public Func<string, MenuFlyout>? FileMenu { get; init; }
         public TextBlock Duration { get; init; } = null!;
         public Func<bool> CanPaint { get; init; } = () => true;
         bool isHovered;
@@ -848,7 +816,7 @@ public sealed partial class MainWindow : Window
         }
         public void Flush()
         {
-            if (pendingText is { } text) { pendingText = null; MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile); }
+            if (pendingText is { } text) { pendingText = null; MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu); }
             if (pendingThinking is { } thinking) { pendingThinking = null; UpdateThinking(thinking.Text, thinking.Complete); }
         }
 
@@ -858,7 +826,7 @@ public sealed partial class MainWindow : Window
             CurrentText = text;
             if ((streaming || pendingText != null) && !CanPaint()) { pendingText = text; return; }
             pendingText = null;
-            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile);
+            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu);
         }
 
         public void UpdateThinking(string reasoning, bool isComplete = false, bool streaming = false)
@@ -887,7 +855,7 @@ public sealed partial class MainWindow : Window
     }
     AssistantMessageUi AddAssistantMessage(string initialText = "…", string? initialReasoning = null, StackPanel? target = null, Project? sourceProject = null)
     {
-        var messageProject = sourceProject ?? project;
+        var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
         var bodyContainer = new StackPanel { Spacing = 4 };
         AppTypography.SetScope(bodyContainer, FontArea.Assistant);
         var duration = Label("", 11); duration.Foreground = FluentDesign.Secondary; duration.Visibility = Visibility.Collapsed;
@@ -950,6 +918,7 @@ public sealed partial class MainWindow : Window
             CanPaint = () => followChatTail || !ReferenceEquals(target ?? messages, scroll.Content),
             ShowReasoningDetails = () => state.ShowReasoningDetails,
             OpenFile = path => OpenChatFileAsync(path, messageProject),
+            FileMenu = path => CreateChatFileMenu(path, messageProject),
             ThinkingCard = thinkingCard,
             ThinkingHeaderBtn = thinkingHeaderBtn,
             ThinkingHeaderLabel = thinkingHeaderLabel,
@@ -1153,8 +1122,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    void AddToolMessage(string toolName, string arguments, string result, byte[]? imageBytes = null, string? imageMime = null, StackPanel? target = null)
+    void AddToolMessage(string toolName, string arguments, string result, byte[]? imageBytes = null, string? imageMime = null, StackPanel? target = null, Project? sourceProject = null)
     {
+        var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
+        void AddPaths(TextBlock text, string value) => MarkdownRenderer.RenderPathText(text, value,
+            path => OpenChatFileAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject));
         bool isError = result.StartsWith(T("Erreur")) || result.StartsWith("Error");
         var card = FluentDesign.MessageSurface(null, "tool", isError);
         var stack = new StackPanel { Spacing = 10 };
@@ -1227,6 +1199,7 @@ public sealed partial class MainWindow : Window
             if (summary.Length > 120) summary = summary[..120] + "…";
         }
         var summaryText = Label(summary, 11);
+        AddPaths(summaryText, summary);
         summaryText.Foreground = Brush(140, 150, 170);
         summaryText.MaxLines = 1;
         summaryText.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -1266,6 +1239,7 @@ public sealed partial class MainWindow : Window
                     IsTextSelectionEnabled = true
                 }
             };
+            if (argsBox.Child is TextBlock argsText) AddPaths(argsText, arguments);
             detailsPanel.Children.Add(argsBox);
         }
 
@@ -1283,6 +1257,7 @@ public sealed partial class MainWindow : Window
             Foreground = Brush(220, 225, 235),
             IsTextSelectionEnabled = true
         };
+        AddPaths(resultText, result);
         resultScroll.Content = resultText;
         var resultBox = new Border
         {
@@ -1308,13 +1283,14 @@ public sealed partial class MainWindow : Window
         (target ?? messages).Children.Add(card);
     }
 
-    Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null)
+    Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null, Project? sourceProject = null)
     {
         var bodyContainer = new StackPanel { Spacing = 4 };
         AppTypography.SetScope(bodyContainer, role == "user" ? FontArea.User : role == "assistant" ? FontArea.Assistant : FontArea.Interface);
         if (!string.IsNullOrWhiteSpace(text))
         {
-            MarkdownRenderer.RenderTo(bodyContainer, text);
+            var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
+            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatFileAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject));
         }
         if (attachments != null && attachments.Count > 0)
         {
@@ -1342,8 +1318,9 @@ public sealed partial class MainWindow : Window
     }
     async Task NewProject()
     {
-        var name = await AskName(T("Créer un projet"), ""); if (name == null) return;
-        var item = new Project { Name = name, Chats = [new Chat { Title = T("Nouvelle conversation") }] }; db.Projects.Add(item); await db.SaveChangesAsync();
+        var item = new Project { Name = "" };
+        if (await ShowProjectEditorAsync(item, creating: true) != ContentDialogResult.Primary) return;
+        item.Chats = [new Chat { Title = T("Nouvelle conversation") }]; db.Projects.Add(item); await db.SaveChangesAsync();
         loading = true; projects.ItemsSource = await db.Projects.OrderBy(x => x.Id).ToListAsync(); projects.SelectedItem = item; loading = false; await SelectProject();
     }
     async Task NewChat()
@@ -1355,29 +1332,14 @@ public sealed partial class MainWindow : Window
     {
         var project = this.project == null ? null : await db.Projects.SingleAsync(x => x.Id == this.project.Id);
         if (project == null) return;
-        var input = new TextBox { Text = project.Name, Header = T("Nom du projet"), MaxLength = 120 };
-        var appearance = BuildProjectAppearance(project);
-        var folders = new TextBox { Header = WorkflowText("Dossiers par défaut · un par ligne", "Default folders · one per line"), Text = string.Join('\n', project.GetSourceFolders()), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90, MaxHeight = 180 };
-        var permissionText = new TextBlock { Text = project.PermissionProfileJson, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-        var imported = project.PermissionProfileJson;
-        var panel = new StackPanel { Spacing = 12 }; panel.Children.Add(input); panel.Children.Add(appearance.Panel); panel.Children.Add(folders);
-        panel.Children.Add(Action(WorkflowText("Ajouter un dossier", "Add folder"), async () => { var picker = new FolderPicker(); picker.FileTypeFilter.Add("*"); InitializePicker(picker, this); var folder = await picker.PickSingleFolderAsync(); if (folder != null) folders.Text = (folders.Text.Trim() + "\n" + folder.Path).Trim(); }));
-        panel.Children.Add(Label(WorkflowText("Les conversations héritent de ces dossiers tant qu’elles n’ont pas de ressources personnalisées. AGENTS.md et Agent.md sont chargés automatiquement.", "Chats inherit these folders until their resources are customized. AGENTS.md and Agent.md load automatically."), 12));
-        panel.Children.Add(Action(WorkflowText("Lire permission.json", "Read permission.json"), async () => { var draft = new Project(); draft.SetSourceFolders(ProjectResources.Validate(ProjectResources.FolderLines(folders.Text))); imported = await ProjectResources.ReadPermissionsAsync(draft); permissionText.Text = string.IsNullOrEmpty(imported) ? WorkflowText("Aucune règle trouvée.", "No rules found.") : imported; }));
-        panel.Children.Add(new ScrollViewer { Content = permissionText, MaxHeight = 160 });
-        panel.Children.Add(Label(WorkflowText("Enregistrer applique les règles affichées (allow / ask / deny). Les modifications ultérieures du fichier nécessitent une nouvelle importation. Refuser tout reste prioritaire.", "Save applies the displayed rules (allow / ask / deny). Later file changes need a new import. Deny all takes priority."), 12));
-        panel.Children.Add(Action(WorkflowText("Retirer les règles du projet", "Clear project rules"), () => { imported = ""; permissionText.Text = ""; return Task.CompletedTask; }));
-        var dialog = new ContentDialog { XamlRoot = root.XamlRoot, Title = T("Gérer le projet"), Content = new ScrollViewer { Content = panel, MaxHeight = 560 }, PrimaryButtonText = T("Enregistrer"), SecondaryButtonText = T("Supprimer…"), CloseButtonText = T("Annuler") };
-        var result = await ShowDialogAsync(dialog);
-        if (result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(input.Text))
-        { var paths = ProjectResources.Validate(ProjectResources.FolderLines(folders.Text)); if (paths.Any(x => !Directory.Exists(x))) throw new ArgumentException("Dossiers requis."); project.Name = input.Text.Trim(); appearance.Save(project); project.SetSourceFolders(paths); project.PermissionProfileJson = imported; }
-        else if (result == ContentDialogResult.Secondary && await Confirm(T("Supprimer le projet et toutes ses conversations ? Les fichiers sources restent sur le disque.")))
+        var result = await ShowProjectEditorAsync(project, creating: false);
+        if (result == ContentDialogResult.Secondary && await Confirm(T("Supprimer le projet et toutes ses conversations ? Les fichiers sources restent sur le disque.")))
         {
             if (conversationRuns.Values.Any(x => x.Project.Id == project.Id)) throw new InvalidOperationException(T("Arrêtez les conversations en cours avant de supprimer leur projet."));
             foreach (var terminalChat in await db.Chats.Where(x => x.ProjectId == project.Id).Select(x => x.Id).ToListAsync()) { await terminals.RemoveChatAsync(terminalChat); CloseConversationBrowser(terminalChat); }
             db.Projects.Remove(project);
         }
-        else return;
+        else if (result != ContentDialogResult.Primary) return;
         await db.SaveChangesAsync();
         loading = true; var list = await db.Projects.OrderBy(x => x.Id).ToListAsync(); projects.ItemsSource = list; projects.SelectedItem = list.FirstOrDefault(x => x.Id == state.ProjectId) ?? list.FirstOrDefault(); loading = false; await SelectProject();
     }
@@ -1482,7 +1444,7 @@ public sealed partial class MainWindow : Window
         var retrySettings = BuildRetrySettings();
         var notificationSettings = BuildNotificationSettings();
         var agentAutomationSettings = BuildAgentAutomationSettings();
-        general.Children.Add(branding.Panel);
+        appearance.Panel.Children.Insert(0, branding.Panel);
         language.Header = null;
         general.Children.Add(FluentDesign.Setting(T("Langue de l’application"), "", language));
         var responseStyle = new ComboBox
@@ -1509,6 +1471,15 @@ public sealed partial class MainWindow : Window
         var about = new StackPanel { Spacing = 20 };
         about.Children.Add(FluentDesign.Surface(updates.Panel, 16));
         about.Children.Add(conversationPreferences.Logs);
+        var welcomeGuide = Action(WorkflowText("Ouvrir le guide de bienvenue", "Open welcome guide"), async () =>
+        {
+            loadingWindow.Close();
+            await Task.Yield();
+            await ShowWelcomeAsync();
+        });
+        about.Children.Add(FluentDesign.Setting(WorkflowText("Guide de bienvenue", "Welcome guide"),
+            WorkflowText("Retrouvez les étapes pour choisir un thème, connecter un fournisseur et découvrir les skills.",
+                "Revisit the steps to choose a theme, connect a provider and discover skills."), welcomeGuide));
 
         var skillPanel = new StackPanel { Spacing = 8 };
         skillPanel.Children.Add(Label(T("Les skills ajoutent des instructions spécialisées. Les accès aux sources et au web peuvent être désactivés indépendamment."), 13));
@@ -1538,7 +1509,8 @@ public sealed partial class MainWindow : Window
             var skillTitle = toggle.Header.ToString()!;
             toggle.Header = null;
             skillPanel.Children.Add(FluentDesign.Setting(skillTitle,
-                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : null));
+                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : null,
+                caption: SkillLabel(skill, bold: true), information: SkillInfoButton(skill)));
             if (skill.Id == "git")
             { gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; toggle.Toggled += (_, _) => gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; }
             if(skill.Id is "rag" or "vision_bridge")
@@ -2149,6 +2121,7 @@ public sealed partial class MainWindow : Window
             modelProviderSubtitle.Text=choice==null?WorkflowText("Aucun modèle coché", "No models selected"):provider!.Name;
             refreshModelsBtn.IsEnabled=provider!=null && !provider.IsComposite;
             RefreshContextInfo();
+            RefreshModelOptions();
         }
         finally { updatingModelSelector=false; }
     }
@@ -2328,6 +2301,7 @@ public sealed partial class MainWindow : Window
     }
     async Task SendCoreAsync(ConversationRun run, string secret)
     {
+        using var consumption = TokenConsumption.Begin(run.Db.FilePath, "chat", run.Project, run.Chat);
         var db = run.Db; var chat = run.Chat; var provider = run.Provider; var project = run.Project;
         var ct = run.Cancellation.Token;
         var history = await db.Messages.Include(x => x.Attachments).Where(x => x.ChatId == chat.Id && x.State == "complete").OrderBy(x => x.Id).ToListAsync();
@@ -2336,7 +2310,7 @@ public sealed partial class MainWindow : Window
         MarkRunSubmitted(run);
         await RefreshInboxAsync();
         if (history.Count == 1) run.Messages.Children.Clear();
-        AddHistoryActions(user, AddMessage("user", user.Content, user.Attachments, run.Messages));
+        AddHistoryActions(user, AddMessage("user", user.Content, user.Attachments, run.Messages, run.Project));
         ScrollRunToBottom(run);
         var sourceFolders = project.GetSourceFolders();
         var hasSources = sourceFolders.Count > 0 && SourceTools.CanRead(run.Options.EnabledSkills);
@@ -2486,7 +2460,7 @@ public sealed partial class MainWindow : Window
                             });
                         }
                         toolResults.Add(toolMsg);
-                        AddToolMessage(toolName, toolArgs, result, screenshot?.Data, screenshot?.Mime, run.Messages);
+                        AddToolMessage(toolName, toolArgs, result, screenshot?.Data, screenshot?.Mime, run.Messages, run.Project);
                         ScrollRunToBottom(run);
                     }
                 active.State = "complete"; active.WireJson = completion.Message.ToJsonString();

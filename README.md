@@ -4,15 +4,15 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-The project is now named **Monolith Harness** (previously OhMyHarness). Version **1.29.2** includes the new M logo and publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on macOS/Linux. Portable data and release archive names stay compatible with existing workspaces.
+The project is now named **Monolith Harness** (previously OhMyHarness). Current downloads are **1.33.1** and publish both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on macOS/Linux. Portable data and release archive names stay compatible with existing workspaces.
 
 Installations up to 1.29.1 need a one-time manual update to the new launcher before using subsequent automatic updates. Keep your database and resources. See the [update guide](docs/cli.md#github-updates).
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.29.2">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.29.2">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.33.1">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.33.1">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -26,11 +26,11 @@ Installations up to 1.29.1 need a one-time manual update to the new launcher bef
 
 Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows, macOS and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.29.2) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.29.2) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.33.1) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.33.1) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
-Version **1.29.2** is available as GUI and CLI downloads for Windows x64, macOS Apple Silicon, macOS Intel and Fedora Linux x64. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
+Version **1.33.1** is available as GUI and CLI downloads for Windows x64, macOS Apple Silicon, macOS Intel and Fedora Linux x64. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
 
 The chat model itself is **not** bundled: cloud providers need network access and, depending on the service, an API key. Git, Docker/Podman, OpenCode, and Chrome MCP are optional integrations with their own prerequisites. The core app does not require a separate Monolith Harness server.
 
@@ -79,6 +79,16 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 ## New in the current downloads
 
+**New in 1.33.1:** creating a project now opens the same editor as Manage project, including icon, color preview, multiple default folders and optional permission-file import. The first conversation inherits the selected folders immediately.
+
+**Since 1.33.0:** **Tools → AI Generated detector** connects to the real [SlopTotal](https://github.com/pablocaeg/sloptotal) service for text, URLs and documents. Compare live detector results, global and paragraph scores, or website-builder fingerprints. A local or remote service is required; the optional local installer needs Docker and downloads models only when explicitly started. Detection scores are indicators, not proof of authorship.
+
+**Since 1.32.0:** **Tools → Token consumption** shows timelines, model breakdowns and detailed calls, with Today, 3 days, 7 days, 30 days and 1 year filters. GUI and CLI record usage for chats, agents and model tools, distinguishing provider counters from estimates. Filtered details can be copied as CSV.
+
+**Since 1.31.0:** new GUI profiles receive an illustrated theme/provider/skills welcome guide. The chat model and thinking controls adapt to smaller windows, and the context popover explains token use with a chart.
+
+**Since 1.30.0:** local chat paths have opening actions in their context menu, application branding lives in Appearance, custom names can use two compact lines, and Git / File Index have Beta labels and skill details.
+
 **New in 1.29.2:** Monolith Harness now has an illuminated M logo, refreshed GUI and CLI screenshots, and consistently named launchers for every platform: `MonolithHarness.exe` on Windows and `MonolithHarness` on macOS/Linux. Existing portable data is retained; the Windows updater handles the new executable name.
 
 **New in 1.29.0:** Auto evaluates delegation before starting a request. Settings → Agents explains Selective, Balanced, Proactive and Swarm behavior and lets you configure coordination instructions and shared budgets. Teams can launch additional waves and descendants with inherited tool permissions, context compaction and cancellation. Defaults are 64 agents per request, 8 parallel model requests, 3 delegation levels and 200 steps per worker. OpenCode workers retain a restriction on native nested delegation.
@@ -105,7 +115,7 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 **Since 1.9.0:** the complete-design skill helps guide projects from discovery through implementation and testing; browser access choices now persist with other skills; the GUI question tool has a clearer step-by-step choice card; and the CLI logo follows the selected theme. GUI and CLI archives remain available for Windows x64, both Mac architectures and Fedora Linux x64. Unix archives use `.tar.gz` to preserve executable permissions; see the [Mac guide](docs/macos.md) and [Fedora guide](docs/fedora.md).
 
-Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.29.2 and CLI v1.29.2** package the same shared engine for all four supported platform targets.
+Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.33.1 and CLI v1.33.1** package the same shared engine for all four supported platform targets.
 
 - **Response styles:** DEFAULT, SHORT, PRAGMATIC, DETAILED and FUN, shared between GUI General settings and CLI `/settings`.
 - **CLI editing:** selection, word navigation, copy/cut/paste and undo/redo; ordinary Backspace deletes one character.
@@ -117,7 +127,7 @@ Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/
 - **Fresh portable workspaces:** launching the executable in a new folder creates fresh data instead of importing previous AppData conversations.
 - **Guided work:** Complete design coordinates questions, choices, implementation, optional subagents and verification; the GUI question card presents one decision at a time.
 
-See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.29.2.
+See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.33.1.
 
 ## Built-in skills — one click to enable
 

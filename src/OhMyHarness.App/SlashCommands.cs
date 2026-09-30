@@ -121,7 +121,7 @@ public sealed partial class MainWindow
                 if (theme == null) throw new ArgumentException(WorkflowText("Thème inconnu : ", "Unknown theme: ") + argument);
                 appearance.Theme = theme.Id; state.FeaturesJson = appearance.Json(); ApplyAppearance(); break;
             case "model":
-                if (argument.Length == 0) { composer.Text = ""; composerInfoExpanded = true; UpdateInfoPanel(); modelSelector.Focus(FocusState.Programmatic); modelSelector.IsDropDownOpen = true; return true; }
+                if (argument.Length == 0) { composer.Text = ""; composerInfoExpanded = true; UpdateInfoPanel(); OpenModelOptions(chooseModel: true); return true; }
                 if (provider == null || !ProviderModels.Visible(provider).Contains(argument)) throw new ArgumentException(WorkflowText("Modèle indisponible chez ce fournisseur.", "Model unavailable from this provider."));
                 provider.Model = argument; PopulateModelSelector(); UpdateProvider(); break;
         }

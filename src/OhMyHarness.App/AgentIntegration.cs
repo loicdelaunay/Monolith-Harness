@@ -8,6 +8,7 @@ public sealed partial class MainWindow
     AgentRuntime CreateAgentRuntime(ConversationRun run, string secret, McpSession mcp) => new(run, new CustomSkills(CustomSkills.DefaultRoot, run.Project.GetSourceFolders(), run.Project.Id),
         async (wire, definitions, ct) =>
         {
+            using var consumption = TokenConsumption.Activity("agent");
             if (!run.Provider.IsOpenCode) return await engine.StreamAsync(run.Provider, secret, wire, definitions, _ => { }, ct, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson));
             var directory = OpenCodeDirectory(run.Project);
             await EnsureOpenCodeServerAsync(run.Provider, secret, ct, run.Project);
@@ -19,6 +20,7 @@ public sealed partial class MainWindow
         text => { SetRunStatus(run, text); return Task.CompletedTask; },
         _ => Task.FromResult(RunSkills(run)), child => { UpdateSubagent(run,child); return Task.CompletedTask; },
         async (target,wire,definitions,update,ct)=> {
+            using var consumption = TokenConsumption.Activity("agent");
             var key=KeyVault.Decrypt(target.ProtectedKey);
             if(!target.IsOpenCode)return await engine.StreamAsync(target,key,wire,definitions,update,ct,run.Options.ThinkingLevel,FeatureSettings.Read(run.Options.FeaturesJson));
             var directory=OpenCodeDirectory(run.Project);await EnsureOpenCodeServerAsync(target,key,ct,run.Project);

@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.33.1 - 2026-09-30
+
+- Project creation now uses the same editor as Manage project: name, icon, icon color with preview, multiple default folders and optional permission-file import. The first conversation inherits the selected folders immediately.
+- Repeated folder selections are deduplicated. Invalid names or folders keep the editor open with an inline error; canceling creation saves no project or conversation.
+
+## 1.33.0 - 2026-09-30
+
+- Added Tools > AI Generated detector in a separate native window, connected to the real SlopTotal detection service. Scan pasted prose, web-page text and PDF/DOCX/TXT/MD documents, with a calibrated global score, live engine results, filters, explanations, per-paragraph score charts and a copyable JSON report.
+- Website scans also identify AI app-builder fingerprints, with supporting evidence shown separately from text detection. Short-text limitations, server retention and unavailable engines are explicitly surfaced; detector scores are indicators, not proof of authorship.
+- Configure and remember a local or remote SlopTotal endpoint. An optional user-started Docker installer builds a pinned upstream revision with CPU models and document support, binds it only to localhost, and preserves models/reports in dedicated volumes. Docker must be installed and running; setup is never triggered automatically.
+
+## 1.32.0 - 2026-09-30
+
+- Added Tools > Token consumption in a separate window, with token timelines, model breakdowns, input/output totals and paginated call details. Filters cover Today, 3 days, 7 days, 30 days and 1 year, plus provider, model, project and activity. The dashboard refreshes automatically and filtered details can be copied as CSV.
+- GUI and CLI persist consumption for chats, subagents, naming, vision, compaction, translation, proofreading and benchmarks. Provider-reported counters are distinguished from estimates, including partial responses on cancellation or failure. Input tokens count each call's prompt, including repeated history.
+- A database migration imports dated historical message counters with the available metadata and avoids counting copied fork messages twice; undated replies are explicitly excluded from period totals. Usage records contain no prompts, responses or credentials, survive individual chat deletion, and are erased by the existing data reset.
+
+## 1.31.1 - 2026-09-30
+
+- The chat's model, speed and context section now adapts to its actual available width and font zoom. A combined model button displays the selected model without truncation and opens model, thinking level and refresh controls together; `/model` still opens model selection.
+- Context usage has a bounded, smaller gauge. Narrow layouts give model selection the full row and retain detailed token counts in the context popover, with additional stacking for very small widths.
+- Removed the duplicate model-thinking text from the model information section. Chat progress and the no-response timer remain in the conversation's status area.
+
+## 1.31.0 - 2026-09-30
+
+- New GUI profiles open an illustrated, three-step welcome guide: preview and choose a theme, configure an AI provider and model, then select skills. Essentials and Development presets help get started, with independent Git reading and writing controls.
+- Provider setup supports compatible APIs and OpenCode, loading model catalogs on request or entering a model ID manually. Credentials use the existing system vault; theme, provider and skill choices are saved together at completion.
+- Setup can be deferred and reopened from Settings > About. Existing profiles retain their settings and do not receive the first-launch prompt. Illustrations follow the selected theme, and the guide adapts to smaller windows.
+
+## 1.30.0 - 2026-09-30
+
+- Local file and directory paths in chat now have a context menu with Open, Open in browser and Open containing folder. Relative paths use the conversation's source folders; missing or ambiguous paths report an explicit error.
+- Path links support directories, quoted paths and inline code with spaces, file URLs and line references. The menu preserves selectable text and wrapping in streamed replies, code blocks, tool details and subagent transcripts.
+- The embedded browser can display an approved local directory and navigate its files and subdirectories, retaining its existing access checks and protected-file exclusions.
+
 ## 1.29.2 - 2026-09-30
 
 - Published GUI and CLI launchers are now named `MonolithHarness.exe` on Windows and `MonolithHarness` on macOS and Linux. Build scripts, clean release packages and update extraction use this name while retaining portable data and internal assembly identities.

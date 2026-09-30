@@ -6,7 +6,6 @@ namespace OhMyHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly TextBlock modelActivityLabel = new() { FontSize = 11, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = FluentDesign.Secondary, Visibility = Visibility.Collapsed };
     readonly TextBlock goalLabel = new() { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = FluentDesign.Secondary, Visibility = Visibility.Collapsed };
     readonly DispatcherTimer modelActivityTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     string goalSettingsSnapshot = "", visibleGoal = "";
@@ -28,16 +27,14 @@ public sealed partial class MainWindow
     void RefreshModelActivity()
     {
         var run = selectedSubagent == null ? ActiveRun : null;
-        modelActivityLabel.Visibility = run?.WaitingForModel == true ? Visibility.Visible : Visibility.Collapsed;
         if (run?.WaitingForModel == true)
         {
             var idle = ModelActivity.IdleSeconds(run.LastModelProgress, DateTimeOffset.UtcNow);
             var line = ModelActivity.ReasoningLine(run.ProgressReasoning);
-            modelActivityLabel.Text = WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking") +
+            var activity = WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking") +
                 (idle > 30 ? " · " + WorkflowText($"Pas de réponse depuis {idle} secondes", $"No response for {idle} seconds") : line.Length > 0 ? " · " + line : "…");
-            ToolTipService.SetToolTip(modelActivityLabel, line.Length > 0 ? line : modelActivityLabel.Text);
             if (idle > 30 && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
-                status.Text = modelActivityLabel.Text;
+                status.Text = activity;
         }
         if (goalSettingsSnapshot != state.FeaturesJson || goalChatSnapshot != chat?.Id)
         {

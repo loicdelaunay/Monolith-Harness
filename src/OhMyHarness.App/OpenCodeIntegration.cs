@@ -415,6 +415,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
     async Task SendOpenCodeAsync(ConversationRun run, string password)
 
     {
+        using var consumption = TokenConsumption.Begin(run.Db.FilePath, "chat", run.Project, run.Chat);
 
         var db = run.Db; var chat = run.Chat; var provider = run.Provider; var state = run.Options;
 
@@ -738,6 +739,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
     async Task CompactOpenCodeSessionAsync(ConversationRun run, Provider target, string password, string directory, ExternalChatSession link, CancellationToken ct)
 
     {
+        using var consumption = TokenConsumption.Activity("compaction");
 
         var db = run.Db; var chat = run.Chat; var state = run.Options;
 
@@ -746,6 +748,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
         var summaryProvider = new Provider
 
         {
+            Id = target.Id,
 
             Name = target.Name,
 

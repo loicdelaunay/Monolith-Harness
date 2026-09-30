@@ -170,7 +170,13 @@ public sealed class OpenCodeEngine(HttpClient http)
         return !string.IsNullOrWhiteSpace(id) ? id : throw new IOException("OpenCode n’a pas renvoyé l’identifiant de la session.");
     }
 
-    public async Task<Completion> PromptAsync(Provider provider, string password, string directory, string sessionId, string prompt,
+    public Task<Completion> PromptAsync(Provider provider, string password, string directory, string sessionId, string prompt,
+        string systemPrompt, IReadOnlyList<OpenCodeAttachment> attachments, Action<GenerationUpdate> update, CancellationToken ct,
+        Func<OpenCodePermission, CancellationToken, Task<string>>? authorize = null, OpenCodeRunPolicy? policy = null, WorkflowTools? workflow = null, FeatureSettings? retrySettings = null) =>
+        TokenConsumption.TrackAsync(provider, ContextWindow.EstimateText(systemPrompt + prompt) + attachments.Count * 1000,
+            progress => PromptOnceAsync(provider, password, directory, sessionId, prompt, systemPrompt, attachments, progress, ct, authorize, policy, workflow, retrySettings), update);
+
+    async Task<Completion> PromptOnceAsync(Provider provider, string password, string directory, string sessionId, string prompt,
         string systemPrompt, IReadOnlyList<OpenCodeAttachment> attachments, Action<GenerationUpdate> update, CancellationToken ct,
         Func<OpenCodePermission, CancellationToken, Task<string>>? authorize = null, OpenCodeRunPolicy? policy = null, WorkflowTools? workflow = null, FeatureSettings? retrySettings = null)
     {
@@ -261,7 +267,14 @@ public sealed class OpenCodeEngine(HttpClient http)
                 if (parsed.Error.Length > 0) throw new IOException("OpenCode : " + parsed.Error);
                 var message = new JsonObject { ["role"] = "assistant", ["content"] = parsed.Text };
                 if (parsed.Reasoning.Length > 0) message["reasoning_content"] = parsed.Reasoning;
-                return new Completion(message, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds);
+                var calls = messages.Where(x => IsAssistant(x) && !known.Contains(MessageId(x)))
+                    .Select(x => ParseAssistant(x!, timer.Elapsed.TotalSeconds)).ToArray();
+                return new Completion(message, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds)
+                {
+                    Usage = new(calls.Sum(x => (long)(x.InputTokens ?? ContextWindow.EstimateText(systemPrompt + prompt) + attachments.Count * 1000)),
+                        calls.Sum(x => (long)(x.OutputTokens ?? ContextWindow.EstimateText(x.Text + x.Reasoning))),
+                        calls.Any(x => !x.InputTokens.HasValue), calls.Any(x => !x.OutputTokens.HasValue))
+                };
             }
         }
         catch

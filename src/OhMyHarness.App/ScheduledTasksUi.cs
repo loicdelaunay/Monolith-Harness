@@ -179,8 +179,8 @@ public sealed partial class MainWindow
             skills.Children.Clear(); skillChecks.Clear();
             foreach (var skill in Skills.Available(project?.GetSourceFolders(), project?.Id ?? 0))
             {
-                var check = new CheckBox { Content = state.Language=="en"?skill.EnglishName:skill.FrenchName, IsChecked = Skills.Enabled(value.EnabledSkills,skill.Id) };
-                skillChecks.Add((check,skill.Id)); skills.Children.Add(check);
+                var check = new CheckBox { IsChecked = Skills.Enabled(value.EnabledSkills,skill.Id) };
+                skillChecks.Add((check,skill.Id)); skills.Children.Add(SkillChoiceRow(skill, check));
             }
             editing=false; ComposeCron(); form.Visibility=Visibility.Visible; list.Visibility=Visibility.Collapsed; add.Visibility=Visibility.Collapsed;
         }

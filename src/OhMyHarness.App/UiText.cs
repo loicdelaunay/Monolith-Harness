@@ -5,6 +5,11 @@ public static partial class UiText
     public static string Language { get; set; } = "fr";
     public static readonly Dictionary<string, string> English = new()
     {
+        ["Ouvrir"] = "Open",
+        ["Ouvrir dans le navigateur"] = "Open in browser",
+        ["Ouvrir le dossier du fichier"] = "Open containing folder",
+        ["Chemin introuvable sur le disque : "] = "Path not found on disk: ",
+        ["Chemin ambigu : indiquez le dossier source ou un chemin absolu."] = "Ambiguous path: specify the source folder or an absolute path.",
         ["Exporter"] = "Export",
         ["Conversation copiée en Markdown."] = "Conversation copied as Markdown.",
         ["Export annulé."] = "Export cancelled.",

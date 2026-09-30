@@ -27,7 +27,7 @@ public static partial class UiText
             return english[..(english.Length - english.TrimStart().Length)] + translated + english[(english.TrimEnd().Length)..];
         }
         // Dynamic labels keep model names, paths, numbers and user text unchanged.
-        foreach (var prefix in new[] { "Error: ", "Goal: ", "Setting saved · ", "Provider: ", "Tool: ", "Folder: ", "Duration: ", "Answered at " })
+        foreach (var prefix in new[] { "Error: ", "Goal: ", "Setting saved · ", "Provider: ", "Tool: ", "Folder: ", "Duration: ", "Answered at ", "Path not found on disk: ", "Thinking: " })
             if (english.StartsWith(prefix, StringComparison.Ordinal) && Translations.TryGetValue(prefix.Trim(), out var translated))
                 return (locale == "de" ? translated.German : translated.Spanish) + " " + english[prefix.Length..];
         if (english.StartsWith("No response for ") && english.EndsWith(" seconds"))
@@ -35,15 +35,151 @@ public static partial class UiText
             var seconds = english[16..^8];
             return locale == "de" ? $"Seit {seconds} Sekunden keine Antwort" : $"Sin respuesta desde hace {seconds} segundos";
         }
+        if (english.EndsWith(" skills enabled", StringComparison.Ordinal) && int.TryParse(english[..^15], out var skills))
+            return locale == "de" ? $"{skills} Skills aktiviert" : $"{skills} skills activados";
+        const string connectedPrefix = "Connected · ", connectedSuffix = " models available. Choose a model to use.";
+        if (english.StartsWith(connectedPrefix, StringComparison.Ordinal) && english.EndsWith(connectedSuffix, StringComparison.Ordinal))
+        {
+            var count = english[connectedPrefix.Length..^connectedSuffix.Length];
+            return locale == "de" ? $"Verbunden · {count} Modelle verfügbar. Wählen Sie ein Modell." : $"Conectado · {count} modelos disponibles. Elige un modelo.";
+        }
         return english;
     }
     const string LocaleData = """
+    Enter the project name.|Geben Sie den Projektnamen ein.|Introduce el nombre del proyecto.
+    Choose folders only:|Wählen Sie nur Ordner:|Elige solo carpetas:
+    Compare multiple detectors for signs of AI-generated text.|Vergleichen Sie mehrere Detektoren auf Hinweise auf KI-generierte Texte.|Compara varios detectores para identificar señales de texto generado por IA.
+    SlopTotal service address|Adresse des SlopTotal-Dienstes|Dirección del servicio SlopTotal
+    Detection service · setup|Erkennungsdienst · Einrichtung|Servicio de detección · Configuración
+    Connect and save|Verbinden und speichern|Conectar y guardar
+    Install / start locally|Lokal installieren / starten|Instalar / iniciar en local
+    Stop local service|Lokalen Dienst stoppen|Detener servicio local
+    Install Docker|Docker installieren|Instalar Docker
+    Source to analyze|Zu analysierende Quelle|Fuente que analizar
+    Web page text|Text einer Webseite|Texto de una página web
+    AI-built website|Mit KI erstellte Website|Sitio web creado con IA
+    Paste text to examine…|Text zur Untersuchung einfügen…|Pega el texto que deseas examinar…
+    Page URL|URL der Seite|URL de la página
+    Choose document…|Dokument auswählen…|Elegir documento…
+    Show paragraph scores|Absatzbewertungen anzeigen|Mostrar puntuaciones por párrafo
+    Your report will appear here|Ihr Bericht erscheint hier|Tu informe aparecerá aquí
+    AI generation index|Index für KI-Generierung|Índice de generación por IA
+    Detector results|Ergebnisse der Detektoren|Resultados de los detectores
+    All engines|Alle Detektoren|Todos los motores
+    AI signals detected|KI-Hinweise erkannt|Señales de IA detectadas
+    Few AI signals|Wenige KI-Hinweise|Pocas señales de IA
+    Unavailable engines|Nicht verfügbare Detektoren|Motores no disponibles
+    Paragraph analysis|Absatzanalyse|Análisis por párrafo
+    Website builder fingerprints|Spuren des Website-Erstellers|Huellas del creador del sitio
+    Copy report|Bericht kopieren|Copiar informe
+    Analyzed by your local service. Nothing sent to the chat provider.|Analyse durch Ihren lokalen Dienst. Keine Übertragung an den Chat-Anbieter.|Análisis en tu servicio local. No se envía nada al proveedor del chat.
+    Content will be sent to:|Inhalt wird gesendet an:|El contenido se enviará a:
+    Enter a valid service address.|Geben Sie eine gültige Dienstadresse ein.|Introduce una dirección válida del servicio.
+    Connecting to service…|Verbindung zum Dienst…|Conectando con el servicio…
+    Service reachable|Dienst erreichbar|Servicio accesible
+    listed engines|aufgelistete Detektoren|motores disponibles
+    Degraded service|Eingeschränkter Dienst|Servicio degradado
+    Installing / starting local service…|Lokaler Dienst wird installiert / gestartet…|Instalando / iniciando el servicio local…
+    Downloading dependencies…|Abhängigkeiten werden heruntergeladen…|Descargando dependencias…
+    Installing dependencies…|Abhängigkeiten werden installiert…|Instalando dependencias…
+    Preparing local service… First startup may take several minutes.|Lokaler Dienst wird vorbereitet… Der erste Start kann einige Minuten dauern.|Preparando el servicio local… El primer inicio puede tardar varios minutos.
+    Waiting for startup… Models may still be downloading.|Warten auf den Start… Modelle werden eventuell noch heruntergeladen.|Esperando el inicio… Puede que los modelos aún se estén descargando.
+    Local service ready. The first scan may wait for models to load.|Lokaler Dienst bereit. Die erste Prüfung muss eventuell auf die Modelle warten.|Servicio local preparado. El primer análisis puede esperar a que se carguen los modelos.
+    Local service stopped. Downloaded models are retained.|Lokaler Dienst gestoppt. Heruntergeladene Modelle bleiben erhalten.|Servicio local detenido. Los modelos descargados se conservan.
+    Paste at least 50 characters to start analysis.|Fügen Sie mindestens 50 Zeichen ein, um die Analyse zu starten.|Pega al menos 50 caracteres para iniciar el análisis.
+    Choose a document to analyze.|Wählen Sie ein Dokument zur Analyse aus.|Elige un documento que analizar.
+    Enter the page URL.|Geben Sie die URL der Seite ein.|Introduce la URL de la página.
+    Connecting to detectors…|Verbindung zu den Detektoren…|Conectando con los detectores…
+    Extracting document…|Dokument wird ausgelesen…|Extrayendo el documento…
+    Looking for builder fingerprints and analyzing text…|Spuren des Erstellers werden gesucht und Text wird analysiert…|Buscando huellas del creador y analizando el texto…
+    Queued · position|Warteschlange · Position|En cola · posición
+    Analyzing…|Analyse läuft…|Analizando…
+    Provisional score|Vorläufige Bewertung|Puntuación provisional
+    engines completed|Detektoren abgeschlossen|motores terminados
+    Analyzing paragraphs…|Absätze werden analysiert…|Analizando los párrafos…
+    Analysis completed in|Analyse abgeschlossen in|Análisis completado en
+    Indeterminate result|Unbestimmtes Ergebnis|Resultado indeterminado
+    Incomplete report · limited interpretation|Unvollständiger Bericht · begrenzte Aussagekraft|Informe incompleto · interpretación limitada
+    flag AI signals|melden KI-Hinweise|detectan señales de IA
+    Few signs of AI generation|Wenige Hinweise auf KI-Generierung|Pocas señales de generación por IA
+    Weak signals|Schwache Hinweise|Señales débiles
+    Mixed or suspicious signals|Gemischte oder verdächtige Hinweise|Señales mixtas o sospechosas
+    Likely AI-generated according to detectors|Laut Detektoren wahrscheinlich KI-generiert|Probablemente generado por IA según los detectores
+    Strong signs of AI generation|Starke Hinweise auf KI-Generierung|Señales claras de generación por IA
+    Short text: interpret the result with care.|Kurzer Text: Ergebnis mit Vorsicht interpretieren.|Texto breve: interpreta el resultado con cautela.
+    Engine documentation|Dokumentation des Detektors|Documentación del motor
+    Unavailable|Nicht verfügbar|No disponible
+    No engines match this filter.|Keine Detektoren entsprechen diesem Filter.|Ningún motor coincide con este filtro.
+    Start an analysis to compare detectors.|Starten Sie eine Analyse zum Vergleich der Detektoren.|Inicia un análisis para comparar los detectores.
+    No usable paragraphs.|Keine auswertbaren Absätze.|No hay párrafos que se puedan analizar.
+    Confirmed fingerprints|Bestätigte Spuren|Huellas confirmadas
+    Possible fingerprints|Mögliche Spuren|Huellas posibles
+    Quick analysis of website text|Schnellanalyse des Website-Textes|Análisis rápido del texto del sitio
+    Insufficient prose for an AI score|Zu wenig Text für eine KI-Bewertung|Texto insuficiente para una puntuación de IA
+    Builder fingerprints and the text score are two independent measurements.|Spuren des Erstellers und Textbewertung sind zwei unabhängige Messungen.|Las huellas del creador y la puntuación del texto son dos medidas independientes.
+    JSON report copied.|JSON-Bericht kopiert.|Informe JSON copiado.
+    Local: Docker must be installed and running. First start downloads dependencies and several GB of models. The service keeps running after this window closes; use Stop to free its resources. Models and reports are retained in Docker volumes.|Lokal: Docker muss installiert sein und laufen. Beim ersten Start werden Abhängigkeiten und mehrere GB Modelle heruntergeladen. Der Dienst läuft nach dem Schließen dieses Fensters weiter; Stoppen gibt Ressourcen frei. Modelle und Berichte bleiben in Docker-Volumes erhalten.|Local: Docker debe estar instalado y en ejecución. El primer inicio descarga dependencias y varios GB de modelos. El servicio sigue en ejecución al cerrar esta ventana; usa Detener para liberar recursos. Los modelos e informes se conservan en volúmenes Docker.
+    SlopTotal retains reports according to server settings (30 days by default).|SlopTotal speichert Berichte gemäß den Servereinstellungen (standardmäßig 30 Tage).|SlopTotal conserva los informes según la configuración del servidor (30 días por defecto).
+    The score is an indicator, not proof of authorship. Texts under 80 words are unreliable; aim for at least 200 words. These engines evaluate prose, not images or source code. Reliability varies by language and rewriting.|Die Bewertung ist ein Hinweis, kein Nachweis der Urheberschaft. Texte unter 80 Wörtern sind unzuverlässig; mindestens 200 Wörter werden empfohlen. Die Detektoren bewerten Fließtext, keine Bilder oder Quellcodes. Die Zuverlässigkeit hängt von Sprache und Überarbeitung ab.|La puntuación es un indicio, no una prueba de autoría. Los textos de menos de 80 palabras son poco fiables; se recomiendan al menos 200. Los motores evalúan texto, no imágenes ni código fuente. La fiabilidad varía según el idioma y las modificaciones.
+    Some detectors are missing or failed. The service score may be biased; do not rely on its overall verdict.|Einige Detektoren fehlen oder sind fehlgeschlagen. Die Dienstbewertung kann verzerrt sein; verlassen Sie sich nicht auf das Gesamturteil.|Faltan algunos detectores o han fallado. La puntuación del servicio puede estar sesgada; no te bases en su veredicto global.
+    Calibrated score supplied by SlopTotal. Compare engines before drawing a conclusion.|Kalibrierte Bewertung von SlopTotal. Vergleichen Sie die Detektoren vor einer Schlussfolgerung.|Puntuación calibrada proporcionada por SlopTotal. Compara los motores antes de sacar conclusiones.
+    These quick passage scores are separate from the full report. The service may merge short paragraphs and truncate displayed excerpts.|Diese schnellen Abschnittsbewertungen sind vom vollständigen Bericht getrennt. Der Dienst kann kurze Absätze zusammenfassen und angezeigte Auszüge kürzen.|Estas puntuaciones rápidas por fragmento son distintas del informe completo. El servicio puede agrupar párrafos breves y recortar los fragmentos mostrados.
+    No AI builder fingerprints identified. This does not prove the site was written without AI.|Keine Spuren eines KI-Website-Erstellers gefunden. Das beweist nicht, dass die Website ohne KI erstellt wurde.|No se han identificado huellas de un creador de sitios con IA. Esto no demuestra que el sitio se haya creado sin IA.
+    Open|Öffnen|Abrir
+    Open in browser|Im Browser öffnen|Abrir en el navegador
+    Open containing folder|Übergeordneten Ordner öffnen|Abrir la carpeta del archivo
+    Path not found on disk:|Pfad auf dem Datenträger nicht gefunden:|Ruta no encontrada en el disco:
+    Ambiguous path: specify the source folder or an absolute path.|Mehrdeutiger Pfad: Quellordner oder absoluten Pfad angeben.|Ruta ambigua: indica la carpeta de origen o una ruta absoluta.
     General|Allgemein|General
     Appearance|Darstellung|Apariencia
+    Welcome to|Willkommen bei|Bienvenido a
+    Welcome guide|Willkommensassistent|Guía de bienvenida
+    Open welcome guide|Willkommensassistent öffnen|Abrir guía de bienvenida
+    Revisit the steps to choose a theme, connect a provider and discover skills.|Wählen Sie erneut ein Design, verbinden Sie einen Anbieter und entdecken Sie Skills.|Repasa los pasos para elegir un tema, conectar un proveedor y descubrir skills.
+    Later|Später|Más tarde
+    Get started|Loslegen|Comenzar
+    Your space, your colors.|Ihr Raum, Ihre Farben.|Tu espacio, tus colores.
+    Your first model.|Ihr erstes Modell.|Tu primer modelo.
+    Your toolkit.|Ihre Werkzeuge.|Tus herramientas.
+    Light, dark or custom: start by making yourself at home.|Hell, dunkel oder individuell: Machen Sie es sich gemütlich.|Claro, oscuro o personalizado: empieza sintiéndote como en casa.
+    A URL, a key, a model: your first chat is within reach.|Eine URL, ein Schlüssel, ein Modell: Ihr erster Chat ist zum Greifen nah.|Una URL, una clave, un modelo: tu primer chat está a tu alcance.
+    Research, code, memory… Build the toolkit that suits you.|Recherche, Code, Gedächtnis… Stellen Sie Ihre passenden Werkzeuge zusammen.|Investigación, código, memoria… Crea el conjunto de herramientas que necesitas.
+    Choose the look you prefer. Preview it immediately; you can change it again in Appearance.|Wählen Sie Ihr bevorzugtes Design mit sofortiger Vorschau. Sie können es später unter Darstellung ändern.|Elige el aspecto que prefieras con vista previa inmediata. Puedes cambiarlo después en Apariencia.
+    Tip: Appearance also lets you choose fonts, customize your logo and create your own theme.|Tipp: Unter Darstellung können Sie auch Schriften wählen, Ihr Logo anpassen und ein eigenes Design erstellen.|Consejo: Apariencia también permite elegir fuentes, personalizar el logo y crear tu propio tema.
+    Your provider gives access to the models used in chats. Choose a connection, enter a key if needed, then select a model.|Ihr Anbieter stellt die Modelle für Chats bereit. Wählen Sie eine Verbindung, geben Sie bei Bedarf einen Schlüssel ein und wählen Sie ein Modell.|Tu proveedor da acceso a los modelos del chat. Elige una conexión, introduce una clave si es necesaria y selecciona un modelo.
+    I'll set up my provider later|Ich richte meinen Anbieter später ein|Configuraré mi proveedor más tarde
+    Skills give the model specialized capabilities. Enable what you need; operations still follow your permissions. Adjust this selection later in Settings or the chat's ＋ menu.|Skills geben dem Modell spezielle Fähigkeiten. Aktivieren Sie, was Sie brauchen; Ihre Berechtigungen gelten weiterhin. Ändern Sie die Auswahl später in den Einstellungen oder im ＋-Menü des Chats.|Los skills dan capacidades especializadas al modelo. Activa los que necesites; las acciones siguen tus permisos. Puedes cambiar la selección en Ajustes o en el menú ＋ del chat.
+    Essentials|Grundausstattung|Esenciales
+    Skill presets|Skill-Presets|Presets de skills
+    Development|Entwicklung|Desarrollo
+    Disable all|Alle deaktivieren|Desactivar todos
+    Git reading|Git-Lesezugriff|Lectura Git
+    Git writing|Git-Schreibzugriff|Escritura Git
+    Git permissions|Git-Berechtigungen|Permisos Git
+    Setup saved. Enjoy exploring!|Einrichtung gespeichert. Viel Spaß beim Entdecken!|Configuración guardada. ¡Disfruta explorando!
+    Choose a provider|Anbieter wählen|Elegir un proveedor
+    Other compatible API|Andere kompatible API|Otra API compatible
+    Load models|Modelle laden|Cargar modelos
+    Model and server options|Modell- und Serveroptionen|Opciones del modelo y del servidor
+    Enter your details, then load models or type a model ID directly. A local API may work without a key.|Geben Sie Ihre Daten ein. Laden Sie dann Modelle oder geben Sie eine Modell-ID direkt ein. Eine lokale API kann ohne Schlüssel funktionieren.|Introduce tus datos y carga los modelos o escribe su identificador. Una API local puede funcionar sin clave.
+    Finding models…|Modelle werden gesucht…|Buscando modelos…
+    Connected, no models found. You can enter a model ID manually.|Verbunden, aber keine Modelle gefunden. Sie können eine Modell-ID manuell eingeben.|Conectado, sin modelos encontrados. Puedes introducir el identificador manualmente.
+    Search cancelled or timed out. You can retry.|Suche abgebrochen oder Zeitlimit erreicht. Sie können es erneut versuchen.|Búsqueda cancelada o tiempo agotado. Puedes volver a intentarlo.
     Providers|Anbieter|Proveedores
     Settings|Einstellungen|Ajustes
     ⚙  Settings|⚙  Einstellungen|⚙  Ajustes
     Skills|Skills|Skills
+    Beta|Beta|Beta
+    Beta skill|Skill in Betaversion|Skill en versión beta
+    Skill details|Skill-Details|Detalles del skill
+    Skill details ·|Skill-Details ·|Detalles del skill ·
+    How it works|Funktionsweise|Funcionamiento
+    Design|Konzeption|Diseño
+    Settings and permissions|Einstellungen und Berechtigungen|Ajustes y permisos
+    Getting started|Erste Schritte|Primeros pasos
+    Updates|Aktualisierungen|Actualizaciones
+    Scope and permissions|Umfang und Berechtigungen|Alcance y permisos
+    Skill instructions|Skill-Anweisungen|Instrucciones del skill
     Memory|Gedächtnis|Memoria
     Permissions|Berechtigungen|Permisos
     Browser|Browser|Navegador
@@ -63,6 +199,8 @@ public static partial class UiText
     Theme-specific logos|Logos je nach Design|Logos según el tema
     Application name and logo|Anwendungsname und Logo|Nombre y logo de la aplicación
     Application display name|Angezeigter Anwendungsname|Nombre visible de la aplicación
+    Two-line application name|Anwendungsname in zwei Zeilen|Nombre de la aplicación en dos líneas
+    The first word is the title, with the rest as a smaller subtitle. Names without spaces stay on one line.|Das erste Wort ist der Titel, der Rest ein kleinerer Untertitel. Namen ohne Leerzeichen bleiben in einer Zeile.|La primera palabra es el título y el resto, un subtítulo más pequeño. Los nombres sin espacios permanecen en una línea.
     Custom logo|Eigenes Logo|Logo personalizado
     Choose logo…|Logo auswählen…|Elegir logo…
     Default logo|Standardlogo|Logo original
@@ -164,6 +302,11 @@ public static partial class UiText
     ASSISTANT|ASSISTENT|ASISTENTE
     TOOL|WERKZEUG|HERRAMIENTA
     Model|Modell|Modelo
+    Model and thinking|Modell und Denkniveau|Modelo y razonamiento
+    Thinking level|Denkniveau|Nivel de razonamiento
+    Thinking:|Denkniveau:|Razonamiento:
+    Choose a model|Modell wählen|Elegir un modelo
+    Choose model and thinking|Modell und Denkniveau wählen|Elegir modelo y razonamiento
     MODEL|MODELL|MODELO
     Speed|Geschwindigkeit|Velocidad
     SPEED|GESCHWINDIGKEIT|VELOCIDAD
@@ -631,6 +774,72 @@ public static partial class UiText
     Connecting to the model…|Verbindung zum Modell wird hergestellt…|Conectando con el modelo…
     Context compacted.|Kontext komprimiert.|Contexto compactado.
     Context usage|Kontextverbrauch|Uso del contexto
+    Token consumption|Token-Verbrauch|Consumo de tokens
+    Track tokens used by your chats, agents and tools.|Verfolgen Sie den Token-Verbrauch Ihrer Chats, Agenten und Werkzeuge.|Consulta los tokens utilizados por tus chats, agentes y herramientas.
+    Period|Zeitraum|Periodo
+    Today|Heute|Hoy
+    3 days|3 Tage|3 días
+    7 days|7 Tage|7 días
+    30 days|30 Tage|30 días
+    1 year|1 Jahr|1 año
+    Activity|Verwendung|Uso
+    All providers|Alle Anbieter|Todos los proveedores
+    All models|Alle Modelle|Todos los modelos
+    All activities|Alle Verwendungen|Todos los usos
+    All projects|Alle Projekte|Todos los proyectos
+    Total tokens|Tokens insgesamt|Tokens totales
+    Input tokens|Eingabe-Tokens|Tokens de entrada
+    Output tokens|Ausgabe-Tokens|Tokens de salida
+    Recorded calls|Erfasste Aufrufe|Llamadas registradas
+    Token timeline|Token-Verbrauch im Zeitverlauf|Evolución de tokens
+    Tokens by model|Token-Verbrauch nach Modell|Tokens por modelo
+    Input tokens include history sent again with each call. ≈ marks estimates. These figures cover this installation, not the provider's billing statement.|Eingabe-Tokens enthalten den bei jedem Aufruf erneut gesendeten Verlauf. ≈ kennzeichnet Schätzungen. Diese Zahlen gelten für diese Installation, nicht für die Abrechnung des Anbieters.|Los tokens de entrada incluyen el historial reenviado en cada llamada. ≈ indica una estimación. Estas cifras corresponden a esta instalación, no a la factura del proveedor.
+    Completed at|Abgeschlossen am|Finalizada el
+    Provider / model|Anbieter / Modell|Proveedor / modelo
+    Project / chat|Projekt / Chat|Proyecto / chat
+    Total|Gesamt|Total
+    Measurement / status|Messung / Status|Medición / estado
+    Call details|Details der Aufrufe|Detalle de las llamadas
+    Copy details as CSV|Details als CSV kopieren|Copiar detalle como CSV
+    Model not recorded|Modell nicht erfasst|Modelo no registrado
+    local time|Ortszeit|hora local
+    calls with estimates|Aufrufe mit Schätzungen|llamadas con estimaciones
+    No usage recorded for these filters. New calls appear after they finish.|Für diese Filter ist kein Verbrauch erfasst. Neue Aufrufe erscheinen nach ihrem Abschluss.|No hay consumo registrado con estos filtros. Las nuevas llamadas aparecen al finalizar.
+    Old measurements are imported with the available information; provider, model or counters may be missing.|Alte Messungen werden mit den verfügbaren Informationen übernommen; Anbieter, Modell oder Zähler können fehlen.|Las mediciones anteriores se importan con la información disponible; pueden faltar el proveedor, el modelo o los contadores.
+    Old replies without dates excluded:|Ausgeschlossene alte Antworten ohne Datum:|Respuestas anteriores sin fecha excluidas:
+    History · unknown provider|Verlauf · unbekannter Anbieter|Historial · proveedor desconocido
+    Chats|Chats|Chats
+    Naming|Titelgenerierung|Nombrado
+    Compaction|Komprimierung|Compactación
+    Translation|Übersetzung|Traducción
+    Proofreading / rephrasing|Korrektur / Umformulierung|Corrección / reformulación
+    Other models|Andere Modelle|Otros modelos
+    No data for this period.|Keine Daten für diesen Zeitraum.|Sin datos para este periodo.
+    History|Verlauf|Historial
+    Reported|Gemeldet|Declarado
+    Interrupted|Unterbrochen|Interrumpida
+    Complete|Abgeschlossen|Finalizada
+    No calls|Keine Aufrufe|Sin llamadas
+    calls|Aufrufe|llamadas
+    CSV details copied.|CSV-Details kopiert.|Detalle CSV copiado.
+    Context is the information the model receives to prepare its response.|Der Kontext umfasst die Informationen, die das Modell zur Vorbereitung seiner Antwort erhält.|El contexto reúne la información que recibe el modelo para preparar su respuesta.
+    Estimate|Schätzung|Estimación
+    Reported by the provider|Vom Anbieter gemeldet|Declarado por el proveedor
+    Context used|Genutzter Kontext|Contexto utilizado
+    Available:|Verfügbar:|Disponible:
+    Capacity:|Kapazität:|Capacidad:
+    used|genutzt|utilizado
+    Last call · reported tokens|Letzter Aufruf · gemeldete Tokens|Última llamada · tokens declarados
+    Model input|Modelleingabe|Entrada del modelo
+    Model output|Modellausgabe|Salida del modelo
+    The provider has not reported this value yet.|Der Anbieter hat diesen Wert noch nicht gemeldet.|El proveedor aún no ha comunicado este valor.
+    Active history · token estimates|Aktiver Verlauf · Token-Schätzungen|Historial activo · estimaciones de tokens
+    Your messages|Ihre Nachrichten|Tus mensajes
+    Tool results|Werkzeugergebnisse|Resultados de herramientas
+    Compaction summary|Zusammenfassung der Komprimierung|Resumen de compactación
+    Images (approx.)|Bilder (ungefähr)|Imágenes (aprox.)
+    These estimates exclude system instructions and tool definitions. They may differ from the total.|Diese Schätzungen enthalten keine Systemanweisungen oder Werkzeugdefinitionen. Sie können vom Gesamtwert abweichen.|Estas estimaciones no incluyen las instrucciones del sistema ni las definiciones de herramientas. Pueden diferir del total.
+    Automatic compaction at 95%: the model summarizes history to free up space. This may consume tokens.|Automatische Komprimierung bei 95 %: Das Modell fasst den Verlauf zusammen, um Platz zu schaffen. Dies kann Tokens verbrauchen.|Compactación automática al 95 %: el modelo resume el historial para liberar espacio. Esto puede consumir tokens.
     Copied to clipboard.|In die Zwischenablage kopiert.|Copiado al portapapeles.
     Copy HTML|HTML kopieren|Copiar HTML
     Copy JSON report|JSON-Bericht kopieren|Copiar informe JSON

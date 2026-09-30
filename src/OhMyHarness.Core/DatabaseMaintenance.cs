@@ -20,6 +20,7 @@ public static class DatabaseMaintenance
     {
         await using var db = new HarnessDb(path);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.TokenUsages.ExecuteDeleteAsync(ct);
         await db.Memories.ExecuteDeleteAsync(ct);
         await db.PendingInputs.ExecuteDeleteAsync(ct);
         await db.Subagents.ExecuteDeleteAsync(ct);
@@ -34,7 +35,7 @@ public static class DatabaseMaintenance
         await db.PermissionGrants.ExecuteDeleteAsync(ct);
         var state = await db.States.SingleAsync(ct);
         state.ProjectId = state.ChatId = null;
-        var settings = FeatureSettings.Read(state.FeaturesJson); settings.ChatGoals.Clear(); state.FeaturesJson = settings.Json();
+        var settings = FeatureSettings.Read(state.FeaturesJson); settings.ChatGoals.Clear(); settings.ConsumptionLegacyMessageId = 0; state.FeaturesJson = settings.Json();
         db.Projects.AddRange(new Project { Name = "Espace personnel", Chats = [new Chat()] }, new Project { Name = "Conversations", IsInbox = true });
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

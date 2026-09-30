@@ -11,7 +11,10 @@ public record GenerationUpdate(string Text, string Reasoning, int? InputTokens, 
     public RetryProgress? Retry { get; init; }
     public double TokensPerSecond => (OutputTokens ?? Math.Ceiling((Text.Length + Reasoning.Length) / 4d)) / Math.Max(.1, Seconds);
 }
-public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens, double Seconds);
+public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens, double Seconds)
+{
+    internal CompletionUsage? Usage { get; init; }
+}
 
 public sealed class ChatEngine(HttpClient http)
 {
@@ -34,7 +37,8 @@ public sealed class ChatEngine(HttpClient http)
     }
     public Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
         Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null) =>
-        RequestRetry.RunAsync(() => StreamOnceAsync(provider, key, messages, tools, update, ct, reasoningEffort), retrySettings, ct,
+        RequestRetry.RunAsync(() => TokenConsumption.TrackAsync(provider, ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools),
+            progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, reasoningEffort), update), retrySettings, ct,
             retry => update(new("", "", null, null, 0) { Retry = retry }));
 
     async Task<Completion> StreamOnceAsync(Provider provider, string key, JsonArray messages, JsonArray tools,

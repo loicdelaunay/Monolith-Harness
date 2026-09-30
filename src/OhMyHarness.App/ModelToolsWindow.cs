@@ -25,6 +25,7 @@ internal sealed partial class ModelToolsWindow : Window
     readonly List<Control> busyControls = [];
     readonly HttpClient http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     readonly ModelToolClient client;
+    readonly string consumptionDatabase;
     readonly Func<FeatureSettings>? readRetrySettings;
     readonly Func<Task<List<Provider>>> loadModels;
     readonly Func<Provider, CancellationToken, Task> prepare;
@@ -45,10 +46,11 @@ internal sealed partial class ModelToolsWindow : Window
     { ModelToolKind.Translator => L("Traducteur", "Translator"), ModelToolKind.Proofreader => L("Correcteur d’orthographe", "Proofreader"), _ => L("Benchmark de modèle", "Model benchmark") };
 
     internal ModelToolsWindow(ModelToolKind kind, List<Provider> providers, int? providerId, string? selectedModel,
-        ElementTheme theme, Func<Task<List<Provider>>> loadModels, Func<Provider, CancellationToken, Task> prepare, Func<FeatureSettings>? readRetrySettings = null)
+        ElementTheme theme, Func<Task<List<Provider>>> loadModels, Func<Provider, CancellationToken, Task> prepare, Func<FeatureSettings>? readRetrySettings = null, string? consumptionDatabase = null)
     {
         this.kind = kind; this.loadModels = loadModels; this.prepare = prepare; client = new(http);
         this.readRetrySettings = readRetrySettings;
+        this.consumptionDatabase = consumptionDatabase ?? HarnessDb.DatabasePath;
         Panel.RequestedTheme = theme;
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
             Panel.RowDefinitions.Add(new() { Height = height });
@@ -146,6 +148,7 @@ internal sealed partial class ModelToolsWindow : Window
         Action<GenerationUpdate>? progress = null)
     {
         SetNotice(L("Réponse en cours…", "Generating…"));
+        using var consumption = SmokeRequest == null ? TokenConsumption.Begin(consumptionDatabase, kind.ToString().ToLowerInvariant()) : null;
         var last = DateTime.MinValue;
         var streaming = true;
         GenerationUpdate? latest = null;

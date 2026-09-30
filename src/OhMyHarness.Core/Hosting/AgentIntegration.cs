@@ -8,6 +8,7 @@ public sealed partial class HarnessService
     AgentRuntime CreateAgentRuntime(ConversationSession run, string secret, McpSession mcp) => new(run, new CustomSkills(CustomSkills.DefaultRoot, run.Project.GetSourceFolders(), run.Project.Id),
         async (wire, definitions, ct) =>
         {
+            using var consumption = TokenConsumption.Activity("agent");
             if (!run.Provider.IsOpenCode) return await new ChatEngine(http).StreamAsync(run.Provider, secret, wire, definitions, _ => { }, ct, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson));
             var directory = OpenCodeDirectory(run.Project);
             await EnsureOpenCode(run.Provider, secret, directory, ct);
@@ -21,6 +22,7 @@ public sealed partial class HarnessService
         async ct => { await using var db = Db(); return await db.States.Select(x => x.EnabledSkills).SingleAsync(ct); },
         child => emit(new { @event="subagent", chatId=run.Chat.Id, child }),
         async (target,wire,definitions,update,ct)=> {
+            using var consumption = TokenConsumption.Activity("agent");
             var key=await Decrypt(target.ProtectedKey,ct);
             if(!target.IsOpenCode)return await new ChatEngine(http).StreamAsync(target,key,wire,definitions,update,ct,run.Options.ThinkingLevel,FeatureSettings.Read(run.Options.FeaturesJson));
             var directory=OpenCodeDirectory(run.Project);await EnsureOpenCode(target,key,directory,ct);

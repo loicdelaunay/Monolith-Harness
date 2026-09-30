@@ -156,6 +156,7 @@ public sealed class HarnessDb : DbContext
     public static string DataDirectory => PortableStorage.Root;
     public static string DatabasePath => Path.Combine(DataDirectory, "database.sqlite");
     readonly string path;
+    public string FilePath => path;
     public HarnessDb(string? path = null)
     {
         this.path = Path.GetFullPath(string.IsNullOrWhiteSpace(path) ? DatabasePath : path);
@@ -174,11 +175,15 @@ public sealed class HarnessDb : DbContext
     public DbSet<ExternalChatSession> ExternalChatSessions => Set<ExternalChatSession>();
     public DbSet<McpServer> McpServers => Set<McpServer>();
     public DbSet<MemoryEntry> Memories => Set<MemoryEntry>();
+    public DbSet<TokenUsage> TokenUsages => Set<TokenUsage>();
     protected override void OnConfiguring(DbContextOptionsBuilder options) =>
         options.UseSqlite(new SqliteConnectionStringBuilder { DataSource = path }.ToString())
                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     protected override void OnModelCreating(ModelBuilder model)
     {
+        model.Entity<TokenUsage>().HasIndex(x => x.CompletedUtc);
+        model.Entity<TokenUsage>().HasIndex(x => new { x.ProviderId, x.Model, x.CompletedUtc });
+        model.Entity<TokenUsage>().Ignore(x => x.TotalTokens).Ignore(x => x.Estimated);
         model.Entity<MemoryEntry>().HasIndex(x => new { x.Partition, x.Category, x.Key }).IsUnique();
         model.Entity<MemoryEntry>().HasIndex(x => new { x.Scope, x.ProjectId, x.ChatId, x.UpdatedUtc });
         model.Entity<MemoryEntry>().Property(x => x.Version).IsConcurrencyToken();
@@ -207,7 +212,7 @@ public sealed class HarnessDb : DbContext
         if (!await States.AnyAsync())
         {
             if (!await Providers.AnyAsync()) Providers.AddRange(new Provider(), new Provider { Name = "DeepSeek", BaseUrl = "https://api.deepseek.com", Model = "deepseek-flash", SupportsImages = true });
-            States.Add(new AppState());
+            States.Add(new AppState { FeaturesJson = new FeatureSettings { WelcomeCompleted = false }.Json() });
             if (!await Projects.AnyAsync()) Projects.Add(new Project { Name = "Espace personnel", Chats = [new Chat()] });
             await SaveChangesAsync();
         }

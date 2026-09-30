@@ -137,18 +137,48 @@ public static class LocalPreview
     public static string ResolveResource(string folder, string escapedPath)
     {
         var relative = Uri.UnescapeDataString(escapedPath.TrimStart('/'));
-        var path = new SourceAccess(folder).Resolve(relative);
+        // Explicitly relative: a child named like the root must not be treated as its alias.
+        var path = new SourceAccess(folder).Resolve(string.IsNullOrEmpty(relative) ? "." : "." + Path.DirectorySeparatorChar + relative);
         ValidatePath(path);
+        if (Directory.Exists(path)) return path;
         if (!File.Exists(path)) throw new FileNotFoundException(path);
         if (new FileInfo(path).Length > 32 * 1024 * 1024) throw new IOException("Preview file too large (32 MB).");
         return path;
+    }
+    public static async Task<byte[]> ReadResourceAsync(string folder, string path, CancellationToken ct = default)
+    {
+        // Re-check containment and protected paths even for directory listing entries.
+        path = ResolveResource(folder, string.Join('/', Path.GetRelativePath(folder, path).Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString)));
+        if (!Directory.Exists(path)) return await File.ReadAllBytesAsync(path, ct);
+        static string Escape(string value) => System.Net.WebUtility.HtmlEncode(value);
+        string Href(string target) => "/" + string.Join('/', Path.GetRelativePath(folder, target).Split(Path.DirectorySeparatorChar).Select(Uri.EscapeDataString));
+        var entries = new List<(string Name, string Path, bool Folder)>();
+        foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (entries.Count >= 1000) break;
+            try
+            {
+                var safe = ResolveResource(folder, Href(entry));
+                entries.Add((Path.GetFileName(safe), safe, Directory.Exists(safe)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
+        }
+        var rows = new System.Text.StringBuilder();
+        if (!string.Equals(Path.TrimEndingDirectorySeparator(path), Path.TrimEndingDirectorySeparator(folder), PlatformSupport.PathComparison))
+            rows.Append("<li><a href=\"").Append(Escape(Href(Path.GetDirectoryName(path)!))).Append("\">📁 ..</a></li>");
+        foreach (var entry in entries.OrderByDescending(x => x.Folder).ThenBy(x => x.Name, PlatformSupport.PathComparer))
+            rows.Append("<li><a href=\"").Append(Escape(Href(entry.Path))).Append(entry.Folder ? "/" : "").Append("\">").Append(entry.Folder ? "📁 " : "📄 ").Append(Escape(entry.Name)).Append("</a></li>");
+        var html = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>" + Escape(path) + "</title>" +
+            "<style>:root{color-scheme:light dark}body{font:16px system-ui;margin:24px}h1{font-size:20px;overflow-wrap:anywhere}ul{padding:0;list-style:none}li{padding:8px 0;border-bottom:1px solid #8884}a{color:inherit;text-decoration:none;overflow-wrap:anywhere}a:hover{text-decoration:underline}</style></head><body><h1>📁 " + Escape(path) + "</h1><ul>" + rows + "</ul></body></html>";
+        return System.Text.Encoding.UTF8.GetBytes(html);
     }
     public static string Mime(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".html" or ".htm" => "text/html; charset=utf-8", ".css" => "text/css; charset=utf-8", ".js" or ".mjs" => "text/javascript; charset=utf-8",
         ".json" => "application/json", ".svg" => "image/svg+xml", ".png" => "image/png", ".jpg" or ".jpeg" => "image/jpeg", ".webp" => "image/webp",
         ".gif" => "image/gif", ".ico" => "image/x-icon", ".pdf" => "application/pdf", ".woff" => "font/woff", ".woff2" => "font/woff2",
-        ".txt" or ".md" or ".cs" or ".ts" or ".xml" or ".yaml" or ".yml" => "text/plain; charset=utf-8",
+        ".txt" or ".md" or ".cs" or ".ts" or ".tsx" or ".jsx" or ".py" or ".xaml" or ".xml" or ".yaml" or ".yml" or ".sql" or ".csv" => "text/plain; charset=utf-8",
         _ => "application/octet-stream"
     };
 }

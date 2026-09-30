@@ -20,6 +20,7 @@ public sealed partial class HarnessService
         var provider = await db.Providers.SingleAsync(x => x.Id == I(p, "providerId"), lifetime);
         using var run = new ConversationSession(chat, project, provider, await db.States.SingleAsync(lifetime), "", [], database,await db.Providers.ToListAsync(lifetime));
         provider=run.Provider;
+        using var consumption = TokenConsumption.Begin(database, "compaction", project, chat);
         if (!runs.TryAdd(chat.Id, run)) throw new InvalidOperationException("Attendez la fin de la réponse / Wait for the response to finish.");
         using var registration = lifetime.Register(run.Cancellation.Cancel);
         var ct = run.Cancellation.Token;
@@ -35,7 +36,7 @@ public sealed partial class HarnessService
                     var directory = OpenCodeDirectory(project);
                     await EnsureOpenCode(provider, secret, directory, token);
                     var engine = new OpenCodeEngine(http);
-                    var isolated = new Provider { Kind = provider.Kind, BaseUrl = provider.BaseUrl, Username = provider.Username, Model = provider.Model, OpenCodeTools = false };
+                    var isolated = new Provider { Id = provider.Id, Name = provider.Name, Kind = provider.Kind, BaseUrl = provider.BaseUrl, Username = provider.Username, Model = provider.Model, OpenCodeTools = false };
                     var session = await engine.CreateSessionAsync(isolated, secret, directory, "Compactage manuel", token);
                     result = await engine.PromptAsync(isolated, secret, directory, session, text, ContextDetails.SummaryInstruction, [], _ => { }, token, retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
                 }

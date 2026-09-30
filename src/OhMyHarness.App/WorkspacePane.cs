@@ -197,7 +197,7 @@ public sealed partial class MainWindow
         var skillMenu = Section("Skills · " + WorkflowText($"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} actifs", $"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} enabled"));
         foreach (var skill in availableSkills)
         {
-            var toggle = new CheckBox { Content = new TextBlock { Text = WorkflowText(skill.FrenchName, skill.EnglishName), TextWrapping = TextWrapping.Wrap }, IsChecked = Skills.Enabled(state.EnabledSkills, skill.Id) };
+            var toggle = new CheckBox { IsChecked = Skills.Enabled(state.EnabledSkills, skill.Id) };
             toggle.Click += async (_, _) => await Guard(async () =>
             {
                 var enabled = state.EnabledSkills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
@@ -206,7 +206,7 @@ public sealed partial class MainWindow
                 if (skillMenu.Tag is Expander expander)
                     expander.Header = "Skills · " + WorkflowText($"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} actifs", $"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} enabled");
             });
-            skillMenu.Children.Add(toggle);
+            skillMenu.Children.Add(SkillChoiceRow(skill, toggle, menu.Hide));
         }
         skillMenu.Children.Add(new Border { Height = 1, Margin = new(0, 4, 0, 4), Background = FluentDesign.Stroke });
         var availableTemplates = db.Templates.Local.Where(x => db.Entry(x).State != EntityState.Deleted).OrderBy(x => x.Name).ToArray();
@@ -519,7 +519,7 @@ public sealed partial class MainWindow
     string ResolveRequestedLocalPath(string requested, Project? targetProject = null)
     {
         if (string.IsNullOrWhiteSpace(requested)) throw new ArgumentException(T("Chemin requis."));
-        if (Uri.TryCreate(requested, UriKind.Absolute, out var uri) && uri.IsFile) requested = uri.LocalPath;
+        if (requested.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(requested, UriKind.Absolute, out var uri) && uri.IsFile) requested = uri.LocalPath;
         return LocalPreview.ValidatePath(Path.IsPathFullyQualified(requested) ? requested : Path.Combine(RequireDirectory(targetProject), requested));
     }
     async Task<string> ReadWithApprovalAsync(string requested, CancellationToken ct, Project? targetProject = null, int? startLine = null, int? endLine = null)
@@ -549,8 +549,7 @@ public sealed partial class MainWindow
     {
         try
         {
-            if (messageProject != null && !Path.IsPathFullyQualified(path))
-                path = new SourceAccess(messageProject.GetSourceFolders()).Resolve(path);
+            path = ResolveChatDiskPath(path, messageProject);
             await OpenLocalPreviewAsync(path, CancellationToken.None, messageProject);
         }
         catch (Exception ex) { ShowStatus(ex.Message, StatusKind.Error); }
@@ -559,18 +558,20 @@ public sealed partial class MainWindow
     {
         using var scope = BrowserScope();
         var path = ResolveRequestedLocalPath(requested, targetProject);
-        var folder = Path.GetDirectoryName(path)!;
-        LocalPreview.ResolveResource(folder, Uri.EscapeDataString(Path.GetFileName(path)));
+        var isDirectory = Directory.Exists(path);
+        var folder = isDirectory ? path : Path.GetDirectoryName(path)!;
+        var resource = isDirectory ? "" : Uri.EscapeDataString(Path.GetFileName(path));
+        LocalPreview.ResolveResource(folder, resource);
         if (!await RequestAccessAsync(PermissionScope("preview-local", folder), T("Ouvrir un fichier local dans le navigateur"), path + "\n\n" + T("Dossier de ressources autorisé : ") + folder + "\n\n" + T("Le fichier et ses ressources locales pourront être lus par la page. Son JavaScript pourra s’exécuter et accéder au réseau. L’IA pourra lire la page et transmettre son contenu au fournisseur."), T("Aperçus locaux dans : ") + folder, ct)) return T("Accès refusé par l’utilisateur.");
         await ShowToolAsync(0);
         previewFolder = folder; previewHost = Guid.NewGuid().ToString("N") + ".preview.invalid";
 #if WINDOWS
-        return await NavigateCoreAsync(new Uri("https://" + previewHost + "/" + Uri.EscapeDataString(Path.GetFileName(path))), ct);
+        return await NavigateCoreAsync(new Uri("https://" + previewHost + "/" + resource), ct);
 #else
         CurrentBrowser.PreviewServer?.Dispose();
         CurrentBrowser.PreviewServer=new LocalPreviewServer(folder);
         previewHost=CurrentBrowser.PreviewServer.Origin.Authority;
-        return await NavigateCoreAsync(new Uri(CurrentBrowser.PreviewServer.Origin,Uri.EscapeDataString(Path.GetFileName(path))),ct);
+        return await NavigateCoreAsync(new Uri(CurrentBrowser.PreviewServer.Origin,resource),ct);
 #endif
     }
     void ConfigureLocalPreview()
@@ -589,11 +590,11 @@ public sealed partial class MainWindow
                 var uri = new Uri(e.Request.Uri);
                 if (owner.PreviewFolder == null || uri.Host != owner.PreviewHost || e.Request.Method != "GET") throw new UnauthorizedAccessException();
                 var path = LocalPreview.ResolveResource(owner.PreviewFolder, uri.AbsolutePath);
-                var bytes = await File.ReadAllBytesAsync(path);
+                var bytes = await LocalPreview.ReadResourceAsync(owner.PreviewFolder, path);
                 var content = new InMemoryRandomAccessStream();
                 using (var writer = new DataWriter(content)) { writer.WriteBytes(bytes); await writer.StoreAsync(); writer.DetachStream(); }
                 content.Seek(0);
-                if(owner.Ready)e.Response = core.Environment.CreateWebResourceResponse(content, 200, "OK", "Content-Type: " + LocalPreview.Mime(path) + "\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff");
+                if(owner.Ready)e.Response = core.Environment.CreateWebResourceResponse(content, 200, "OK", "Content-Type: " + (Directory.Exists(path) ? "text/html; charset=utf-8" : LocalPreview.Mime(path)) + "\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff");
             }
             catch { try { if(owner.Ready)e.Response = core.Environment.CreateWebResourceResponse(null, 403, "Access denied", "Cache-Control: no-store"); } catch (System.Runtime.InteropServices.COMException) { } }
             finally { try { deferral.Complete(); } catch (System.Runtime.InteropServices.COMException) { } }

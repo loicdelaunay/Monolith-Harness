@@ -39,8 +39,7 @@ public sealed class LocalPreviewServer : IDisposable
                 {
                     if(parts.Length!=3 || parts[0]!="GET" || host!=Origin.Authority || !parts[1].StartsWith('/'))throw new UnauthorizedAccessException();
                     var path=LocalPreview.ResolveResource(folder,parts[1].Split('?')[0]);
-                    if(new FileInfo(path).Length>32*1024*1024)throw new IOException("Preview file too large.");
-                    data=await File.ReadAllBytesAsync(path,timeout.Token); headers=$"200 OK\r\nContent-Type: {LocalPreview.Mime(path)}";
+                    data=await LocalPreview.ReadResourceAsync(folder,path,timeout.Token); headers=$"200 OK\r\nContent-Type: {(Directory.Exists(path) ? "text/html; charset=utf-8" : LocalPreview.Mime(path))}";
                 }
                 catch { data=[]; headers="403 Forbidden"; }
                 var head=Encoding.ASCII.GetBytes($"HTTP/1.1 {headers}\r\nContent-Length: {data.Length}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n");

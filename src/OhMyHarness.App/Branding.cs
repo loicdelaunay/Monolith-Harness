@@ -12,7 +12,7 @@ namespace OhMyHarness.App;
 public sealed partial class MainWindow
 {
     readonly Image brandLogo = new() { Width = 28, Height = 28, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBlock brandName = new() { Text = BrandingAssets.DefaultName, FontSize = 20, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Foreground = FluentDesign.Primary };
+    readonly AdaptiveApplicationTitle brandName = new();
     string DisplayApplicationName => BrandingAssets.DisplayName(FeatureSettings.Read(state.FeaturesJson).ApplicationName);
     static string DefaultLogo => Path.Combine(AppContext.BaseDirectory, "Assets", "logo-32.png");
     void ApplyBrandingIcon(Window window)
@@ -53,6 +53,7 @@ public sealed partial class MainWindow
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
         var logoPath = config.LogoForTheme(dark ?? root.RequestedTheme == ElementTheme.Dark);
+        brandName.TwoLines = config.ApplicationNameTwoLines;
         Title = brandName.Text = DisplayApplicationName;
         ToolTipService.SetToolTip(brandName, DisplayApplicationName);
         if (settingsWindow != null) settingsWindow.Title = DisplayApplicationName + " · " + T("Réglages");
@@ -90,6 +91,10 @@ public sealed partial class MainWindow
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
         var name = new TextBox { Header = WorkflowText("Nom affiché de l’application", "Application display name"), Text = config.ApplicationName, MaxLength = 80, PlaceholderText = BrandingAssets.DefaultName };
+        var twoLines = new ToggleSwitch { IsOn = config.ApplicationNameTwoLines };
+        var nameLayout = FluentDesign.Setting(WorkflowText("Nom sur deux lignes", "Two-line application name"),
+            WorkflowText("Le premier mot s’affiche en titre, le reste en sous-titre plus petit. Sans espace, le nom reste sur une ligne.",
+                "The first word is the title, with the rest as a smaller subtitle. Names without spaces stay on one line."), twoLines);
         var separate = new ToggleSwitch { IsOn = config.ThemeLogosEnabled };
         var themed = new StackPanel { Spacing = 12 };
         (StackPanel Panel, Func<Task<string>> Save, Action Reset) LogoChoice(string heading, string initial)
@@ -157,9 +162,9 @@ public sealed partial class MainWindow
         };
         void ResetLogo() { selectedFile = null; selectedData = null; path.Text = ""; Preview(DefaultLogo); }
         reset.Click += (_, _) => ResetLogo();
-        defaults.Click += (_, _) => { name.Text = BrandingAssets.DefaultName; ResetLogo(); light.Reset(); dark.Reset(); separate.IsOn = false; };
+        defaults.Click += (_, _) => { name.Text = BrandingAssets.DefaultName; twoLines.IsOn = true; ResetLogo(); light.Reset(); dark.Reset(); separate.IsOn = false; };
         var details = new StackPanel { Spacing = 12 };
-        foreach (var item in new UIElement[] { name, path, preview, Row(choose, reset), defaults, error,
+        foreach (var item in new UIElement[] { name, nameLayout, path, preview, Row(choose, reset), defaults, error,
             Label(WorkflowText("PNG, JPEG, WebP, BMP ou ICO · 10 Mo maximum. Les logos externes sont copiés dans branding/. Les chemins sont relatifs au dossier de l’exécutable : copiez le dossier complet pour conserver votre personnalisation.", "PNG, JPEG, WebP, BMP or ICO · Maximum 10 MB. External logos are copied into branding/. Paths are relative to the executable folder: copy the whole folder to keep your customization."), 12) }) details.Children.Add(item);
         var panel = new StackPanel(); panel.Children.Add(new Expander { Header = WorkflowText("Nom et logo de l’application", "Application name and logo"), Content = details, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
         details.Children.Add(FluentDesign.Setting(WorkflowText("Logos selon le thème", "Theme-specific logos"), WorkflowText("Choisissez un logo clair et un logo sombre. Un choix vide utilise le logo commun.", "Choose light and dark logos. An empty choice uses the shared logo."), separate));
@@ -167,6 +172,7 @@ public sealed partial class MainWindow
         return (panel, async value =>
         {
             value.ApplicationName = BrandingAssets.DisplayName(name.Text);
+            value.ApplicationNameTwoLines = twoLines.IsOn;
             value.ThemeLogosEnabled = separate.IsOn;
             value.LightLogoPath = await light.Save(); value.DarkLogoPath = await dark.Save();
             value.LogoPath = selectedFile != null && selectedData != null ? await BrandingAssets.SaveLogoAsync(selectedFile, selectedData) : path.Text;
