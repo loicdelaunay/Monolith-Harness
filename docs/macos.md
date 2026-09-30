@@ -10,7 +10,7 @@ See [the Uno, tasks and models guide](uno-tasks-models.md) for architecture and 
 
 [GUI v1.29.2](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.29.2) and [CLI v1.29.2](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.29.2) include `osx-arm64` (Apple Silicon) and `osx-x64` (Intel) archives. Choose your architecture and extract the `.tar.gz` into a writable folder with `tar -xzf <archive>`. Run `./MonolithHarness` for the GUI or `./MonolithHarness` for the CLI; enter `/connect` to configure the CLI provider. Verify the archive against the release's `SHA256SUMS.txt`.
 
-These builds are unsigned and not notarized, so macOS may block their first launch. Builds and automated engine/CLI tests run on both Mac architectures; this does not validate the native interactions listed below. Automatic executable replacement currently supports Windows only; on Mac, close the application and replace only the executable while preserving your portable data.
+These builds are unsigned and not notarized, so macOS may block their first launch. Historical builds covered both Mac architectures; they did not validate the native interactions listed below. Automated Mac publications and checks are paused. Automatic executable replacement currently supports Windows only; on Mac, close the application and replace only the executable while preserving your portable data.
 
 ## Build and publish
 
@@ -50,7 +50,7 @@ Under **System Settings → Privacy & Security**, allow **Accessibility** for mo
 
 ## Validation
 
-Native Windows and Uno Desktop builds, 413 Core checks, both standalone EXEs and nine Chromium checks were verified during the migration. The UI test also checks model checkboxes and two task executions with tools and history using a simulated local provider. macOS ARM64 and Intel targets were compiled from Windows. `.github/workflows/desktop.yml` includes Windows, Mac ARM64 and Mac Intel builds and tests.
+Native Windows and Uno Desktop builds, 413 Core checks, both standalone EXEs and nine Chromium checks were verified during the migration. The UI test also checks model checkboxes and two task executions with tools and history using a simulated local provider. macOS ARM64 and Intel targets were compiled from Windows. `.github/workflows/desktop.yml` currently covers Windows and Fedora Linux; Mac ARM64 and Intel jobs are temporarily suspended.
 
 **Still to verify on a real Mac:** startup and shutdown, pickers, Keychain after restart, TCC permissions, Command/Option keys and Unicode, cursor and coordinates in Retina/multi-monitor captures, embedded Python startup, signing/notarization. Cross-compilation does not validate these native interactions.
 
