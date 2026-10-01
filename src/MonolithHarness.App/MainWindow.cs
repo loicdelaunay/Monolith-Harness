@@ -56,7 +56,7 @@ public sealed partial class MainWindow : Window
     };
     readonly StackPanel assetsBar = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
     readonly ScrollViewer assetsScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Visibility = Visibility.Collapsed, Padding = new Thickness(0, 2, 0, 2) };
-    readonly ComboBox modelSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch, IsEditable = false, MinHeight = 44 };
+    readonly ModelPicker modelSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
     readonly TextBlock modelProviderSubtitle = Label("", 9);
     readonly Button refreshModelsBtn = new() { Content = "↻", Width = 32, Height = 32, Padding = new Thickness(0) };
     readonly ComboBox thinkingSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 36 };
@@ -398,17 +398,17 @@ public sealed partial class MainWindow : Window
         refreshModelsBtn.Click += async (_, _) =>
         {
             if (provider == null) return;
-            refreshModelsBtn.IsEnabled = false;
+            SetModelRefreshBusy(true);
             try
             {
                 var selectedProvider = provider;
                 var secret = KeyVault.Decrypt(selectedProvider.ProtectedKey);
-                if (string.IsNullOrEmpty(secret) && !provider.IsOpenCode)
+                if (string.IsNullOrEmpty(secret) && !selectedProvider.IsOpenCode && !selectedProvider.IsLocal)
                 {
                     ShowStatus(T("Renseignez votre clé API dans les Réglages pour charger la liste."), StatusKind.Error);
                     return;
                 }
-                ShowStatus(T("Chargement des modèles depuis l’API…"), StatusKind.Activity);
+                ShowStatus(WorkflowText("Actualisation des modèles…", "Refreshing models…"), StatusKind.Activity);
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
                 List<string> remoteModels;
                 if (provider.IsOpenCode)
@@ -421,9 +421,7 @@ public sealed partial class MainWindow : Window
                 ProviderModels.Refresh(selectedProvider, remoteModels);
                 await db.SaveChangesAsync();
                 PopulateModelSelector();
-                ShowStatus(state.Language == "en"
-                    ? $"{remoteModels.Count} models loaded from API."
-                    : $"{remoteModels.Count} modèles chargés depuis l’API.");
+                ShowStatus(string.Format(WorkflowText("{0} modèles disponibles pour {1}.", "{0} models available for {1}."), remoteModels.Count, selectedProvider.Name));
             }
             catch (Exception ex)
             {
@@ -431,7 +429,7 @@ public sealed partial class MainWindow : Window
             }
             finally
             {
-                refreshModelsBtn.IsEnabled = true;
+                SetModelRefreshBusy(false);
             }
         };
 
@@ -633,7 +631,7 @@ public sealed partial class MainWindow : Window
         UiText.Language = state.Language;
         ApplyLanguage();
         ApplyAppearance();
-        var providerList = await db.Providers.OrderBy(x => x.Id).ToListAsync();
+        var providerList = (await db.Providers.OrderBy(x => x.Id).ToListAsync()).Where(ProviderModels.CanChat).ToList();
         providers.ItemsSource = providerList; provider = providerList.FirstOrDefault(x => x.Id == state.ProviderId) ?? providerList.FirstOrDefault(); providers.SelectedItem = provider;
         if (!await db.Projects.AnyAsync(x => x.IsInbox)) { db.Projects.Add(new Project { Name = "Conversations", IsInbox = true }); await db.SaveChangesAsync(); }
         var list = await db.Projects.OrderBy(x => x.Id).ToListAsync();
@@ -711,7 +709,8 @@ public sealed partial class MainWindow : Window
                 }
                 var text = item.Content + (item.State == "interrupted" ? T("\n[Réponse interrompue]") : "");
                 var rendered = AddAssistantMessage(text, reasoning, target: messages, sourceProject: sourceProject);
-                rendered.SetDuration(item.Seconds, item.CompletedUtc); actionCard = rendered.Container;
+                rendered.SetDuration(item.Seconds, item.CompletedUtc);
+                rendered.SetCachedInputTokens(item.CachedInputTokens); actionCard = rendered.Container;
             }
             else if (item.Role == "tool")
             {
@@ -791,25 +790,46 @@ public sealed partial class MainWindow : Window
         public TextBlock Duration { get; init; } = null!;
         public Func<bool> CanPaint { get; init; } = () => true;
         bool isHovered;
+        string durationText = "";
+        string completedTimeTip = "";
+        int? cachedInputTokens;
         string? pendingText;
         (string Text, bool Complete)? pendingThinking;
         public void SetDuration(double seconds, DateTime? completedUtc = null)
         {
-            Duration.Text = seconds > 0 ? UiText.Resolve("Durée : ", "Duration: ") + (seconds >= 60 ? $"{(int)(seconds / 60)} min {seconds % 60:0.#} s" : $"{seconds:0.#} s") : "";
+            durationText = seconds > 0 ? UiText.Resolve("Durée : ", "Duration: ") + (seconds >= 60 ? $"{(int)(seconds / 60)} min {seconds % 60:0.#} s" : $"{seconds:0.#} s") : "";
+            completedTimeTip = "";
             if (completedUtc is { } completed)
             {
                 var local = DateTime.SpecifyKind(completed, DateTimeKind.Utc).ToLocalTime();
-                Duration.Text += (Duration.Text.Length > 0 ? " · " : "") + UiText.Resolve("Réponse à ", "Answered at ") + local.ToString("HH:mm:ss");
-                ToolTipService.SetToolTip(Duration, local.ToString("dd/MM/yyyy HH:mm:ss"));
+                durationText += (durationText.Length > 0 ? " · " : "") + UiText.Resolve("Réponse à ", "Answered at ") + local.ToString("HH:mm:ss");
+                completedTimeTip = local.ToString("dd/MM/yyyy HH:mm:ss");
             }
-            // Reserve the footer before hover, including the response timestamp.
-            Duration.Visibility = Duration.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-            Duration.Opacity = isHovered && Duration.Text.Length > 0 ? 1 : 0;
+            RefreshFooter();
         }
         public void SetHovered(bool hovered)
         {
             isHovered = hovered;
             Duration.Opacity = hovered && Duration.Text.Length > 0 ? 1 : 0;
+        }
+        public void SetCachedInputTokens(int? count)
+        {
+            cachedInputTokens = count is >= 0 ? count : null;
+            RefreshFooter();
+        }
+        void RefreshFooter()
+        {
+            var cacheText = cachedInputTokens is { } count
+                ? UiText.Resolve("Tokens réutilisés (cache) : ", "Reused tokens (cache): ") + count.ToString("N0") : "";
+            Duration.Text = string.Join(" · ", new[] { durationText, cacheText }.Where(x => x.Length > 0));
+            var cacheTip = cachedInputTokens.HasValue ? UiText.Resolve(
+                "Tokens d’entrée réutilisés depuis le cache, déclarés par le fournisseur. Ils restent inclus dans le contexte.",
+                "Input tokens reused from the cache, reported by the provider. They remain part of the context.") : "";
+            var tooltip = string.Join("\n", new[] { completedTimeTip, cacheTip }.Where(x => x.Length > 0));
+            ToolTipService.SetToolTip(Duration, tooltip.Length > 0 ? tooltip : null);
+            // Reserve the complete footer so hovering only changes opacity, not message layout.
+            Duration.Visibility = Duration.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Duration.Opacity = isHovered && Duration.Text.Length > 0 ? 1 : 0;
         }
         public void Flush()
         {
@@ -856,6 +876,7 @@ public sealed partial class MainWindow : Window
         var bodyContainer = ChatDensity.Track(new StackPanel(), "body");
         AppTypography.SetScope(bodyContainer, FontArea.Assistant);
         var duration = Label("", 11); duration.Foreground = FluentDesign.Secondary; duration.Visibility = Visibility.Collapsed;
+        duration.TextWrapping = TextWrapping.Wrap;
 
         var stack = ChatDensity.Track(new StackPanel(), "stack");
         var roleLabel = Label(T("ASSISTANT"), 11);
@@ -1103,13 +1124,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    void AddToolMessage(string toolName, string arguments, string result, byte[]? imageBytes = null, string? imageMime = null, StackPanel? target = null, Project? sourceProject = null, double seconds = 0)
+    ToolMessageUi AddToolMessage(string toolName, string arguments, string? result = null, byte[]? imageBytes = null, string? imageMime = null, StackPanel? target = null, Project? sourceProject = null, double seconds = 0)
     {
         var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
         void AddPaths(TextBlock text, string value) => MarkdownRenderer.RenderPathText(text, value,
             path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject));
-        bool isError = ToolActivity.Failed(result) || result.StartsWith(T("Erreur"));
-        var card = FluentDesign.MessageSurface(null, "tool", isError);
+        var card = FluentDesign.MessageSurface(null, "tool");
         var stack = ChatDensity.Track(new StackPanel(), "stack");
 
         var headerGrid = new Grid { MinHeight = 30, ColumnSpacing = 12 };
@@ -1148,12 +1168,17 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(toolTitle, 1);
         titleBox.Children.Add(toolTitle);
 
-        var outcome = isError ? WorkflowText("Échec", "Failed") : T("Succès");
-        var statusBadge = Label((isError ? "⚠ " : "✓ ") + outcome + (seconds > 0 ? WorkflowText(" en ", " in ") + ToolActivity.Duration(seconds) : ""), 11);
-        statusBadge.Foreground = isError ? Brush(255, 110, 110) : Brush(100, 220, 140);
+        var spinner = new BusySpinner { IsActive = true, VerticalAlignment = VerticalAlignment.Center };
+        var statusBadge = Label("", 11);
+        statusBadge.Foreground = FluentDesign.Resource("AccentFillColorDefaultBrush");
+        statusBadge.MaxWidth = 250;
+        statusBadge.TextWrapping = TextWrapping.NoWrap;
+        statusBadge.TextTrimming = TextTrimming.CharacterEllipsis;
         statusBadge.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(statusBadge, 2);
-        titleBox.Children.Add(statusBadge);
+        var statusBox = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        statusBox.Children.Add(spinner); statusBox.Children.Add(statusBadge);
+        Grid.SetColumn(statusBox, 2);
+        titleBox.Children.Add(statusBox);
 
         headerGrid.Children.Add(titleBox);
 
@@ -1177,7 +1202,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            summary = result.Replace("\r", " ").Replace("\n", " ").Trim();
+            summary = (result ?? ToolActivity.Detail(toolName, arguments)).Replace("\r", " ").Replace("\n", " ").Trim();
             if (summary.Length > 120) summary = summary[..120] + "…";
         }
         var summaryText = Label(summary, 11);
@@ -1187,16 +1212,10 @@ public sealed partial class MainWindow : Window
         summaryText.TextTrimming = TextTrimming.CharacterEllipsis;
         stack.Children.Add(summaryText);
 
-        if (imageBytes != null && imageBytes.Length > 0)
-        {
-            var imagePreview = CreateImageThumbnailWithPreview(
-                imageBytes,
-                imageMime ?? "image/png",
-                toolName == "browser_screenshot" ? T("Capture navigateur") : T("Capture d’écran bureau"),
-                maxWidth: 440,
-                maxHeight: 240);
-            stack.Children.Add(imagePreview);
-        }
+        var progressBar = new ProgressBar { IsIndeterminate = true, Height = 2, HorizontalAlignment = HorizontalAlignment.Stretch };
+        stack.Children.Add(progressBar);
+        var imageHost = new StackPanel { Visibility = Visibility.Collapsed };
+        stack.Children.Add(imageHost);
 
         var detailsPanel = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 0) };
 
@@ -1225,21 +1244,20 @@ public sealed partial class MainWindow : Window
             detailsPanel.Children.Add(argsBox);
         }
 
-        var resultTitle = Label(T("Résultat obtenu :"), 11);
+        var resultTitle = Label(WorkflowText("Exécution en cours…", "Execution in progress…"), 11);
         resultTitle.Foreground = Brush(160, 170, 190);
         detailsPanel.Children.Add(resultTitle);
 
         var resultScroll = new ScrollViewer { MaxHeight = 240, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var resultText = new TextBlock
         {
-            Text = result,
+            Text = WorkflowText("Le résultat s’affichera ici dès que l’outil aura terminé.", "The result will appear here as soon as the tool finishes."),
             FontSize = 12,
             FontFamily = new FontFamily("Cascadia Code, Consolas"),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush(220, 225, 235),
             IsTextSelectionEnabled = true
         };
-        AddPaths(resultText, result);
         resultScroll.Content = resultText;
         var resultBox = new Border
         {
@@ -1263,6 +1281,34 @@ public sealed partial class MainWindow : Window
 
         card.Child = stack;
         (target ?? messages).Children.Add(card);
+        var ui = new ToolMessageUi((elapsed, phase) =>
+        {
+            var caption = phase ?? WorkflowText("En cours", "Running");
+            statusBadge.Text = caption + " · " + ToolActivity.Duration(elapsed);
+            ToolTipService.SetToolTip(statusBadge, caption + " · " + ToolActivity.Duration(elapsed));
+        }, (output, elapsed, image, mime, cancelled) =>
+        {
+            var failed = !cancelled && (ToolActivity.Failed(output) || output.StartsWith(T("Erreur")));
+            var outcome = cancelled ? WorkflowText("Arrêté", "Stopped") : failed ? WorkflowText("Échec", "Failed") : T("Succès");
+            statusBadge.Text = (cancelled ? "⏹ " : failed ? "⚠ " : "✓ ") + outcome +
+                (elapsed > 0 ? WorkflowText(" en ", " in ") + ToolActivity.Duration(elapsed) : "");
+            statusBadge.Foreground = cancelled ? FluentDesign.Secondary : failed ? Brush(255, 110, 110) : Brush(100, 220, 140);
+            ToolTipService.SetToolTip(statusBadge, statusBadge.Text);
+            card.BorderBrush = FluentDesign.Resource(failed ? "ToolMessageErrorStrokeBrush" : "ToolMessageStrokeBrush");
+            spinner.IsActive = false; spinner.Visibility = Visibility.Collapsed;
+            progressBar.IsIndeterminate = false; progressBar.Visibility = Visibility.Collapsed;
+            resultTitle.Text = cancelled ? WorkflowText("Exécution arrêtée :", "Execution stopped:") : T("Résultat obtenu :");
+            AddPaths(resultText, output);
+            if (image is { Length: > 0 })
+            {
+                imageHost.Children.Add(CreateImageThumbnailWithPreview(image, mime ?? "image/png",
+                    toolName == "browser_screenshot" ? T("Capture navigateur") : T("Capture d’écran bureau"), maxWidth: 440, maxHeight: 240));
+                imageHost.Visibility = Visibility.Visible;
+            }
+        });
+        if (result != null) ui.Complete(result, seconds, imageBytes, imageMime);
+        else ui.UpdateProgress(0);
+        return ui;
     }
 
     Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null, Project? sourceProject = null)
@@ -1479,6 +1525,7 @@ public sealed partial class MainWindow : Window
                 + WorkflowText("Skills du projet : <dossier source>/.omh-ai/skills. Activez Auto-création de skills pour autoriser l’IA à les créer.",
                     "Project skills: <source folder>/.omh-ai/skills. Enable Automatic skill creation to let the AI create them."), 12) });
         var skillToggles = new Dictionary<string, ToggleSwitch>();
+        var imageGenerationSettings = BuildImageGenerationSettings(providerEditor.Drafts);
         var gitRead = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableRead) };
         var gitWrite = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableWrite) };
         var gitSettings = new StackPanel { Spacing = 8 };
@@ -1498,13 +1545,13 @@ public sealed partial class MainWindow : Window
             var skillTitle = toggle.Header.ToString()!;
             toggle.Header = null;
             skillPanel.Children.Add(FluentDesign.Setting(skillTitle,
-                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : null,
+                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
                 caption: SkillLabel(skill, bold: true), information: SkillInfoButton(skill)));
             if (skill.Id == "git")
             { gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; toggle.Toggled += (_, _) => gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; }
-            if(skill.Id is "rag" or "vision_bridge")
+            if(skill.Id is "rag" or "vision_bridge" or ImageGenerationTools.SkillId)
             {
-                var settingsPanel = skill.Id == "rag" ? features.Rag : features.Vision;
+                var settingsPanel = skill.Id == "rag" ? features.Rag : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
                 settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 toggle.Toggled+=(_,_)=>settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 settingsPanel.Margin = new(0, 8, 0, 0);
@@ -1583,6 +1630,11 @@ public sealed partial class MainWindow : Window
                 valid = false;
             }
             if (!mcpEditor.Validate()) { tabs.SelectedIndex = mcpTab; valid = false; }
+            try
+            {
+                var imageDraft = FeatureSettings.Read(state.FeaturesJson); imageGenerationSettings.Save(imageDraft); imageDraft.Json();
+            }
+            catch (ArgumentException ex) { providerEditor.Error.Text = ex.Message; tabs.SelectedIndex = providerTab; valid = false; }
             if (valid && !renderingSettings.Apply()) { tabs.SelectedIndex = 0; valid = false; }
             return valid;
         }))
@@ -1631,10 +1683,12 @@ public sealed partial class MainWindow : Window
         await mcpEditor.Save();
         foreach (var item in revoke.Where(x => x.Value.IsChecked == true).Select(x => x.Key)) db.PermissionGrants.Remove(item);
         var selectedProvider = await SaveProviderDraftsAsync(providerEditor);
+        imageGenerationSettings.Save(savedFeatures);
+        state.FeaturesJson = savedFeatures.Json();
         state.ProviderId = selectedProvider?.Id ?? 0;
         await db.SaveChangesAsync();
 
-        var providerList = await db.Providers.OrderBy(x => x.Id).ToListAsync();
+        var providerList = (await db.Providers.OrderBy(x => x.Id).ToListAsync()).Where(ProviderModels.CanChat).ToList();
         provider = providerList.FirstOrDefault(x => x.Id == state.ProviderId) ?? providerList.FirstOrDefault();
         if (provider != null) state.ProviderId = provider.Id;
         loading = true;
@@ -1861,6 +1915,13 @@ public sealed partial class MainWindow : Window
         permissionProject.Value = run.Project;
         await FocusLatestToolAsync(run, name, argsObj);
         if (VisionBridge.Handles(name)) return await VisionFor(run).CallAsync(name, argsObj, ct);
+        if (ImageGenerationTools.Handles(name))
+        {
+            var output = await ImageGenerationTools.CallAsync(run, argsObj, _ => Task.FromResult(RunSkills(run)),
+                (scope, title, details, token) => RequestAccessAsync(scope, title, details, "Génération d’image", token), ct);
+            if (output.Image != null) SetPendingMcpImage(output.Image);
+            return output.Text;
+        }
         if (AssetTools.Handles(name))
         {
             var output = await AssetTools.CallAsync(run, name, argsObj, _ => Task.FromResult(RunSkills(run)),
@@ -2110,11 +2171,11 @@ public sealed partial class MainWindow : Window
             modelSelector.SelectedItem=choice;
             if(choice!=null)
             {
-                provider=available.Single(x=>x.Id==choice.ProviderId);provider.Model=choice.Model;state.ProviderId=provider.Id;
+                provider=available.Single(x=>x.Id==choice.ProviderId);ModelContexts.Select(provider,choice.Model);state.ProviderId=provider.Id;
                 var previousLoading=loading;loading=true;providers.SelectedItem=provider;loading=previousLoading;
             }
             modelProviderSubtitle.Text=choice==null?WorkflowText("Aucun modèle coché", "No models selected"):provider!.Name;
-            refreshModelsBtn.IsEnabled=provider!=null && !provider.IsComposite;
+            refreshModelsBtn.IsEnabled=!refreshingModels && provider!=null && !provider.IsComposite && ActiveRun==null;
             RefreshContextInfo();
             RefreshModelOptions();
         }
@@ -2126,12 +2187,7 @@ public sealed partial class MainWindow : Window
         newModel = newModel.Trim();
         if (provider.Model == newModel) return;
 
-        provider.Model = newModel;
-        var defaultLimit = ModelCatalog.GetDefaultContextLimit(newModel);
-        if (defaultLimit.HasValue)
-        {
-            provider.ContextLimit = defaultLimit.Value;
-        }
+        ModelContexts.Select(provider, newModel);
         if (newModel.Contains("vision", StringComparison.OrdinalIgnoreCase) ||
             newModel.Contains("4o", StringComparison.OrdinalIgnoreCase) ||
             newModel.Contains("deepseek", StringComparison.OrdinalIgnoreCase))
@@ -2381,7 +2437,7 @@ public sealed partial class MainWindow : Window
                     SetRunStatus(run, T("Le modèle réfléchit…"));
                     if (update.CompatibilityNotice.Length > 0) { active.CompatibilityNotice = update.CompatibilityNotice; compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible; }
                     run.ExportProgress = new(active.Id, update);
-                    active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.Seconds = update.Seconds;
+                    active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
                     var currentTokens = update.OutputTokens ?? Math.Ceiling((update.Text.Length + update.Reasoning.Length) / 4.0);
                     run.Tracker?.AddSample(update.Seconds, currentTokens);
                     if ((DateTime.UtcNow - lastPaint).TotalMilliseconds < 70) return;
@@ -2389,24 +2445,27 @@ public sealed partial class MainWindow : Window
                     {
                         assistantUi.UpdateThinking(update.Reasoning, isComplete: update.Text.Length > 0, streaming: true);
                     }
-                    var displayText = update.Text.Length > 0 ? update.Text : update.Reasoning.Length > 0 ? T("Raisonnement en cours…") : run.ContextRequest != null ? WorkflowText("Préchargement du contexte…", "Preloading context…") : "…";
+                    var displayText = update.Text.Length > 0 ? update.Text : update.Reasoning.Length > 0 ? T("Raisonnement en cours…") : run.ContextRequest?.Label(run.Options.Language) ?? "…";
                     assistantUi.UpdateContent(displayText, streaming: true);
                     UpdateMetrics(run, update, inputEstimate); lastPaint = DateTime.UtcNow;
                     if (IsVisible(run)) ScrollToBottom();
                 }, ct, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson), progress =>
                 {
                     ContextRequestProgressed(run, progress);
-                    assistantUi.UpdateContent(WorkflowText("Préchargement du contexte…", "Preloading context…"));
+                    assistantUi.UpdateContent(progress.Label(run.Options.Language));
                 });
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
-                active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
+                active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
                 var finalTokens = completion.OutputTokens ?? Math.Ceiling((active.Content.Length + (completion.Message["reasoning_content"]?.GetValue<string>()?.Length ?? 0)) / 4.0);
                 run.Tracker?.Complete(completion.Seconds, finalTokens);
                 if (run.Tracker != null) messageTrackers[active.Id] = run.Tracker;
                 run.Tracker = null;
-                assistantUi.UpdateContent(active.Content); UpdateMetrics(run, new(active.Content, "", completion.InputTokens, completion.OutputTokens, completion.Seconds), inputEstimate);
+                assistantUi.UpdateContent(active.Content.Length == 0 && completion.Message["tool_calls"] is JsonArray { Count: > 0 }
+                    ? T("Consultation des outils…") : active.Content);
+                UpdateMetrics(run, new(active.Content, "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens }, inputEstimate);
                 assistantUi.SetDuration(completion.Seconds, active.CompletedUtc);
+                assistantUi.SetCachedInputTokens(completion.CachedInputTokens);
                 if (IsVisible(run)) RefreshSpeedTooltip();
                 ScrollRunToBottom(run);
                 var finalReasoning = completion.Message["reasoning_content"]?.GetValue<string>();
@@ -2421,12 +2480,22 @@ public sealed partial class MainWindow : Window
                         string result;
                         var toolName = call!["function"]!["name"]!.GetValue<string>();
                         (byte[] Data, string Label, string Mime, int Width, int Height)? screenshot;
-                        if (!TerminalHub.IsBoundedWait(toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}")) await run.LoopGuard.CheckAsync(toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}", run.Workflow, ct);
                         var ownsToolQueue = !AgentRuntime.Handles(toolName) && !TerminalHub.Handles(toolName) && !RagTools.Handles(toolName) && !VisionBridge.Handles(toolName) && !PythonTools.Handles(toolName);
-                        if (ownsToolQueue) await toolQueue.WaitAsync(ct);
+                        bool acquiredToolQueue = false;
                         var runningTool = BeginToolActivity(run, toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}");
                         try
                         {
+                            if (!TerminalHub.IsBoundedWait(toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}"))
+                                await run.LoopGuard.CheckAsync(toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}", run.Workflow, ct);
+                            if (ownsToolQueue)
+                            {
+                                runningTool.Phase = WorkflowText("En attente", "Waiting");
+                                SetRunStatus(run, ToolActivityText(runningTool));
+                                await toolQueue.WaitAsync(ct);
+                                acquiredToolQueue = true;
+                                runningTool.Phase = null;
+                                SetRunStatus(run, ToolActivityText(runningTool));
+                            }
                             try
                             {
                                 AgentPolicy.Demand(run.Chat.ExecutionMode, toolName);
@@ -2445,8 +2514,17 @@ public sealed partial class MainWindow : Window
                             catch (Exception ex) { AppLog.Write(AppLogLevel.Warning, "tool.failed", ex, run.Chat.Id); result = T("Erreur outil : ") + ex.Message; }
                             screenshot = ownsToolQueue ? TakePendingToolScreenshot() : null;
                         }
-                        finally { EndToolActivity(run, runningTool); if (ownsToolQueue) { TakePendingToolScreenshot(); toolQueue.Release(); } }
-                        var toolArgs = call["function"]?["arguments"]?.GetValue<string>() ?? "";
+                        catch (OperationCanceledException)
+                        {
+                            runningTool.Message.Complete(WorkflowText("Exécution interrompue.", "Execution interrupted."), runningTool.Timer.Elapsed.TotalSeconds, cancelled: true);
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            runningTool.Message.Complete(T("Erreur outil : ") + ex.Message, runningTool.Timer.Elapsed.TotalSeconds);
+                            throw;
+                        }
+                        finally { EndToolActivity(run, runningTool); if (acquiredToolQueue) { TakePendingToolScreenshot(); toolQueue.Release(); } }
                         var toolWire = new JsonObject { ["role"] = "tool", ["tool_call_id"] = call["id"]!.GetValue<string>(), ["content"] = result };
                         var toolMsg = new Message { ChatId = chat.Id, Role = "tool", Content = toolName + "\n" + result, WireJson = toolWire.ToJsonString(), Seconds = runningTool.Timer.Elapsed.TotalSeconds, CompletedUtc = DateTime.UtcNow };
                         if (screenshot != null)
@@ -2460,7 +2538,7 @@ public sealed partial class MainWindow : Window
                             });
                         }
                         toolResults.Add(toolMsg);
-                        AddToolMessage(toolName, toolArgs, result, screenshot?.Data, screenshot?.Mime, run.Messages, run.Project, toolMsg.Seconds);
+                        runningTool.Message.Complete(result, toolMsg.Seconds, screenshot?.Data, screenshot?.Mime);
                         ScrollRunToBottom(run);
                     }
                 active.State = "complete"; active.WireJson = completion.Message.ToJsonString();

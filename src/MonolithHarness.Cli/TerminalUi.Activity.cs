@@ -18,7 +18,7 @@ public sealed partial class TerminalUi
     {
         bool workers = view.Children.Values.Any(child => child.Status == "running");
         canvas.Write(x, y, ActivityBar(frame, 10, ascii: ascii), p.Highlight);
-        canvas.Write(x + 13, y, workers ? L("Sous-agents au travail…", "Subagents working…") : view.ContextRequest is { } preload ? L("Préchargement du contexte · ", "Preloading context · ") + preload.StageDescription(workspace?.State.Language ?? "fr") : L("Réflexion en cours…", "Thinking…"), p.Highlight, width - 13);
+        canvas.Write(x + 13, y, workers ? L("Sous-agents au travail…", "Subagents working…") : view.ContextRequest is { } preload ? preload.Label(workspace?.State.Language ?? "fr") : L("Réflexion en cours…", "Thinking…"), p.Highlight, width - 13);
     }
 
     void DrawAgents(TerminalCanvas canvas, ChatView view, IReadOnlyList<SubagentRecord> agents,

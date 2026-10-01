@@ -295,9 +295,24 @@ public sealed partial class MainWindow
             ct.ThrowIfCancellationRequested();
             using var registration = ct.Register(() => DispatcherQueue.TryEnqueue(dialog.Hide));
             var pending = automaticToolRun.Value;
+            var waitingTool = pending?.CurrentTool;
+            var priorPhase = waitingTool?.Phase;
+            if (waitingTool != null)
+            {
+                waitingTool.Phase = WorkflowText("Action requise", "Action required");
+                waitingTool.Message.UpdateProgress(waitingTool.Timer.Elapsed.TotalSeconds, waitingTool.Phase);
+            }
             if (pending != null && conversationRuns.ContainsKey(pending.Chat.Id)) NotifyChat(pending, true);
             try { return await dialog.ShowAsync(); }
-            finally { if (pending != null) AcknowledgeChatNotice(pending.Chat.Id, actionResolved: true); }
+            finally
+            {
+                if (waitingTool != null)
+                {
+                    waitingTool.Phase = priorPhase;
+                    waitingTool.Message.UpdateProgress(waitingTool.Timer.Elapsed.TotalSeconds, priorPhase);
+                }
+                if (pending != null) AcknowledgeChatNotice(pending.Chat.Id, actionResolved: true);
+            }
         }
         finally { approvalQueue.Release(); }
     }

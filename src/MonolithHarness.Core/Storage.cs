@@ -60,6 +60,7 @@ public sealed class Message
     public string State { get; set; } = "complete";
     public int? InputTokens { get; set; }
     public int? OutputTokens { get; set; }
+    public int? CachedInputTokens { get; set; }
     public double Seconds { get; set; }
     public List<Attachment> Attachments { get; set; } = [];
 }
@@ -73,6 +74,8 @@ public sealed class Attachment
 }
 public sealed class Provider
 {
+    public string LocalModelsJson { get; set; } = "{}";
+    public bool IsLocal => Kind.Equals("local", StringComparison.OrdinalIgnoreCase);
     public string DetectedModelsJson { get; set; } = "[]";
     public string SelectedModelsJson { get; set; } = "";
     public string CompositeJson { get; set; } = "";
@@ -82,7 +85,15 @@ public sealed class Provider
     public string BaseUrl { get; set; } = "https://api.openai.com/v1";
     public string Model { get; set; } = "gpt-4.1-mini";
     public byte[] ProtectedKey { get; set; } = [];
-    public int ContextLimit { get; set; } = 128000;
+    int legacyContextLimit = 128000;
+    public int ContextLimit
+    {
+        get => ModelContexts.For(this).Limit;
+        set => ModelContexts.SetOverride(this, value);
+    }
+    // Serialized after ContextLimit so snapshots restore automatic/manual state after the compatibility setter.
+    public string ModelContextsJson { get; set; } = "{}";
+    internal void StoreContextLimit(int value) => legacyContextLimit = value;
     public bool SupportsImages { get; set; } = true;
     public string Kind { get; set; } = "openai";
     public string Username { get; set; } = "";
@@ -181,6 +192,8 @@ public sealed class HarnessDb : DbContext
                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     protected override void OnModelCreating(ModelBuilder model)
     {
+        // Materialization must restore the old column without creating a manual model override.
+        model.Entity<Provider>().Property(x => x.ContextLimit).HasField("legacyContextLimit").UsePropertyAccessMode(PropertyAccessMode.Field);
         model.Entity<TokenUsage>().HasIndex(x => x.CompletedUtc);
         model.Entity<TokenUsage>().HasIndex(x => new { x.ProviderId, x.Model, x.CompletedUtc });
         model.Entity<TokenUsage>().Ignore(x => x.TotalTokens).Ignore(x => x.Estimated);

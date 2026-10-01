@@ -9,7 +9,7 @@ public sealed partial class HarnessService
     async Task<ContextDetails> ReadContext(int chatId, int providerId, CancellationToken ct)
     {
         await using var db = Db();
-        var limit = await db.Providers.Where(x => x.Id == providerId).Select(x => x.ContextLimit).SingleAsync(ct);
+        var limit = (await db.Providers.AsNoTracking().SingleAsync(x => x.Id == providerId, ct)).ContextLimit;
         return ContextDetails.From(await db.Messages.AsNoTracking().Include(x => x.Attachments).Where(x => x.ChatId == chatId).OrderBy(x => x.Id).ToListAsync(ct), limit);
     }
     async Task<object> CompactManually(JsonObject p, CancellationToken lifetime)

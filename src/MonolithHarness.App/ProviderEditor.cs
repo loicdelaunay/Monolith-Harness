@@ -10,6 +10,8 @@ public sealed partial class MainWindow
 {
     sealed class ProviderDraft
     {
+        public string LocalModelsJson { get; set; } = "{}";
+        public bool LocalBusy { get; set; }
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public string BaseUrl { get; set; } = "";
@@ -18,6 +20,7 @@ public sealed partial class MainWindow
         public string PendingKey { get; set; } = "";
         public bool DeleteKey { get; set; }
         public int ContextLimit { get; set; } = 128000;
+        public string ModelContextsJson { get; set; } = "{}";
         public bool SupportsImages { get; set; } = true;
         public string Kind { get; set; } = "openai";
         public string CompositeJson { get; set; } = "";
@@ -48,8 +51,8 @@ public sealed partial class MainWindow
     ProviderEditorState BuildProviderEditor(int selectedProviderId)
     {
         var drafts = db.Providers.Local.Where(x => db.Entry(x).State != EntityState.Deleted).OrderBy(x => x.Id)
-            .Select(x => new ProviderDraft { Id = x.Id, Name = x.Name, BaseUrl = x.BaseUrl, Model = x.Model, ProtectedKey = [.. x.ProtectedKey], ContextLimit = x.ContextLimit, SupportsImages = x.SupportsImages,
-                DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
+            .Select(x => new ProviderDraft { Id = x.Id, Name = x.Name, BaseUrl = x.BaseUrl, Model = x.Model, ProtectedKey = [.. x.ProtectedKey], ContextLimit = x.ContextLimit, ModelContextsJson = x.ModelContextsJson, SupportsImages = x.SupportsImages,
+                DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, LocalModelsJson=x.LocalModelsJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
             .ToList();
         var state = new ProviderEditorState { Panel = new StackPanel(), Drafts = drafts, Error = Label("", 12) };
         state.Error.Tag = null;
@@ -63,7 +66,7 @@ public sealed partial class MainWindow
         var url = new TextBox { Header = T("URL de base de l’API") };
         var key = new PasswordBox { Header = T("Clé API (vide : conserver la clé enregistrée)") };
         var model = new ComboBox { Header = T("Identifiant du modèle"), IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var limit = new NumberBox { Header = T("Fenêtre de contexte du modèle (tokens)"), Minimum = 1024, Maximum = 10_000_000, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
+        var limit = new ModelContextEditor();
         var vision = new CheckBox { Content = T("Ce modèle accepte les images") };
         var deleteKey = new CheckBox { Content = T("Supprimer la clé enregistrée") };
         var username = new TextBox { Header = T("Utilisateur OpenCode"), PlaceholderText = "opencode" };
@@ -87,7 +90,16 @@ public sealed partial class MainWindow
         var addDeepSeek = new MenuFlyoutItem { Text = "+ DeepSeek" };
         var addOpenCode = new MenuFlyoutItem { Text = "+ OpenCode" };
         var addComposite = new MenuFlyoutItem { Text = "+ Modèle composé / Composite" };
+        var addLocal = new MenuFlyoutItem { Text = "+ Local · Bêta" };
+        var cloudItems = ProviderPresets.Cloud.Select(preset =>
+        {
+            var item = new MenuFlyoutItem { Text = "+ " + preset.Name };
+            ToolTipService.SetToolTip(item, WorkflowText(preset.DescriptionFr, preset.DescriptionEn));
+            return (Preset: preset, Item: item);
+        }).ToList();
+        var providerHelp = new StackPanel { Spacing = 8 };
         var compositePanel=new StackPanel();
+        var localPanel = new StackPanel();
         var duplicate = new Button { Content = T("Dupliquer") };
         var remove = new Button { Content = T("Supprimer le fournisseur") };
         bool refreshing = false;
@@ -100,7 +112,13 @@ public sealed partial class MainWindow
         }
 
         Provider AsProvider(ProviderDraft draft) => new() { Name = draft.Name, BaseUrl = draft.BaseUrl, Model = draft.Model, ContextLimit = draft.ContextLimit, SupportsImages = draft.SupportsImages,
-            DetectedModelsJson=draft.DetectedModelsJson, SelectedModelsJson=draft.SelectedModelsJson, Kind = draft.Kind, Username = draft.Username, ExecutablePath = draft.ExecutablePath, AutoStart = draft.AutoStart, OpenCodeTools = draft.OpenCodeTools, BypassFreeLimitation = draft.BypassFreeLimitation };
+            DetectedModelsJson=draft.DetectedModelsJson, SelectedModelsJson=draft.SelectedModelsJson, Kind = draft.Kind, LocalModelsJson=draft.LocalModelsJson, Username = draft.Username, ExecutablePath = draft.ExecutablePath, AutoStart = draft.AutoStart, OpenCodeTools = draft.OpenCodeTools, BypassFreeLimitation = draft.BypassFreeLimitation, ModelContextsJson = draft.ModelContextsJson };
+        void RefreshLimit(ProviderDraft? draft)
+        {
+            var target = draft == null ? null : AsProvider(draft);
+            if (draft != null) { ModelContexts.MergeLocal(target!); draft.ModelContextsJson = target!.ModelContextsJson; draft.ContextLimit = target.ContextLimit; }
+            limit.Bind(target, changed => { if (draft != null) { draft.ModelContextsJson = changed.ModelContextsJson; draft.ContextLimit = changed.ContextLimit; } });
+        }
         void Select(ProviderDraft? draft)
         {
             refreshing = true; state.Selected = draft;
@@ -110,7 +128,7 @@ public sealed partial class MainWindow
             remove.IsEnabled = duplicate.IsEnabled = enabled;
             name.Text = draft?.Name ?? ""; url.Text = draft?.BaseUrl ?? ""; model.Text = draft?.Model ?? "";
             model.ItemsSource = draft == null ? null : ModelCatalog.GetModelsForProvider(AsProvider(draft));
-            limit.Value = draft?.ContextLimit ?? 128000; vision.IsChecked = draft?.SupportsImages ?? true; deleteKey.IsChecked = draft?.DeleteKey ?? false;
+            RefreshLimit(draft); vision.IsChecked = draft?.SupportsImages ?? true; deleteKey.IsChecked = draft?.DeleteKey ?? false;
             username.Text = draft?.Username ?? ""; executable.Text = draft?.ExecutablePath ?? ""; autoStart.IsChecked = draft?.AutoStart ?? false;
             openCodeTools.IsChecked = draft?.OpenCodeTools ?? false;
             bypassFreeLimitation.IsChecked = draft?.BypassFreeLimitation ?? false;
@@ -121,8 +139,16 @@ public sealed partial class MainWindow
             key.Password = draft?.PendingKey ?? "";
             key.PlaceholderText = draft?.ProtectedKey.Length > 0 && draft.DeleteKey == false ? T("Clé déjà enregistrée") : T("Votre clé API");
             var composite=draft?.Kind=="composite";
+            ShowProviderHelp(draft);
             foreach(var control in new UIElement[]{url,key,model,limit,vision,deleteKey,testConnection,importModels})control.Visibility=composite?Visibility.Collapsed:Visibility.Visible;
             compositePanel.Children.Clear();if(composite)compositePanel.Children.Add(BuildCompositeModelEditor(draft!,drafts));
+            localPanel.Children.Clear();
+            if (draft?.Kind == "local")
+            {
+                foreach (var control in new UIElement[] { url, model, vision, testConnection, importModels }) control.Visibility = Visibility.Collapsed;
+                key.Header = WorkflowText("Jeton Hugging Face de lecture (facultatif)", "Hugging Face read token (optional)");
+                localPanel.Children.Add(BuildLocalProviderEditor(draft, () => { model.ItemsSource = ProviderModels.Available(AsProvider(draft)); model.Text = draft.Model; RefreshLimit(draft); }));
+            }
             refreshing = false;
         }
         void Refresh(ProviderDraft? draft)
@@ -133,8 +159,14 @@ public sealed partial class MainWindow
         {
             if (state.Selected == null || editor.Visibility != Visibility.Visible) return;
             if(state.Selected.Kind=="composite"){state.Selected.Name=name.Text;return;}
+            if (state.Selected.Kind == "local")
+            {
+                state.Selected.Name = name.Text; state.Selected.PendingKey = key.Password; state.Selected.DeleteKey = deleteKey.IsChecked == true;
+                RefreshLimit(state.Selected);
+                return;
+            }
             state.Selected.Name = name.Text; state.Selected.BaseUrl = url.Text; state.Selected.Model = model.Text;
-            if (double.IsFinite(limit.Value)) state.Selected.ContextLimit = (int)limit.Value;
+            RefreshLimit(state.Selected);
             state.Selected.SupportsImages = vision.IsChecked == true; state.Selected.DeleteKey = deleteKey.IsChecked == true; state.Selected.PendingKey = key.Password;
             state.Selected.Username = username.Text; state.Selected.ExecutablePath = executable.Text; state.Selected.AutoStart = autoStart.IsChecked == true;
             state.Selected.OpenCodeTools = openCodeTools.IsChecked == true;
@@ -145,17 +177,14 @@ public sealed partial class MainWindow
         name.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.Name = name.Text; };
         name.LostFocus += (_, _) => { if (!refreshing) { if (state.Selected != null) model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected)); Refresh(state.Selected); } };
         url.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.BaseUrl = url.Text; };
-        url.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected)); } };
+        url.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected)); ShowProviderHelp(state.Selected); } };
         key.PasswordChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.PendingKey = key.Password; };
         model.TextSubmitted += (_, args) =>
         {
             if (!refreshing && state.Selected != null)
             {
                 state.Selected.Model = args.Text;
-                if (ModelCatalog.GetDefaultContextLimit(args.Text) is int defaultLimit && state.Selected.ContextLimit <= 128000)
-                {
-                    state.Selected.ContextLimit = defaultLimit; limit.Value = defaultLimit;
-                }
+                RefreshLimit(state.Selected);
             }
         };
         model.SelectionChanged += (_, _) =>
@@ -163,14 +192,10 @@ public sealed partial class MainWindow
             if (!refreshing && state.Selected != null && model.SelectedItem is string selected)
             {
                 state.Selected.Model = selected;
-                if (ModelCatalog.GetDefaultContextLimit(selected) is int defaultLimit && state.Selected.ContextLimit <= 128000)
-                {
-                    state.Selected.ContextLimit = defaultLimit; limit.Value = defaultLimit;
-                }
+                RefreshLimit(state.Selected);
             }
         };
-        model.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.Model = model.Text; };
-        limit.ValueChanged += (_, _) => { if (!refreshing && state.Selected != null && double.IsFinite(limit.Value)) state.Selected.ContextLimit = (int)limit.Value; };
+        model.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { state.Selected.Model = model.Text; RefreshLimit(state.Selected); } };
         vision.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.SupportsImages = true; };
         vision.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.SupportsImages = false; };
         deleteKey.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.DeleteKey = true; };
@@ -202,13 +227,23 @@ public sealed partial class MainWindow
         bypassFreeLimitation.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.BypassFreeLimitation = false; };
         void AddPreset(string preset)
         {
+            state.Commit();
             var deepSeek = preset == "deepseek";
             var draft = new ProviderDraft { Name = NextName(deepSeek ? "DeepSeek" : T("OpenAI compatible")), BaseUrl = deepSeek ? "https://api.deepseek.com" : "https://api.openai.com/v1", Model = deepSeek ? "deepseek-chat" : "gpt-4.1-mini", ContextLimit = 128000, SupportsImages = true };
             drafts.Add(draft); Refresh(draft); name.Focus(FocusState.Programmatic); name.SelectAll();
         }
         addOpenAi.Click += (_, _) => AddPreset("openai");
+        addLocal.Click += (_, _) => { state.Commit(); var draft = new ProviderDraft { Name = NextName("Local"), Kind = "local", BaseUrl = "http://127.0.0.1", Model = "", ContextLimit = 8192, SupportsImages = false }; drafts.Add(draft); Refresh(draft); };
         addComposite.Click+=(_,_)=>{state.Commit();var draft=new ProviderDraft{Name=NextName("Modèle composé"),Kind="composite",CompositeJson=new CompositeModel().Json()};drafts.Add(draft);Refresh(draft);};
         addDeepSeek.Click += (_, _) => AddPreset("deepseek");
+        foreach (var cloud in cloudItems)
+            cloud.Item.Click += (_, _) =>
+            {
+                state.Commit();
+                var preset = cloud.Preset;
+                var draft = new ProviderDraft { Name = NextName(preset.Name), BaseUrl = preset.BaseUrl, Model = preset.DefaultModel, ContextLimit = 128000, SupportsImages = true };
+                drafts.Add(draft); Refresh(draft); key.Focus(FocusState.Programmatic);
+            };
         addOpenCode.Click += (_, _) =>
         {
             var defaultDesktop = ResolveOpenCodeExecutable(null);
@@ -233,14 +268,20 @@ public sealed partial class MainWindow
             if (state.Selected == null) return;
             state.Commit();
             var source = state.Selected;
-            var draft = new ProviderDraft { Name = NextName(source.Name + " " + T("copie")), BaseUrl = source.BaseUrl, Model = source.Model, ContextLimit = source.ContextLimit, SupportsImages = source.SupportsImages,
-                DetectedModelsJson=source.DetectedModelsJson, SelectedModelsJson=source.SelectedModelsJson, Kind = source.Kind, CompositeJson=source.CompositeJson, Username = source.Username, ExecutablePath = source.ExecutablePath, AutoStart = source.AutoStart, OpenCodeTools = source.OpenCodeTools, BypassFreeLimitation = source.BypassFreeLimitation };
+            var draft = new ProviderDraft { Name = NextName(source.Name + " " + T("copie")), BaseUrl = source.BaseUrl, Model = source.Model, ContextLimit = source.ContextLimit, ModelContextsJson = source.ModelContextsJson, SupportsImages = source.SupportsImages,
+                DetectedModelsJson=source.DetectedModelsJson, SelectedModelsJson=source.SelectedModelsJson, Kind = source.Kind, CompositeJson=source.CompositeJson, LocalModelsJson=source.LocalModelsJson, Username = source.Username, ExecutablePath = source.ExecutablePath, AutoStart = source.AutoStart, OpenCodeTools = source.OpenCodeTools, BypassFreeLimitation = source.BypassFreeLimitation };
             drafts.Add(draft); Refresh(draft); name.Focus(FocusState.Programmatic); name.SelectAll();
         };
-        remove.Click += (_, _) =>
+        remove.Click += async (_, _) =>
         {
-            if (state.Selected == null) return;
-            var index = drafts.IndexOf(state.Selected); drafts.Remove(state.Selected);
+            if (state.Selected is not { } selected) return;
+            if (selected.LocalBusy) { info.Text = WorkflowText("Annulez l’opération locale avant de retirer ce fournisseur.", "Cancel the local operation before removing this provider."); return; }
+            if (selected.Kind == "local")
+            {
+                try { await LocalModelRuntime.UnloadAsync(LocalProviderSettings.Read(selected.LocalModelsJson), CancellationToken.None, onlyIdle: true); }
+                catch (Exception ex) { info.Text = ex.Message; return; }
+            }
+            var index = drafts.IndexOf(selected); drafts.Remove(selected);
             Refresh(drafts.Count == 0 ? null : drafts[Math.Clamp(index, 0, drafts.Count - 1)]);
         };
         testConnection.Click += async (_, _) =>
@@ -285,17 +326,24 @@ public sealed partial class MainWindow
                     .Select(x => x.Reference).ToList(), timeout.Token);
             }
             else list = await Task.Run(() => engine.ModelsAsync(target, secret, timeout.Token), timeout.Token);
-            if (draft.BaseUrl != endpoint) return null;
+            if (draft.BaseUrl != endpoint || !drafts.Contains(draft)) return null;
             if (selectAll && list.Count == 0) return list;
             await Task.Run(() =>
             {
                 ProviderModels.Refresh(target, list);
                 if (selectAll && list.Count > 0) ProviderModels.Select(target, list);
             }, timeout.Token);
-            if (selectAll && list.Count > 0 && !list.Contains(draft.Model, StringComparer.Ordinal)) draft.Model = list[0];
+            if (list.Count > 0 && (string.IsNullOrWhiteSpace(draft.Model) || selectAll && !list.Contains(draft.Model, StringComparer.Ordinal)))
+            {
+                draft.Model = list[0];
+                ProviderModels.Select(target, selectAll ? list : [draft.Model]);
+            }
             draft.DetectedModelsJson = target.DetectedModelsJson;
             draft.SelectedModelsJson = target.SelectedModelsJson;
-            if (state.Selected == draft) { model.ItemsSource = list; model.Text = draft.Model; }
+            ModelContexts.Select(target, draft.Model);
+            draft.LocalModelsJson = target.LocalModelsJson;
+            draft.ModelContextsJson = target.ModelContextsJson; draft.ContextLimit = target.ContextLimit;
+            if (state.Selected == draft) { model.ItemsSource = list; model.Text = draft.Model; RefreshLimit(draft); }
             info.Text = $"{list.Count} modèles détectés / models detected";
             return list;
         }
@@ -307,6 +355,24 @@ public sealed partial class MainWindow
             try { await Discover(draft); } catch (Exception ex) { info.Text = ex.Message; }
             finally { importModels.IsEnabled = true; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
         };
+
+        void ShowProviderHelp(ProviderDraft? draft)
+        {
+            providerHelp.Children.Clear();
+            var preset = draft == null || draft.Kind is "local" or "opencode" or "composite" ? null : ProviderPresets.Resolve(draft.BaseUrl);
+            providerHelp.Visibility = preset == null ? Visibility.Collapsed : Visibility.Visible;
+            if (preset == null) return;
+            providerHelp.Children.Add(Label(WorkflowText(preset.DescriptionFr, preset.DescriptionEn), 12));
+            providerHelp.Children.Add(Row(
+                new HyperlinkButton { Content = WorkflowText("Obtenir une clé API", "Get an API key"), NavigateUri = new Uri(preset.KeysUrl) },
+                new HyperlinkButton { Content = WorkflowText("Documentation", "Documentation"), NavigateUri = new Uri(preset.DocumentationUrl) }));
+            providerHelp.Children.Add(Label(WorkflowText("Renseignez votre clé, puis importez les modèles accessibles à votre compte ou saisissez leur identifiant exact. Ajustez le contexte et la case Images au modèle choisi.",
+                "Enter your key, then import models accessible to your account or enter their exact identifier. Adjust context and the Images checkbox for the selected model."), 12));
+            if (preset.SuggestedChatModels.Count > 0)
+                providerHelp.Children.Add(Label(WorkflowText("Exemples d’identifiants · accès non vérifié : ", "Example identifiers · access not verified: ") + string.Join(", ", preset.SuggestedChatModels), 12));
+            if (preset.Id == "zai") providerHelp.Children.Add(Label(WorkflowText("Le catalogue automatique peut être indisponible. Le choix manuel reste possible. GLM utilise un raisonnement activé/désactivé ; l’intensité est gérée par le modèle.",
+                "Automatic discovery may be unavailable. You can still select a model manually. GLM uses enabled/disabled thinking; effort is managed by the model."), 12));
+        }
 
         void RenderCards()
         {
@@ -352,7 +418,9 @@ public sealed partial class MainWindow
                         modelBody.Children.Add(refresh);
                         modelBody.Children.Add(result);
                         var selected = ProviderModels.Visible(AsProvider(draft)).ToHashSet(StringComparer.Ordinal);
-                        var models = ProviderModels.Normalize(ProviderModels.Available(AsProvider(draft)).Concat(selected).Append(draft.Model));
+                        var models = ModelCatalog.GetModelsForProvider(AsProvider(draft));
+                        if (ProviderModels.Available(AsProvider(draft)).Count == 0 && ProviderPresets.Resolve(draft.BaseUrl)?.SuggestedChatModels.Count > 0)
+                            modelBody.Children.Add(Label(WorkflowText("Exemples documentés : cette liste ne confirme pas une connexion ni les droits de votre compte.", "Documented examples: this list does not confirm a connection or your account's access."), 12));
                         var search = new TextBox { PlaceholderText = WorkflowText("Rechercher un modèle…", "Search models…"),
                             Text = draft.ModelSearch, HorizontalAlignment = HorizontalAlignment.Stretch };
                         var selectAll = new Button { Content = WorkflowText("Tout cocher", "Select all") };
@@ -416,17 +484,17 @@ public sealed partial class MainWindow
                     if (draft.ModelsExpanded) BuildModelBody();
                     details.Children.Add(expander);
                 }
-                cards.Children.Add(FluentDesign.Setting(draft.Name, draft.Kind == "composite" ? WorkflowText("Modèle composé", "Composite model") : draft.Kind, gear, details));
+                cards.Children.Add(FluentDesign.Setting(draft.Name, draft.Kind == "composite" ? WorkflowText("Modèle composé", "Composite model") : ProviderPresets.Resolve(draft.BaseUrl)?.Name ?? draft.Kind, gear, details));
             }
             if (drafts.Count == 0) cards.Children.Add(Label(WorkflowText("Ajoutez un fournisseur pour commencer.", "Add a provider to get started.")));
         }
         back.Click += (_, _) => { state.Commit(); RenderCards(); editor.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible; };
         var add = new DropDownButton { Content = WorkflowText("＋ Ajouter un fournisseur", "＋ Add provider") };
         var presets = new MenuFlyout(); add.Flyout = presets;
-        foreach (var item in new[] { addOpenAi, addDeepSeek, addOpenCode, addComposite }) presets.Items.Add(item);
+        foreach (var item in new[] { addOpenAi, addDeepSeek }.Concat(cloudItems.Select(x => x.Item)).Concat([addOpenCode, addLocal, addComposite])) presets.Items.Add(item);
         state.Panel.Spacing = 12;
         state.Panel.Children.Add(add); state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
-        foreach (var item in new UIElement[] { back, editorTitle, info, name, compositePanel, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, Row(duplicate, remove) }) editor.Children.Add(item);
+        foreach (var item in new UIElement[] { back, editorTitle, info, name, compositePanel, providerHelp, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, Row(duplicate, remove) }) editor.Children.Add(item);
         Refresh(drafts.FirstOrDefault(x => x.Id == selectedProviderId) ?? drafts.FirstOrDefault());
         editor.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible;
         return state;
@@ -435,10 +503,18 @@ public sealed partial class MainWindow
     string? ValidateProviderDrafts(ProviderEditorState editor)
     {
         editor.Commit();
+        if (editor.Drafts.Any(x => x.LocalBusy)) return WorkflowText("Une opération locale est en cours. Attendez sa fin ou annulez-la avant d’enregistrer.", "A local operation is running. Wait for it or cancel before saving.");
         if(db.PendingInputs.AsNoTracking().Select(x=>x.ProviderId).ToList().Any(id=>!editor.Drafts.Any(draft=>draft.Id==id)))return "Un fournisseur est utilisé par un message en attente. / Provider used by a queued message.";
         if (editor.Drafts.Any(x => string.IsNullOrWhiteSpace(x.Name))) return T("Le nom du fournisseur est requis.");
         foreach (var draft in editor.Drafts)
         {
+            if (draft.Kind == "local")
+            {
+                var local = LocalProviderSettings.Read(draft.LocalModelsJson);
+                if (local.Models.Count == 0) return WorkflowText("Importez au moins un modèle dans ", "Import at least one model in ") + draft.Name;
+                if (draft.ContextLimit is < 1024 or > 262144) return WorkflowText("Le contexte local doit être compris entre 1 024 et 262 144 tokens.", "Local context must be between 1,024 and 262,144 tokens.");
+                continue;
+            }
             if(draft.Kind=="composite")
             {
                 try{CompositeModel.Read(draft.CompositeJson).Validate(editor.Drafts.Where(x=>x.Id>0).Select(x=>new Provider{Id=x.Id,Kind=x.Kind}));}
@@ -454,11 +530,13 @@ public sealed partial class MainWindow
     void ApplyProviderDraft(ProviderDraft draft, Provider entity)
     {
         entity.Name = draft.Name.Trim(); entity.BaseUrl = draft.BaseUrl.Trim().TrimEnd('/'); entity.Model = draft.Model.Trim();
-        entity.ContextLimit = draft.ContextLimit; entity.SupportsImages = draft.SupportsImages;
+        entity.SupportsImages = draft.SupportsImages;
         entity.Kind = draft.Kind; entity.Username = draft.Username.Trim(); entity.ExecutablePath = draft.ExecutablePath.Trim(); entity.AutoStart = draft.AutoStart;
         entity.OpenCodeTools = draft.OpenCodeTools;
         entity.BypassFreeLimitation = draft.BypassFreeLimitation;
         entity.CompositeJson = draft.CompositeJson;
+        entity.LocalModelsJson = draft.LocalModelsJson;
+        entity.ModelContextsJson = draft.ModelContextsJson; ModelContexts.MergeLocal(entity); ModelContexts.Sync(entity);
         entity.DetectedModelsJson = draft.DetectedModelsJson; entity.SelectedModelsJson = draft.SelectedModelsJson;
         if (entity.IsComposite)
         {
@@ -495,7 +573,8 @@ public sealed partial class MainWindow
             entities[draft] = entity;
         }
         await db.SaveChangesAsync();
-        if (editor.Selected != null && entities.TryGetValue(editor.Selected, out var selected)) return selected;
-        return editor.Drafts.Count == 0 ? null : entities[editor.Drafts[0]];
+        foreach (var entry in entities) entry.Key.Id = entry.Value.Id;
+        if (editor.Selected != null && entities.TryGetValue(editor.Selected, out var selected) && ProviderModels.CanChat(selected)) return selected;
+        return entities.Values.FirstOrDefault(x => x.Id == state.ProviderId && ProviderModels.CanChat(x)) ?? entities.Values.FirstOrDefault(ProviderModels.CanChat);
     }
 }

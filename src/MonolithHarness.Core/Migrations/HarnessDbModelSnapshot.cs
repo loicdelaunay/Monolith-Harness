@@ -299,6 +299,9 @@ namespace MonolithHarness.Core.Migrations
                     b.Property<int>("ChatId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("CachedInputTokens")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("CompatibilityNotice")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -453,6 +456,13 @@ namespace MonolithHarness.Core.Migrations
 
             modelBuilder.Entity("MonolithHarness.Core.Provider", b =>
                 {
+                    b.Property<string>("ModelContextsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LocalModelsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
@@ -698,6 +708,9 @@ namespace MonolithHarness.Core.Migrations
                     b.Property<string>("Activity")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long?>("CachedInputTokens")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("ChatId")
                         .HasColumnType("INTEGER");

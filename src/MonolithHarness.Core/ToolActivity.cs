@@ -17,7 +17,7 @@ public static class ToolActivity
         {
             var args = JsonNode.Parse(string.IsNullOrWhiteSpace(arguments) ? "{}" : arguments) as JsonObject;
             if (args == null) return "";
-            foreach (var key in new[] { "path", "url", "command", "query", "pattern", "operation", "action", "task", "session_id", "id" })
+            foreach (var key in new[] { "path", "url", "command", "query", "pattern", "operation", "action", "task", "prompt", "session_id", "id" })
             {
                 if (args[key] is not JsonValue value || !value.TryGetValue<string>(out var text) || string.IsNullOrWhiteSpace(text)) continue;
                 if (Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") text = new UriBuilder(uri) { UserName = "", Password = "" }.Uri.GetLeftPart(UriPartial.Path);

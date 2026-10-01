@@ -29,8 +29,7 @@ public sealed class CompositeModel
     {
         var source=providers.SingleOrDefault(x=>x.Id==assignment.ProviderId && !x.IsComposite) ?? throw new InvalidOperationException("Fournisseur du modèle composé introuvable.");
         var copy=JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(source))!;
-        copy.Model=assignment.Model;
-        if(ModelCatalog.GetDefaultContextLimit(copy.Model) is int limit) copy.ContextLimit=limit;
+        ModelContexts.Select(copy, assignment.Model);
         return copy;
     }
 }

@@ -18,6 +18,7 @@ public sealed class TokenUsage
     public string ChatTitle { get; set; } = "";
     public long InputTokens { get; set; }
     public long OutputTokens { get; set; }
+    public long? CachedInputTokens { get; set; }
     public bool InputEstimated { get; set; }
     public bool OutputEstimated { get; set; }
     public double Seconds { get; set; }
@@ -75,6 +76,8 @@ public static class TokenConsumption
                     (result.Message["tool_calls"]?.ToJsonString() ?? "");
                 entry.InputTokens = Math.Max(0, input ?? inputEstimate);
                 entry.OutputTokens = Math.Max(0, output ?? ContextWindow.EstimateText(text));
+                entry.CachedInputTokens = result?.Usage is { } aggregate ? aggregate.CachedInputTokens
+                    : result?.CachedInputTokens ?? latest?.CachedInputTokens;
                 entry.InputEstimated = result?.Usage?.InputEstimated ?? (input == null);
                 entry.OutputEstimated = result?.Usage?.OutputEstimated ?? (output == null);
                 try
@@ -89,7 +92,10 @@ public static class TokenConsumption
     }
 }
 
-internal sealed record CompletionUsage(long Input, long Output, bool InputEstimated, bool OutputEstimated);
+internal sealed record CompletionUsage(long Input, long Output, bool InputEstimated, bool OutputEstimated)
+{
+    public long? CachedInputTokens { get; init; }
+}
 
 public enum ConsumptionPeriod { Today, ThreeDays, SevenDays, ThirtyDays, Year }
 public sealed record ConsumptionFilter(ConsumptionPeriod Period, string Provider = "", string Model = "", string Activity = "", int? ProjectId = null);

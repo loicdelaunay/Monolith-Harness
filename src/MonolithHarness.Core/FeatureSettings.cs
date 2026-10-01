@@ -4,6 +4,11 @@ namespace MonolithHarness.Core;
 
 public sealed class FeatureSettings
 {
+    public int ImageGenerationProviderId { get; set; }
+    public string ImageGenerationModel { get; set; } = "";
+    public int ImageGenerationWidth { get; set; } = 1024;
+    public int ImageGenerationHeight { get; set; } = 1024;
+    public int ImageGenerationSteps { get; set; } = 28;
     // Older profiles skip onboarding; newly created profiles explicitly opt in.
     public bool WelcomeCompleted { get; set; } = true;
     // Cutoff captured by the usage migration; newer interrupted messages aren't legacy history.
@@ -102,6 +107,9 @@ public sealed class FeatureSettings
     }
     public string Json()
     {
+        if (ImageGenerationProviderId < 0 || ImageGenerationModel == null || ImageGenerationModel.Length > 300 ||
+            ImageGenerationWidth is < 256 or > 2048 || ImageGenerationHeight is < 256 or > 2048 || ImageGenerationWidth % 64 != 0 || ImageGenerationHeight % 64 != 0 || ImageGenerationSteps is < 1 or > 100)
+            throw new ArgumentException("Réglages de génération d’image invalides : dimensions multiples de 64 entre 256 et 2048, de 1 à 100 étapes.");
         if (Compaction == null) throw new ArgumentException("Réglages de compactage requis / Compaction settings required.");
         Compaction.Validate();
         if (ChatGoals == null || ChatGoals.Any(x => x.Key <= 0 || x.Value == null || x.Value.Length > 4000))

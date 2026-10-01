@@ -5,6 +5,7 @@ namespace MonolithHarness.Core;
 /// <summary>Catalogues belong to a connection, never to its display name or provider family.</summary>
 public static class ProviderModels
 {
+    public static bool CanChat(Provider provider) => !provider.IsLocal || Available(provider).Count > 0;
     public static List<string> Parse(string json)
     {
         try { return Normalize(JsonSerializer.Deserialize<List<string>>(json) ?? []); }
@@ -12,7 +13,7 @@ public static class ProviderModels
     }
     public static List<string> Normalize(IEnumerable<string> models) => models.Where(x => !string.IsNullOrWhiteSpace(x))
         .Select(x => x.Trim()).Distinct(StringComparer.Ordinal).Order(StringComparer.OrdinalIgnoreCase).ToList();
-    public static List<string> Available(Provider provider) => provider.IsComposite ? [provider.Model] :
+    public static List<string> Available(Provider provider) => provider.IsLocal ? Normalize(LocalProviderSettings.Read(provider.LocalModelsJson).Models.Where(x => x.Purpose == "chat").Select(x => x.Id)) : provider.IsComposite ? [provider.Model] :
         Parse(provider.DetectedModelsJson);
     public static List<string> Visible(Provider provider) => provider.IsComposite ? [provider.Model] :
         string.IsNullOrWhiteSpace(provider.SelectedModelsJson) ? Normalize([provider.Model]) : Parse(provider.SelectedModelsJson);

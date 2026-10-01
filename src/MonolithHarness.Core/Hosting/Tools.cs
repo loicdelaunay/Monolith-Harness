@@ -58,6 +58,7 @@ public sealed partial class HarnessService
         var source = run.Project.GetSourceFolders().Count > 0;
         var definitions = ChatEngine.ToolDefinitions(source && SourceTools.CanRead(skills), browserAccess && Skills.Enabled(skills, "web"), source && Skills.Enabled(skills, "write_sources"));
         AssetTools.AddDefinitions(definitions, skills);
+        ImageGenerationTools.AddDefinitions(definitions, skills);
         SourceTools.AddDefinitions(definitions, source, skills);
         void Add(string name, string description, params (string Name, string Type)[] properties)
         {
@@ -117,6 +118,11 @@ public sealed partial class HarnessService
             return new(output.Text, output.Image);
         }
         if (VisionBridge.Handles(name)) return new(await VisionFor(run).CallAsync(name, p, ct));
+        if (ImageGenerationTools.Handles(name))
+        {
+            var output = await ImageGenerationTools.CallAsync(run, p, async token => await db.States.Select(x => x.EnabledSkills).SingleAsync(token), Approve, ct, Decrypt);
+            return new(output.Text, output.Image);
+        }
         if (PythonTools.Handles(name)) return new(await PythonTools.CallAsync(run, name, p, () => skills, async (scope, title, detail, token) => {
             var allowed = await Approve(scope, title, detail, token);
             skills = await db.States.Select(x => x.EnabledSkills).SingleAsync(token);

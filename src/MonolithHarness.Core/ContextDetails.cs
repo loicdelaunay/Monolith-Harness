@@ -6,6 +6,7 @@ namespace MonolithHarness.Core;
 public sealed record ContextDetails(int Used, int Limit, bool Estimated, int? Input, int? Output,
     int User, int Assistant, int Tools, int Summary, int Images, int ActiveMessages, int ArchivedMessages)
 {
+    public int? CachedInputTokens { get; init; }
     public static ContextDetails From(IEnumerable<Message> messages, int limit)
     {
         var all = messages.ToList();
@@ -14,10 +15,16 @@ public sealed record ContextDetails(int Used, int Limit, bool Estimated, int? In
         var images = active.Sum(x => x.Attachments.Count) * 1000;
         var estimate = active.Sum(x => ContextWindow.Estimate(ChatEngine.ToWire(x, includeImageData: false)));
         var latest = active.LastOrDefault(x => x.InputTokens.HasValue);
-        if (active.LastOrDefault(x => x.Role == "compaction") is { } summary && (latest == null || summary.Id > latest.Id)) latest = null;
+        var latestReply = active.LastOrDefault(x => x.Role == "assistant");
+        if (active.LastOrDefault(x => x.Role == "compaction") is { } summary)
+        {
+            if (latest == null || summary.Id > latest.Id) latest = null;
+            if (latestReply == null || summary.Id > latestReply.Id) latestReply = null;
+        }
         return new(latest?.InputTokens is int input ? input + (latest.OutputTokens ?? 0) : estimate,
             limit, latest?.InputTokens == null || latest.OutputTokens == null, latest?.InputTokens, latest?.OutputTokens,
-            Tokens("user"), Tokens("assistant"), Tokens("tool"), Tokens("compaction"), images, active.Count, all.Count(x => x.State == "compacted"));
+            Tokens("user"), Tokens("assistant"), Tokens("tool"), Tokens("compaction"), images, active.Count, all.Count(x => x.State == "compacted"))
+            { CachedInputTokens = latestReply?.CachedInputTokens };
     }
 
     public static Task<bool> CompactAsync(ConversationSession run, Func<string, CancellationToken, Task<string>> summarize, CancellationToken ct) =>

@@ -35,6 +35,9 @@ public sealed partial class MainWindow
     }
     void RefreshModelActivity()
     {
+        foreach (var conversation in conversationRuns.Values)
+            if (conversation.CurrentTool is { } running)
+                running.Message.UpdateProgress(running.Timer.Elapsed.TotalSeconds, running.Phase);
         var run = selectedSubagent == null ? ActiveRun : null;
         if (run?.CurrentTool is { } tool && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
             status.Text = ToolActivityText(tool);

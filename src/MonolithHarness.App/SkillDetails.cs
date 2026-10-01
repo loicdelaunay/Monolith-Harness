@@ -9,7 +9,7 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     readonly HashSet<XamlRoot> skillDetailRoots = [];
-    static bool IsBetaSkill(SkillDefinition skill) => skill.Id is GitTools.SkillId or FileIndexTools.SkillId;
+    static bool IsBetaSkill(SkillDefinition skill) => skill.Id is GitTools.SkillId or FileIndexTools.SkillId or ImageGenerationTools.SkillId;
 
     FrameworkElement SkillLabel(SkillDefinition skill, bool bold = false)
     {
@@ -77,7 +77,12 @@ public sealed partial class MainWindow
             }
             body.Children.Add(SkillLabel(skill, bold: true));
             Section("Fonctionnement", "How it works", skill.FrenchDescription, skill.EnglishDescription);
-            if (skill.Id == GitTools.SkillId)
+            if (skill.Id == ImageGenerationTools.SkillId)
+            {
+                Section("Fonctionnement", "How it works", "Le modèle du chat appelle generate_image. Un fournisseur et un modèle dédiés, choisis dans Réglages → Skills, réalisent la génération. L’image est jointe au chat et conservée dans images/chat-…/.", "The chat model calls generate_image. A dedicated provider and model selected in Settings → Skills generate the image. It is attached to chat and saved in images/chat-…/.");
+                Section("Conception et limites", "Design and limits", "Une image par appel, autorisation du chat, délai maximum de 15 minutes et annulation. API distante images/generations ou moteur stable-diffusion.cpp local. Cette bêta charge des checkpoints complets SD/SDXL ; les composants séparés et la retouche ne sont pas pris en charge. Le skill ne s’active pas automatiquement.", "One image per call, chat permissions, cancellation and a 15-minute timeout. Remote images/generations API or local stable-diffusion.cpp engine. This beta loads full SD/SDXL checkpoints; separate components and image editing are not supported. The skill is not automatically enabled.");
+            }
+            else if (skill.Id == GitTools.SkillId)
             {
                 Section("Conception", "Design",
                     "Le modèle appelle des outils Git dédiés. L’application prépare les commandes et les exécute avec Git installé sur le PC, dans le dépôt associé aux sources de la conversation.\n\nLa lecture couvre l’état, les différences, l’historique et les branches. L’écriture couvre l’initialisation, les fichiers à indexer, les commits, les branches et les opérations fetch, pull et push. Chaque fichier à indexer est sélectionné explicitement.",

@@ -106,7 +106,7 @@ public sealed class CliClient : IAsyncDisposable
     public async Task SelectModel(int providerId, string model, CancellationToken ct)
     {
         await using var db = OpenDb(); var provider = await db.Providers.SingleAsync(p => p.Id == providerId, ct);
-        provider.Model = model; (await db.States.SingleAsync(ct)).ProviderId = providerId; await db.SaveChangesAsync(ct);
+        ModelContexts.Select(provider, model); (await db.States.SingleAsync(ct)).ProviderId = providerId; await db.SaveChangesAsync(ct);
     }
     public async Task<int> SaveProvider(Provider provider, string key, CancellationToken ct)
     {
@@ -114,7 +114,7 @@ public sealed class CliClient : IAsyncDisposable
         await using var db = OpenDb();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         provider.ProtectedKey = key.Length == 0 ? [] : KeyVault.Encrypt(key);
-        db.Providers.Add(provider); await db.SaveChangesAsync(ct);
+        ModelContexts.MergeLocal(provider); ModelContexts.Sync(provider); db.Providers.Add(provider); await db.SaveChangesAsync(ct);
         (await db.States.SingleAsync(ct)).ProviderId = provider.Id; await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); return provider.Id;
     }
     public async Task<List<string>> RefreshModels(int providerId, CancellationToken ct)

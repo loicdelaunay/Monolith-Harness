@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.45.1 - 2026-10-02
+
+- Compacts the GUI Model and thinking panel with a narrower responsive width, smaller spacing and inputs, an inline thinking selector and a context editor on two short rows. Removes repeated explanatory labels from this popup; thinking guidance moves to a tooltip, and context detection details remain available from an information button. Automatic/custom limits, model autocomplete and the accent Done action remain accessible.
+
+## 1.45.0 - 2026-10-01
+
+- Context capacity is now saved for each exact model ID within its provider connection. Switching models restores their own automatic or custom limit, without carrying a limit from the previous model. GUI provider settings, onboarding and the Model and thinking panel share a context editor; the CLI provider menu adds Context per model. Context counters, request sizing, agent models and automatic compaction use the selected model's capacity.
+- Loading or refreshing models retains explicit context-window metadata from compatible catalogues and OpenCode, and obtains Gemini's input-token limits from its native model catalogue. Automatic mode uses the reported maximum, within the engine's supported ceiling; output-token caps are never used as context capacity. Missing metadata is clearly labelled as an estimated fallback and can be overridden for that model. Model refresh preserves custom settings.
+- Local GGUF chat imports read the architecture's declared context window from bounded metadata, without loading model weights. Refreshing local models also detects this for older imports. The local engine ceiling and available-memory requirements still apply; a custom context can reduce memory use.
+- Migrates historical non-default provider limits to a custom limit for the model previously selected. Historical standard defaults become automatic; model settings and reported capacities persist across application restarts.
+
+## 1.44.1 - 2026-10-01
+
+- GUI replies display reused input tokens in the same footer as duration and response time, with the same typography and hover visibility. The footer reserves its space before hovering and wraps in narrow bubbles without shifting other messages. Provider-reported zero remains visible; an absent cache counter adds no label. The combined tooltip keeps the response date and explains reported cache reuse.
+- Removes the model picker's explanatory text and result/suggestion counts. Empty-search and unconfigured-model feedback remains available when needed.
+
+## 1.44.0 - 2026-10-01
+
+- Redesigns the GUI Model and thinking panel with a responsive width, separate model and thinking sections, connection details, explanatory thinking text and a Done action at the bottom right. Long names wrap in suggestions, body scrolling stays vertical, and model refresh shows a busy indicator.
+- Adds model autocomplete from the enabled models of every configured connection. Typing filters model and provider names without changing the active model; matching model prefixes and the current provider are prioritized. Arrow keys navigate suggestions; Enter or clicking a suggestion confirms a choice, while a browse button shows the catalogue. Unknown or ambiguous names never create a model or silently switch provider. Suggestions are limited to 50 visible items with a refinement hint for large catalogues.
+- Closing the panel discards unconfirmed search text. Confirmed choices retain the existing immediate-save behavior, and local model refresh no longer requires a remote API key.
+
+## 1.43.0 - 2026-10-01
+
+- Replaces “Préchargement du contexte” with “Chargement du modèle / Loading model” in GUI and CLI, showing Preparation, Sending and Waiting for first tokens. The wait includes estimated context size and elapsed time; GUI request details clarify that these are observable request stages rather than evidence of a model restart or server progress. Local engine preparation is included in the first stage.
+- Reads provider-reported input cache hits from compatible usage metadata, including DeepSeek, OpenRouter and OpenCode cache reads. Completed replies show reused tokens in a small footer and the GUI context details; CLI history shows the same counter. Missing counters remain unknown and are never estimated or confused with a reported zero. Cached tokens still occupy context and are not subtracted from its size.
+- Persists nullable cache counters with each reply and consumption record so declared reuse remains available after reopening the conversation. For OpenCode calls with several assistant turns, consumption totals aggregate cache reads only when every turn reports them. Existing conversation rows remain unknown until a new request reports usage.
+
+## 1.42.1 - 2026-10-01
+
+- GUI tool cards appear as soon as an execution starts, including while waiting for the shared tool queue or user permission. Each card shows an activity indicator, the supplied arguments and elapsed time; the same card becomes the final success, failure or stopped result with expandable details and any returned image. Empty assistant tool turns show their activity immediately instead of leaving a blank bubble until completion.
+- Allows continuous text selection across adjacent Markdown headings, paragraphs, lists and quotes, including list numbers and bullet markers. Streamed replies reuse their text surface and completed inlines; file context menus attach once and recognize newly received links. Code blocks and tables keep their dedicated rendering.
+
+## 1.42.0 - 2026-10-01
+
+- Adds OpenRouter, Groq, Google Gemini, Mistral, Z.ai and NVIDIA NIM to the GUI provider menu and CLI connection wizard, backed by one shared preset catalogue. Each connection keeps its own protected key and model selection; GUI settings show service information, API-key and documentation links. Account quotas and billing remain with the provider.
+- Uses each service's official compatible API endpoint. Model discovery keeps the authenticated catalogue, filters explicitly incompatible chat capabilities and normalizes Gemini model IDs. Documented Z.ai examples are labelled as unverified and can be entered manually when model discovery is unavailable; they never count as a successful connection check.
+- Handles OpenRouter reasoning parameters and opaque reasoning blocks, Gemini tool-call thought signatures, Mistral's streamed thinking/text chunks, Groq usage metadata and GLM's enabled/disabled thinking switch. Required metadata is preserved across tool turns. Compatibility notices explain unsupported effort levels and forced GLM thinking.
+- Makes Gemini and Z.ai available to the image skill through their image APIs, with Gemini base64 responses and Z.ai's documented image identifiers and dimension checks. Other new presets are excluded from this skill's provider list because they require different image APIs. Existing generic compatible and Local image providers remain available.
+
+## 1.41.0 - 2026-10-01
+
+- Adds the opt-in **Image generation · Beta** skill with the `generate_image` tool, a dedicated provider/model selector, image dimensions and local sampling steps. Generated images appear in the conversation and are saved under `images/chat-…/`. Chat permissions, Plan/sandbox restrictions and cancellation apply to both GUI and CLI; remote providers must implement the OpenAI-compatible `images/generations` API.
+- Adds a **Local · Beta** provider in GUI settings. Import or reference standalone GGUF chat models and complete Stable Diffusion 1.x, 2.x or SDXL Safetensors checkpoints. The default model directory is `model/` next to the executable. Image-only providers remain available to the skill without appearing as chat providers.
+- Adds a Hugging Face search dialog for chat and image models, file/quantization selection, licence/model-card links, gated access through an optional protected read token, cancellable streaming downloads and SHA-256 checks when the Hub provides a digest. Incomplete checkpoints, projectors, adapters, split files and separate Diffusers components explain why they cannot be loaded by this beta.
+- Shows estimated support and memory requirements based on detected OS/architecture, CPU instruction support, installed/free RAM, graphics adapters and VRAM when available. CPU/partial GPU operation, unknown hardware and insufficient memory are distinguished; actual architectures, drivers and throughput are confirmed only when loading/inference runs.
+- Downloads official llama.cpp and stable-diffusion.cpp engines on explicit Prepare / load, verifies their published SHA-256, and supports CPU/Vulkan selection or already installed engine paths. Chat servers bind only to loopback with a generated credential, are reused between requests and can be unloaded while idle. Image models load for each generation and release their process afterwards. Heavy transfers and image parsing use asynchronous/background work.
+
 ## 1.40.0 - 2026-10-01
 
 - Tools adds Preview in the right workspace pane, with real Raw and Preview tabs. Clicking a local PNG/JPEG/WebP/GIF/BMP/ICO, TXT or Markdown file in the chat opens it directly; attached images and compatible text attachments use the same pane. Existing right-click OS, browser and containing-folder actions remain available, with an additional Preview action for compatible files.

@@ -34,6 +34,12 @@ public sealed class MarkdownRenderer
         public Func<string, Task>? OpenFile;
         public Func<string, MenuFlyout>? FileMenu;
     }
+    sealed class TextFlowState
+    {
+        public List<string> Keys = [];
+        public List<int> InlineEnds = [];
+    }
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TextBlock, TextFlowState> textFlows = new();
     static readonly List<WeakReference<Panel>> renderedPanels = [];
     public static void RefreshDensity()
     {
@@ -51,34 +57,82 @@ public sealed class MarkdownRenderer
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;
         var blocks = MarkdownPipelineHelper.Parse(markdown);
-        var keys = blocks.Select(block => markdown.Substring(block.Span.Start, block.Span.Length)).ToList();
+        var groups = GroupTextBlocks(blocks).ToList();
+        var keys = groups.Select(group => markdown.Substring(group[0].Span.Start,
+            group[^1].Span.End - group[0].Span.Start + 1)).ToList();
         int shared = 0;
         while (state.Density == ChatDensity.Id && shared < keys.Count && shared < state.Keys.Count && shared < container.Children.Count && keys[shared] == state.Keys[shared]) shared++;
-        // Build changed blocks off-tree, then replace only those blocks. Already completed
-        // paragraphs keep their visual objects, selection and scroll position during streaming.
+        // Adjacent headings, paragraphs, lists and quotes share one selection surface.
+        // Reuse that surface and its completed inlines when the streamed tail changes.
         var replacements = new List<UIElement>();
         var renderer = new MarkdownRenderer(openFile, fileMenu);
-        foreach (var block in blocks.Skip(shared))
+        for (int index = shared; index < groups.Count; index++)
         {
-            var blockPanel = new StackPanel { Spacing = 4 };
-            if (CanJoinText(block))
+            var group = groups[index];
+            StackPanel blockPanel;
+            if (CanJoinText(group[0]))
             {
-                var flow = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight };
-                renderer.AppendText(block, flow, 0); blockPanel.Children.Add(flow);
+                TextBlock flow;
+                if (state.Density == ChatDensity.Id && index < container.Children.Count &&
+                    container.Children[index] is StackPanel existing && existing.Children.Count == 1 &&
+                    existing.Children[0] is TextBlock existingFlow && textFlows.TryGetValue(existingFlow, out _))
+                { blockPanel = existing; flow = existingFlow; }
+                else
+                {
+                    blockPanel = new StackPanel { Spacing = 4 };
+                    flow = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+                        Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight };
+                    blockPanel.Children.Add(flow);
+                }
+                renderer.UpdateTextFlow(flow, group, markdown);
             }
-            else if (renderer.RenderBlock(block) is { } element) blockPanel.Children.Add(element);
+            else
+            {
+                blockPanel = new StackPanel { Spacing = 4 };
+                if (renderer.RenderBlock(group[0]) is { } element) blockPanel.Children.Add(element);
+            }
             if (fileMenu != null) ChatPathMenus.Attach(blockPanel, fileMenu);
             replacements.Add(blockPanel);
         }
         for (int i = 0; i < replacements.Count; i++)
         {
             int index = shared + i;
-            if (index < container.Children.Count) container.Children[index] = replacements[i];
+            if (index < container.Children.Count)
+            {
+                if (!ReferenceEquals(container.Children[index], replacements[i])) container.Children[index] = replacements[i];
+            }
             else container.Children.Add(replacements[i]);
         }
         while (container.Children.Count > keys.Count) container.Children.RemoveAt(container.Children.Count - 1);
         state.Keys = keys; state.Density = ChatDensity.Id;
         AppTypography.Apply(container);
+    }
+    static IEnumerable<MdBlock[]> GroupTextBlocks(IEnumerable<MdBlock> blocks)
+    {
+        var text = new List<MdBlock>();
+        foreach (var block in blocks)
+        {
+            if (CanJoinText(block)) { text.Add(block); continue; }
+            if (text.Count > 0) { yield return text.ToArray(); text.Clear(); }
+            yield return [block];
+        }
+        if (text.Count > 0) yield return text.ToArray();
+    }
+    void UpdateTextFlow(TextBlock flow, IReadOnlyList<MdBlock> blocks, string markdown)
+    {
+        var state = textFlows.GetOrCreateValue(flow);
+        var keys = blocks.Select(block => markdown.Substring(block.Span.Start, block.Span.Length)).ToList();
+        int shared = 0;
+        while (shared < keys.Count && shared < state.Keys.Count && keys[shared] == state.Keys[shared]) shared++;
+        int keep = shared > 0 ? state.InlineEnds[shared - 1] : 0;
+        while (flow.Inlines.Count > keep) flow.Inlines.RemoveAt(flow.Inlines.Count - 1);
+        if (state.InlineEnds.Count > shared) state.InlineEnds.RemoveRange(shared, state.InlineEnds.Count - shared);
+        foreach (var block in blocks.Skip(shared))
+        {
+            AppendText(block, flow, 0);
+            state.InlineEnds.Add(flow.Inlines.Count);
+        }
+        state.Keys = keys;
     }
     /// <summary>Paginated file rendering with cancellation and UI yields between blocks.</summary>
     public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,
@@ -216,7 +270,6 @@ public sealed class MarkdownRenderer
             if (flow.Inlines.Count > 0)
             {
                 flow.Inlines.Add(new LineBreak());
-                if (depth == 0) flow.Inlines.Add(new LineBreak());
             }
             if(depth > 0) p.Inlines.Add(new Run { Text = new string(' ', depth * 2) });
             if (prefix.Length > 0) p.Inlines.Add(new Run { Text = prefix, Foreground = Brush(130, 175, 245) });

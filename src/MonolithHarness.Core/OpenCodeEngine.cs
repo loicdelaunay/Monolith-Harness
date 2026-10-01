@@ -108,6 +108,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 }
             }
         }
+        ModelContexts.Merge(provider, result.Select(x => new ModelContextMetadata(x.Reference, x.ContextLimit)));
         return result.GroupBy(x => x.Reference, StringComparer.OrdinalIgnoreCase)
                      .Select(x => x.First())
                      .OrderByDescending(x => x.Reference.StartsWith("opencode/", StringComparison.OrdinalIgnoreCase))
@@ -255,7 +256,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 if (parsed.Text != lastText || parsed.Reasoning != lastReasoning || parsed.Completed)
                 {
                     lastText = parsed.Text; lastReasoning = parsed.Reasoning;
-                    update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds));
+                    update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds) { CachedInputTokens = parsed.CachedInputTokens });
                 }
                 if (!parsed.Completed) continue;
                 if (provider.OpenCodeTools && workflow != null)
@@ -271,9 +272,14 @@ public sealed class OpenCodeEngine(HttpClient http)
                     .Select(x => ParseAssistant(x!, timer.Elapsed.TotalSeconds)).ToArray();
                 return new Completion(message, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds)
                 {
+                    CachedInputTokens = parsed.CachedInputTokens,
                     Usage = new(calls.Sum(x => (long)(x.InputTokens ?? ContextWindow.EstimateText(systemPrompt + prompt) + attachments.Count * 1000)),
                         calls.Sum(x => (long)(x.OutputTokens ?? ContextWindow.EstimateText(x.Text + x.Reasoning))),
                         calls.Any(x => !x.InputTokens.HasValue), calls.Any(x => !x.OutputTokens.HasValue))
+                    {
+                        CachedInputTokens = calls.All(x => x.CachedInputTokens.HasValue)
+                            ? calls.Sum(x => (long)x.CachedInputTokens!.Value) : null
+                    }
                 };
             }
         }
@@ -345,7 +351,7 @@ public sealed class OpenCodeEngine(HttpClient http)
     static string MessageId(JsonNode? message) => message?["info"]?["id"]?.GetValue<string>() ?? "";
     static bool IsAssistant(JsonNode? message) => string.Equals(message?["info"]?["role"]?.GetValue<string>(), "assistant", StringComparison.OrdinalIgnoreCase);
 
-    static (string Text, string Reasoning, int? InputTokens, int? OutputTokens, bool Completed, string Error) ParseAssistant(JsonNode message, double seconds)
+    static (string Text, string Reasoning, int? InputTokens, int? OutputTokens, int? CachedInputTokens, bool Completed, string Error) ParseAssistant(JsonNode message, double seconds)
     {
         var info = message["info"];
         var text = new StringBuilder(); var reasoning = new StringBuilder();
@@ -359,8 +365,9 @@ public sealed class OpenCodeEngine(HttpClient http)
         var tokens = info?["tokens"] ?? info?["metadata"]?["assistant"]?["tokens"];
         var input = Int(tokens?["input"]);
         var output = Int(tokens?["output"]);
+        var cachedInput = TokenCache.ReadCount((tokens as JsonObject)?["cache"] is JsonObject cache ? cache["read"] : null);
         var completed = info?["time"]?["completed"] != null || info?["finish"] != null || info?["metadata"]?["time"]?["completed"] != null;
         var error = info?["error"]?["data"]?["message"]?.GetValue<string>() ?? info?["error"]?["message"]?.GetValue<string>() ?? "";
-        return (text.ToString(), reasoning.ToString(), input, output, completed, error);
+        return (text.ToString(), reasoning.ToString(), input, output, cachedInput, completed, error);
     }
 }

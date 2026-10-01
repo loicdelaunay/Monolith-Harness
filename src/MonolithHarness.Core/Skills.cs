@@ -13,6 +13,7 @@ public static class Skills
     };
     public static IReadOnlyList<SkillDefinition> Available(IEnumerable<string>? projectRoots = null, int projectId = 0) => [.. All, .. new CustomSkills(CustomSkills.DefaultRoot, projectRoots, projectId).Definitions()];
     public static IReadOnlyList<SkillDefinition> All { get; } = [
+        new(ImageGenerationTools.SkillId, "Génération d’image", "Image generation", "Générer une image avec un modèle dédié local ou un fournisseur compatible avec l’API images, puis l’afficher et l’enregistrer.", "Generate an image with a dedicated local model or an image API provider, then display and save it.", ImageGenerationTools.Instructions),
         new(GitTools.SkillId, "Git", "Git", "État, différences, historique, branches, staging, commits et synchronisation Git avec autorisations.", "Git status, diffs, history, branches, staging, commits and synchronization with permissions.", GitTools.Instructions),
         new(FileIndexTools.SkillId, "File Index", "File Index", "Créer index.ohm pour naviguer dans les fichiers et dossiers, conserver leurs descriptions et les actualiser au fil des modifications.", "Create index.ohm to navigate files and folders, retain their descriptions and keep them current as files change.", FileIndexTools.Instructions),
         CompleteDesignSkill.Definition,

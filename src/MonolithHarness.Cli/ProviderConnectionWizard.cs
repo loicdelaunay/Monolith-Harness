@@ -9,23 +9,29 @@ public sealed class ProviderConnectionWizard(HttpClient http,
     Func<ConnectionStep, Task<string?>> prompt, Func<Provider, string, CancellationToken, Task<int>> save,
     Action<string>? progress = null)
 {
-    public static IReadOnlyList<ProviderPreset> Presets { get; } = [
+    public static IReadOnlyList<ProviderPreset> Presets { get; } = new ProviderPreset[] {
         new("openai", "OpenAI", "https://api.openai.com/v1", "openai", false),
         new("deepseek", "DeepSeek", "https://api.deepseek.com", "openai", false),
+    }.Concat(ProviderPresets.Cloud.Select(x => new ProviderPreset(x.Id, x.Name, x.BaseUrl, "openai", false))).Concat(new ProviderPreset[] {
         new("compatible", "Autre API compatible OpenAI / Other compatible API", "", "openai", true),
+        new("local-model", "Local · GGUF · Beta", "model/", "local", true),
         new("local", "API locale compatible OpenAI / Local compatible API", "", "openai", true),
         new("opencode", "OpenCode", "http://127.0.0.1:4096", "opencode", true)
-    ];
+    }).ToArray();
     public async Task<int?> RunAsync(CancellationToken ct)
     {
-        var type = await prompt(new("1/4 · Type de fournisseur / Provider type", Choices: Presets.Select(p => new Choice(p.Id, p.Name, p.Url)).ToList()));
+        var type = await prompt(new("1/4 · Type de fournisseur / Provider type", Choices: Presets.Select(p => new Choice(p.Id, p.Name,
+            ProviderPresets.Find(p.Id) is { } cloud ? cloud.DescriptionFr + " / " + cloud.DescriptionEn : p.Url)).ToList()));
         if (type == null) return null;
         var preset = Presets.Single(p => p.Id == type);
+        var cloudPreset = ProviderPresets.Find(preset.Id);
+        if (preset.Kind == "local") return await LocalAsync(ct);
         var draft = new Provider { Name = preset.Name.Split(" / ")[0], Kind = preset.Kind, BaseUrl = preset.Url, Model = "", Username = preset.Kind == "opencode" ? "opencode" : "" };
         // Credentials stay in memory until the final confirmation, including during discovery.
         var key = await prompt(new("2/4 · " + (draft.IsOpenCode ? "Mot de passe serveur / Server password" : "Clé API / API key"),
             preset.OptionalKey ? "Saisie masquée. Vide si aucune authentification. / Masked. Empty if no authentication."
-                : "Saisie masquée ; clé chiffrée après validation. / Masked; encrypted after confirmation.", Secret: true));
+                : "Saisie masquée ; clé chiffrée après validation. / Masked; encrypted after confirmation." +
+                    (cloudPreset == null ? "" : "\n" + cloudPreset.DescriptionFr + "\n" + cloudPreset.DescriptionEn + "\nClé API / API key: " + cloudPreset.KeysUrl), Secret: true));
         if (key == null) return null;
         while (!preset.OptionalKey && string.IsNullOrWhiteSpace(key))
         {
@@ -80,14 +86,15 @@ public sealed class ProviderConnectionWizard(HttpClient http,
             }
             if (mode == "manual")
             {
-                var value = await prompt(new("3/4 · Identifiants des modèles / Model IDs", "Un ou plusieurs modèles séparés par des virgules. OpenCode : fournisseur/modèle. / Comma-separated IDs. OpenCode: provider/model."));
+                var examples = cloudPreset?.SuggestedChatModels is { Count: > 0 } suggested ? "\nExemples documentés · accès non vérifié / Documented examples · access not verified: " + string.Join(", ", suggested) : "";
+                var value = await prompt(new("3/4 · Identifiants des modèles / Model IDs", "Un ou plusieurs modèles séparés par des virgules. OpenCode : fournisseur/modèle. / Comma-separated IDs. OpenCode: provider/model." + examples));
                 if (value == null) return null;
-                models = ProviderModels.Normalize(value.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+                models = ProviderModels.Normalize(value.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(x => ProviderPresets.NormalizeModelId(draft, x.Trim())));
             }
         }
         var active = models.Count == 1 ? models[0] : await prompt(new("3/4 · Modèle par défaut / Default model", "Tous les modèles seront disponibles via /models. / All models will be available via /models.", models.Select(m => new Choice(m, m)).ToList()));
         if (active == null) return null;
-        draft.Model = active;
+        ModelContexts.Select(draft, active);
         ProviderModels.Refresh(draft, models); ProviderModels.Select(draft, models);
         var name = await prompt(new("4/4 · Nom de cette connexion / Connection name", "Plusieurs connexions du même type sont possibles. / Multiple connections of the same type are supported.", Initial: draft.Name));
         if (name == null) return null;
@@ -98,5 +105,30 @@ public sealed class ProviderConnectionWizard(HttpClient http,
         if (decision != "save") return null;
         ct.ThrowIfCancellationRequested();
         return await save(draft, key, ct);
+    }
+
+    async Task<int?> LocalAsync(CancellationToken ct)
+    {
+        var path = await prompt(new("2/4 · Modèle local GGUF / Local GGUF model", "Chemin du fichier existant ; il sera copié dans model/ près de l’exécutable. / Existing file path; it will be copied to model/ next to the executable."));
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        path = path.Trim().Trim('"');
+        var backend = await prompt(new("3/4 · Calcul / Computing", Choices: [new("auto", "Auto"), new("cpu", "CPU"), new("vulkan", "Vulkan")]));
+        if (backend == null) return null;
+        var config = new LocalProviderSettings { Backend = backend };
+        var machine = await MachineCapabilities.ReadAsync(ct);
+        var estimate = LocalModelCompatibility.Estimate(path, "chat", "", new FileInfo(path.Trim().Trim('"')).Length, machine, backend: config.Backend);
+        if (!estimate.CanLoad) throw new InvalidOperationException(estimate.Reason);
+        var confirmation = await prompt(new("4/4 · Préparer Local / Prepare Local", machine.Summary + "\n\n" + estimate.Label + " · " + estimate.Reason +
+            "\nTélécharge le moteur officiel llama.cpp avec vérification SHA-256, importe le modèle et le charge. / Downloads the official llama.cpp engine with SHA-256 verification, imports and loads the model.",
+            Choices: [new("prepare", "Importer et charger / Import and load"), new("cancel", "Annuler / Cancel")]));
+        if (confirmation != "prepare") return null;
+        var updates = new Progress<LocalTransferProgress>(value => progress?.Invoke(value.Detail + (value.Percent is { } percent ? $" · {percent:0}%" : "")));
+        var model = await LocalModelImport.ImportAsync(path.Trim().Trim('"'), "chat", "", config, true, updates, ct); config.Add(model);
+        await LocalRuntimeInstaller.EnsureAsync(config, "chat", machine, updates, ct);
+        var draft = new Provider { Name = "Local", Kind = "local", BaseUrl = "http://127.0.0.1", Model = model.Id, SupportsImages = false, LocalModelsJson = config.Json() };
+        ModelContexts.MergeLocal(draft);
+        ProviderModels.Refresh(draft, [model.Id]); ProviderModels.Select(draft, [model.Id]);
+        progress?.Invoke("Chargement du modèle… / Loading model…"); using var ready = await LocalModelRuntime.ChatAsync(draft, ct);
+        return await save(draft, "", ct);
     }
 }

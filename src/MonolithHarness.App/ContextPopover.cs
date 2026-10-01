@@ -62,6 +62,9 @@ public sealed partial class MainWindow
         var lastCall = new StackPanel { Spacing = 10 }; var lastCallTitle = Text(13);
         lastCallTitle.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         lastCall.Children.Add(lastCallTitle); lastCall.Children.Add(exchange);
+        var cacheLine = Columns(); var cacheTitle = Text(12, true); var cacheValue = Text(13);
+        cacheLine.Children.Add(cacheTitle); Grid.SetColumn(cacheValue, 1); cacheLine.Children.Add(cacheValue);
+        lastCall.Children.Add(cacheLine);
         details.Children.Add(FluentDesign.Surface(lastCall, 12));
 
         var history = new StackPanel { Spacing = 8 };
@@ -98,6 +101,7 @@ public sealed partial class MainWindow
             var update = ActiveRun?.Update;
             var input = ActiveRun == null ? value.Input : update?.InputTokens;
             var output = ActiveRun == null ? value.Output : update?.OutputTokens;
+            var cachedInput = ActiveRun == null ? value.CachedInputTokens : update?.CachedInputTokens;
             var used = ActiveRun?.Context?.Tokens ?? (update != null ? (update.InputTokens ?? ActiveRun?.InputEstimate ?? value.Used) + (update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning)) : value.Used);
             var estimated = ActiveRun?.Context?.Estimated ?? (update == null ? value.Estimated : update.InputTokens == null || update.OutputTokens == null);
             var approximation = estimated ? "≈ " : "";
@@ -118,6 +122,13 @@ public sealed partial class MainWindow
             inputTitle.Text = WorkflowText("Entrée du modèle", "Model input");
             outputTitle.Text = WorkflowText("Sortie du modèle", "Model output");
             inputValue.Text = input?.ToString("N0") ?? "—"; outputValue.Text = output?.ToString("N0") ?? "—";
+            cacheTitle.Text = WorkflowText("Réutilisés depuis le cache", "Reused from cache");
+            cacheValue.Text = cachedInput?.ToString("N0") ?? WorkflowText("Non communiqué", "Not reported");
+            ToolTipService.SetToolTip(cacheLine, cachedInput.HasValue
+                ? WorkflowText("Tokens d’entrée réutilisés depuis le cache, déclarés par le fournisseur. Ils restent inclus dans le contexte.",
+                    "Input tokens reused from the cache, reported by the provider. They remain part of the context.")
+                : WorkflowText("Le fournisseur n’a pas communiqué les tokens réutilisés. Cette valeur n’est pas estimée.",
+                    "The provider has not reported reused tokens. This value is not estimated."));
             var missing = WorkflowText("Le fournisseur n’a pas encore communiqué cette valeur.", "The provider has not reported this value yet.");
             ToolTipService.SetToolTip(inputValue, input == null ? missing : null);
             ToolTipService.SetToolTip(outputValue, output == null ? missing : null);

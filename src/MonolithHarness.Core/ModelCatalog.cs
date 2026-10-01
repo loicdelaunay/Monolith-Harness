@@ -2,8 +2,14 @@ namespace MonolithHarness.Core;
 
 public static class ModelCatalog
 {
-    public static List<string> GetModelsForProvider(Provider? provider) => provider == null ? [] :
-        ProviderModels.Normalize(ProviderModels.Available(provider).Concat(ProviderModels.Visible(provider)));
+    public static List<string> GetModelsForProvider(Provider? provider)
+    {
+        if (provider == null) return [];
+        var available = ProviderModels.Available(provider);
+        var examples = available.Count == 0 && !provider.IsLocal && !provider.IsOpenCode && !provider.IsComposite
+            ? ProviderPresets.Resolve(provider.BaseUrl)?.SuggestedChatModels ?? [] : [];
+        return ProviderModels.Normalize(available.Concat(ProviderModels.Visible(provider)).Concat(examples));
+    }
 
     public static int? GetDefaultContextLimit(string model)
     {

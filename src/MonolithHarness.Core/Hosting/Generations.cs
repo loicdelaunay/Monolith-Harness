@@ -112,14 +112,14 @@ public sealed partial class HarnessService
                     if (update.CompatibilityNotice.Length > 0) active.CompatibilityNotice = update.CompatibilityNotice;
                     run.ExportProgress = new(active.Id, update);
                     speedTracker.AddSample(update.Seconds, update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning));
-                    active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.Seconds = update.Seconds;
+                    active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
                     bool modelOutput = update.HasModelOutput || update.Text.Length > 0 || update.Reasoning.Length > 0 || update.OutputTokens > 0;
                     if ((sawModelOutput || !modelOutput) && (DateTime.UtcNow - lastUpdate).TotalMilliseconds < 80) return;
                     sawModelOutput |= modelOutput;
                     lastUpdate = DateTime.UtcNow;
                     // The stdout writer serializes events; blocking here preserves ordering without unobserved tasks.
                     emit(new { @event = "stream", chatId = chat.Id, messageId = active.Id, text = update.Text, reasoning = update.Reasoning,
-                        html = Html(update.Text), speed = update.TokensPerSecond, compatibilityNotice = active.CompatibilityNotice,
+                        html = Html(update.Text), speed = update.TokensPerSecond, compatibilityNotice = active.CompatibilityNotice, cachedInputTokens = update.CachedInputTokens,
                         speedMin = speedTracker.MinSpeed, speedMax = speedTracker.MaxSpeed, speedAverage = speedTracker.AverageSpeed,
                         speedEstimated = !update.OutputTokens.HasValue,
                         tokens = (update.InputTokens ?? input) + (update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning)),
@@ -132,8 +132,8 @@ public sealed partial class HarnessService
                         emit(new { @event = "status", chatId = chat.Id, text = progress.Caption(options.Language, 0), contextPreload = progress }).GetAwaiter().GetResult());
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 lastUpdate = DateTime.MinValue;
-                Update(new GenerationUpdate(active.Content, completion.Message["reasoning_content"]?.GetValue<string>() ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds));
-                active.WireJson = completion.Message.ToJsonString(); active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
+                Update(new GenerationUpdate(active.Content, completion.Message["reasoning_content"]?.GetValue<string>() ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens });
+                active.WireJson = completion.Message.ToJsonString(); active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
                 if (provider.IsOpenCode) active.State = "complete";
                 await emit(new { @event = "message", chatId = chat.Id, message = MessageView(active) });
                 var results = new List<Message>();

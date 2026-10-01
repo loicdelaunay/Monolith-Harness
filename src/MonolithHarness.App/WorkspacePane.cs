@@ -1488,6 +1488,7 @@ public sealed partial class MainWindow
         }
         RagTools.AddDefinitions(definitions, project.GetSourceFolders().Count > 0, state.EnabledSkills);
         AssetTools.AddDefinitions(definitions, state.EnabledSkills);
+        ImageGenerationTools.AddDefinitions(definitions, state.EnabledSkills);
         VisionBridge.AddDefinitions(definitions, state.EnabledSkills);
         PythonTools.AddDefinitions(definitions, state.EnabledSkills);
         if (Skills.Enabled(state.EnabledSkills, "terminal")) Add("run_terminal", "Requests user approval before executing a shell command in the attached project folder (PowerShell on Windows, zsh on macOS). Each invocation is a new session, 30 second default timeout, configurable up to 600 seconds. The command runs with the user's OS privileges.", new() { ["command"] = StringProperty() }, "command");

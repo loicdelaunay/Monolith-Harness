@@ -24,14 +24,14 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
     static JsonObject Obj(object value) => (JsonSerializer.SerializeToNode(value, Json) as JsonObject)!;
     HarnessDb Db() => new(database);
     public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); }
-    static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.BaseUrl, p.Model, p.ContextLimit, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, hasKey = p.ProtectedKey.Length > 0 };
+    static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, hasKey = p.ProtectedKey.Length > 0 };
     static string Html(string text)
     {
         var document = Markdig.Markdown.Parse(text, Markdown);
         LocalFileLinks.Decorate(document);
         return CodeHighlight.Html(Markdig.Markdown.ToHtml(document, Markdown));
     }
-    static object MessageView(Message m) => new { m.Id, m.ChatId, m.Role, m.Content, m.State, m.InputTokens, m.OutputTokens, m.Seconds, m.CompatibilityNotice,
+    static object MessageView(Message m) => new { m.Id, m.ChatId, m.Role, m.Content, m.State, m.InputTokens, m.OutputTokens, m.CachedInputTokens, m.Seconds, m.CompatibilityNotice,
         canBranch = m.State is "complete" or "compacted" && m.Role is "user" or "assistant" && (string.IsNullOrEmpty(m.WireJson) || JsonNode.Parse(m.WireJson)?["tool_calls"] is not JsonArray { Count: > 0 }),
         html = Html(m.Content), reasoning = string.IsNullOrEmpty(m.WireJson) ? "" : JsonNode.Parse(m.WireJson)?["reasoning_content"]?.GetValue<string>() ?? "",
         attachments = m.Attachments.Select(x => new { x.Name, x.Mime, data = Convert.ToBase64String(x.Data) }) };
@@ -140,7 +140,15 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                     if(provider.Id==0)db.Providers.Add(provider);await db.SaveChangesAsync(ct);return ProviderView(provider);
                 }
                 provider.BaseUrl = S(p, "baseUrl").TrimEnd('/'); _ = ChatEngine.Endpoint(provider.BaseUrl, "models");
-                provider.Model = S(p, "model"); provider.ContextLimit = Math.Clamp(I(p, "contextLimit", 128000), 1024, 10_000_000);
+                ModelContexts.Select(provider, S(p, "model"));
+                if (p["modelContextsJson"] != null) provider.ModelContextsJson = S(p, "modelContextsJson", "{}");
+                if (B(p, "contextAutomatic")) ModelContexts.SetOverride(provider, null);
+                else if (p["contextLimit"] != null && p["modelContextsJson"] == null) ModelContexts.SetOverride(provider, I(p, "contextLimit"));
+                if (provider.IsLocal)
+                {
+                    provider.LocalModelsJson = LocalProviderSettings.Read(S(p, "localModelsJson", provider.LocalModelsJson)).Json();
+                }
+                ModelContexts.MergeLocal(provider); ModelContexts.Sync(provider);
                 provider.SupportsImages = B(p, "supportsImages", true); provider.Username = S(p, "username", "opencode");
                 provider.AutoStart = B(p, "autoStart"); provider.OpenCodeTools = B(p, "openCodeTools"); provider.ExecutablePath = S(p, "executablePath");
                 if (B(p, "deleteKey")) provider.ProtectedKey = [];
@@ -158,9 +166,15 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
                     timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                    if (!selected.IsOpenCode) return await new ChatEngine(http).ModelsAsync(selected, secret, timeout.Token);
-                    await EnsureOpenCode(selected, secret, Path.GetDirectoryName(database)!, timeout.Token);
-                    return (await new OpenCodeEngine(http).ModelsAsync(selected, secret, null, timeout.Token)).Select(x => x.Reference);
+                    List<string> models;
+                    if (!selected.IsOpenCode) models = await new ChatEngine(http).ModelsAsync(selected, secret, timeout.Token);
+                    else
+                    {
+                        await EnsureOpenCode(selected, secret, Path.GetDirectoryName(database)!, timeout.Token);
+                        models = (await new OpenCodeEngine(http).ModelsAsync(selected, secret, null, timeout.Token)).Select(x => x.Reference).ToList();
+                    }
+                    await db.SaveChangesAsync(ct);
+                    return models;
                 }
             case "state.save":
                 var state = await db.States.SingleAsync(ct);

@@ -39,6 +39,8 @@ public sealed partial class TerminalUi
                 foreach (var image in message.Attachments) rendered.Add(new("▧ " + image.Name, "muted"));
                 if (message.Role == "assistant" && message.State != "streaming" && message.Seconds > 0)
                     rendered.Add(new(L("Durée : ", "Duration: ") + $"{message.Seconds:0.#} s", "muted"));
+                if (message.Role == "assistant" && message.State != "streaming" && message.CachedInputTokens is { } cachedTokens)
+                    rendered.Add(new(L("Tokens réutilisés (cache) : ", "Reused tokens (cache): ") + cachedTokens.ToString("N0"), "muted"));
                 rendered.Add(new("", "muted"));
                 cached = (message, reasoning, width, showDetails, rendered); lineCache[key] = cached;
             }

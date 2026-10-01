@@ -1,6 +1,9 @@
 name: Release packages
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 permissions:
   contents: read
 jobs:
@@ -65,3 +68,20 @@ jobs:
           path: artifacts/TEMP/release-packages/CLI/*
           if-no-files-found: error
           compression-level: 0
+  releases:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, fedora]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/TEMP/downloaded-packages
+      - name: Prepare and publish both releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 build/publish-github-release.py

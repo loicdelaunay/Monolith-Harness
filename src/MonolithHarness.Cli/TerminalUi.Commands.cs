@@ -191,8 +191,34 @@ public sealed partial class TerminalUi
         var selected = await Prompt("Fournisseurs / Providers", choices: snapshot.Providers.Select(p => new Choice(p.Id.ToString(), p.Name, p.Model)).Append(new("new", "+ Ajouter / Add")).ToList());
         if (selected == "new") { await Connect(); return; } if (selected == null) return;
         int id = int.Parse(selected); var provider = snapshot.Providers.Single(p => p.Id == id);
-        var action = await Prompt(provider.Name, provider.BaseUrl, [new("models", "Modèles / Models"), new("key", "Modifier la clé / Change key"), new("delete", "Supprimer / Delete")]);
+        var action = await Prompt(provider.Name, provider.BaseUrl, [new("models", "Modèles / Models"), new("context", "Contexte par modèle / Context per model"), new("key", "Modifier la clé / Change key"), new("delete", "Supprimer / Delete")]);
         if (action == "models") { await Models(snapshot, id); return; }
+        if (action == "context")
+        {
+            var model = await Prompt(L("Contexte du modèle", "Model context"), choices: ProviderModels.Visible(provider).Select(m =>
+                new Choice(m, m, $"{ModelContexts.For(provider, m).Limit:N0} tokens")).ToList());
+            if (model == null) return;
+            var info = ModelContexts.For(provider, model);
+            var mode = await Prompt(model, info.MaximumTokens is int maximum
+                ? L($"Maximum communiqué : {maximum:N0} tokens", $"Reported maximum: {maximum:N0} tokens")
+                : L($"Maximum non communiqué · repli estimé : {ModelContexts.Fallback(provider, model):N0} tokens", $"Maximum not reported · estimated fallback: {ModelContexts.Fallback(provider, model):N0} tokens"),
+                [new("auto", "Capacité maximale automatique / Automatic maximum"), new("custom", "Limite personnalisée / Custom limit")]);
+            if (mode == null) return;
+            int? limit = null;
+            if (mode == "custom")
+            {
+                var value = await Prompt(L("Limite en tokens", "Token limit"), initial: info.Limit.ToString());
+                if (value == null) return;
+                var ceiling = Math.Min(info.MaximumTokens ?? ModelContexts.Ceiling(provider), ModelContexts.Ceiling(provider));
+                if (!int.TryParse(value, out int count) || count < 1024 || count > ceiling)
+                { await Show(L("Limite invalide", "Invalid limit"), $"1024 – {ceiling:N0} tokens"); return; }
+                limit = count;
+            }
+            await using var contextDb = client.OpenDb();
+            var entity = await contextDb.Providers.SingleAsync(p => p.Id == id);
+            ModelContexts.SetOverride(entity, limit, model); await contextDb.SaveChangesAsync();
+            await Refresh(); Post(() => View(chatId).Limit = 0); return;
+        }
         if (action == "key")
         {
             var key = await Prompt("Clé API / API key", "Vide = supprimer la clé / Empty = remove key", secret: true); if (key == null) return;

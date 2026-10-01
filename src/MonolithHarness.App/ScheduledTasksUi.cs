@@ -144,7 +144,12 @@ public sealed partial class MainWindow
             var choices = ProviderModels.Visible(selected);
             model.ItemsSource = choices;
             model.SelectedItem = choices.FirstOrDefault();
-            if (!editing) { context.Value = selected.ContextLimit; images.IsChecked = selected.SupportsImages; }
+            if (!editing) { context.Value = ModelContexts.For(selected, model.SelectedItem as string).Limit; images.IsChecked = selected.SupportsImages; }
+        };
+        model.SelectionChanged += (_, _) =>
+        {
+            if (!editing && connection.SelectedItem is Provider selected && model.SelectedItem is string id)
+                context.Value = ModelContexts.For(selected, id).Limit;
         };
         async Task Reload()
         {

@@ -9,25 +9,21 @@ public sealed record ContextRequestProgress(ContextRequestStage Stage, int Estim
 {
     public string Caption(string language, double elapsedSeconds)
     {
-        var culture = CultureInfo.GetCultureInfo(language == "en" ? "en-US" : "fr-FR");
-        return (language == "en" ? "Preloading context" : "Préchargement du contexte") +
+        var culture = Culture(language);
+        return Label(language) +
             " · ≈ " + EstimatedTokens.ToString("N0", culture) + " tokens · " + ToolActivity.Duration(elapsedSeconds);
     }
-    public string StageDescription(string language) => language == "en" ? Stage switch
+    public string Label(string language) => Text(language, "Chargement du modèle", "Loading model", "Modell wird geladen", "Cargando modelo") + " · " + StageDescription(language);
+    public string StageDescription(string language) => Stage switch
     {
-        ContextRequestStage.Preparing => "Preparing the request",
-        ContextRequestStage.Sending => "Sending / connecting to the provider",
-        _ => "Waiting for the first output tokens"
-    } : Stage switch
-    {
-        ContextRequestStage.Preparing => "Préparation de la requête",
-        ContextRequestStage.Sending => "Envoi / connexion au fournisseur",
-        _ => "Attente des premiers tokens de sortie"
+        ContextRequestStage.Preparing => Text(language, "Préparation", "Preparation", "Vorbereitung", "Preparación"),
+        ContextRequestStage.Sending => Text(language, "Envoi", "Sending", "Senden", "Envío"),
+        _ => Text(language, "Attente des premiers tokens", "Waiting for first tokens", "Warten auf erste Tokens", "Esperando los primeros tokens")
     };
     public string Details(string language, int contextLimit, double elapsedSeconds)
     {
         bool english = language == "en";
-        var culture = CultureInfo.GetCultureInfo(english ? "en-US" : "fr-FR");
+        var culture = Culture(language);
         var size = PayloadBytes is { } bytes ? "\n" + (english ? "Request size: " : "Taille de la requête : ") +
             (bytes >= 1024 * 1024 ? (bytes / (1024d * 1024)).ToString("0.#", culture) + (english ? " MB" : " Mo") : (bytes / 1024d).ToString("0.#", culture) + (english ? " KB" : " Ko")) : "";
         return (english ? "Stage: " : "Phase : ") + StageDescription(language) +
@@ -35,6 +31,8 @@ public sealed record ContextRequestProgress(ContextRequestStage Stage, int Estim
             " / " + contextLimit.ToString("N0", culture) + " tokens" +
             "\n" + MessageCount.ToString("N0", culture) + (english ? " messages in the request, including instructions and tool results." : " messages dans la requête, instructions et résultats d’outils compris.") + size +
             "\n" + (english ? "Elapsed wait: " : "Attente écoulée : ") + ToolActivity.Duration(elapsedSeconds) +
-            "\n\n" + (english ? "The wait can include context processing or the provider queue. The API does not report internal progress or current cache state. Token count also includes tool definitions and is an estimate." : "L’attente peut inclure le traitement du contexte ou la file d’attente du fournisseur. L’API ne fournit pas de progression interne ni l’état actuel du cache. Le nombre de tokens inclut aussi les définitions d’outils et reste une estimation.");
+            "\n\n" + (english ? "These are the request stages, not evidence of a model restart. The wait can include context processing or the provider queue. The API does not report internal progress. Reused tokens are shown after the response when reported by the provider. The estimated context includes tool definitions." : "Ces phases décrivent la requête, sans indiquer un redémarrage du modèle. L’attente peut inclure le traitement du contexte ou la file d’attente du fournisseur. L’API ne fournit pas de progression interne. Les tokens réutilisés sont affichés après la réponse si le fournisseur les communique. Le contexte estimé inclut les définitions d’outils.");
     }
+    static CultureInfo Culture(string language) => CultureInfo.GetCultureInfo(language switch { "en" => "en-US", "de" => "de-DE", "es" => "es-ES", _ => "fr-FR" });
+    static string Text(string language, string fr, string en, string de, string es) => language switch { "en" => en, "de" => de, "es" => es, _ => fr };
 }

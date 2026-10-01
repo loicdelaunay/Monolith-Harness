@@ -27,7 +27,7 @@ public sealed class ProviderCompatibility
         if (NoTools) payload.Remove("tools");
         foreach (var message in payload["messages"]!.AsArray().OfType<JsonObject>())
         {
-            if (NoThinking) message.Remove("reasoning_content");
+            if (NoThinking) { message.Remove("reasoning_content"); message.Remove("reasoning"); message.Remove("reasoning_details"); }
             if (NoTools)
             {
                 message.Remove("tool_calls"); message.Remove("tool_call_id");
@@ -43,7 +43,7 @@ public sealed class ProviderCompatibility
     {
         var text = error.ToLowerInvariant();
         if (!NoThinking && deepSeek && (text.Contains("reasoning_content") || text.Contains("thinking mode"))) { NoThinking = true; Notice = "Compatibilité : raisonnement désactivé pour reprendre cet historique."; return true; }
-        if (!NoEffort && text.Contains("reasoning_effort")) { NoEffort = true; Notice = "Compatibilité : niveau de raisonnement non pris en charge, valeur automatique utilisée."; return true; }
+        if (!NoEffort && (text.Contains("reasoning_effort") || text.Contains("reasoning") && text.Contains("effort"))) { NoEffort = true; Notice = "Compatibilité : niveau de raisonnement non pris en charge, valeur automatique utilisée."; return true; }
         if (!NoUsage && (text.Contains("stream_options") || text.Contains("include_usage"))) { NoUsage = true; Notice = "Compatibilité : comptage des tokens estimé."; return true; }
         var unsupported = text.Contains("not support") || text.Contains("unsupported") || text.Contains("not allowed") || text.Contains("invalid content") || text.Contains("does not have");
         if (!NoImages && unsupported && (text.Contains("image") || text.Contains("vision"))) { DisableImages(); return true; }

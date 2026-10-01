@@ -581,7 +581,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
                         if (update.Retry is { } retry) { SetRunStatus(run, retry.Describe(run.Options.Language)); return; }
                         run.ExportProgress = new(active.Id, update);
 
-                        active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.Seconds = update.Seconds;
+                        active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
 
                         ModelProgress(run, update);
                         var tokens = update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning);
@@ -677,7 +677,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
 
-            active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
+            active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
 
             active.WireJson = completion.Message.ToJsonString(); active.State = "complete";
 
@@ -690,12 +690,13 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
             assistantUi.UpdateContent(active.Content);
 
             assistantUi.SetDuration(completion.Seconds, active.CompletedUtc);
+            assistantUi.SetCachedInputTokens(completion.CachedInputTokens);
 
             var reasoning = completion.Message["reasoning_content"]?.GetValue<string>();
 
             if (!string.IsNullOrEmpty(reasoning)) assistantUi.UpdateThinking(reasoning, true);
 
-            UpdateMetrics(run, new(active.Content, reasoning ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds), inputEstimate);
+            UpdateMetrics(run, new(active.Content, reasoning ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens }, inputEstimate);
 
             await db.SaveChangesAsync(ct);
 

@@ -13,7 +13,14 @@ namespace MonolithHarness.App;
 static class ChatPathMenus
 {
     sealed record LinkTarget(string Path);
-    sealed class PointerState { public string? Path; public bool SecondaryPress; public bool MenuShown; }
+    sealed class PointerState
+    {
+        public string? Path;
+        public bool SecondaryPress;
+        public bool MenuShown;
+        public bool Attached;
+        public Func<string, MenuFlyout>? CreateMenu;
+    }
     static readonly ConditionalWeakTable<Hyperlink, LinkTarget> targets = new();
     static readonly ConditionalWeakTable<TextBlock, PointerState> pointers = new();
 
@@ -45,10 +52,15 @@ static class ChatPathMenus
     static void AttachText(TextBlock text, Func<string, MenuFlyout> createMenu)
     {
         var state = pointers.GetOrCreateValue(text);
+        state.CreateMenu = createMenu;
+        foreach (var link in Links(text.Inlines))
+            if (!owners.TryGetValue(link, out _)) owners.Add(link, text);
+        if (state.Attached) return;
+        state.Attached = true;
         void ShowMenu(string path, Windows.Foundation.Point? position)
         {
             state.MenuShown = true;
-            var menu = createMenu(path);
+            var menu = state.CreateMenu!(path);
             menu.Closed += (_, _) => state.MenuShown = false;
             if (position is { } point) menu.ShowAt(text, new FlyoutShowOptions { Position = point });
             else menu.ShowAt(text);
@@ -98,10 +110,6 @@ static class ChatPathMenus
             args.Handled = true;
             ShowMenu(path, args.TryGetPosition(text, out var point) ? point : null);
         };
-        foreach (var link in Links(text.Inlines))
-        {
-            owners.Add(link, text);
-        }
     }
 
     static readonly ConditionalWeakTable<Hyperlink, TextBlock> owners = new();

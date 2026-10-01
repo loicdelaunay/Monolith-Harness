@@ -46,6 +46,21 @@ public static partial class UiText
         return english;
     }
     const string LocaleData = """
+    Automatic maximum capacity|Automatische maximale Kapazität|Capacidad máxima automática
+    Automatic|Automatisch|Automático
+    Custom|Benutzerdefiniert|Personalizado
+    Limit for this model (tokens)|Limit für dieses Modell (Tokens)|Límite para este modelo (tokens)
+    Select a model.|Wählen Sie ein Modell.|Selecciona un modelo.
+    Model:|Modell:|Modelo:
+    Reported maximum: {0:N0} tokens.|Gemeldetes Maximum: {0:N0} Tokens.|Máximo comunicado: {0:N0} tokens.
+    Maximum not reported. Estimated fallback: {0:N0} tokens; change it in custom mode.|Kein Maximum gemeldet. Geschätzter Ersatzwert: {0:N0} Tokens, im benutzerdefinierten Modus änderbar.|Máximo no comunicado. Valor alternativo estimado: {0:N0} tokens; se puede cambiar en modo personalizado.
+    The provider reports an input token limit.|Der Anbieter meldet ein Limit für Eingabetokens.|El proveedor indica un límite de tokens de entrada.
+    The engine's supported limit is lower.|Das vom System unterstützte Limit ist niedriger.|El límite admitido por el motor es inferior.
+    Model context|Modellkontext|Contexto del modelo
+    Context|Kontext|Contexto
+    Thinking|Denken|Razonamiento
+    Context information|Kontextinformationen|Información del contexto
+    Window declared in GGUF metadata. Available memory may require a lower limit.|In den GGUF-Metadaten angegebenes Kontextfenster. Der verfügbare Speicher kann ein niedrigeres Limit erfordern.|Ventana indicada en los metadatos GGUF. La memoria disponible puede requerir un límite menor.
     Enter the project name.|Geben Sie den Projektnamen ein.|Introduce el nombre del proyecto.
     Choose folders only:|Wählen Sie nur Ordner:|Elige solo carpetas:
     Compare multiple detectors for signs of AI-generated text.|Vergleichen Sie mehrere Detektoren auf Hinweise auf KI-generierte Texte.|Compara varios detectores para identificar señales de texto generado por IA.
@@ -1074,5 +1089,30 @@ public static partial class UiText
     Trigger at {0:0}% → target {1:0}%. The automatic target includes instructions, tools, summary and retained exchanges.|Auslösung bei {0:0} % → Ziel {1:0} %. Das automatische Ziel umfasst Anweisungen, Werkzeuge, Zusammenfassung und beibehaltene Nachrichten.|Activación al {0:0} % → objetivo {1:0} %. El objetivo automático incluye instrucciones, herramientas, resumen e intercambios conservados.
     Automatic compaction disabled. Manual history target: at most {0:0}%.|Automatische Komprimierung deaktiviert. Ziel für den manuell komprimierten Verlauf: höchstens {0:0} %.|Compactación automática desactivada. Objetivo del historial manual: como máximo {0:0} %.
     Automatic compaction at {0}% · target {1}%. Configure in Settings > Compaction. This operation consumes tokens.|Automatische Komprimierung bei {0} % · Ziel {1} %. Einstellbar unter Einstellungen > Kontextkomprimierung. Dieser Vorgang verbraucht Tokens.|Compactación automática al {0} % · objetivo {1} %. Configúrala en Ajustes > Compactación. Esta operación consume tokens.
+    Reused tokens (cache):|Wiederverwendete Tokens (Cache):|Tokens reutilizados (caché):
+    Reused from cache|Aus dem Cache wiederverwendet|Reutilizados de la caché
+    Not reported|Nicht gemeldet|No comunicado
+    Input tokens reused from the cache, reported by the provider. They remain part of the context.|Vom Anbieter gemeldete, aus dem Cache wiederverwendete Eingabe-Tokens. Sie bleiben Teil des Kontexts.|Tokens de entrada reutilizados de la caché, comunicados por el proveedor. Siguen formando parte del contexto.
+    The provider has not reported reused tokens. This value is not estimated.|Der Anbieter hat keine wiederverwendeten Tokens gemeldet. Dieser Wert wird nicht geschätzt.|El proveedor no ha comunicado los tokens reutilizados. Este valor no se estima.
+    Search models or providers…|Modelle oder Anbieter suchen…|Buscar modelos o proveedores…
+    Search models|Modelle suchen|Buscar modelos
+    Show enabled models|Aktivierte Modelle anzeigen|Mostrar modelos activados
+    Enable models in Settings > Providers.|Aktiviere Modelle unter Einstellungen > Anbieter.|Activa modelos en Ajustes > Proveedores.
+    {0} enabled models · choose a suggestion or press Enter.|{0} aktivierte Modelle · Vorschlag auswählen oder Eingabetaste drücken.|{0} modelos activados · elige una sugerencia o pulsa Intro.
+    No matching model. Try another name or provider.|Kein passendes Modell. Versuche einen anderen Namen oder Anbieter.|No hay modelos coincidentes. Prueba otro nombre o proveedor.
+    {0} matching models|{0} passende Modelle|{0} modelos coincidentes
+    · Showing 50 suggestions; refine your search.|· Es werden 50 Vorschläge angezeigt; grenze die Suche ein.|· Se muestran 50 sugerencias; precisa la búsqueda.
+    Refresh models|Modelle aktualisieren|Actualizar modelos
+    Find your model and adjust thinking for your task.|Finde dein Modell und passe das Denkniveau an deine Aufgabe an.|Encuentra tu modelo y ajusta el razonamiento a tu tarea.
+    Choices saved immediately.|Auswahl wird sofort gespeichert.|Las opciones se guardan de inmediato.
+    No model selected|Kein Modell ausgewählt|Ningún modelo seleccionado
+    Requests brief thinking to favor speed.|Fordert kurzes Nachdenken für höhere Geschwindigkeit an.|Solicita un razonamiento breve para priorizar la rapidez.
+    Requests a balance between thinking and speed.|Fordert ein Gleichgewicht zwischen Nachdenken und Geschwindigkeit an.|Solicita un equilibrio entre razonamiento y rapidez.
+    Requests deeper thinking for complex tasks.|Fordert tieferes Nachdenken für komplexe Aufgaben an.|Solicita un razonamiento profundo para tareas complejas.
+    Requests a response without extended reasoning.|Fordert eine Antwort ohne erweitertes Nachdenken an.|Solicita una respuesta sin razonamiento extendido.
+    Uses the model's default thinking level.|Verwendet das voreingestellte Denkniveau des Modells.|Utiliza el nivel de razonamiento predeterminado del modelo.
+    Support for thinking levels depends on the provider and model.|Die Unterstützung der Denkniveaus hängt vom Anbieter und Modell ab.|La compatibilidad de los niveles de razonamiento depende del proveedor y del modelo.
+    Refreshing models…|Modelle werden aktualisiert…|Actualizando modelos…
+    {0} models available for {1}.|{0} Modelle für {1} verfügbar.|{0} modelos disponibles para {1}.
     """;
 }
