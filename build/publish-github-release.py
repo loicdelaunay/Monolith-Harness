@@ -50,6 +50,18 @@ def main():
     cli = ET.parse(root / "src/MonolithHarness.Cli/MonolithHarness.Cli.csproj").findtext(".//Version")
     if gui != version or cli != version:
         raise RuntimeError("Both application versions must match the release tag.")
+    if os.environ.get("RELEASE_ARTIFACT_RUN"):
+        repo = os.environ["GH_REPO"]
+        run = json.loads(gh("api", f"repos/{repo}/actions/runs/{os.environ['RELEASE_ARTIFACT_RUN']}").stdout)
+        ref = json.loads(gh("api", f"repos/{repo}/git/ref/tags/{tag}").stdout)["object"]
+        for _ in range(4):
+            if ref["type"] == "commit":
+                break
+            if ref["type"] != "tag":
+                raise RuntimeError("Unexpected release tag target.")
+            ref = json.loads(gh("api", f"repos/{repo}/git/tags/{ref['sha']}").stdout)["object"]
+        if ref["type"] != "commit" or run["head_sha"] != ref["sha"] or run["path"] != ".github/workflows/release-packages.yml":
+            raise RuntimeError("Artifacts must come from the build of this exact version tag.")
     notes = root / f"docs/releases/{tag}.md"
     if not notes.is_file():
         raise RuntimeError("Release notes are missing.")
@@ -86,17 +98,18 @@ def main():
 
     # Both drafts exist and both uploads pass validation before either becomes public.
     for channel, release_tag, assets in channels:
-        endpoint = f"repos/{os.environ['GH_REPO']}/releases/tags/{release_tag}"
-        probe = gh("api", endpoint, allow_failure=True)
+        probe = gh("release", "view", release_tag, "--json", "isDraft,apiUrl", allow_failure=True)
         if not probe.returncode:
-            if not json.loads(probe.stdout)["draft"]:
+            if not json.loads(probe.stdout)["isDraft"]:
                 raise RuntimeError(f"Refusing to replace an already published release: {release_tag}")
-        elif "HTTP 404" in probe.stderr:
+        elif "HTTP 404" in probe.stderr or "release not found" in probe.stderr.lower():
             gh("release", "create", release_tag, "--draft", "--verify-tag", "--title", f"Monolith Harness {channel} {version}", "--notes-file", str(notes))
         else:
             raise RuntimeError(probe.stderr.strip())
         gh("release", "upload", release_tag, *(str(path) for path in assets), "--clobber")
-        release = json.loads(gh("api", endpoint).stdout)
+        # The REST /releases/tags endpoint only exposes published releases; use the draft's ID.
+        metadata = json.loads(gh("release", "view", release_tag, "--json", "apiUrl").stdout)
+        release = json.loads(gh("api", metadata["apiUrl"]).stdout)
         remote = {item["name"]: item for item in release["assets"]}
         if set(remote) != {path.name for path in assets}:
             raise RuntimeError(f"Unexpected release assets: {release_tag}")

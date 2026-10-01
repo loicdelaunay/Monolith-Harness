@@ -1,0 +1,41 @@
+name: Finish release
+on:
+  push:
+    tags:
+      - 'publish-v*'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find the completed build for this version
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISH_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${PUBLISH_TAG#publish-}"
+          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          run_id="$(gh api "repos/$GH_REPO/actions/runs?branch=$version&event=push&per_page=100" --jq '[.workflow_runs[] | select(.path == ".github/workflows/release-packages.yml" and .status == "completed")] | max_by(.id).id')"
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/TEMP/downloaded-packages
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+          pattern: MonolithHarness-*
+      - name: Verify the artifacts and publish both drafts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.source.outputs.version }}
+          RELEASE_ARTIFACT_RUN: ${{ steps.source.outputs.run_id }}
+        run: python3 build/publish-github-release.py
