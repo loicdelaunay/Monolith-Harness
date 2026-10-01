@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.45.2 - 2026-10-02
+
+- Fixes SQLite rollback of the local-model, cached-token and per-model context migrations. Returning to an older schema and upgrading again no longer fails on an unsupported EF table-rebuild operation; normal forward upgrades keep their existing behavior.
+
 ## 1.45.1 - 2026-10-02
 
 - Compacts the GUI Model and thinking panel with a narrower responsive width, smaller spacing and inputs, an inline thinking selector and a context editor on two short rows. Removes repeated explanatory labels from this popup; thinking guidance moves to a tooltip, and context detection details remain available from an information button. Automatic/custom limits, model autocomplete and the accent Done action remain accessible.

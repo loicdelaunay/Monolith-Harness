@@ -18,5 +18,6 @@ public sealed class ModelContextsMigration : Migration
               AND ContextLimit <> 128000 AND NOT (Kind = 'local' AND ContextLimit = 8192);
             """);
     }
-    protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.DropColumn(name: "ModelContextsJson", table: "Providers");
+    // The bundled SQLite can remove this unindexed column without EF's target-model rebuild.
+    protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("ALTER TABLE Providers DROP COLUMN ModelContextsJson;");
 }

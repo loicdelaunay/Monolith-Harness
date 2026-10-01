@@ -4,15 +4,15 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.45.1**; portable data remains compatible with existing workspaces.
+**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.45.2**; portable data remains compatible with existing workspaces.
 
 Installations up to 1.29.1 need a one-time manual update to the new launcher before using subsequent automatic updates. Keep your database and resources. See the [update guide](docs/cli.md#github-updates).
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.1">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.1">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.2">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.2">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -26,11 +26,11 @@ Installations up to 1.29.1 need a one-time manual update to the new launcher bef
 
 Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.1) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.1) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.2) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.2) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
-Version **1.45.1** is available as GUI and CLI downloads for Windows x64 and Fedora Linux x64. macOS publications are temporarily paused. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
+Version **1.45.2** is available as GUI and CLI downloads for Windows x64 and Fedora Linux x64. macOS publications are temporarily paused. Both interfaces include GitHub update checks; the CLI also offers an independent font/size picker with bundled **VT323**, **Share Tech Mono** and **Space Mono**. GUI Settings → About and CLI `/update` can download a verified compatible release and restart while preserving portable data. See the [font and update guide](docs/cli.md#cli-themes-fonts-and-crt).
 
 The chat model itself is **not** bundled: cloud providers need network access and, depending on the service, an API key. Git, Docker/Podman, OpenCode, and Chrome MCP are optional integrations with their own prerequisites. The core app does not require a separate Monolith Harness server.
 
@@ -79,9 +79,9 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 ## New in the current downloads
 
-**New in 1.45.1:** a compact **Model and thinking** panel with autocomplete, inline thinking selection and model-specific context limits. Automatic context uses the maximum reported by your API when available; refresh models to detect capacities. Context details stay accessible via an information button. Reused tokens appear with reply duration and time, tool bubbles show live progress, and adjacent Markdown sections support continuous text selection.
+**New in 1.45.2:** a compact **Model and thinking** panel with autocomplete, inline thinking selection and model-specific context limits. Automatic context uses the maximum reported by your API when available; refresh models to detect capacities. Context details stay accessible via an information button. Reused tokens appear with reply duration and time, tool bubbles show live progress, and adjacent Markdown sections support continuous text selection.
 
-**New since 1.40.0:** providers **OpenRouter, Groq, Google Gemini, Mistral, Z.ai and NVIDIA NIM**, **Local · Beta** with GGUF import and optional Hugging Face downloads, and an **Image generation · Beta** skill using a selected provider/model. Local model compatibility is estimated from machine characteristics; optional runtimes and models download separately. See [local models and images](docs/local-models-and-images.md), [cloud providers](docs/cloud-providers.md) and the [1.45.1 release guide](docs/releases/v1.45.1.md).
+**New since 1.40.0:** providers **OpenRouter, Groq, Google Gemini, Mistral, Z.ai and NVIDIA NIM**, **Local · Beta** with GGUF import and optional Hugging Face downloads, and an **Image generation · Beta** skill using a selected provider/model. Local model compatibility is estimated from machine characteristics; optional runtimes and models download separately. See [local models and images](docs/local-models-and-images.md), [cloud providers](docs/cloud-providers.md) and the [1.45.2 release guide](docs/releases/v1.45.2.md).
 
 **New in 1.40.0:** **Tools → Preview** opens local images, TXT and Markdown from chat links or compatible attachments in the right workspace pane. Real **Raw / Preview** tabs offer rendered Markdown, image fit/zoom, original decoded text or hexadecimal bytes, copy and refresh. File reads and decoding run in the background, with pagination, size limits and cancellation. See the [Preview guide](docs/file-preview.md).
 
@@ -133,7 +133,7 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 **Since 1.9.0:** the complete-design skill helps guide projects from discovery through implementation and testing; browser access choices now persist with other skills; the GUI question tool has a clearer step-by-step choice card; and the CLI logo follows the selected theme. Current GUI and CLI archives are available for Windows x64 and Fedora Linux x64. Linux archives use `.tar.gz` to preserve executable permissions; see the [Fedora guide](docs/fedora.md). The [Mac guide](docs/macos.md) covers historical releases and source builds while publication is paused.
 
-Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.45.1 and CLI v1.45.1** package the same shared engine for Windows x64 and Linux x64.
+Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0), the source has gained the following updates. **GUI v1.45.2 and CLI v1.45.2** package the same shared engine for Windows x64 and Linux x64.
 
 - **Response styles:** DEFAULT, SHORT, PRAGMATIC, DETAILED and FUN, shared between GUI General settings and CLI `/settings`.
 - **CLI editing:** selection, word navigation, copy/cut/paste and undo/redo; ordinary Backspace deletes one character.
@@ -145,7 +145,7 @@ Since the [GUI v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/
 - **Fresh portable workspaces:** launching the executable in a new folder creates fresh data instead of importing previous AppData conversations.
 - **Guided work:** Complete design coordinates questions, choices, implementation, optional subagents and verification; the GUI question card presents one decision at a time.
 
-See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.45.1.
+See the [full changelog](CHANGELOG.md) for version-by-version details. All current GUI and CLI downloads include changes through v1.45.2.
 
 ## Built-in skills — one click to enable
 
@@ -195,7 +195,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.1), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.1) for a terminal workspace. The 1.45.1 archives cover Windows x64 and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.2), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.2) for a terminal workspace. The 1.45.2 archives cover Windows x64 and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its skills folder beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.

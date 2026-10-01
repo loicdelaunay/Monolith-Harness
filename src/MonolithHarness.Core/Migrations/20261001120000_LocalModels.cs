@@ -9,5 +9,7 @@ namespace MonolithHarness.Core.Migrations;
 public sealed class LocalModels : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder) => migrationBuilder.AddColumn<string>(name: "LocalModelsJson", table: "Providers", type: "TEXT", nullable: false, defaultValue: "{}");
-    protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.DropColumn(name: "LocalModelsJson", table: "Providers");
+    // This hand-written migration has no target model for EF's SQLite table rebuild.
+    // The bundled SQLite supports dropping this unindexed column directly.
+    protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("ALTER TABLE Providers DROP COLUMN LocalModelsJson;");
 }
