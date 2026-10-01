@@ -11,7 +11,12 @@ public sealed partial class MainWindow
         var config = FeatureSettings.Read(state.FeaturesJson);
         var panel = new StackPanel { Spacing = 12 };
         var enabled = new CheckBox { IsChecked = config.AutoNameConversations };
-        panel.Children.Add(FluentDesign.Setting(WorkflowText("Nommer automatiquement les nouvelles conversations", "Automatically name new conversations"), WorkflowText("Après la première réponse. Le modèle choisi reçoit un extrait textuel et peut consommer des tokens. Le nommage reste accessible par clic droit quand cette option est désactivée.", "After the first response. The selected model receives a text excerpt and may consume tokens. Manual AI naming stays available in the context menu."), enabled));
+        panel.Children.Add(FluentDesign.Setting(WorkflowText("Nommer automatiquement les nouvelles conversations", "Automatically name new conversations"), WorkflowText("Le modèle choisi reçoit un extrait textuel et peut consommer des tokens. Le nommage manuel reste accessible par clic droit.", "The selected model receives a text excerpt and may consume tokens. Manual naming remains available in the context menu."), enabled));
+        var timing = new ComboBox { Header = WorkflowText("Quand nommer la conversation", "When to name the conversation"), ItemsSource = new[] { WorkflowText("Dès le premier message de l’utilisateur", "After the first user message"), WorkflowText("Après la fin de la première réponse", "After the first response finishes") }, SelectedIndex = config.AutoNamingTiming == "first-message" ? 0 : 1, HorizontalAlignment = HorizontalAlignment.Stretch };
+        timing.IsEnabled = enabled.IsChecked == true;
+        enabled.Checked += (_, _) => timing.IsEnabled = true;
+        enabled.Unchecked += (_, _) => timing.IsEnabled = false;
+        panel.Children.Add(timing);
         var providers = db.Providers.Local.Where(p => !p.IsComposite).ToList();
         var provider = new ComboBox { Header = WorkflowText("Fournisseur de nommage", "Naming provider"), ItemsSource = providers, SelectedItem = providers.FirstOrDefault(p => p.Id == config.NamingProviderId), HorizontalAlignment = HorizontalAlignment.Stretch };
         var model = new ComboBox { Header = WorkflowText("Modèle de nommage", "Naming model"), IsEditable = true, Text = config.NamingModel, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -28,6 +33,7 @@ public sealed partial class MainWindow
         logs.Unchecked += (_, _) => level.IsEnabled = days.IsEnabled = false;
         level.IsEnabled = days.IsEnabled = logs.IsChecked == true;
         return (panel, logPanel, settings => {
+            settings.AutoNamingTiming = timing.SelectedIndex == 0 ? "first-message" : "first-response";
             settings.AutoNameConversations = enabled.IsChecked == true; settings.NamingProviderId = (provider.SelectedItem as Provider)?.Id ?? 0; settings.NamingModel = SettingsModelPicker.Read(model);
             settings.LogsEnabled = logs.IsChecked == true; settings.LogLevel = level.SelectedItem as string ?? "Information";
             settings.LogRetentionDays = double.IsFinite(days.Value) ? Math.Clamp((int)days.Value, 1, 365) : 7;

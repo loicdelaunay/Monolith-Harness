@@ -31,6 +31,13 @@ public sealed class FeatureSettings
     public string GoalInstructions(int chatId) => ChatGoals.TryGetValue(chatId, out var goal) && !string.IsNullOrWhiteSpace(goal)
         ? "\nUSER GOAL FOR THIS CONVERSATION: " + goal + "\nWork towards this goal, follow subsequent user instructions, and report when it is achieved.\n" : "";
     public int FontZoomPercent { get; set; } = 100;
+    public string ChatMessageDensity { get; set; } = "normal";
+    public string RenderingGpuPreference { get; set; } = "auto";
+    public bool ShowAttentionSection { get; set; } = true;
+    public bool AutoArchiveConversations { get; set; }
+    public int AutoArchiveDays { get; set; } = 30;
+    public bool AutoDeleteConversations { get; set; }
+    public int AutoDeleteDays { get; set; } = 45;
     public string InterfaceFont { get; set; } = "";
     public string UserMessageFont { get; set; } = "";
     public string AssistantMessageFont { get; set; } = "";
@@ -65,6 +72,7 @@ public sealed class FeatureSettings
     public string VisionModel { get; set; } = "";
     public string VisionInstruction { get; set; } = "";
     public bool VisionComponents { get; set; }
+    public string AutoNamingTiming { get; set; } = "first-response";
     public bool AutoNameConversations { get; set; }
     public int NamingProviderId { get; set; }
     public string NamingModel { get; set; } = "";
@@ -100,6 +108,10 @@ public sealed class FeatureSettings
             throw new ArgumentException("Objectif de conversation invalide / Invalid conversation goal.");
         if (CustomThemes == null || CustomThemes.Count > 50 || CustomThemes.Any(x => !AppearanceThemes.IsValidCustom(x)) || CustomThemes.Select(x => x.Id).Distinct().Count() != CustomThemes.Count)
             throw new ArgumentException("Thèmes personnalisés invalides / Invalid custom themes.");
+        if (ChatMessageDensity is not ("compact" or "normal" or "spacious") || RenderingGpuPreference is not ("auto" or "high-performance" or "power-saving") || AutoNamingTiming is not ("first-message" or "first-response"))
+            throw new ArgumentException("Densité, GPU ou moment du nommage invalide / Invalid density, GPU or naming timing.");
+        if (AutoArchiveDays is < 1 or > 3650 || AutoDeleteDays is < 1 or > 3650 || AutoArchiveConversations && AutoDeleteConversations && AutoDeleteDays <= AutoArchiveDays)
+            throw new ArgumentException("La suppression doit survenir après l’archivage, avec des délais de 1 à 3650 jours / Deletion must follow archiving, with delays from 1 to 3650 days.");
         ResponseStyle = ResponseStyles.Get(ResponseStyle).Id;
         if (new[] { InterfaceFont, UserMessageFont, AssistantMessageFont }.Any(font => font == null || font.Length > 100 || font.Any(char.IsControl)))
             throw new ArgumentException("Police d’interface invalide / Invalid interface font.");

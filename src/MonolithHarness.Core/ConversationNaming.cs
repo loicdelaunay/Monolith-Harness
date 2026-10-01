@@ -5,6 +5,7 @@ namespace MonolithHarness.Core;
 
 public static class ConversationNaming
 {
+    public static bool At(FeatureSettings config, string timing) => config.AutoNameConversations && config.AutoNamingTiming == timing;
     public static async Task<string?> RenameAsync(string database, int chatId, HttpClient http,
         Func<byte[], CancellationToken, Task<string>> decrypt, bool automatic, CancellationToken ct)
     {
@@ -16,12 +17,14 @@ public static class ConversationNaming
         using var consumption = TokenConsumption.Begin(database, "naming", await db.Projects.AsNoTracking().SingleAsync(x => x.Id == chat.ProjectId, ct), chat);
         if (automatic && chat.Title is not ("Nouvelle conversation" or "New conversation")) return null;
         var userCount = await db.Messages.CountAsync(m => m.ChatId == chatId && m.Role == "user", ct);
-        if (automatic && userCount != 1) return null;
+        if (automatic && userCount == 0) return null;
+        if (automatic && config.AutoNamingTiming == "first-response" && !await db.Messages.AnyAsync(m => m.ChatId == chatId && m.Role == "assistant" && m.State == "complete" && m.Content != "", ct)) return null;
         var provider = await db.Providers.AsNoTracking().SingleOrDefaultAsync(p => p.Id == config.NamingProviderId, ct);
         if (provider == null || provider.IsComposite || string.IsNullOrWhiteSpace(config.NamingModel))
             throw new InvalidOperationException("Choisissez un fournisseur et un modèle de nommage dans Général / Choose a naming model in Settings.");
-        var excerpts = await db.Messages.AsNoTracking().Where(m => m.ChatId == chatId && (m.Role == "user" || m.Role == "assistant")).OrderBy(m => m.Id)
-            .Take(4).Select(m => new { m.Role, m.Content }).ToListAsync(ct);
+        var firstMessageOnly = automatic && config.AutoNamingTiming == "first-message";
+        var excerpts = await db.Messages.AsNoTracking().Where(m => m.ChatId == chatId && m.State == "complete" && (m.Role == "user" || !firstMessageOnly && m.Role == "assistant")).OrderBy(m => m.Id)
+            .Take(firstMessageOnly ? 1 : 4).Select(m => new { m.Role, m.Content }).ToListAsync(ct);
         if (excerpts.Count == 0) throw new InvalidOperationException("Envoyez un message avant de nommer cette conversation / Send a message first.");
         var content = string.Join("\n", excerpts.Select(m => m.Role + ": " + m.Content[..Math.Min(1800, m.Content.Length)]));
         provider.Model = config.NamingModel; provider.OpenCodeTools = false;

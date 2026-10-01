@@ -100,13 +100,13 @@ internal static partial class FluentDesign
     public static Border MessageSurface(UIElement? content, string role, bool error = false)
     {
         var prefix = role switch { "user" => "User", "tool" => "Tool", _ => "Assistant" };
-        return new Border
+        return ChatDensity.Track(new Border
         {
             Child = content, Background = Resource(prefix + "MessageFillBrush"),
             BorderBrush = Resource(error ? "ToolMessageErrorStrokeBrush" : prefix + "MessageStrokeBrush"),
             BorderThickness = new(1), CornerRadius = new(12), Padding = new(16),
             Margin = new(0), HorizontalAlignment = HorizontalAlignment.Stretch
-        };
+        }, "surface");
     }
 
     public static Border Surface(UIElement child, double padding = 20) => new()

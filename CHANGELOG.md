@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.40.0 - 2026-10-01
+
+- Tools adds Preview in the right workspace pane, with real Raw and Preview tabs. Clicking a local PNG/JPEG/WebP/GIF/BMP/ICO, TXT or Markdown file in the chat opens it directly; attached images and compatible text attachments use the same pane. Existing right-click OS, browser and containing-folder actions remain available, with an additional Preview action for compatible files.
+- Preview renders Markdown headings, lists, tables and code, plain text and images with fit/zoom controls. Local Markdown image references are rendered when readable inside the document's directory. Raw shows the original decoded text or paginated hexadecimal bytes and image metadata. The pane also offers a file picker, refresh, raw copy and file actions.
+- File reads, text decoding, image conversion and Markdown parsing run in the background. Text and binary pages, image size limits, bounded Markdown rendering, cancellation on navigation and request revisions keep large or stale previews from blocking the chat. No scripts are executed and embedded remote images are not fetched.
+
+## 1.39.0 - 2026-10-01
+
+- GUI and CLI show “Préchargement du contexte / Preloading context” before the first actual output tokens, with an estimated context size and elapsed wait. GUI tooltips describe request preparation, sending/connection and waiting for output, message count and encoded request size when known. These are observed client stages, not a provider prefill percentage or cache status.
+- The indicator switches to reasoning or response activity on the first meaningful text, reasoning or tool-call fragment. Empty role/heartbeat chunks keep the preloading state. New requests and automatic retries restart their wait counter; switching conversations preserves the associated request state. Generation token/speed accounting is unchanged.
+
+## 1.38.0 - 2026-10-01
+
+- Appearance adds Compact / Normal / Spacious chat density, controlling text size, line height, message spacing and bubble padding, including displayed history. Lists no longer add duplicate blank lines. Shift+Enter uses the native multiline editor once.
+- Automatic conversation naming can start after the first user message or after the first completed response, with the timing shared by GUI and CLI.
+- General settings add a switchable Needs attention section above pinned conversations and a Windows rendering GPU preference (system choice, high performance or power saving), applied to the current executable after restart.
+- Tool results show their measured execution duration and retain it in history. The current tool chip shows a concise description from its arguments and an elapsed-time counter.
+- Optional automatic archival and deletion of archived conversations use configurable total inactivity delays (30 and 45 days by default). They are disabled initially and run at startup and hourly while the GUI is open. Displayed, pinned, favorite, running or pending conversations are preserved; deletion removes conversation-owned records.
+
 ## 1.37.0 - 2026-09-30
 
 - Translator and proofreader editors synchronize after changes rather than polling continuously. Formatted paste is processed in bounded batches, with stack-safe traversal and explicit size/complexity errors that preserve existing text. Redundant editor replacements and layout changes are avoided to keep windows responsive and prevent blinking.

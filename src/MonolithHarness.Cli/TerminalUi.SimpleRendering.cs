@@ -80,7 +80,8 @@ public sealed partial class TerminalUi
             catch (JsonException) { }
         }
         if (visibleAgents > 0) DrawAgents(canvas, view, agents, left, agentTop, bodyWidth, visibleAgents, p, appearance.Border == TerminalBorder.Ascii, compactAgents);
-        string status = connectionProgress.Length > 0 ? connectionProgress : view.Status.Length > 0 ? view.Status : notice;
+        string status = connectionProgress.Length > 0 ? connectionProgress : view.ContextRequest is { } preload
+            ? preload.Caption(workspace?.State.Language ?? "fr", Math.Max(0, (DateTimeOffset.UtcNow - view.ContextRequestStarted).TotalSeconds)) : view.Status.Length > 0 ? view.Status : notice;
         bool busy = Running(chatId) || pendingOperations > 0;
         canvas.Write(left, statusTop, (busy ? "◐◓◑◒"[(frame / 3) % 4] + " " : "") + status, busy ? p.Highlight : p.Dim, bodyWidth);
         var pendingImages = attachments.GetValueOrDefault(chatId, []);

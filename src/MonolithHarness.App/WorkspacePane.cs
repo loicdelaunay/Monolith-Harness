@@ -344,6 +344,7 @@ public sealed partial class MainWindow
         });
         toolTabs.AddTab(T("Fichiers"), filePanel);
         toolTabs.AddTab("Assets", BuildAssetsPane());
+        toolTabs.AddTab("Preview", BuildFilePreviewPane());
         toolTabs.SelectionChanged += async (_, _) => { SyncBrowserPresentation(); if (browserVisible) await Guard(ActivateToolAsync); };
         Grid.SetRow(toolTabs, 1); container.Children.Add(toolTabs);
         browserPanel.Child = container; Grid.SetColumn(browserPanel, 1); workspace.Children.Add(browserPanel);
@@ -385,6 +386,7 @@ public sealed partial class MainWindow
     void ResetWorkspaceTools()
     {
         ResetAssetPreview();
+        ResetFilePreview();
         lastGitPreview = null;
         gitLoading.Visibility = filesLoading.Visibility = Visibility.Collapsed;
         fileRevision++;

@@ -32,6 +32,8 @@ public sealed partial class MainWindow
         consumption.Click += async (_, _) => await Guard(ShowConsumptionAsync); menu.Items.Add(consumption);
         var detector = new MenuFlyoutItem { Text = "AI Generated detector", Icon = FluentDesign.Icon("\uE9F5") };
         detector.Click += async (_, _) => await Guard(ShowAiDetectorAsync); menu.Items.Add(detector);
+        var preview = new MenuFlyoutItem { Text = "Preview", Icon = FluentDesign.Icon("\uE8A5") };
+        preview.Click += async (_, _) => await Guard(() => ShowToolAsync(PreviewToolIndex)); menu.Items.Add(preview);
         var tools = new DropDownButton { Content = WorkflowText("Outils", "Tools"), Flyout = menu, FontSize = 12, Padding = new(8, 8, 8, 8) };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tools, WorkflowText("Outils dédiés", "Dedicated tools"));
         row.Children.Add(scheduled); Grid.SetColumn(tools, 1); row.Children.Add(tools);

@@ -46,6 +46,17 @@ public sealed class TaskSchedulerService(string database, Func<ScheduledTask, Ca
     readonly SemaphoreSlim tickGate = new(1, 1);
     readonly CancellationTokenSource lifetime = new();
     FileStream? lease;
+    public async Task<bool> TryRunMaintenanceAsync(Func<Task> operation)
+    {
+        if (!await tickGate.WaitAsync(0)) return false;
+        try
+        {
+            if (!running.IsEmpty) return false;
+            await operation();
+            return true;
+        }
+        finally { tickGate.Release(); }
+    }
     public async Task RunMaintenanceAsync(Func<Task> operation)
     {
         await tickGate.WaitAsync();

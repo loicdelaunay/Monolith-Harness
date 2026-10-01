@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     void ApplyAppearance()
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
+        ChatDensity.Configure(config.ChatMessageDensity);
         AppTypography.Configure(config);
         AppTypography.SetScope(composer, FontArea.User);
         TextZoom.Set(config.FontZoomPercent);

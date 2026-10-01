@@ -18,6 +18,33 @@ public sealed partial class MainWindow
     readonly HashSet<int> failedUnreadChats = [];
     sealed record SidebarRow(Chat Chat, Button Button, TextBlock Title, TextBlock Age, TextBlock Status, StackPanel Naming, BusySpinner Spinner, ProgressBar Progress);
     readonly List<SidebarRow> independentChatRows = [];
+    readonly StackPanel attentionNavigation = new() { Spacing = 4, Visibility = Visibility.Collapsed };
+    readonly List<SidebarRow> attentionSidebarRows = [];
+    string attentionSidebarSignature = "";
+
+    void RefreshAttentionSection()
+    {
+        var settings = FeatureSettings.Read(state.FeaturesJson);
+        var ids = pendingChatAttention.Keys.Concat(failedUnreadChats).ToHashSet();
+        var items = settings.ShowAttentionSection ? navigationChats.Select(CurrentSidebarChat).Where(x => ids.Contains(x.Id) && MatchesSidebarSearch(x)).OrderByDescending(x => x.UpdatedUtc).ThenByDescending(x => x.Id).ToList() : [];
+        var signature = settings.ShowAttentionSection + "|" + state.Language + "|" + string.Join(",", items.Select(x => x.Id));
+        if (attentionSidebarSignature == signature) return;
+        attentionSidebarSignature = signature;
+        foreach (var row in attentionSidebarRows) independentChatRows.Remove(row);
+        attentionSidebarRows.Clear(); attentionNavigation.Children.Clear();
+        attentionNavigation.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (items.Count == 0) return;
+        var heading = Label(WorkflowText($"Attention requise ({items.Count})", $"Needs attention ({items.Count})"), 12);
+        heading.Foreground = FluentDesign.Secondary; heading.Margin = new(8, 4, 0, 6);
+        attentionNavigation.Children.Add(heading);
+        foreach (var item in items)
+        {
+            var button = BuildIndependentChatRow(item, true);
+            attentionSidebarRows.Add(independentChatRows[^1]);
+            attentionNavigation.Children.Add(button);
+        }
+        attentionNavigation.Margin = new(0, 0, 0, 12);
+    }
 
     void PruneSidebarActivity()
     {
@@ -94,6 +121,7 @@ public sealed partial class MainWindow
 
     void RefreshIndependentChatRows()
     {
+        RefreshAttentionSection();
         foreach (var row in independentChatRows)
         {
             var item = CurrentSidebarChat(row.Chat);

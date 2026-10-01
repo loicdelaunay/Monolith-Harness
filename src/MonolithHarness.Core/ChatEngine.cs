@@ -9,6 +9,7 @@ public record GenerationUpdate(string Text, string Reasoning, int? InputTokens, 
 {
     public string CompatibilityNotice { get; init; } = "";
     public RetryProgress? Retry { get; init; }
+    public bool HasModelOutput { get; init; }
     public double TokensPerSecond => (OutputTokens ?? Math.Ceiling((Text.Length + Reasoning.Length) / 4d)) / Math.Max(.1, Seconds);
 }
 public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens, double Seconds)
@@ -36,14 +37,20 @@ public sealed class ChatEngine(HttpClient http)
         return data?["data"]?.AsArray().Select(x => x?["id"]?.GetValue<string>() ?? "").Where(x => x.Length > 0).Order().ToList() ?? [];
     }
     public Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
-        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null) =>
-        RequestRetry.RunAsync(() => TokenConsumption.TrackAsync(provider, ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools),
-            progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, reasoningEffort), update), retrySettings, ct,
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null,
+        Action<ContextRequestProgress>? requestProgress = null)
+    {
+        var inputEstimate = ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools);
+        return RequestRetry.RunAsync(() => TokenConsumption.TrackAsync(provider, inputEstimate,
+            progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, reasoningEffort, inputEstimate, requestProgress), update), retrySettings, ct,
             retry => update(new("", "", null, null, 0) { Retry = retry }));
+    }
 
     async Task<Completion> StreamOnceAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
-        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort)
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort, int inputEstimate, Action<ContextRequestProgress>? requestProgress)
     {
+        var progress = new ContextRequestProgress(ContextRequestStage.Preparing, inputEstimate, messages.Count);
+        requestProgress?.Invoke(progress);
         var payload = new JsonObject { ["model"] = provider.Model, ["messages"] = messages.DeepClone(), ["stream"] = true,
             ["stream_options"] = new JsonObject { ["include_usage"] = true } };
         if (tools.Count > 0) payload["tools"] = tools.DeepClone();
@@ -60,6 +67,8 @@ public sealed class ChatEngine(HttpClient http)
             using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint(provider.BaseUrl, "chat/completions"));
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
             request.Content = new StringContent(actual.ToJsonString(), Encoding.UTF8, "application/json");
+            progress = progress with { Stage = ContextRequestStage.Sending, PayloadBytes = request.Content.Headers.ContentLength };
+            requestProgress?.Invoke(progress);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!response.IsSuccessStatusCode)
             {
@@ -77,6 +86,7 @@ public sealed class ChatEngine(HttpClient http)
                 if ((int)response.StatusCode is 400 or 422 && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase))) continue;
                 throw new HttpRequestException($"API : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {detail}", null, response.StatusCode);
             }
+            requestProgress?.Invoke(progress with { Stage = ContextRequestStage.AwaitingOutput });
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
             compatibility[compatibilityKey] = profile.Copy();
             return await ParseStreamAsync(reader, value => update(value with { CompatibilityNotice = compatibilityNotice }), ct);
@@ -93,6 +103,7 @@ public sealed class ChatEngine(HttpClient http)
         {
             if (data == "[DONE]") { finished = true; return; }
             var chunk = JsonNode.Parse(data)!;
+            bool hasModelOutput = false;
             if (chunk["error"] != null) throw new IOException("Le fournisseur a renvoyé une erreur dans le flux.");
             if (chunk["usage"] is JsonObject usage)
             {
@@ -107,6 +118,7 @@ public sealed class ChatEngine(HttpClient http)
                     if (!timer.IsRunning) timer.Start();
                     text.Append(delta["content"]?.GetValue<string>());
                     reasoning.Append(delta["reasoning_content"]?.GetValue<string>());
+                    if (delta["content"]?.GetValue<string>() is { Length: > 0 } || delta["reasoning_content"]?.GetValue<string>() is { Length: > 0 } || delta["tool_calls"] is JsonArray { Count: > 0 }) hasModelOutput = true;
                     if (delta["tool_calls"] is JsonArray fragments)
                         foreach (var fragment in fragments)
                         {
@@ -120,7 +132,7 @@ public sealed class ChatEngine(HttpClient http)
                         }
                 }
             }
-            update(new(text.ToString(), reasoning.ToString(), input, output, timer.Elapsed.TotalSeconds));
+            update(new(text.ToString(), reasoning.ToString(), input, output, timer.Elapsed.TotalSeconds) { HasModelOutput = hasModelOutput });
         }
         while (await reader.ReadLineAsync(ct) is { } line)
         {

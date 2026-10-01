@@ -27,17 +27,33 @@ public sealed class MarkdownRenderer
 
     readonly Func<string, Task>? openFile;
     readonly Func<string, MenuFlyout>? fileMenu;
-    sealed class RenderState { public List<string> Keys = []; }
+    sealed class RenderState
+    {
+        public List<string> Keys = [];
+        public string Density = "", Markdown = "";
+        public Func<string, Task>? OpenFile;
+        public Func<string, MenuFlyout>? FileMenu;
+    }
+    static readonly List<WeakReference<Panel>> renderedPanels = [];
+    public static void RefreshDensity()
+    {
+        renderedPanels.RemoveAll(x => !x.TryGetTarget(out _));
+        foreach (var reference in renderedPanels.ToArray())
+            if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state))
+                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu);
+    }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
     MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null) { this.openFile = openFile; this.fileMenu = fileMenu; }
     public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null)
     {
         markdown ??= "";
-        var state = states.GetOrCreateValue(container);
+        if (!states.TryGetValue(container, out var state))
+        { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
+        state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;
         var blocks = MarkdownPipelineHelper.Parse(markdown);
         var keys = blocks.Select(block => markdown.Substring(block.Span.Start, block.Span.Length)).ToList();
         int shared = 0;
-        while (shared < keys.Count && shared < state.Keys.Count && shared < container.Children.Count && keys[shared] == state.Keys[shared]) shared++;
+        while (state.Density == ChatDensity.Id && shared < keys.Count && shared < state.Keys.Count && shared < container.Children.Count && keys[shared] == state.Keys[shared]) shared++;
         // Build changed blocks off-tree, then replace only those blocks. Already completed
         // paragraphs keep their visual objects, selection and scroll position during streaming.
         var replacements = new List<UIElement>();
@@ -47,7 +63,7 @@ public sealed class MarkdownRenderer
             var blockPanel = new StackPanel { Spacing = 4 };
             if (CanJoinText(block))
             {
-                var flow = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Primary, FontSize = 14.5, LineHeight = 22 };
+                var flow = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight };
                 renderer.AppendText(block, flow, 0); blockPanel.Children.Add(flow);
             }
             else if (renderer.RenderBlock(block) is { } element) blockPanel.Children.Add(element);
@@ -61,9 +77,67 @@ public sealed class MarkdownRenderer
             else container.Children.Add(replacements[i]);
         }
         while (container.Children.Count > keys.Count) container.Children.RemoveAt(container.Children.Count - 1);
-        state.Keys = keys;
+        state.Keys = keys; state.Density = ChatDensity.Id;
         AppTypography.Apply(container);
     }
+    /// <summary>Paginated file rendering with cancellation and UI yields between blocks.</summary>
+    public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,
+        Func<string, MenuFlyout> fileMenu, Func<string, Task<FrameworkElement?>> imagePreview, CancellationToken ct)
+    {
+        var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown), ct);
+        ct.ThrowIfCancellationRequested();
+        var renderer = new MarkdownRenderer(openFile, fileMenu);
+        int imageCount = 0, blockCount = 0;
+        foreach (var block in blocks)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (blockCount >= 400)
+            {
+                target.Children.Add(new TextBlock { Text = T("La suite de cette page est disponible dans Raw."), Foreground = FluentDesign.Secondary, TextWrapping = TextWrapping.Wrap });
+                break;
+            }
+            var nodes = PreviewNodes(block).Take(1201).ToArray();
+            var panel = new StackPanel { Spacing = 6 };
+            // Avoid thousands of native controls for pathological tables or highlighted code.
+            if (nodes.Length > 1200 || block is FencedCodeBlock && block.Span.Length > 8000)
+                panel.Children.Add(new TextBlock { Text = markdown.Substring(block.Span.Start, block.Span.Length), IsTextSelectionEnabled = true,
+                    FontFamily = new FontFamily("Cascadia Code, Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Primary });
+            else if (CanJoinText(block))
+            {
+                var text = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+                    Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight };
+                renderer.AppendText(block, text, 0); panel.Children.Add(text);
+            }
+            else if (renderer.RenderBlock(block) is { } element) panel.Children.Add(element);
+            ChatPathMenus.Attach(panel, fileMenu);
+            target.Children.Add(panel);
+            foreach (var link in nodes.OfType<LinkInline>().Where(x => x.IsImage && !string.IsNullOrWhiteSpace(x.Url)))
+            {
+                if (imageCount >= 12) break;
+                imageCount++;
+                var image = await imagePreview(link.Url!);
+                ct.ThrowIfCancellationRequested();
+                if (image != null) panel.Children.Add(image);
+            }
+            if (++blockCount % 8 == 0) await Task.Delay(1, ct);
+        }
+        ct.ThrowIfCancellationRequested();
+        AppTypography.Apply(target);
+    }
+    static IEnumerable<Markdig.Syntax.MarkdownObject> PreviewNodes(Markdig.Syntax.MarkdownObject root)
+    {
+        var pending = new Stack<Markdig.Syntax.MarkdownObject>(); pending.Push(root);
+        while (pending.TryPop(out var node))
+        {
+            yield return node;
+            if (node is ContainerBlock blocks)
+                foreach (var child in blocks.Reverse()) pending.Push(child);
+            else if (node is LeafBlock { Inline: { } inline }) pending.Push(inline);
+            else if (node is ContainerInline inlines)
+                foreach (var child in inlines.Reverse()) pending.Push(child);
+        }
+    }
+
     public static void RenderPathText(TextBlock target, string text, Func<string, Task> openFile, Func<string, MenuFlyout> fileMenu)
     {
         var renderer = new MarkdownRenderer(openFile, fileMenu);
@@ -116,7 +190,7 @@ public sealed class MarkdownRenderer
                 if (textFlow == null)
                 {
                     textFlow = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
-                        Foreground = FluentDesign.Primary, FontSize = 14.5, LineHeight = 22 };
+                        Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight };
                     container.Children.Add(textFlow);
                 }
                 AppendText(block, textFlow, 0);
@@ -139,7 +213,11 @@ public sealed class MarkdownRenderer
         if (block is ParagraphBlock paragraph || block is HeadingBlock)
         {
             var p = new Span();
-            if(flow.Inlines.Count > 0) flow.Inlines.Add(new LineBreak());
+            if (flow.Inlines.Count > 0)
+            {
+                flow.Inlines.Add(new LineBreak());
+                if (depth == 0) flow.Inlines.Add(new LineBreak());
+            }
             if(depth > 0) p.Inlines.Add(new Run { Text = new string(' ', depth * 2) });
             if (prefix.Length > 0) p.Inlines.Add(new Run { Text = prefix, Foreground = Brush(130, 175, 245) });
             if (block is HeadingBlock heading)
@@ -151,7 +229,6 @@ public sealed class MarkdownRenderer
             }
             else if (((ParagraphBlock)block).Inline is { } inline) RenderInlines(inline, p.Inlines);
             flow.Inlines.Add(p);
-            flow.Inlines.Add(new LineBreak());
         }
         else if (block is ListBlock list)
         {
@@ -250,8 +327,8 @@ public sealed class MarkdownRenderer
             IsTextSelectionEnabled = true,
             TextWrapping = TextWrapping.Wrap,
             Foreground = FluentDesign.Primary,
-            FontSize = 14.5,
-            LineHeight = 22,
+            FontSize = ChatDensity.FontSize,
+            LineHeight = ChatDensity.LineHeight,
             Margin = new Thickness(0, 2, 0, 4)
         };
 
@@ -424,7 +501,7 @@ public sealed class MarkdownRenderer
             Margin = new Thickness(0, 2, 0, 6)
         };
 
-        int index = 1;
+        int index = int.TryParse(list.OrderedStart, out var start) ? start : 1;
         foreach (var item in list)
         {
             if (item is ListItemBlock listItem)
@@ -585,7 +662,17 @@ public sealed class MarkdownRenderer
                 break;
 
             case LinkInline link:
-                if (link.IsImage)
+                if (link.IsImage && LocalFileLinks.PathFromUrl(link.Url) is string imagePath && openFile != null)
+                {
+                    var imageLink = new Hyperlink { Foreground = Brush(120, 175, 255), UnderlineStyle = UnderlineStyle.Single };
+                    if (fileMenu != null) ChatPathMenus.Register(imageLink, imagePath);
+                    imageLink.Click += async (_, _) => { if (!ChatPathMenus.IsSecondaryPress(imageLink)) await openFile(imagePath); };
+                    imageLink.Inlines.Add(new Run { Text = "🖼 " });
+                    if (link.FirstChild != null) RenderInlines(link, imageLink.Inlines);
+                    else imageLink.Inlines.Add(new Run { Text = link.Title ?? "Image" });
+                    target.Add(imageLink);
+                }
+                else if (link.IsImage)
                 {
                     target.Add(new Run
                     {

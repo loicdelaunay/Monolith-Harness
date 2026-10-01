@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MonolithHarness.Core;
+using static MonolithHarness.App.UiText;
 
 namespace MonolithHarness.App;
 
@@ -15,9 +16,17 @@ public sealed partial class MainWindow
         modelActivityTimer.Tick += (_, _) => RefreshModelActivity(); modelActivityTimer.Start();
         Closed += (_, _) => modelActivityTimer.Stop();
     }
+    void ContextRequestProgressed(ConversationRun run, ContextRequestProgress progress)
+    {
+        if (progress.Stage == ContextRequestStage.Preparing) run.ContextRequestTimer.Restart();
+        run.ContextRequest = progress;
+        SetRunStatus(run, T("Le modèle réfléchit…"));
+    }
     void ModelProgress(ConversationRun run, GenerationUpdate update)
     {
-        if (update.Text != run.ProgressText || update.Reasoning != run.ProgressReasoning || update.OutputTokens != run.ProgressTokens)
+        if (update.HasModelOutput || update.Text.Length > 0 || update.Reasoning.Length > 0 || update.OutputTokens > 0)
+        { run.ContextRequest = null; run.ContextRequestTimer.Stop(); }
+        if (update.HasModelOutput || update.Text != run.ProgressText || update.Reasoning != run.ProgressReasoning || update.OutputTokens != run.ProgressTokens)
         {
             run.LastModelProgress = DateTimeOffset.UtcNow;
             run.ProgressText = update.Text; run.ProgressReasoning = update.Reasoning; run.ProgressTokens = update.OutputTokens;
@@ -27,15 +36,26 @@ public sealed partial class MainWindow
     void RefreshModelActivity()
     {
         var run = selectedSubagent == null ? ActiveRun : null;
-        if (run?.WaitingForModel == true)
+        if (run?.CurrentTool is { } tool && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
+            status.Text = ToolActivityText(tool);
+        string? details = null;
+        if (run?.WaitingForModel == true && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
         {
-            var idle = ModelActivity.IdleSeconds(run.LastModelProgress, DateTimeOffset.UtcNow);
-            var line = ModelActivity.ReasoningLine(run.ProgressReasoning);
-            var activity = WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking") +
-                (idle > 30 ? " · " + WorkflowText($"Pas de réponse depuis {idle} secondes", $"No response for {idle} seconds") : line.Length > 0 ? " · " + line : "…");
-            if (idle > 30 && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
-                status.Text = activity;
+            if (run.ContextRequest is { } preload)
+            {
+                var elapsed = run.ContextRequestTimer.Elapsed.TotalSeconds;
+                status.Text = preload.Caption(state.Language, elapsed);
+                details = preload.Details(state.Language, run.Provider.ContextLimit, elapsed);
+            }
+            else
+            {
+                var idle = ModelActivity.IdleSeconds(run.LastModelProgress, DateTimeOffset.UtcNow);
+                var line = ModelActivity.ReasoningLine(run.ProgressReasoning);
+                var activity = run.ProgressText.Length > 0 ? WorkflowText("Réponse en cours", "Response in progress") : WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking");
+                status.Text = activity + (idle > 30 ? " · " + WorkflowText($"Pas de réponse depuis {idle} secondes", $"No response for {idle} seconds") : line.Length > 0 && run.ProgressText.Length == 0 ? " · " + line : "…");
+            }
         }
+        ToolTipService.SetToolTip(statusChipView ?? (FrameworkElement)status, details);
         if (goalSettingsSnapshot != state.FeaturesJson || goalChatSnapshot != chat?.Id)
         {
             goalSettingsSnapshot = state.FeaturesJson; goalChatSnapshot = chat?.Id;

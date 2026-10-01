@@ -7,7 +7,7 @@ namespace MonolithHarness.Core;
 public static class LocalFileLinks
 {
     public const string Prefix = "omh-file:";
-    static readonly Regex Paths = new(@"(?<![\w:/\\])(?:[A-Za-z]:[/\\]|\.{1,2}[/\\]|/)?(?:[\w.@-]+[/\\])*[\w@-][\w.@-]*\.(?:html?|pdf|md|txt|json|csv|cs|csproj|slnx?|ts|tsx|js|jsx|py|css|xaml|xml|yaml|yml|sql|svg|png|jpe?g|webp|gif|ico|docx?|xlsx?|pptx?|odt|ods|rtf|zip|7z|rar|tar|gz|exe|dll|bat|cmd|ps1|sh|ini|toml|lock|config|ohm|log|mp[34]|wav|ogg)(?![\w.])", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+    static readonly Regex Paths = new(@"(?<![\w:/\\])(?:[A-Za-z]:[/\\]|\.{1,2}[/\\]|/)?(?:[\w.@-]+[/\\])*[\w@-][\w.@-]*\.(?:html?|pdf|md|markdown|txt|json|csv|cs|csproj|slnx?|ts|tsx|js|jsx|py|css|xaml|xml|yaml|yml|sql|svg|png|jpe?g|webp|gif|bmp|ico|docx?|xlsx?|pptx?|odt|ods|rtf|zip|7z|rar|tar|gz|exe|dll|bat|cmd|ps1|sh|ini|toml|lock|config|ohm|log|mp[34]|wav|ogg)(?![\w.])", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
     static readonly Regex ExplicitPaths = new("(?<![\\w:/\\\\])(?:[A-Za-z]:[/\\\\]|\\\\\\\\|\\.{1,2}[/\\\\]|~/|/(?=[\\w.])|[\\w.@-]+[/\\\\])[^\\s<>\"'|?*()\\[\\]{};,]*", RegexOptions.None, TimeSpan.FromMilliseconds(100));
     static readonly Regex QuotedPaths = new("[\"“'](?<path>(?:[A-Za-z]:[/\\\\]|\\\\\\\\|\\.{1,2}[/\\\\]|~/|/|[\\w.@-]+[/\\\\])[^\"“”'\\r\\n<>]+)[\"”']", RegexOptions.None, TimeSpan.FromMilliseconds(100));
     static readonly Regex Location = new(@"(?::\d+(?::\d+)?|#L\d+(?:-L?\d+)?)$", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));

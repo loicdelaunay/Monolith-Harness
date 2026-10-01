@@ -14,6 +14,7 @@ The interface uses **Uno Platform / .NET 10**. It targets Windows (Uno Desktop o
 - **Stay in control**: toggleable skills, MCP servers, Plan/Execution modes, permission requests, optional sandbox, interactive questions and agent task tracking. `AGENTS.md` conventions and `SKILL.md` skills can load from the project.
 - **Recover useful context**: conversation or shared memory, RAG search with a local multilingual model or embedding provider, images and a fallback vision model, token counts, speed and context compaction.
 - **Customize your workspace**: per-project scheduled tasks, light/dark themes, French/English, custom name and logo, Markdown export and SQLite with EF Core migrations.
+- **Conversation display and maintenance**: Compact / Normal / Spacious message density, automatic naming timing, Needs attention section, tool durations, Windows rendering GPU preference and optional inactivity-based archival/deletion. See the [conversation settings guide](conversation-display.md).
 
 **Cloud providers** require network access and, depending on the service, an API key; the chat model does not run inside the EXE. Optional integrations retain their prerequisites: Git for Git view, Docker/Podman for sandbox, OpenCode for its dedicated connection, or Chrome/Node.js for Chrome MCP. The embedded browser uses the system web engine (Edge WebView2 on Windows, WebKit on macOS). The application core does not require a separate Monolith Harness server.
 
@@ -30,6 +31,8 @@ The skill uses existing capabilities: attach your project sources and enable the
 ### Connect a provider
 
 Launch `artifacts\GUI\MonolithHarness.exe`, then **Settings → Providers**. Each connection has its own card, key, URL and catalog. **Test connection** detects models, selects them all and automatically saves the provider. **Refresh models** preserves existing choices; manual edits are committed with **Save**. The chat picker groups checked models from all connections and automatically switches providers. Multiple connections of the same type stay independent. For APIs without `/models`, a model can be entered manually in the editor and selected in the card.
+
+**Tools → Preview** opens local images, TXT and Markdown in the right workspace pane, with **Raw** and **Preview** tabs. Click a compatible file or image in the chat to view it; the file context menu keeps the OS and browser actions. See [file preview](file-preview.md) for formats, pagination and rendering limits.
 
 **Scheduled tasks**, within a project, creates a CRON schedule with a picker, instruction, model, thinking, resources, skills and a choice of fresh conversation or continued history. Tasks run while the application is open; they do not wake the PC.
 

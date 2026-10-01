@@ -56,8 +56,6 @@ public sealed partial class MainWindow
         }
         root.UpdateLayout(); await Capture(root, Path.Combine(output, "notifications.png"));
         AcknowledgeChatNotice(current.Id);
-        composer.Text = "beforeafter"; composer.Select(6, 0); await HandleComposerEnterAsync(true);
-        if (!composer.Text.Replace("\r\n", "\n").Replace("\r", "\n").Equals("before\nafter")) throw new Exception("Shift+Enter did not insert a line at the caret.");
         composer.Text = "";
         var separate = new Grid(); var sample = new TextBlock { Text = "Zoom", FontSize = 20 }; separate.Children.Add(sample); TextZoom.Observe(separate);
         TextZoom.Apply(separate); TextZoom.SetWindow(separate, 130);
@@ -89,6 +87,6 @@ public sealed partial class MainWindow
         var notificationPanel = BuildNotificationSettings();
         var overlay = new Border { Width = 680, Padding = new(24), Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush"), Child = notificationPanel.Panel };
         root.Children.Add(overlay); await Task.Delay(120); await Capture(root, Path.Combine(output, "notification-settings.png")); root.Children.Remove(overlay);
-        File.WriteAllText(Path.Combine(output, "smoke-ok.txt"), "Project groups, archive reopening, naming spinner, completion/action bells, Shift+Enter, local/global font zoom, agent count/mode persistence and preset save/delete passed.");
+        File.WriteAllText(Path.Combine(output, "smoke-ok.txt"), "Project groups, archive reopening, naming spinner, completion/action bells, local/global font zoom, agent count/mode persistence and preset save/delete passed.");
     }
 }

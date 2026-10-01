@@ -25,6 +25,9 @@ public sealed partial class MainWindow
         public bool Submitted { get; set; }
         public bool Failed { get; set; }
         public bool IsScheduled { get; init; }
+        public RunningTool? CurrentTool { get; set; }
+        public ContextRequestProgress? ContextRequest { get; set; }
+        public System.Diagnostics.Stopwatch ContextRequestTimer { get; } = new();
         public bool WaitingForModel { get; set; }
         public DateTimeOffset LastModelProgress { get; set; } = DateTimeOffset.UtcNow;
         public string ProgressText { get; set; } = "";
@@ -40,7 +43,7 @@ public sealed partial class MainWindow
     ConversationRun? ActiveRun => chat != null ? conversationRuns.GetValueOrDefault(chat.Id) : null;
     string RunSkills(ConversationRun run) => run.IsScheduled ? run.Options.EnabledSkills : state.EnabledSkills;
     string ToolSkills => automaticToolRun.Value is { } run ? RunSkills(run) : state.EnabledSkills;
-    static StackPanel CreateMessagePanel() => new() { Spacing = 16, Padding = new(4, 20, 12, 20), MaxWidth = 1120, HorizontalAlignment = HorizontalAlignment.Stretch };
+    static StackPanel CreateMessagePanel() => ChatDensity.Track(new StackPanel { MaxWidth = 1120, HorizontalAlignment = HorizontalAlignment.Stretch }, "messages");
     bool IsVisible(ConversationRun run) => selectedSubagent == null && chat?.Id == run.Chat.Id;
     IEnumerable<Message> VisibleHistory() => ActiveRun is { } active ? active.Db.Messages.Local :
         chat != null ? conversationHistory.GetValueOrDefault(chat.Id) ?? [] : [];
@@ -63,7 +66,7 @@ public sealed partial class MainWindow
     void RefreshGenerationControls()
     {
         // Keep navigation, settings and drafts usable; only sending to this running chat is blocked.
-        send.IsEnabled = selectedSubagent == null && chat != null && conversationReady && !conversationLoading;
+        send.IsEnabled = selectedSubagent == null && chat != null && conversationReady && !conversationLoading && !conversationRetentionBusy && !databaseMaintenanceBusy;
         stop.IsEnabled = ActiveRun != null;
         composer.IsEnabled = selectedSubagent == null;
         RefreshConversationProgress();
@@ -143,17 +146,19 @@ public sealed partial class MainWindow
 
     void SetRunStatus(ConversationRun run, string text, StatusKind kind = StatusKind.Activity)
     {
-        run.Status = text;
         var wasWaiting = run.WaitingForModel;
         run.WaitingForModel = text == T("Le modèle réfléchit…") || text == T("OpenCode réfléchit…");
         if (run.WaitingForModel && !wasWaiting)
         { run.LastModelProgress = DateTimeOffset.UtcNow; run.ProgressText = run.ProgressReasoning = ""; run.ProgressTokens = null; }
-        RefreshModelActivity();
+        if (!run.WaitingForModel) run.ContextRequest = null;
+        if (run.WaitingForModel && run.ContextRequest is { } preload) text = preload.Caption(state.Language, run.ContextRequestTimer.Elapsed.TotalSeconds);
+        run.Status = text;
         run.StatusMode = kind;
         run.StatusExpiresAt = StatusExpiry(text, kind);
         conversationStatuses[run.Chat.Id] = new(text, kind, run.StatusExpiresAt);
         if (IsVisible(run) && !(kind == StatusKind.Activity && IsTransientOverlayVisible))
             ShowStatus(text, kind, run.Chat.Id, run.StatusExpiresAt);
+        RefreshModelActivity();
     }
 
     void ShowContextUsage(ConversationRun run, double tokens, bool estimated = false)
@@ -174,6 +179,7 @@ public sealed partial class MainWindow
         if (run.Update != null) UpdateMetrics(run.Update, run.InputEstimate, run.Provider.ContextLimit);
         if (run.Context is { } context) ShowContextUsage(context.Tokens, context.Estimated, run.Provider.ContextLimit);
         RefreshSpeedTooltip(run.Tracker);
+        RefreshModelActivity();
     }
 
     void ScrollRunToBottom(ConversationRun run)
@@ -196,11 +202,12 @@ public sealed partial class MainWindow
         }
         if (IsVisible(run)) title.Text = run.Chat.Title;
         RefreshConversationProgress();
+        if (ConversationNaming.At(FeatureSettings.Read(run.Options.FeaturesJson), "first-message")) _ = AutoNameAsync(run.Chat.Id, true);
     }
 
     async Task SendAsync()
     {
-        if (databaseMaintenanceBusy) return;
+        if (databaseMaintenanceBusy || conversationRetentionBusy) return;
         if (await ExecuteSlashCommandAsync()) return;
         if (!conversationReady || conversationLoading || chat == null || provider == null || project == null) return;
         if(!ProviderModels.Visible(provider).Contains(provider.Model)) { ShowStatus(WorkflowText("Cochez un modèle dans les réglages des fournisseurs.","Select a model in provider settings."), StatusKind.Error); return; }
@@ -274,7 +281,7 @@ public sealed partial class MainWindow
         if (success)
         {
             NotifyChat(run, false);
-            await AutoNameAsync(run.Chat.Id, true);
+            if (ConversationNaming.At(FeatureSettings.Read(run.Options.FeaturesJson), "first-response")) await AutoNameAsync(run.Chat.Id, true);
             AppLog.Write(AppLogLevel.Information, "generation.completed", chatId: run.Chat.Id);
             await RunNextQueuedAsync(run.Chat.Id,run.Messages);
         }

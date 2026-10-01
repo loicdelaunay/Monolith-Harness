@@ -19,6 +19,7 @@ public sealed partial class MainWindow
         editingSettings = true;
         try { await EditSettingsAsync(); }
         finally { editingSettings = false; }
+        await MaintainConversationsAsync();
     }
 
     async Task EditSettingsAsync()

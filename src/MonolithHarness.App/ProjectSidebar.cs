@@ -87,6 +87,8 @@ public sealed partial class MainWindow
     {
         if (conversationArea.Parent is Border previous) previous.Child = null;
         projectNavigation.Children.Clear(); independentChatRows.Clear(); projectBadgeHosts.Clear();
+        attentionSidebarRows.Clear(); attentionSidebarSignature = ""; attentionNavigation.Children.Clear();
+        projectNavigation.Children.Add(attentionNavigation);
         var items = (projects.ItemsSource as IEnumerable<Project> ?? []).ToList();
         var summaries = navigationChats.Select(CurrentSidebarChat).ToList();
         var pinned = summaries.Where(x => x.IsPinned && MatchesSidebarSearch(x)).OrderBy(x => x.Id).ToList();

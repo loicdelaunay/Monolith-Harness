@@ -40,6 +40,8 @@ sealed class ChatView
     public int Scroll;
     public int LastLineCount, LastWidth;
     public bool Loading, Thinking;
+    public ContextRequestProgress? ContextRequest;
+    public DateTimeOffset ContextRequestStarted;
     public int AgentPage;
 }
 
@@ -170,12 +172,19 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         {
             case "chat.renamed": Work(Refresh); break;
             case "started":
+                view.ContextRequest = null;
                 view.Status = L("Le modèle réfléchit…", "Thinking…"); view.Notice = ""; view.Thinking = true;
                 view.Children.Clear(); view.AgentPage = 0; break;
-            case "status": view.Status = S(data, "text"); break;
+            case "status":
+                view.Status = S(data, "text");
+                view.ContextRequest = data["contextPreload"]?.Deserialize<ContextRequestProgress>(HarnessService.Json);
+                if (view.ContextRequest?.Stage == ContextRequestStage.Preparing) view.ContextRequestStarted = DateTimeOffset.UtcNow;
+                break;
             case "stream":
                 int messageId = I(data, "messageId");
                 string streamedText = S(data, "text"), streamedReasoning = S(data, "reasoning");
+                if (view.ContextRequest != null && (data["modelOutput"]?.GetValue<bool>() == true || streamedText.Length > 0 || streamedReasoning.Length > 0))
+                { view.ContextRequest = null; view.Status = streamedText.Length > 0 ? L("Réponse en cours…", "Response in progress…") : L("Le modèle réfléchit…", "Thinking…"); }
                 view.Thinking = string.IsNullOrWhiteSpace(streamedText) || streamedReasoning.Length > view.Reasoning.GetValueOrDefault(messageId, "").Length;
                 view.Messages[messageId] = new() { Id = messageId, ChatId = id, Role = "assistant", Content = S(data, "text"), State = "streaming" };
                 view.Reasoning[messageId] = S(data, "reasoning"); view.Tokens = I(data, "tokens"); view.Limit = I(data, "limit");
@@ -184,14 +193,14 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
                 var item = data["message"]!.Deserialize<Message>(HarnessService.Json)!;
                 view.Messages[item.Id] = item;
                 if (item.Role == "user") view.InputHistory.Saved(item.Id, item.Content);
-                if (item.Role == "assistant") view.Thinking = false;
+                if (item.Role == "assistant") { view.Thinking = false; view.ContextRequest = null; }
                 if (item.Role == "tool") view.Thinking = true;
                 if (data["message"]?["reasoning"] is { } reasoning) view.Reasoning[item.Id] = reasoning.GetValue<string>();
                 if (data["title"] is { } title && workspace?.Chats.FirstOrDefault(c => c.Id == id) is { } chat) chat.Title = title.GetValue<string>();
                 break;
             case "subagent": var child = data["child"]!.Deserialize<SubagentRecord>(HarnessService.Json)!; view.Children[child.Id] = child; break;
             case "inbox": view.Inbox = data["items"]?.AsArray() ?? []; break;
-            case "done": view.Thinking = false; view.Status = S(data, "error") is { Length: > 0 } error ? error : S(data, "status"); break;
+            case "done": view.ContextRequest = null; view.Thinking = false; view.Status = S(data, "error") is { Length: > 0 } error ? error : S(data, "status"); break;
             case "question":
                 activeQuestions.TryAdd(S(data, "id"), 0);
                 var questionToken = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
@@ -254,8 +263,8 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         runs[id] = Task.Run(async () =>
         {
             try { await action(); }
-            catch (OperationCanceledException) { Post(() => { View(id).Thinking = false; View(id).Status = L("Arrêté", "Stopped"); }); }
-            catch (Exception ex) { Post(() => { View(id).Thinking = false; View(id).Status = "! " + ex.Message; }); }
+            catch (OperationCanceledException) { Post(() => { View(id).ContextRequest = null; View(id).Thinking = false; View(id).Status = L("Arrêté", "Stopped"); }); }
+            catch (Exception ex) { Post(() => { View(id).ContextRequest = null; View(id).Thinking = false; View(id).Status = "! " + ex.Message; }); }
             finally { await Refresh(); Post(() => dirty = true); }
         });
     }

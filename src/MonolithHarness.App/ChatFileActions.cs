@@ -60,6 +60,8 @@ public sealed partial class MainWindow
             };
             menu.Items.Add(item);
         }
+        if (resolved != null && FilePreviewDocument.Supports(resolved) && File.Exists(resolved))
+            Add("Preview", "\uE8A5", path => OpenFilePreviewAsync(path, messageProject));
         Add("Ouvrir", "\uE8A7", path => OpenChatDiskItemAsync(path, false));
         Add("Ouvrir dans le navigateur", "\uE774", path => OpenChatFileAsync(path, messageProject));
         Add("Ouvrir le dossier du fichier", "\uE8B7", path => OpenChatDiskItemAsync(path, true));

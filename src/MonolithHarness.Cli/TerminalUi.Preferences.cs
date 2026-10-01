@@ -19,13 +19,18 @@ public sealed partial class TerminalUi
     async Task NamingSettings(WorkspaceSnapshot snapshot)
     {
         var config = FeatureSettings.Read(snapshot.State.FeaturesJson);
-        var action = await Prompt("Nommage / Naming", "Le modèle reçoit un extrait textuel après la première réponse. / The model receives a text excerpt after the first response.", [new("toggle", (config.AutoNameConversations ? "[x] " : "[ ] ") + "Automatique / Automatic"), new("model", "Modèle / Model · " + config.NamingModel)]);
+        var action = await Prompt("Nommage / Naming", "Choisissez quand le modèle reçoit un extrait pour générer le titre. / Choose when the model receives an excerpt to generate the title.", [new("toggle", (config.AutoNameConversations ? "[x] " : "[ ] ") + "Automatique / Automatic"), new("model", "Modèle / Model · " + config.NamingModel), new("timing", "Moment / Timing · " + config.AutoNamingTiming)]);
         if (action == "model" || action == "toggle" && !config.AutoNameConversations && (config.NamingProviderId == 0 || config.NamingModel.Length == 0))
         {
             if (await PickAuxiliaryModel(snapshot, false) is not { } selected) return;
             await SaveFeatures(c => { c.NamingProviderId = selected.Provider; c.NamingModel = selected.Model; if (action == "toggle") c.AutoNameConversations = true; });
         }
         else if (action == "toggle") await SaveFeatures(c => c.AutoNameConversations = !config.AutoNameConversations);
+        else if (action == "timing")
+        {
+            var timing = await Prompt("Quand nommer / Naming timing", choices: [new("first-message", "Dès le premier message / After first user message"), new("first-response", "Après la première réponse / After first response")]);
+            if (timing != null) await SaveFeatures(c => c.AutoNamingTiming = timing);
+        }
     }
     async Task VisionSettings(WorkspaceSnapshot snapshot)
     {

@@ -57,11 +57,12 @@ public sealed partial class MainWindow
         themeTabs.SelectionChanged += async (_, _) => { if (themeTabs.SelectedIndex == 1) await Guard(Edit); };
         panel.Children.Add(FluentDesign.Surface(themeTabs, 16));
         panel.Children.Add(Label(WorkflowText("Le thème est prévisualisé immédiatement. Enregistrez les réglages pour conserver les changements.", "Themes preview immediately. Save settings to keep your changes."), 12));
+        var density = BuildChatDensitySettings(); panel.Children.Add(density.Panel);
         var fonts = BuildFontSettings(); panel.Children.Add(fonts.Panel);
         return (panel, target => {
             target.CustomThemes = custom.Select(CopyTheme).ToList(); target.Theme = selected;
             if (AppearanceThemes.IsCustomId(target.CliTheme) && !custom.Any(x => x.Id == target.CliTheme)) target.CliTheme = "shared";
-            fonts.Save(target);
+            density.Save(target); fonts.Save(target);
         });
     }
 

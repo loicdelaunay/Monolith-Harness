@@ -5,6 +5,9 @@ public static partial class UiText
     public static string Language { get; set; } = "fr";
     public static readonly Dictionary<string, string> English = new()
     {
+        ["La suite de cette page est disponible dans Raw."] = "The rest of this page is available in Raw.",
+        ["Survoler pour prévisualiser · Cliquer pour ouvrir Preview"] = "Hover to preview · Click to open Preview",
+        ["Cliquer sur la miniature pour ouvrir Raw et Preview"] = "Click the thumbnail to open Raw and Preview",
         ["Ouvrir"] = "Open",
         ["Ouvrir dans le navigateur"] = "Open in browser",
         ["Ouvrir le dossier du fichier"] = "Open containing folder",
