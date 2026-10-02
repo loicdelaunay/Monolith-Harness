@@ -10,6 +10,7 @@ public sealed record ModelContextInfo(int Limit, int? MaximumTokens, bool Automa
 /// <summary>Limits are scoped to the exact model ID of one connection; output limits are never context capacities.</summary>
 public static class ModelContexts
 {
+    public const int DefaultContextLimit = 256_000;
     public sealed class Entry
     {
         public int? MaximumTokens { get; set; }
@@ -39,7 +40,7 @@ public static class ModelContexts
         var limit = Math.Clamp(custom ?? maximum ?? fallback, 1024, Math.Min(maximum ?? Ceiling(provider), Ceiling(provider)));
         return new(limit, maximum, custom == null, maximum != null ? entry!.Source : "fallback");
     }
-    public static int Fallback(Provider provider, string? model = null) => Math.Clamp(provider.IsLocal ? 8192 : ModelCatalog.GetDefaultContextLimit(model ?? provider.Model) ?? 128000, 1024, Ceiling(provider));
+    public static int Fallback(Provider provider, string? model = null) => Math.Clamp(provider.IsLocal ? 8192 : ModelCatalog.GetDefaultContextLimit(model ?? provider.Model) ?? DefaultContextLimit, 1024, Ceiling(provider));
     public static void Select(Provider provider, string model)
     {
         provider.Model = model.Trim();

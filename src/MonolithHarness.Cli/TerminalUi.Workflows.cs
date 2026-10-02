@@ -115,7 +115,7 @@ public sealed partial class TerminalUi
     }
     async Task Settings(WorkspaceSnapshot snapshot)
     {
-        var action = await Prompt("Réglages / Settings", client.Database, [new("language", "Langue / Language"), new("theme", "Thème / Theme"), new("font", "Police et CRT / Font and CRT"), new("thinking", "Réflexion / Thinking"), new("style", "Style de réponse / Response style"), new("compaction", "Compactage / Compaction"), new("permissions", "Autorisations / Permissions"), new("continue", "Auto-continue : " + snapshot.State.AutoContinue), new("naming", "Nommage des conversations / Conversation naming"), new("vision", "Bypass image AI"), new("logs", "Logs"), new("updates", "Mises à jour GitHub / GitHub updates")]);
+        var action = await Prompt("Réglages / Settings", client.Database, [new("language", "Langue / Language"), new("theme", "Thème / Theme"), new("font", "Police et CRT / Font and CRT"), new("thinking", "Réflexion / Thinking"), new("style", "Style de réponse / Response style"), new("compaction", "Compactage / Compaction"), new("web", "Recherche web · HTTP / Web research · HTTP"), new("artifacts", "Entretien · Artefacts / Maintenance · Artifacts"), new("permissions", "Autorisations / Permissions"), new("continue", "Auto-continue : " + snapshot.State.AutoContinue), new("naming", "Nommage des conversations / Conversation naming"), new("vision", "Bypass image AI"), new("logs", "Logs"), new("updates", "Mises à jour GitHub / GitHub updates")]);
         if (action == "style")
         {
             var current = FeatureSettings.Read(snapshot.State.FeaturesJson).ResponseStyle;
@@ -125,6 +125,8 @@ public sealed partial class TerminalUi
         }
         if (action == "updates") await UpdateSettings();
         if (action == "compaction") await CompactionPreferences(snapshot);
+        if (action == "web") await WebHttpPreferences(snapshot);
+        if (action == "artifacts") await ArtifactPreferences(snapshot);
         if (action == "naming") await NamingSettings(snapshot);
         if (action == "font") await ConfigureTerminalFont(snapshot);
         if (action == "vision") await VisionSettings(snapshot);

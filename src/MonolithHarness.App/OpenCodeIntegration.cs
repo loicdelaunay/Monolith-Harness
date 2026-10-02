@@ -578,7 +578,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                     {
 
-                        if (update.Retry is { } retry) { SetRunStatus(run, retry.Describe(run.Options.Language)); return; }
+                        if (update.Retry is { } retry) { ShowModelRetry(run, retry, assistantUi, ct); return; }
                         run.ExportProgress = new(active.Id, update);
 
                         active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
@@ -598,7 +598,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                     }, ct, (permission, token) => AuthorizeOpenCodePermissionAsync(provider, directory, permission, token), new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
 
-                    run.WaitingForModel = false; RefreshModelActivity();
+                    CancelModelRetryFeedback(run); run.WaitingForModel = false; RefreshModelActivity();
                     break;
 
                 }

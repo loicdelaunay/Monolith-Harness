@@ -21,13 +21,13 @@ public static class ModelCatalog
         if (m.Contains("nemotron")) return 262_144;
         if (m.Contains("mimo")) return 200_000;
         if (m.Contains("ling-3")) return 262_144;
-        if (m.Contains("ox-alpha")) return 128_000;
+        if (m.Contains("ox-alpha")) return ModelContexts.DefaultContextLimit;
         if (m.Contains("o1") || m.Contains("o3")) return 200_000;
         if (m.Contains("deepseek-reasoner")) return 64_000;
-        if (m.Contains("deepseek")) return 128_000;
-        if (m.Contains("gpt-4o") || m.Contains("gpt-4.1")) return 128_000;
-        if (m.Contains("llama3")) return 128_000;
-        if (m.Contains("qwen2.5")) return 128_000;
+        if (m.Contains("deepseek")) return ModelContexts.DefaultContextLimit;
+        if (m.Contains("gpt-4o") || m.Contains("gpt-4.1")) return ModelContexts.DefaultContextLimit;
+        if (m.Contains("llama3")) return ModelContexts.DefaultContextLimit;
+        if (m.Contains("qwen2.5")) return ModelContexts.DefaultContextLimit;
         if (m.Contains("gpt-3.5")) return 16_384;
         return null;
     }

@@ -95,7 +95,7 @@ public sealed partial class MainWindow
             Grid.SetColumnSpan(chart, narrow ? 2 : 1);
             Grid.SetRow(totals, narrow ? 1 : 0); Grid.SetColumn(totals, narrow ? 0 : 1);
             Grid.SetColumnSpan(totals, narrow ? 2 : 1);
-            var limit = ActiveRun?.Provider.ContextLimit ?? provider?.ContextLimit ?? 128000;
+            var limit = ActiveRun?.Provider.ContextLimit ?? provider?.ContextLimit ?? ModelContexts.DefaultContextLimit;
             var compactSettings = FeatureSettings.Read(ActiveRun?.Options.FeaturesJson ?? state.FeaturesJson).Compaction;
             var value = ContextDetails.From(VisibleHistory(), limit);
             var update = ActiveRun?.Update;

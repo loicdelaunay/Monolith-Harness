@@ -70,13 +70,13 @@ sealed class ModelContextEditor : UserControl
             automatic.IsEnabled = provider != null && provider.Model.Length > 0;
             automatic.IsOn = value?.Automatic ?? true;
             tokens.Maximum = Math.Min(value?.MaximumTokens ?? (provider == null ? 10_000_000 : ModelContexts.Ceiling(provider)), provider == null ? 10_000_000 : ModelContexts.Ceiling(provider));
-            tokens.Value = value?.Limit ?? 128000; tokens.IsEnabled = automatic.IsEnabled && !automatic.IsOn;
+            tokens.Value = value?.Limit ?? ModelContexts.DefaultContextLimit; tokens.IsEnabled = automatic.IsEnabled && !automatic.IsOn;
             model.Text = provider == null || provider.Model.Length == 0 ? UiText.Resolve("Sélectionnez un modèle.", "Select a model.")
                 : UiText.Resolve("Modèle : ", "Model: ") + provider.Model;
             source.Text = value?.MaximumTokens is { } maximum
                 ? string.Format(UiText.Resolve("Maximum communiqué : {0:N0} tokens.", "Reported maximum: {0:N0} tokens."), maximum)
                 : string.Format(UiText.Resolve("Maximum non communiqué. Valeur de repli estimée : {0:N0} tokens, modifiable en mode personnalisé.",
-                    "Maximum not reported. Estimated fallback: {0:N0} tokens; change it in custom mode."), provider == null ? 128000 : ModelContexts.Fallback(provider));
+                    "Maximum not reported. Estimated fallback: {0:N0} tokens; change it in custom mode."), provider == null ? ModelContexts.DefaultContextLimit : ModelContexts.Fallback(provider));
             if (value?.Source == "API input") source.Text += " " + UiText.Resolve("Le fournisseur indique une limite de tokens d’entrée.", "The provider reports an input token limit.");
             if (value?.Source == "GGUF") source.Text += " " + UiText.Resolve("Fenêtre déclarée dans les métadonnées GGUF. La mémoire disponible peut imposer une limite plus basse.", "Window declared in GGUF metadata. Available memory may require a lower limit.");
             if (value?.MaximumTokens > tokens.Maximum) source.Text += " " + UiText.Resolve("La limite prise en charge par le moteur est inférieure.", "The engine's supported limit is lower.");

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.49.2 - 2026-10-02
+
+- Renames HTTP web research modes to Smart and Legacy throughout GUI/CLI settings, skill details, model instructions, tool schemas and new results. Smart remains the recommended default: models are instructed to search saved pages first, read only relevant passages, reuse cached results and stop when sufficient evidence is available. Legacy returns body and headers inline and is reserved for an explicit user choice or request. Historical partial/full preferences and tool calls remain accepted and map to Smart/Legacy; existing cached files stay readable. GUI, CLI and legacy desktop versions remain aligned.
+
+## 1.49.1 - 2026-10-02
+
+- Raises the standard context fallback from 128,000 to 256,000 tokens across the shared engine, new remote connections, model context controls, chat counters, scheduled-task defaults and the legacy desktop provider form. Former 128,000-token catalogue estimates use the same shared default. Provider-reported model capacities and explicit per-model overrides remain authoritative; local-model defaults and other model-specific estimates retain their existing values. Existing profiles in automatic mode pick up the new fallback without overwriting saved custom limits. GUI, CLI and legacy desktop versions remain aligned.
+
+## 1.49.0 - 2026-10-02
+
+- Adds Partial and Full HTTP response modes in GUI Skills → Web research and CLI settings. Partial is the default: web_http_request saves the original body, metadata and readable content in a conversation-scoped tool cache, returning a bounded preview and outline instead of the entire page and headers. New web_http_search and web_http_read tools provide literal search, numbered passages and pagination, including columns for long/minified lines. HTML text retains headings and links without executing JavaScript; raw content remains available. Full mode returns the downloaded body inline. Downloads are capped at 1 MiB, with explicit truncation. Existing network permissions, live skill checks, Plan and sandbox restrictions remain enforced.
+- Conversation maintenance now offers Clean tool artifacts, enabled by default after seven days without use. Reading or searching a cached result renews retention. GUI and CLI clean the managed HTTP cache at startup and hourly, preserving active conversations and deleting only known cache files. Source folders, conversation documents and release binaries remain outside this cache. GUI and CLI versions remain aligned.
+
+## 1.48.3 - 2026-10-02
+
+- Adds a four-second grace period before showing model-retry notices in GUI chats, including OpenCode connections. The status chip and current response show Model thinking during this period; resumed requests or output cancel the delayed notice. Persistent retries keep their actual attempt count and remaining delay, and final errors remain visible. Retry timing, limits and compaction behavior are unchanged. GUI and CLI versions remain aligned.
+
+## 1.48.2 - 2026-10-02
+
+- Aligns the Providers title, Add provider menu and Back action in one fixed header row when space allows. Controls wrap together in narrower windows or with larger fonts. Back now clears the editor selection and reliably returns to the provider list while retaining unsaved drafts; leaving the name field no longer rebuilds or reopens the provider form. GUI and CLI versions remain aligned.
+
 ## 1.48.1 - 2026-10-02
 
 - Keeps historical local file links, previews and approved file reads working after the portable-folder migration. GUI and CLI resolve legacy locations before protected-file checks and access approvals, preserving history text and permission boundaries. GUI and CLI versions remain aligned.

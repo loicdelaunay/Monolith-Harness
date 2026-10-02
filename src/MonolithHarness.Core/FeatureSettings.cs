@@ -47,6 +47,9 @@ public sealed class FeatureSettings
     public int AutoArchiveDays { get; set; } = 30;
     public bool AutoDeleteConversations { get; set; }
     public int AutoDeleteDays { get; set; } = 45;
+    public bool AutoCleanArtifacts { get; set; } = true;
+    public int ArtifactRetentionDays { get; set; } = 7;
+    public string WebHttpResponseMode { get; set; } = "smart";
     public string InterfaceFont { get; set; } = "";
     public string UserMessageFont { get; set; } = "";
     public string AssistantMessageFont { get; set; } = "";
@@ -105,6 +108,9 @@ public sealed class FeatureSettings
             settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
             settings.Compaction ??= new();
             settings.Compaction.Normalize();
+            settings.WebHttpResponseMode = settings.WebHttpResponseMode?.Trim().ToLowerInvariant() switch {
+                "legacy" or "full" => "legacy", _ => "smart" };
+            if (settings.ArtifactRetentionDays is < 1 or > 3650) settings.ArtifactRetentionDays = 7;
             if (settings.GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) settings.GuiUpdateMode = null;
             return settings;
         }
@@ -112,6 +118,9 @@ public sealed class FeatureSettings
     }
     public string Json()
     {
+        WebHttpResponseMode = WebHttpTools.NormalizeResponseMode(WebHttpResponseMode);
+        if (ArtifactRetentionDays is < 1 or > 3650)
+            throw new ArgumentException("Réglages HTTP ou de nettoyage des artefacts invalides / Invalid HTTP or artifact cleanup settings.");
         if (GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) throw new ArgumentException("Invalid automatic update mode.");
         // Keep older versions aware of the user's choice when reading the same portable profile.
         GuiCheckUpdates = EffectiveGuiUpdateMode != AutomaticUpdateMode.Disabled;

@@ -16,7 +16,7 @@ public sealed class ScheduledTask
     public int? LastChatId { get; set; }
     public int ProviderId { get; set; }
     public string Model { get; set; } = "";
-    public int ContextLimit { get; set; } = 128000;
+    public int ContextLimit { get; set; } = ModelContexts.DefaultContextLimit;
     public bool SupportsImages { get; set; }
     public string ThinkingLevel { get; set; } = "auto";
     public string ResourcePathsJson { get; set; } = "";

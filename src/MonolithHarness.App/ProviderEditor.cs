@@ -19,7 +19,7 @@ public sealed partial class MainWindow
         public byte[] ProtectedKey { get; set; } = [];
         public string PendingKey { get; set; } = "";
         public bool DeleteKey { get; set; }
-        public int ContextLimit { get; set; } = 128000;
+        public int ContextLimit { get; set; } = ModelContexts.DefaultContextLimit;
         public string ModelContextsJson { get; set; } = "{}";
         public bool SupportsImages { get; set; } = true;
         public string Kind { get; set; } = "openai";
@@ -42,7 +42,7 @@ public sealed partial class MainWindow
     sealed class ProviderEditorState
     {
         public required StackPanel Panel { get; init; }
-        public required StackPanel Header { get; init; }
+        public required SettingsHeaderPanel Header { get; init; }
         public required StackPanel Cards { get; init; }
         public required List<ProviderDraft> Drafts { get; init; }
         public required TextBlock Error { get; init; }
@@ -58,7 +58,7 @@ public sealed partial class MainWindow
                 DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, LocalModelsJson=x.LocalModelsJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
             .ToList();
         var cards = new StackPanel { Spacing = 8 };
-        var state = new ProviderEditorState { Panel = new StackPanel(), Header = new StackPanel { Spacing = 8 }, Cards = cards, Drafts = drafts, Error = Label("", 12) };
+        var state = new ProviderEditorState { Panel = new StackPanel(), Header = new SettingsHeaderPanel { Spacing = 8 }, Cards = cards, Drafts = drafts, Error = Label("", 12) };
         state.Error.Tag = null;
 
         var editor = new StackPanel { Spacing = 12, Visibility = Visibility.Collapsed };
@@ -157,7 +157,12 @@ public sealed partial class MainWindow
         void Refresh(ProviderDraft? draft)
         {
             var viewChanged = state.Selected != draft || (editor.Visibility == Visibility.Visible) != (draft != null);
-            refreshing = true; chooser.ItemsSource = null; chooser.ItemsSource = drafts.ToList(); chooser.SelectedItem = draft; refreshing = false; Select(draft); RenderCards(); editor.Visibility = draft == null ? Visibility.Collapsed : Visibility.Visible; cards.Visibility = draft == null ? Visibility.Visible : Visibility.Collapsed;
+            // Clear selection before hiding the form: a focus-loss callback must not reopen it.
+            refreshing = true; state.Selected = draft;
+            editor.Visibility = draft == null ? Visibility.Collapsed : Visibility.Visible;
+            cards.Visibility = draft == null ? Visibility.Visible : Visibility.Collapsed;
+            chooser.ItemsSource = null; chooser.ItemsSource = drafts.ToList(); chooser.SelectedItem = draft;
+            Select(draft); RenderCards();
             back.Visibility = editor.Visibility;
             if (viewChanged) state.ViewChanged();
         }
@@ -181,7 +186,12 @@ public sealed partial class MainWindow
 
         chooser.SelectionChanged += (_, _) => { if (refreshing) return; state.Commit(); Select(chooser.SelectedItem as ProviderDraft); };
         name.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.Name = name.Text; };
-        name.LostFocus += (_, _) => { if (!refreshing) { if (state.Selected != null) model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected)); Refresh(state.Selected); } };
+        name.LostFocus += (_, _) =>
+        {
+            if (refreshing || state.Selected == null) return;
+            model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected));
+            editorTitle.Text = state.Selected.Name; RenderCards();
+        };
         url.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.BaseUrl = url.Text; };
         url.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected)); ShowProviderHelp(state.Selected); } };
         key.PasswordChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.PendingKey = key.Password; };
@@ -235,7 +245,7 @@ public sealed partial class MainWindow
         {
             state.Commit();
             var deepSeek = preset == "deepseek";
-            var draft = new ProviderDraft { Name = NextName(deepSeek ? "DeepSeek" : T("OpenAI compatible")), BaseUrl = deepSeek ? "https://api.deepseek.com" : "https://api.openai.com/v1", Model = deepSeek ? "deepseek-chat" : "gpt-4.1-mini", ContextLimit = 128000, SupportsImages = true };
+            var draft = new ProviderDraft { Name = NextName(deepSeek ? "DeepSeek" : T("OpenAI compatible")), BaseUrl = deepSeek ? "https://api.deepseek.com" : "https://api.openai.com/v1", Model = deepSeek ? "deepseek-chat" : "gpt-4.1-mini", ContextLimit = ModelContexts.DefaultContextLimit, SupportsImages = true };
             drafts.Add(draft); Refresh(draft); name.Focus(FocusState.Programmatic); name.SelectAll();
         }
         addOpenAi.Click += (_, _) => AddPreset("openai");
@@ -247,7 +257,7 @@ public sealed partial class MainWindow
             {
                 state.Commit();
                 var preset = cloud.Preset;
-                var draft = new ProviderDraft { Name = NextName(preset.Name), BaseUrl = preset.BaseUrl, Model = preset.DefaultModel, ContextLimit = 128000, SupportsImages = true };
+                var draft = new ProviderDraft { Name = NextName(preset.Name), BaseUrl = preset.BaseUrl, Model = preset.DefaultModel, ContextLimit = ModelContexts.DefaultContextLimit, SupportsImages = true };
                 drafts.Add(draft); Refresh(draft); key.Focus(FocusState.Programmatic);
             };
         addOpenCode.Click += (_, _) =>
@@ -494,16 +504,15 @@ public sealed partial class MainWindow
             }
             if (drafts.Count == 0) cards.Children.Add(Label(WorkflowText("Ajoutez un fournisseur pour commencer.", "Add a provider to get started.")));
         }
-        back.Click += (_, _) => { state.Commit(); RenderCards(); editor.Visibility = back.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible; state.ViewChanged(); };
         var add = new DropDownButton { Name = "AddProvider", Content = WorkflowText("＋ Ajouter un fournisseur", "＋ Add provider") };
+        back.Click += (_, _) => { state.Commit(); Refresh(null); add.Focus(FocusState.Programmatic); };
         var presets = new MenuFlyout(); add.Flyout = presets;
         foreach (var item in new[] { addOpenAi, addDeepSeek }.Concat(cloudItems.Select(x => x.Item)).Concat([addOpenCode, addLocal, addComposite])) presets.Items.Add(item);
         state.Panel.Spacing = 12;
         state.Header.Children.Add(add); state.Header.Children.Add(back);
         state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
         foreach (var item in new UIElement[] { editorTitle, info, name, compositePanel, providerHelp, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, Row(duplicate, remove) }) editor.Children.Add(item);
-        Refresh(drafts.FirstOrDefault(x => x.Id == selectedProviderId) ?? drafts.FirstOrDefault());
-        editor.Visibility = back.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible;
+        Refresh(null);
         return state;
     }
 

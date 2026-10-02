@@ -69,7 +69,7 @@ public sealed partial class MainWindow : Window
     readonly TextBlock contextHeaderLabel = Label("CONTEXTE", 9);
     readonly TextBlock contextPercentText = Label("0 %", 10);
     readonly ProgressBar contextBar = new() { Minimum = 0, Maximum = 100, Height = 2, Value = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
-    readonly TextBlock contextValueText = Label("— / 128 000 tokens", 10);
+    readonly TextBlock contextValueText = Label($"— / {ModelContexts.DefaultContextLimit:N0} tokens", 10);
     readonly TextBlock status = Label("", 12);
     bool updatingModelSelector, updatingThinkingSelector;
     StackPanel messages = CreateMessagePanel();
@@ -1536,6 +1536,7 @@ public sealed partial class MainWindow : Window
                     "Project skills: <source folder>/.omh-ai/skills. Enable Automatic skill creation to let the AI create them."), 12) });
         var skillToggles = new Dictionary<string, ToggleSwitch>();
         var imageGenerationSettings = BuildImageGenerationSettings(providerEditor.Drafts);
+        var webHttpSettings = BuildWebHttpSettings();
         var gitRead = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableRead) };
         var gitWrite = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableWrite) };
         var gitSettings = new StackPanel { Spacing = 8 };
@@ -1555,13 +1556,13 @@ public sealed partial class MainWindow : Window
             var skillTitle = toggle.Header.ToString()!;
             toggle.Header = null;
             skillPanel.Children.Add(FluentDesign.Setting(skillTitle,
-                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
+                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
                 caption: SkillLabel(skill, bold: true), information: SkillInfoButton(skill)));
             if (skill.Id == "git")
             { gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; toggle.Toggled += (_, _) => gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; }
-            if(skill.Id is "rag" or "vision_bridge" or ImageGenerationTools.SkillId)
+            if(skill.Id is "rag" or "vision_bridge" or "web" or ImageGenerationTools.SkillId)
             {
-                var settingsPanel = skill.Id == "rag" ? features.Rag : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
+                var settingsPanel = skill.Id == "rag" ? features.Rag : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
                 settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 toggle.Toggled+=(_,_)=>settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 settingsPanel.Margin = new(0, 8, 0, 0);
@@ -1672,6 +1673,7 @@ public sealed partial class MainWindow : Window
         retrySettings.Save(savedFeatures); notificationSettings.Save(savedFeatures);
         agentAutomationSettings.Save(savedFeatures);
         compactionSettings.Save(savedFeatures);
+        webHttpSettings.Save(savedFeatures);
         await branding.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
         AppLog.Configure(savedFeatures);
@@ -2217,7 +2219,7 @@ public sealed partial class MainWindow : Window
     void RefreshContextInfo()
     {
         if (ActiveRun is { } running) { RestoreRunMetrics(running); return; }
-        var limit = provider?.ContextLimit ?? 128_000;
+        var limit = provider?.ContextLimit ?? ModelContexts.DefaultContextLimit;
         var currentDetails = ContextDetails.From(VisibleHistory(), limit);
         if (currentDetails.Estimated && currentDetails.ActiveMessages > 0)
         {
@@ -2249,7 +2251,7 @@ public sealed partial class MainWindow : Window
     }
     void ShowContextUsage(double tokens, bool estimated = false, int? contextLimit = null)
     {
-        var limit = contextLimit ?? ActiveRun?.Provider.ContextLimit ?? provider?.ContextLimit ?? 128_000;
+        var limit = contextLimit ?? ActiveRun?.Provider.ContextLimit ?? provider?.ContextLimit ?? ModelContexts.DefaultContextLimit;
         var ratio = Math.Clamp(tokens / limit, 0, 1);
         contextBar.Value = ratio * 100;
         contextPercentText.Text = $"{(ratio * 100):F1} %{(estimated ? " ~" : "")}";
@@ -2259,7 +2261,7 @@ public sealed partial class MainWindow : Window
     void UpdateMetrics(GenerationUpdate update, int? fallbackInputTokens = null, int? contextLimit = null)
     {
         var exact = update.OutputTokens.HasValue;
-        var limit = contextLimit ?? ActiveRun?.Provider.ContextLimit ?? provider?.ContextLimit ?? 128_000;
+        var limit = contextLimit ?? ActiveRun?.Provider.ContextLimit ?? provider?.ContextLimit ?? ModelContexts.DefaultContextLimit;
         speedValueText.Text = $"⚡ {(exact ? "" : "≈ ")}{update.TokensPerSecond:F1} tok/s";
         speedOutputText.Text = $"{T("Sortie : ")}{(exact ? update.OutputTokens!.Value.ToString("N0") : T("estimation"))}";
 
@@ -2361,7 +2363,7 @@ public sealed partial class MainWindow : Window
                 {
                     if (update.Retry is { } retry)
                     {
-                        SetRunStatus(run, retry.Describe(run.Options.Language)); assistantUi.UpdateContent(retry.Describe(run.Options.Language));
+                        ShowModelRetry(run, retry, assistantUi, ct);
                         assistantUi.UpdateThinking("", isComplete: false); run.Tracker = new GenerationSpeedTracker(); lastPaint = DateTime.MinValue;
                         return;
                     }
@@ -2387,7 +2389,7 @@ public sealed partial class MainWindow : Window
                     assistantUi.UpdateContent(progress.Label(run.Options.Language));
                 });
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
-                run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
+                CancelModelRetryFeedback(run); run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
                 active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
                 var finalTokens = completion.OutputTokens ?? Math.Ceiling((active.Content.Length + (completion.Message["reasoning_content"]?.GetValue<string>()?.Length ?? 0)) / 4.0);
                 run.Tracker?.Complete(completion.Seconds, finalTokens);

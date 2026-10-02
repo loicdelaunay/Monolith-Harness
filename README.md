@@ -4,13 +4,13 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.48.1**; portable data remains compatible with existing workspaces.
+**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.49.2**; portable data remains compatible with existing workspaces.
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.48.1">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.48.1">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.49.2">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.49.2">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -24,7 +24,7 @@
 
 Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.48.1) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.48.1) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.49.2) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.49.2) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
@@ -72,6 +72,11 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 </details>
 
 ## New in the current downloads
+
+- **Smart web research** saves downloaded pages as tool artifacts. The model searches and reads relevant passages instead of filling the context with the entire response. **Legacy** retains inline responses; older Partial/Full preferences remain compatible.
+- **Automatic artifact cleanup**, enabled by default after **seven days without use**, preserves active conversations and leaves source files and conversation documents intact.
+- The standard **context fallback is 256,000 tokens**. Reported model capacities and custom per-model limits still take priority.
+- Provider settings now have a responsive header and a working Back action. Model retry notices use a **four-second grace period** showing thinking before exposing a persistent retry.
 
 See the [changelog](CHANGELOG.md) for additions, improvements and fixes in the current releases.
 
@@ -123,7 +128,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.48.1), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.48.1) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.49.2), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.49.2) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its portable resources under <code>workspace/</code> beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.

@@ -189,7 +189,7 @@ public sealed partial class MainWindow
             }
             editing=false; ComposeCron(); form.Visibility=Visibility.Visible; list.Visibility=Visibility.Collapsed; add.Visibility=Visibility.Collapsed;
         }
-        add.Click += (_, _) => Edit(new ScheduledTask { ProjectId=projectId, ProviderId=provider?.Id ?? 0, Model=provider?.Model ?? "", ContextLimit=provider?.ContextLimit ?? 128000, SupportsImages=provider?.SupportsImages ?? false, ThinkingLevel=state.ThinkingLevel, EnabledSkills=state.EnabledSkills, AutoContinue=state.AutoContinue });
+        add.Click += (_, _) => Edit(new ScheduledTask { ProjectId=projectId, ProviderId=provider?.Id ?? 0, Model=provider?.Model ?? "", ContextLimit=provider?.ContextLimit ?? ModelContexts.DefaultContextLimit, SupportsImages=provider?.SupportsImages ?? false, ThinkingLevel=state.ThinkingLevel, EnabledSkills=state.EnabledSkills, AutoContinue=state.AutoContinue });
         var save = new Button { Content = "Enregistrer / Save", Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         var cancel = new Button { Content = "Annuler / Cancel" };
         cancel.Click += async (_, _) => { form.Visibility=Visibility.Collapsed; list.Visibility=add.Visibility=Visibility.Visible; await Reload(); };

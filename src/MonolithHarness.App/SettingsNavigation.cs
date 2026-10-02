@@ -13,8 +13,8 @@ public sealed class SettingsNavigation : Grid
     };
     readonly ScrollViewer body = new()
     { Name = "SettingsPageBody", HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(24, 0, 24, 24) };
-    readonly TextBlock heading = new() { FontSize = 24, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new(24, 20, 24, 20) };
-    readonly ContentPresenter header = new() { Margin = new(24, 0, 24, 16), Visibility = Visibility.Collapsed };
+    readonly TextBlock heading = new() { FontSize = 24, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+    readonly ContentPresenter header = new() { Visibility = Visibility.Collapsed };
     readonly List<UIElement> pages = [];
     readonly List<UIElement?> headers = [];
     readonly List<NavigationViewItem> items = [];
@@ -27,10 +27,10 @@ public sealed class SettingsNavigation : Grid
     {
         var content = new Grid();
         content.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        content.RowDefinitions.Add(new() { Height = GridLength.Auto });
         content.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        content.Children.Add(heading); SetRow(header, 1); content.Children.Add(header);
-        SetRow(body, 2); content.Children.Add(body);
+        var pageHeader = new SettingsHeaderPanel { Margin = new(24, 20, 24, 16), Spacing = 16, RightAlignLast = true };
+        pageHeader.Children.Add(heading); pageHeader.Children.Add(header); content.Children.Add(pageHeader);
+        SetRow(body, 1); content.Children.Add(body);
         navigation.Content = content; Children.Add(navigation);
         navigation.SelectionChanged += (_, _) =>
         {

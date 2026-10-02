@@ -33,6 +33,8 @@ public sealed partial class MainWindow
         public string ProgressText { get; set; } = "";
         public string ProgressReasoning { get; set; } = "";
         public int? ProgressTokens { get; set; }
+        public int RetryRevision { get; set; }
+        public bool RetryFeedbackActive { get; set; }
     }
 
     readonly Dictionary<int, ConversationRun> conversationRuns = [];
@@ -146,6 +148,7 @@ public sealed partial class MainWindow
 
     void SetRunStatus(ConversationRun run, string text, StatusKind kind = StatusKind.Activity)
     {
+        CancelModelRetryFeedback(run);
         var wasWaiting = run.WaitingForModel;
         run.WaitingForModel = text == T("Le modèle réfléchit…") || text == T("OpenCode réfléchit…");
         if (run.WaitingForModel && !wasWaiting)

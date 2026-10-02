@@ -13,7 +13,7 @@ public class ConversationSession : IDisposable
     public volatile ConversationExport.Progress? ExportProgress;
     public WorkflowTools? Workflow { get; set; }
     public VisionBridge? Vision { get; set; }
-    public WebHttpTools WebHttp { get; } = new();
+    public WebHttpTools WebHttp { get; }
     public ToolLoopGuard LoopGuard { get; } = new();
     public SandboxWorkspace? Sandbox { get; private set; }
     public string? SandboxEngine { get; private set; }
@@ -56,6 +56,8 @@ public class ConversationSession : IDisposable
         Prompt = prompt;
         Images = images.Select(x => new Attachment { Name = x.Name, Mime = x.Mime, Data = [.. x.Data] }).ToList();
         Db = new HarnessDb(databasePath);
+        WebHttp = new(FeatureSettings.Read(Options.FeaturesJson).WebHttpResponseMode,
+            ConversationArtifacts.DirectoryPath(Chat.Id, databasePath));
         Db.Attach(Chat);
         Cancellation = new CancellationTokenSource();
     }

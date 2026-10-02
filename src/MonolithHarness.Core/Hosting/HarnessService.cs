@@ -23,7 +23,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
     static bool B(JsonObject p, string name, bool fallback = false) => p[name]?.GetValue<bool>() ?? fallback;
     static JsonObject Obj(object value) => (JsonSerializer.SerializeToNode(value, Json) as JsonObject)!;
     HarnessDb Db() => new(database);
-    public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); }
+    public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); }
     static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, hasKey = p.ProtectedKey.Length > 0 };
     static string Html(string text)
     {
@@ -251,10 +251,12 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
         throw new InvalidOperationException("Ressaisissez cette clé API sur Mac : elle est protégée par Windows DPAPI.");
     }
     public void CancelAll() { foreach (var run in runs.Values) run.Cancellation.Cancel(); }
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        artifactMaintenanceStop.Cancel();
+        if (artifactMaintenance != null) await artifactMaintenance;
+        artifactMaintenanceStop.Dispose();
         CancelAll(); terminals.Dispose(); http.Dispose();
         foreach (var process in servers) { try { if (!process.HasExited) process.Kill(true); } catch { } process.Dispose(); }
-        return ValueTask.CompletedTask;
     }
 }

@@ -68,7 +68,7 @@ public sealed partial class TerminalUi
             [new Provider { Id = 1, Name = "DeepSeek", Model = "deepseek-flash" }], []);
         ui.chatId = ui.providerId = 1;
         ui.editor.Set(input);
-        var view = ui.View(1); view.Tokens = 18520; view.Limit = 128000; view.Speed = 62.8;
+        var view = ui.View(1); view.Tokens = 18520; view.Limit = ModelContexts.DefaultContextLimit; view.Speed = 62.8;
         view.Messages[1] = new() { Id = 1, ChatId = 1, Role = "user", Content = "Ajoute une commande pour exporter mes conversations en Markdown." };
         view.Messages[2] = new() { Id = 2, ChatId = 1, Role = "assistant", Content = "Je vais réutiliser le service d’export du moteur partagé.\n\n### Plan\n1. Inspecter le service existant\n2. Brancher /export dans le CLI\n3. Vérifier le fichier Markdown produit" };
         view.Messages[3] = new() { Id = 3, ChatId = 1, Role = "tool", Content = "read_source\nsrc/MonolithHarness.Core/ConversationExport.cs · 180 lignes lues" };

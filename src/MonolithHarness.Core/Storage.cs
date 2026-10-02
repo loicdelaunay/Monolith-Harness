@@ -85,7 +85,7 @@ public sealed class Provider
     public string BaseUrl { get; set; } = "https://api.openai.com/v1";
     public string Model { get; set; } = "gpt-4.1-mini";
     public byte[] ProtectedKey { get; set; } = [];
-    int legacyContextLimit = 128000;
+    int legacyContextLimit = ModelContexts.DefaultContextLimit;
     public int ContextLimit
     {
         get => ModelContexts.For(this).Limit;

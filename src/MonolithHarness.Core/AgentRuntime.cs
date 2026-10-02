@@ -30,6 +30,8 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     {
         var catalog = skills.Catalog(run.Options.EnabledSkills);
         context = await ProjectInstructions.LoadAsync(run.Project.GetSourceFolders(), ct);
+        if (!run.Provider.IsOpenCode && Skills.Enabled(run.Options.EnabledSkills, "web"))
+            context += "\nHTTP response preference: " + agentSettings.WebHttpResponseMode + ". Omit response_mode to follow this user setting. Smart is recommended to save context: search a stored file_id, read only relevant passages, and reuse it for follow-up questions. Legacy is for explicitly selected/requested inline whole responses. Do not switch to Legacy just to avoid targeted reading.\n";
         if (run.Composite == null && run.Chat.OrchestrationMode != "disabled") context += agentOptions.Instructions;
         if (run.Chat.OrchestrationMode != "disabled") context += AgentAutomation.Instructions(agentSettings);
         var recent = await run.Db.Messages.AsNoTracking().Where(x => x.ChatId == run.Chat.Id && x.State == "complete" && (x.Role == "user" || x.Role == "assistant"))
@@ -51,7 +53,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     public void AddDefinitions(JsonArray definitions, bool child = false, int depth = 0)
     {
         if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
-            WebHttpTools.AddDefinitions(definitions, run.Options.EnabledSkills);
+            WebHttpTools.AddDefinitions(definitions, run.Options.EnabledSkills, agentSettings.WebHttpResponseMode);
         MemoryTools.AddDefinitions(definitions, run.Options.EnabledSkills);
         SkillAuthoring.AddDefinitions(definitions, run.Options.EnabledSkills);
         if (run.Workflow != null) WorkflowTools.AddDefinitions(definitions, child);

@@ -24,6 +24,9 @@ public sealed partial class MainWindow
     }
     void ModelProgress(ConversationRun run, GenerationUpdate update)
     {
+        var retrying = run.RetryFeedbackActive;
+        CancelModelRetryFeedback(run);
+        if (retrying) SetRunStatus(run, T("Le modèle réfléchit…"));
         if (update.HasModelOutput || update.Text.Length > 0 || update.Reasoning.Length > 0 || update.OutputTokens > 0)
         { run.ContextRequest = null; run.ContextRequestTimer.Stop(); }
         if (update.HasModelOutput || update.Text != run.ProgressText || update.Reasoning != run.ProgressReasoning || update.OutputTokens != run.ProgressTokens)
