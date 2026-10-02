@@ -8,8 +8,6 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly TextBlock speedPopoverDetails = new() { TextWrapping = TextWrapping.Wrap, Width = 280 };
-
     void AttachHoverPopover(FrameworkElement anchor, FrameworkElement body, Flyout flyout, Action update)
     {
         // A hover flyout must not steal the pointer/focus from its trigger.
@@ -55,10 +53,4 @@ public sealed partial class MainWindow
         anchor.Unloaded += (_, _) => { flyout.Hide(); dismiss.Stop(); refresh.Stop(); };
     }
 
-    void AttachSpeedPopover()
-    {
-        speedStack.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        AttachHoverPopover(speedStack, speedPopoverDetails, new Flyout { Content = speedPopoverDetails },
-            () => RefreshSpeedTooltip(currentSpeedTracker));
-    }
 }

@@ -323,7 +323,7 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(speedStack, 1);
         grid.Children.Add(speedStack);
         AttachSpeedPopover();
-        RefreshSpeedTooltip();
+        RefreshSpeedPopover();
 
         var contextStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         var contextTop = new Grid { ColumnSpacing = 8 };
@@ -2206,88 +2206,6 @@ public sealed partial class MainWindow : Window
         RefreshContextInfo();
         ShowStatus(T("Modèle mis à jour : ") + newModel);
     }
-    void RefreshSpeedTooltip(GenerationSpeedTracker? activeTracker = null)
-    {
-        var assistantMessages = chat == null
-            ? []
-            : VisibleHistory()
-                .Where(x => x.ChatId == chat.Id && x.Role == "assistant" && x.State == "complete" && (x.OutputTokens ?? 0) > 0 && x.Seconds > 0)
-                .ToList();
-
-        var sb = new StringBuilder();
-
-        if (activeTracker != null)
-        {
-            var curAvg = activeTracker.AverageSpeed;
-            var curMin = activeTracker.MinSpeed ?? curAvg;
-            var curMax = activeTracker.MaxSpeed ?? curAvg;
-
-            sb.AppendLine(T("Débit en cours (tok/s) :"));
-            sb.AppendLine($"• {T("Minimum")} : {curMin:F1} {T("tok/s")}");
-            sb.AppendLine($"• {T("Maximum")} : {curMax:F1} {T("tok/s")}");
-            sb.AppendLine($"• {T("Moyenne")} : {curAvg:F1} {T("tok/s")}");
-
-            if (assistantMessages.Count > 0)
-            {
-                var stats = SpeedStats.Compute(assistantMessages.Select(m => (m.OutputTokens!.Value, m.Seconds)));
-                if (stats.HasValue)
-                {
-                    var count = assistantMessages.Count;
-                    sb.AppendLine();
-                    sb.AppendLine($"📊 {T("Discussion")} ({count} {T(count > 1 ? "réponses" : "réponse")}) :");
-                    sb.AppendLine($"• {T("Minimum")} : {stats.Value.Min:F1} {T("tok/s")}");
-                    sb.AppendLine($"• {T("Maximum")} : {stats.Value.Max:F1} {T("tok/s")}");
-                    sb.AppendLine($"• {T("Moyenne")} : {stats.Value.Avg:F1} {T("tok/s")}");
-                }
-            }
-        }
-        else if (assistantMessages.Count > 0)
-        {
-            var lastMsg = assistantMessages[^1];
-            double lastAvg = lastMsg.OutputTokens!.Value / Math.Max(0.1, lastMsg.Seconds);
-            messageTrackers.TryGetValue(lastMsg.Id, out var lastTracker);
-            var lastMin = lastTracker?.MinSpeed?.ToString("F1") ?? "—";
-            var lastMax = lastTracker?.MaxSpeed?.ToString("F1") ?? "—";
-
-            if (assistantMessages.Count > 1)
-            {
-                var stats = SpeedStats.Compute(assistantMessages.Select(m => (m.OutputTokens!.Value, m.Seconds)));
-                sb.AppendLine(T("Dernière réponse (tok/s) :"));
-                sb.AppendLine($"• {T("Minimum")} : {lastMin} {T("tok/s")}");
-                sb.AppendLine($"• {T("Maximum")} : {lastMax} {T("tok/s")}");
-                sb.AppendLine($"• {T("Moyenne")} : {lastAvg:F1} {T("tok/s")}");
-
-                if (stats.HasValue)
-                {
-                    var count = assistantMessages.Count;
-                    sb.AppendLine();
-                    sb.AppendLine($"📊 {T("Discussion")} ({count} {T("réponses")}) :");
-                    sb.AppendLine($"• {T("Minimum")} : {stats.Value.Min:F1} {T("tok/s")}");
-                    sb.AppendLine($"• {T("Maximum")} : {stats.Value.Max:F1} {T("tok/s")}");
-                    sb.AppendLine($"• {T("Moyenne")} : {stats.Value.Avg:F1} {T("tok/s")}");
-                }
-            }
-            else
-            {
-                sb.AppendLine(T("Débit (tok/s) :"));
-                sb.AppendLine($"• {T("Minimum")} : {lastMin} {T("tok/s")}");
-                sb.AppendLine($"• {T("Maximum")} : {lastMax} {T("tok/s")}");
-                sb.AppendLine($"• {T("Moyenne")} : {lastAvg:F1} {T("tok/s")}");
-            }
-        }
-        else
-        {
-            sb.AppendLine(T("Débit (tok/s) :"));
-            sb.AppendLine($"• {T("Minimum")} : —");
-            sb.AppendLine($"• {T("Maximum")} : —");
-            sb.AppendLine($"• {T("Moyenne")} : —");
-        }
-
-        sb.AppendLine();
-        sb.AppendLine(WorkflowText("Les mesures en cours peuvent être estimées. Les extrema de la dernière réponse ne sont pas conservés après redémarrage.", "Live measurements may be estimated. Last-response extrema are not retained after restart."));
-        var tooltipText = sb.ToString().TrimEnd();
-        speedPopoverDetails.Text = tooltipText;
-    }
     void RefreshContextInfo()
     {
         if (ActiveRun is { } running) { RestoreRunMetrics(running); return; }
@@ -2295,7 +2213,7 @@ public sealed partial class MainWindow : Window
         var currentDetails = ContextDetails.From(VisibleHistory(), limit);
         if (currentDetails.Estimated && currentDetails.ActiveMessages > 0)
         {
-            ShowContextUsage(currentDetails.Used, true, limit); RefreshSpeedTooltip(); return;
+            ShowContextUsage(currentDetails.Used, true, limit); RefreshSpeedPopover(); return;
         }
         var last = VisibleHistory().LastOrDefault(x => x.State == "complete" && x.InputTokens.HasValue);
         if (last?.InputTokens is int inputTokens)
@@ -2319,7 +2237,7 @@ public sealed partial class MainWindow : Window
             speedOutputText.Text = $"{T("Sortie : ")}—";
             metrics.Text = T("Débit : —   •   Contexte : —");
         }
-        RefreshSpeedTooltip();
+        RefreshSpeedPopover();
     }
     void ShowContextUsage(double tokens, bool estimated = false, int? contextLimit = null)
     {
@@ -2354,7 +2272,7 @@ public sealed partial class MainWindow : Window
             contextBar.Value = 0;
         }
         metrics.Text = $"{speedValueText.Text}  ·  {contextValueText.Text}";
-        RefreshSpeedTooltip(currentSpeedTracker);
+        RefreshSpeedPopover(currentSpeedTracker);
     }
     async Task SendCoreAsync(ConversationRun run, string secret)
     {
@@ -2428,7 +2346,7 @@ public sealed partial class MainWindow : Window
                 activeAssistantUi = assistantUi;
                 ScrollRunToBottom(run);
                 run.Tracker = new GenerationSpeedTracker();
-                if (IsVisible(run)) RefreshSpeedTooltip(run.Tracker);
+                if (IsVisible(run)) RefreshSpeedPopover(run.Tracker);
                 SetRunStatus(run, T("Le modèle réfléchit…"));
                 var lastPaint = DateTime.MinValue;
                 var completion = await engine.StreamAsync(provider, secret, wire, definitions, update =>
@@ -2472,7 +2390,7 @@ public sealed partial class MainWindow : Window
                 UpdateMetrics(run, new(active.Content, "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens }, inputEstimate);
                 assistantUi.SetDuration(completion.Seconds, active.CompletedUtc);
                 assistantUi.SetCachedInputTokens(completion.CachedInputTokens);
-                if (IsVisible(run)) RefreshSpeedTooltip();
+                if (IsVisible(run)) RefreshSpeedPopover();
                 ScrollRunToBottom(run);
                 var finalReasoning = completion.Message["reasoning_content"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(finalReasoning))
@@ -2569,7 +2487,7 @@ public sealed partial class MainWindow : Window
                 messageTrackers[active.Id] = run.Tracker;
             }
             run.Tracker = null;
-            if (IsVisible(run)) RefreshSpeedTooltip();
+            if (IsVisible(run)) RefreshSpeedPopover();
             SetRunStatus(run, ex is OperationCanceledException ? T("Génération arrêtée. Réponse partielle conservée.") : ex.Message,
                 ex is OperationCanceledException ? StatusKind.Notice : StatusKind.Error);
             run.Failed=true;

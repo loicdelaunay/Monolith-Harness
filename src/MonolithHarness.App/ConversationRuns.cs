@@ -178,7 +178,7 @@ public sealed partial class MainWindow
         ShowStatus(run.Status, run.StatusMode, run.Chat.Id, run.StatusExpiresAt);
         if (run.Update != null) UpdateMetrics(run.Update, run.InputEstimate, run.Provider.ContextLimit);
         if (run.Context is { } context) ShowContextUsage(context.Tokens, context.Estimated, run.Provider.ContextLimit);
-        RefreshSpeedTooltip(run.Tracker);
+        RefreshSpeedPopover(run.Tracker);
         RefreshModelActivity();
     }
 

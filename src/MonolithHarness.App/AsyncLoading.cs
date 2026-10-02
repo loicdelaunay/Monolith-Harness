@@ -190,7 +190,7 @@ public sealed partial class MainWindow
                 panel.Children.Remove(placeholder);
                 var last = history.LastOrDefault(x => x.InputTokens.HasValue);
                 if (last != null) UpdateMetrics(new(last.Content, "", last.InputTokens, last.OutputTokens, last.Seconds));
-                RefreshSpeedTooltip(); RefreshContextInfo();
+                RefreshSpeedPopover(); RefreshContextInfo();
                 if (panel.Children.Count == 0)
                 {
                     var welcome = new StackPanel { Spacing = 16, Margin = new(20, 42, 20, 24) };

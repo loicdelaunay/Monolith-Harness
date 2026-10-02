@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.47.3 - 2026-10-02
+
+- Restyles the GUI generation-speed popover to match the context panel: an accent average-speed summary, a live/estimated or last-response badge, and rounded cards for the response and conversation statistics. Minimum, average and maximum values remain separate, with missing measurements shown as dashes. The layout adapts to narrow windows and text zoom, keeps scrolling on shorter screens and refreshes while open. Existing throughput calculations and session-only extrema are preserved. GUI and CLI versions remain aligned.
+
 ## 1.47.2 - 2026-10-02
 
 - Keeps the GUI thinking status chip at “Le modèle réfléchit” while the model reasons, instead of repeating excerpts or an idle counter in that chip. The separate reasoning panel still displays the full streamed reasoning, and the response and tool status indicators retain their existing behavior. GUI and CLI versions remain aligned.
