@@ -30,8 +30,10 @@ Extract into a writable, private folder. $start
 Linux GUI uses X11 or XWayland; install GTK3 and WebKitGTK for its browser.
 No separate .NET or Python installation is required.
 
-To update, close the application and replace only $executable. Keep your
-database.sqlite, keys and existing resources. This download has no user data.
+To update, close all application instances and replace only $executable. Keep your
+database.sqlite, keys, workspace/ and existing resources. This download has no user data.
+Startup groups managed resource folders in workspace/; folderless chats get their
+own workspace/conversations/chat-ID/ directory, with files retained across restarts.
 The chat model is not bundled; configure a provider. Optional integrations
 such as Git, Docker/Podman, OpenCode and MCP retain their own prerequisites.
 

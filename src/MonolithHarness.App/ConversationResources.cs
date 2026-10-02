@@ -92,7 +92,7 @@ public sealed partial class MainWindow
     {
         if (chat == null || project == null) return;
         var validated = ProjectResources.Validate(paths);
-        chat.ResourcePathsJson = ProjectResources.Serialize(validated);
+        chat.ResourcePathsJson = ProjectResources.Serialize(validated, chat.Id);
         project = ProjectResources.Effective(chat, db.Projects.Local.FirstOrDefault(x => x.Id == project.Id) ?? project);
         await db.SaveChangesAsync();
         UpdateSourceLabel(); UpdateFloatingAssets(); ResetWorkspaceTools();

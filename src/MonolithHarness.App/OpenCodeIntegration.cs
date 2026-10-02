@@ -382,7 +382,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
         if (!string.IsNullOrWhiteSpace(source)) return source;
 
-        var fallback = Path.Combine(HarnessDb.DataDirectory, "OpenCodeWorkspaces", "project-" + (project?.Id ?? 0));
+        var fallback = Path.Combine(PortableStorage.Folder("OpenCodeWorkspaces"), "project-" + (project?.Id ?? 0));
 
         Directory.CreateDirectory(fallback);
 

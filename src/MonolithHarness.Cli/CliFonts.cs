@@ -22,7 +22,7 @@ public static class CliFonts
     {
         var font = All.FirstOrDefault(f => f.Face == face);
         if (font?.File == null) return null;
-        var folder = Path.Combine(root, "fonts", font.Folder!); Directory.CreateDirectory(folder);
+        var folder = Path.Combine(PortableStorage.Folder("fonts", root), font.Folder!); Directory.CreateDirectory(folder);
         foreach (var name in new[] { font.File, "OFL.txt" })
         {
             using var resource = typeof(CliFonts).Assembly.GetManifestResourceStream($"MonolithHarness.Cli.Fonts.{font.Folder}.{name}")

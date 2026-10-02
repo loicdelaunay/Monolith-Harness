@@ -21,7 +21,7 @@ public static class PythonRuntime
     }
     static Stream Resource(string name) => Assembly.GetEntryAssembly()?.GetManifestResourceStream("MonolithHarness.Python." + name)
         ?? throw new IOException("Runtime Python absent de cette compilation. Compilez/publiez l’application avec build/PythonRuntime.targets.");
-    public static string DirectoryPath(Manifest info) => Path.Combine(PortableStorage.Root, "runtimes", "python", $"{info.Version}-{info.Release}-{info.Rid}");
+    public static string DirectoryPath(Manifest info) => Path.Combine(PortableStorage.Folder("runtimes/python"), $"{info.Version}-{info.Release}-{info.Rid}");
     public static string Executable(Manifest info) => Path.Combine(DirectoryPath(info), "python", OperatingSystem.IsWindows() ? "python.exe" : "bin/python3.13");
     public static async Task<string> EnsureAsync(CancellationToken ct)
     {

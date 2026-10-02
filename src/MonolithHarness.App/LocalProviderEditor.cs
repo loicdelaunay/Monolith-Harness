@@ -39,7 +39,7 @@ public sealed partial class MainWindow
         void Save()
         {
             var selectedFolder = folder.Text.Trim();
-            config.Directory = PlatformSupport.PathComparer.Equals(selectedFolder.TrimEnd(Path.DirectorySeparatorChar), Path.Combine(PortableStorage.Root, "model")) ? "" : selectedFolder;
+            config.Directory = PlatformSupport.PathComparer.Equals(selectedFolder.TrimEnd(Path.DirectorySeparatorChar), PortableStorage.Folder("model")) ? "" : selectedFolder;
             config.Backend = backend.SelectedItem as string ?? "auto";
             config.ChatExecutable = customChat.Text.Trim(); config.ImageExecutable = customImage.Text.Trim(); draft.LocalModelsJson = config.Json();
             var chatModels = config.Models.Where(x => x.Purpose == "chat").Select(x => x.Id).ToList();

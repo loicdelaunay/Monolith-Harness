@@ -10,6 +10,6 @@ PortableStorage.EnsureWritable();
 using var db = new HarnessDb(HarnessDb.DatabasePath);
 await db.InitializeAsync();
 new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate();
-if (!File.Exists(Path.Combine(expected, "database.sqlite")) || !File.Exists(Path.Combine(expected, "skills", "exemple-revue", "SKILL.md")))
+if (!File.Exists(Path.Combine(expected, "database.sqlite")) || !File.Exists(Path.Combine(expected, "workspace", "skills", "exemple-revue", "SKILL.md")))
     throw new Exception("Portable files are missing beside the executable.");
 Console.WriteLine("PASS: SQLite and skills beside actual EXE, despite full extraction and different working directory.");

@@ -50,7 +50,7 @@ public sealed class SandboxWorkspace : IDisposable
             throw new InvalidOperationException("Sandbox : associez uniquement des dossiers sources sans imbrication / Source roots must not overlap.");
         var db = Path.GetFullPath(database);
         var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(db)))[..16];
-        var dir = Path.Combine(Path.GetDirectoryName(db)!, "sandboxes", id, chatId.ToString());
+        var dir = Path.Combine(PortableStorage.Folder("sandboxes", Path.GetDirectoryName(db)!), id, chatId.ToString());
         AssertNoLinks(dir);
         var gate = Gates.GetOrAdd(dir, _ => new(1, 1));
         if (!await gate.WaitAsync(0, ct)) throw new InvalidOperationException("Sandbox occupée / Sandbox is busy.");
@@ -60,7 +60,8 @@ public sealed class SandboxWorkspace : IDisposable
             var manifest = Path.Combine(dir, "roots.json");
             if (File.Exists(manifest))
             {
-                var saved = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(manifest, ct))!;
+                var saved = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(manifest, ct))!
+                    .ToDictionary(x => x.Key, x => PortableStorage.ResolvePath(x.Value, Path.GetDirectoryName(db)!));
                 if (saved.Count != aliases.Count || aliases.Any(x => !saved.TryGetValue(x.Key, out var value) || !PlatformSupport.PathComparer.Equals(value, x.Value)))
                     throw new InvalidOperationException("Les sources ont changé : créez une nouvelle conversation sandbox / Source roots changed: start a new sandbox conversation.");
             }

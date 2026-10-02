@@ -97,7 +97,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 permissionOwner.PermissionProfileJson = reviewed; await db.SaveChangesAsync(ct); return true;
             case "chat.resources":
                 var resourceChat = await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct);
-                resourceChat.ResourcePathsJson = B(p, "inherit") ? "" : ProjectResources.Serialize(ProjectResources.Validate((p["paths"] as JsonArray ?? []).Select(x => x!.GetValue<string>())));
+                resourceChat.ResourcePathsJson = B(p, "inherit") ? "" : ProjectResources.Serialize(ProjectResources.Validate((p["paths"] as JsonArray ?? []).Select(x => x!.GetValue<string>())), resourceChat.Id, database);
                 await db.SaveChangesAsync(ct); return true;
             case "chat.tasks":
                 var taskChat = await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct);
@@ -204,7 +204,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 return true;
             case "files.list": case "files.read": case "git": case "git.files": case "git.diff": case "git.preview": case "terminal":
                 var workspace = await db.Projects.SingleAsync(x => x.Id == I(p, "projectId"), ct);
-                if (I(p, "chatId") != 0) workspace = ProjectResources.Effective(await db.Chats.SingleAsync(x => x.Id == I(p, "chatId") && x.ProjectId == workspace.Id, ct), workspace);
+                if (I(p, "chatId") != 0) workspace = ProjectResources.Effective(await db.Chats.SingleAsync(x => x.Id == I(p, "chatId") && x.ProjectId == workspace.Id, ct), workspace, database);
                 var source = new SourceAccess(workspace.GetSourceFolders());
                 if (method == "files.list") return source.List(S(p, "path", "."));
                 if (method == "files.read") return await source.ReadAsync(S(p, "path"), ct);
@@ -219,7 +219,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
             case "preview":
                 var previewChat = await db.Chats.SingleAsync(x => x.Id == I(p, "chatId"), ct);
                 var previewProject = await db.Projects.SingleAsync(x => x.Id == previewChat.ProjectId, ct);
-                previewProject = ProjectResources.Effective(previewChat, previewProject);
+                previewProject = ProjectResources.Effective(previewChat, previewProject, database);
                 permissionProject.Value = previewProject;
                 return await Preview(previewProject, S(p, "path"), ct, previewChat.Id);
             case "mcp.json.get": case "mcp.json.save": case "mcp.save": case "mcp.delete": case "mcp.toggle": case "mcp.test": return await DispatchMcp(method, p, ct);

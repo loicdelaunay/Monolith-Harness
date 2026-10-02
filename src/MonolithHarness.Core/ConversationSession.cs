@@ -41,7 +41,7 @@ public class ConversationSession : IDisposable
         Chat = new Chat { Id = chat.Id, ProjectId = chat.ProjectId, Title = chat.Title, IsFavorite = chat.IsFavorite, IsPinned = chat.IsPinned, IsArchived = chat.IsArchived, UpdatedUtc = chat.UpdatedUtc, AgentOptionsJson = chat.AgentOptionsJson,
             SandboxEnabled = chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, TodoDismissed = chat.TodoDismissed, ExecutionMode = AgentPolicy.Mode(chat.ExecutionMode), OrchestrationMode = AgentPolicy.Orchestration(chat.OrchestrationMode) };
         Project = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
-        Project.SetSourceFolders(ProjectResources.For(chat, project));
+        Project.SetSourceFolders(ProjectResources.For(chat, project, databasePath));
         Provider = JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(provider))!;
         SelectedProviderId=provider.Id;
         if(provider.IsComposite)

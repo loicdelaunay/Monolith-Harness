@@ -15,7 +15,7 @@ public sealed partial class HarnessService
         await using var db = Db();
         var chat = await db.Chats.SingleAsync(x => x.Id == chatId, ct);
         var project = await db.Projects.SingleAsync(x => x.Id == chat.ProjectId, ct);
-        project = ProjectResources.Effective(chat, project);
+        project = ProjectResources.Effective(chat, project, database);
         return await SandboxWorkspace.OpenAsync(database, chatId, project.GetSourceFolders(), ct);
     }
     async Task<object> ReviewSandbox(JsonObject p, CancellationToken ct)

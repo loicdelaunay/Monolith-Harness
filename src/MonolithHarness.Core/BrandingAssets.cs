@@ -16,7 +16,7 @@ public static class BrandingAssets
     {
         root ??= PortableStorage.Root;
         if (string.IsNullOrWhiteSpace(path)) return "";
-        return Path.GetFullPath(path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar), root);
+        return PortableStorage.ResolvePath(path, root);
     }
     public static string? RelativePath(string path, string? root = null)
     {
@@ -33,11 +33,11 @@ public static class BrandingAssets
         var extension = Path.GetExtension(path).ToLowerInvariant();
         if (extension is not (".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".ico")) throw new ArgumentException("Format de logo non pris en charge.");
         var name = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant() + extension;
-        var folder = Path.Combine(root, "branding"); Directory.CreateDirectory(folder);
+        var folder = PortableStorage.Folder("branding", root); Directory.CreateDirectory(folder);
         var destination = Path.Combine(folder, name);
         var staging = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try { await File.WriteAllBytesAsync(staging, data); File.Move(staging, destination, overwrite: true); }
         finally { if (File.Exists(staging)) File.Delete(staging); }
-        return "branding/" + name;
+        return RelativePath(destination, root)!;
     }
 }

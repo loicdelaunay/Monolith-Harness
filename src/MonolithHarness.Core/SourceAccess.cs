@@ -14,7 +14,7 @@ public sealed partial class SourceAccess
 
     public SourceAccess(IEnumerable<string> roots)
     {
-        var rawList = roots.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => Path.GetFullPath(r.Trim())).Distinct(PlatformSupport.PathComparer).ToList();
+        var rawList = roots.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => PortableStorage.ResolvePath(r.Trim())).Distinct(PlatformSupport.PathComparer).ToList();
         var aliasCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in rawList)
         {
@@ -78,7 +78,7 @@ public sealed partial class SourceAccess
 
         if (Path.IsPathFullyQualified(relative))
         {
-            var fullReq = Path.GetFullPath(relative);
+            var fullReq = PortableStorage.ResolvePath(relative);
             var match = _roots.FirstOrDefault(r =>
             {
                 var bp = r.FullPath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;

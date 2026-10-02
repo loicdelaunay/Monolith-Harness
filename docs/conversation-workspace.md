@@ -10,6 +10,8 @@ Changes apply to the next send. An active generation keeps its configuration sna
 
 `AGENTS.md`, `Agent.md` and `AGENT.md` load automatically from attached folders and subfolders. Instructions remain subordinate to the user's request, Plan mode and permissions.
 
+GUI and CLI conversations without a folder receive a private `workspace/conversations/chat-<id>/` beside the launcher or selected database. File-only resources receive this working directory too. Files and terminals use it automatically, and reopening the chat retains created files. Attaching a real folder uses that folder; removing the last folder returns to the previous workspace. Deleting a chat retains its files. See [portable workspaces and migration](portable-workspace.md).
+
 ## permission.json
 
 Place this file in a default project folder, then use **Manage project → Read/Import permission.json**. Review the rules and save/apply them. The application keeps a snapshot in SQLite: editing the file, including by an agent, does not change permissions without a new import. New generations use that snapshot.

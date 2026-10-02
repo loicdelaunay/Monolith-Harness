@@ -63,13 +63,13 @@ try
         state.EnabledSkills = "sources,write_sources,terminal,web,mouse_control,screenshots";
         state.PermissionMode = "allow"; await db.SaveChangesAsync();
     }
-    async Task<(int Code, string Output, string Errors)> Run(bool execute = false, bool json = false, bool allow = false)
+    async Task<(int Code, string Output, string Errors)> Run(bool execute = false, bool json = false, bool allow = false, int? chat = null)
     {
         using var output = new StringWriter(); using var errors = new StringWriter();
         Console.SetOut(output); Console.SetError(errors);
         try
         {
-            int code = await Headless.RunAsync(new() { Run = true, Execute = execute, Allow=allow, Json = json, Database = database, Directory = sources, Prompt = "Test the CLI" }).WaitAsync(TimeSpan.FromSeconds(20));
+            int code = await Headless.RunAsync(new() { Run = true, Execute = execute, Allow=allow, Json = json, Database = database, Directory = chat == null ? sources : null, Chat = chat, Prompt = "Test the CLI" }).WaitAsync(TimeSpan.FromSeconds(20));
             return (code, output.ToString(), errors.ToString());
         }
         finally { Console.SetOut(originalOut); Console.SetError(originalError); }
@@ -140,7 +140,81 @@ try
     var assetRun=await Run(execute:true,allow:true);
     Check(assetRun.Code==0 && assetRun.Output.Contains("Asset complete"),"CLI runs complete asset create/edit/capture/export sequence");
     Check(resumed!.ToJsonString().Contains("data:image/png;base64,"),"Asset capture reaches the vision model through CLI history");
-    Check(Directory.EnumerateFiles(Path.Combine(root,"assets"),"*.png",SearchOption.AllDirectories).Any(),"CLI exports asset PNG beside the portable database");
+    Check(Directory.EnumerateFiles(Path.Combine(root,"workspace","assets"),"*.png",SearchOption.AllDirectories).Any(),"CLI exports asset PNG inside the portable workspace");
+    int fileChat, otherFileChat;
+    await using (var fileDb = new HarnessDb(database))
+    {
+        var folderless = new Project { Name = "Conversation files", IsInbox = true, Chats = [new Chat(), new Chat()] };
+        fileDb.Projects.Add(folderless); await fileDb.SaveChangesAsync();
+        fileChat = folderless.Chats.First().Id; otherFileChat = folderless.Chats.Last().Id;
+    }
+    var fileRoot = ConversationWorkspace.DirectoryPath(fileChat, database);
+    step = 0; resumed = null;
+    api.Respond = (body, _) => Interlocked.Increment(ref step) == 1
+        ? FakeApi.Tool("write_source", new { path = "created.txt", content = "Portable conversation file" })
+        : (resumed = body) != null ? FakeApi.Text("Workspace file created") : "";
+    var fileRun = await Run(execute: true, allow: true, chat: fileChat);
+    Check(fileRun.Code == 0 && File.ReadAllText(Path.Combine(fileRoot, "created.txt")) == "Portable conversation file",
+        "A real CLI generation writes into the folderless conversation workspace");
+    var workspaceSystem = resumed!["messages"]!.AsArray().First(x => x?["role"]?.GetValue<string>() == "system")!["content"]!.GetValue<string>();
+    Check(workspaceSystem.Contains("write_source", StringComparison.Ordinal)
+        && !workspaceSystem.Contains("file tools are disabled", StringComparison.Ordinal)
+        && !workspaceSystem.Contains("outils d'accès aux fichiers sont désactivés", StringComparison.Ordinal),
+        "The model is told source tools are available in a folderless conversation");
+    step = 0; resumed = null;
+    api.Respond = (body, _) => Interlocked.Increment(ref step) == 1
+        ? FakeApi.Tool("read_source", new { path = "created.txt" })
+        : (resumed = body) != null ? FakeApi.Text("Workspace file restored") : "";
+    var readRun = await Run(chat: fileChat);
+    Check(readRun.Code == 0 && resumed!.ToJsonString().Contains("Portable conversation file"),
+        "Reopening a folderless chat in a fresh CLI client retains its files");
+    step = 0;
+    api.Respond = (_, _) => Interlocked.Increment(ref step) == 1
+        ? FakeApi.Tool("run_terminal", new { command = "echo conversation-terminal > terminal.txt" })
+        : FakeApi.Text("Terminal complete");
+    var terminalRun = await Run(execute: true, allow: true, chat: fileChat);
+    Check(terminalRun.Code == 0 && File.Exists(Path.Combine(fileRoot, "terminal.txt")),
+        "CLI terminal tools start in the current conversation workspace");
+    foreach (var execute in new[] { false, true })
+    {
+        if (execute)
+        {
+            await using var permissionDb = new HarnessDb(database);
+            var owner = await permissionDb.Projects.SingleAsync(x => x.Chats.Any(c => c.Id == fileChat));
+            owner.PermissionProfileJson = "{\"write_source\":\"deny\"}"; await permissionDb.SaveChangesAsync();
+        }
+        step = 0;
+        api.Respond = (_, _) => Interlocked.Increment(ref step) == 1
+            ? FakeApi.Tool("write_source", new { path = "forbidden.txt", content = "must not write" })
+            : FakeApi.Text("Workspace permission preserved");
+        var rejected = await Run(execute: execute, chat: fileChat);
+        Check(rejected.Code == 0 && !File.Exists(Path.Combine(fileRoot, "forbidden.txt")),
+            execute ? "Folderless writes retain imported project tool denials" : "Plan remains read-only in a folderless conversation");
+    }
+    await using (var permissionDb = new HarnessDb(database))
+    {
+        var owner = await permissionDb.Projects.SingleAsync(x => x.Chats.Any(c => c.Id == fileChat));
+        owner.PermissionProfileJson = ""; await permissionDb.SaveChangesAsync();
+    }
+    step = 0; resumed = null;
+    api.Respond = (body, _) => Interlocked.Increment(ref step) == 1
+        ? FakeApi.Tool("write_source", new { path = Path.Combine(fileRoot, "cross-chat.txt"), content = "must not cross" })
+        : (resumed = body) != null ? FakeApi.Text("Other conversation isolated") : "";
+    var crossChat = await Run(execute: true, chat: otherFileChat);
+    Check(crossChat.Code == 0 && !File.Exists(Path.Combine(fileRoot, "cross-chat.txt")) && resumed!.ToJsonString().Contains("Access denied", StringComparison.Ordinal),
+        "Writing outside the current conversation workspace requires its normal additional permission");
+    await using (var fileClient = new CliClient(new() { Database = database }, (_, _, _) => Task.FromResult<JsonNode?>(null), _ => Task.CompletedTask))
+    {
+        await fileClient.Call("chat.resources", new { id = fileChat, paths = new[] { fileRoot, sources } });
+        var snapshot = await fileClient.Snapshot(); var selected = snapshot.Chats.Single(x => x.Id == fileChat);
+        var owner = snapshot.Projects.Single(x => x.Id == selected.ProjectId);
+        Check(ProjectResources.For(selected, owner, database).SequenceEqual([sources]) && !selected.ResourcePathsJson.Contains(fileRoot, StringComparison.Ordinal),
+            "CLI attachment replaces the implicit workspace with the selected real folder");
+        await fileClient.Call("chat.resources", new { id = fileChat, paths = Array.Empty<string>() });
+        snapshot = await fileClient.Snapshot(); selected = snapshot.Chats.Single(x => x.Id == fileChat);
+        Check(ProjectResources.For(selected, owner, database).SequenceEqual([fileRoot]) && File.Exists(Path.Combine(fileRoot, "created.txt")),
+            "Detaching the last CLI folder restores the original workspace and files");
+    }
     api.Respond = (_, _) => FakeApi.Tool("question", new { questions = new[] { new { question = "Choose an option", options = new[] { new { label = "A", description = "First" }, new { label = "B", description = "Second" } }, custom = false } } });
     var question = await Run(json: true);
     Check(question.Code == 3 && question.Output.Contains("\"event\":\"question\""), "Headless questions return an explicit needs-input code instead of hanging");

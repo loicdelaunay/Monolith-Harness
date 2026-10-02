@@ -117,7 +117,7 @@ Canvas captures are sent through the existing image pipeline. A vision-capable m
 
 SVG preserves vector shapes and named layers. PNG and WebP preserve transparency; JPEG requires an opaque background such as `#FFFFFF`. PDF retains vectors. The `transparent` option removes the canvas background, but does not delete background shapes drawn into layers. Raster exports support scales up to 4×, subject to the pixel limit. The GUI also provides a Save As dialog.
 
-Drawings are persisted beside the database under `assets/chat-<id>`, with exports in that conversation's `exports` subfolder. Reopening the conversation restores its drawings. Asset export creates a new file instead of overwriting previous exports.
+Drawings are persisted beside the database under `workspace/assets/chat-<id>`, with exports in that conversation's `exports` subfolder. Reopening the conversation restores its drawings. Asset export creates a new file instead of overwriting previous exports.
 
 ## Availability and limits
 

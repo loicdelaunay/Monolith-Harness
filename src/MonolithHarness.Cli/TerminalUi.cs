@@ -77,7 +77,8 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     string L(string fr, string en) => workspace?.State.Language == "en" ? en : fr;
     ChatView View(int id) => views.TryGetValue(id, out var v) ? v : views[id] = new();
     Chat? CurrentChat => workspace?.Chats.FirstOrDefault(c => c.Id == chatId);
-    Project? CurrentProject => workspace?.Projects.FirstOrDefault(p => p.Id == CurrentChat?.ProjectId);
+    Project? CurrentProject => CurrentChat is { } selected && workspace?.Projects.FirstOrDefault(p => p.Id == selected.ProjectId) is { } owner
+        ? client == null ? owner : ProjectResources.Effective(selected, owner, client.Database) : null;
     Provider? CurrentProvider => workspace?.Providers.FirstOrDefault(p => p.Id == providerId);
     bool Running(int id) => runs.TryGetValue(id, out var task) && !task.IsCompleted;
     void Post(Action action) => actions.Enqueue(action);

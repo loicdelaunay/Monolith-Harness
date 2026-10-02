@@ -6,10 +6,10 @@ namespace MonolithHarness.Core;
 public static class ProjectResources
 {
     public static string[] FolderLines(string text) => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    public static Project Effective(Chat chat, Project project)
+    public static Project Effective(Chat chat, Project project, string? database = null)
     {
         var copy = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
-        copy.SetSourceFolders(For(chat, project)); return copy;
+        copy.SetSourceFolders(For(chat, project, database)); return copy;
     }
     public static List<string> Validate(IEnumerable<string> paths)
     {
@@ -31,8 +31,18 @@ public static class ProjectResources
         if (decision == "deny" || decision == "ask" && !await approve(tool, details, ct))
             throw new UnauthorizedAccessException("Outil refusé par les permissions du projet : " + tool);
     }
-    public static List<string> For(Chat chat, Project project) => string.IsNullOrEmpty(chat.ResourcePathsJson) ? project.GetSourceFolders() : JsonSerializer.Deserialize<List<string>>(chat.ResourcePathsJson) ?? [];
+    public static List<string> For(Chat chat, Project project, string? database = null)
+    {
+        var root = Path.GetDirectoryName(Path.GetFullPath(database ?? HarnessDb.DatabasePath))!;
+        var paths = (string.IsNullOrEmpty(chat.ResourcePathsJson) ? project.GetSourceFolders()
+            : JsonSerializer.Deserialize<List<string>>(chat.ResourcePathsJson) ?? []).Select(x => PortableStorage.ResolvePath(x, root)).ToList();
+        // A missing configured folder remains a missing resource; a file-only conversation still needs somewhere to write.
+        if (chat.Id > 0 && (paths.Count == 0 || paths.All(File.Exists))) paths.Add(ConversationWorkspace.Ensure(chat.Id, database));
+        return paths;
+    }
     public static string Serialize(IEnumerable<string> paths) => JsonSerializer.Serialize(paths.Select(Path.GetFullPath).Distinct(PlatformSupport.PathComparer).ToArray());
+    public static string Serialize(IEnumerable<string> paths, int chatId, string? database = null)
+        => Serialize(paths.Where(x => !ConversationWorkspace.IsDirectory(x, chatId, database)));
     public static async Task<string> ReadPermissionsAsync(Project project, CancellationToken ct = default)
     {
         var combined = new JsonObject();

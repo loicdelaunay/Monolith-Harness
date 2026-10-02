@@ -9,7 +9,7 @@ public static class PythonTools
 {
     static readonly SemaphoreSlim WriteGate = new(1, 1);
     public static bool Handles(string name) => name is "python_info" or "write_python_script" or "run_python_script";
-    public static string ScriptsDirectory(int chatId) => Path.Combine(PortableStorage.Root, "scripts", "python", "chat-" + chatId);
+    public static string ScriptsDirectory(int chatId) => Path.Combine(PortableStorage.Folder("scripts"), "python", "chat-" + chatId);
     public static string ScriptPath(int chatId, string name)
     {
         if (string.IsNullOrWhiteSpace(name) || Path.IsPathRooted(name) || !name.EndsWith(".py", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Nom relatif de script .py requis.");
@@ -29,7 +29,7 @@ public static class PythonTools
         });
         Add("python_info", "Describe the bundled Python runtime and list this conversation's scripts. Read-only; does not install or execute Python.", []);
         Add("write_python_script", "Create or replace a UTF-8 Python script after approval. Stored next to the app, scoped to this conversation. path is relative and ends in .py. Does not execute it; maximum 100000 characters.", new() { ["path"] = Text(), ["code"] = Text() }, "path", "code");
-        Add("run_python_script", "Run an existing conversation script using bundled Python after approval. Never uses system Python. args are literal strings, not shell syntax. working_directory defaults to the first attached source folder or the conversation scripts folder; optional directory must be within attached sources. Returns exit_code, stdout, stderr and timeout status. Local execution has user's privileges, NOT a security sandbox. No stdin interaction. Read outputs and fix errors. timeout_seconds defaults to 30, max 600.",
+        Add("run_python_script", "Run an existing conversation script using bundled Python after approval. Never uses system Python. args are literal strings, not shell syntax. working_directory defaults to the first source folder, including the automatic conversation workspace when no project folder is attached; optional directory must be within attached sources. Returns exit_code, stdout, stderr and timeout status. Local execution has user's privileges, NOT a security sandbox. No stdin interaction. Read outputs and fix errors. timeout_seconds defaults to 30, max 600.",
             new() { ["path"] = Text(), ["args"] = new JsonObject { ["type"] = "array", ["items"] = Text() }, ["working_directory"] = Text(), ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 600, ["default"] = 30 } }, "path");
     }
     public static async Task<string> CallAsync(ConversationSession run, string name, JsonObject args, Func<string> skills,

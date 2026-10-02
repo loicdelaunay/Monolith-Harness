@@ -54,7 +54,7 @@ public static class ImageGenerationTools
             if (codec == null || codec.Info.Width <= 0 || codec.Info.Height <= 0 || (long)codec.Info.Width * codec.Info.Height > 40_000_000) throw new IOException("Image reçue invalide ou trop grande.");
             return codec.EncodedFormat switch { SkiaSharp.SKEncodedImageFormat.Jpeg => "image/jpeg", SkiaSharp.SKEncodedImageFormat.Webp => "image/webp", SkiaSharp.SKEncodedImageFormat.Png => "image/png", _ => throw new IOException("Format d’image non supporté.") };
         }, ct);
-        var folder = Path.Combine(PortableStorage.Root, "images", "chat-" + run.Chat.Id); Directory.CreateDirectory(folder); SandboxWorkspace.AssertNoLinks(folder);
+        var folder = Path.Combine(PortableStorage.Folder("images"), "chat-" + run.Chat.Id); Directory.CreateDirectory(folder); SandboxWorkspace.AssertNoLinks(folder);
         var name = "generated-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8] + (mime == "image/jpeg" ? ".jpg" : mime == "image/webp" ? ".webp" : ".png");
         var path = Path.Combine(folder, name); await File.WriteAllBytesAsync(path, bytes, ct);
         return new("Image générée avec " + config.ImageGenerationModel + ".\n[" + name + "](" + new Uri(path).AbsoluteUri + ")\nFichier : " + path, new() { Name = name, Mime = mime, Data = bytes });

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.48.0 - 2026-10-02
+
+- Conversations without an attached folder now receive a private file workspace under `workspace/conversations/chat-<id>` beside the executable or selected database. GUI and CLI source tools and terminals use it automatically, including conversations with file-only resources. Reopening a chat restores its files; attaching a real project folder uses that folder instead. Plan mode, enabled skills and approvals still apply.
+- Groups application-managed folders under one portable `workspace/` directory: skills, models, browser profiles, drawings, generated images, scripts, Python, sandboxes, logs and exports. Startup moves legacy folders and updates saved paths without relocating external projects or the SQLite database. Existing destination folders retain their contents; conflicting legacy folders are preserved under `workspace/legacy-imports/`. Interrupted moves resume on a later startup. Conversation files are retained when chats are deleted. GUI and CLI versions remain aligned.
+
 ## 1.47.3 - 2026-10-02
 
 - Restyles the GUI generation-speed popover to match the context panel: an accent average-speed summary, a live/estimated or last-response badge, and rounded cards for the response and conversation statistics. Minimum, average and maximum values remain separate, with missing measurements shown as dashes. The layout adapts to narrow windows and text zoom, keeps scrolling on shorter screens and refreshes while open. Existing throughput calculations and session-only extrema are preserved. GUI and CLI versions remain aligned.

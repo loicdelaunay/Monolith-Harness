@@ -221,6 +221,7 @@ public sealed class HarnessDb : DbContext
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        PortableStorage.MigrateLayout(Path.GetDirectoryName(path)!);
         await Database.MigrateAsync();
         if (!await States.AnyAsync())
         {
@@ -235,6 +236,7 @@ public sealed class HarnessDb : DbContext
             foreach (var item in legacyProviders) item.Kind = "openai";
             await SaveChangesAsync();
         }
+        await PortableStorage.RemapReferencesAsync(this);
     }
 
     public static async Task CopyDatabaseAsync(string sourcePath, string destinationPath)

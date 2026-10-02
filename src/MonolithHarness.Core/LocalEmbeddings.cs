@@ -12,7 +12,7 @@ public static class LocalEmbeddings
     static readonly Lazy<(InferenceSession Session, SentencePieceTokenizer Tokenizer)> Model = new(Load);
     static (InferenceSession, SentencePieceTokenizer) Load()
     {
-        var folder = Path.Combine(PortableStorage.Root, "models", "minilm_multilingual"); Directory.CreateDirectory(folder);
+        var folder = Path.Combine(PortableStorage.Folder("models"), "minilm_multilingual"); Directory.CreateDirectory(folder);
         foreach (var resource in typeof(LocalEmbeddings).Assembly.GetManifestResourceNames().Where(x => x.Contains(".Models.minilm_multilingual.")))
         {
             var file = Path.Combine(folder, resource.Split(".Models.minilm_multilingual.")[1]);

@@ -11,9 +11,9 @@ Task<bool> Approve(string scope, string title, string detail, CancellationToken 
 Task<string> Tool(string name, JsonObject p) => PythonTools.CallAsync(run, name, p, () => skill, Approve, CancellationToken.None);
 var info = JsonNode.Parse(await Tool("python_info", []))!;
 Check(info["Version"]!.GetValue<string>() == "3.13.15", "Bundled pinned Python version");
-Check(!Directory.Exists(root), "Info does not extract or create directories");
+Check(!Directory.Exists(PythonTools.ScriptsDirectory(41)) && !Directory.Exists(PythonRuntime.DirectoryPath(PythonRuntime.Bundle())), "Info does not extract Python or create a scripts directory");
 var denied = await Tool("write_python_script", new() { ["path"] = "demo.py", ["code"] = "print('denied')" });
-Check(denied.Contains("denied") && !Directory.Exists(root), "Denied write leaves no files");
+Check(denied.Contains("denied") && !Directory.Exists(PythonTools.ScriptsDirectory(41)), "Denied write leaves no script files");
 allowed = true;
 await Tool("write_python_script", new() { ["path"] = "helper.py", ["code"] = "VALUE='français'" });
 await Tool("write_python_script", new() { ["path"] = "demo.py", ["code"] = "import sys,json,sqlite3,ssl,helper,pathlib\nprint(json.dumps({'version':sys.version.split()[0], 'value':helper.VALUE, 'args':sys.argv[1:], 'exe':sys.executable},ensure_ascii=False))\npathlib.Path('created.txt').write_text('réussi',encoding='utf-8')\nprint('stderr marker',file=sys.stderr)" });
@@ -26,8 +26,8 @@ Check(result["exit_code"]!.GetValue<int>() == 0 && !result["timed_out"]!.GetValu
 var output = JsonNode.Parse(result["stdout"]!.GetValue<string>())!;
 Check(output["version"]!.GetValue<string>() == "3.13.15" && output["value"]!.GetValue<string>() == "français", "Standard library, SQLite, SSL and sibling modules; UTF-8");
 Check(output["args"]![1]!.GetValue<string>() == "$(not-shell)", "Arguments passed literally without a shell");
-Check(output["exe"]!.GetValue<string>().StartsWith(Path.Combine(root, "runtimes")), "Interpreter extracted beside the portable profile");
-Check(result["stderr"]!.GetValue<string>().Contains("stderr marker") && File.Exists(Path.Combine(PythonTools.ScriptsDirectory(41), "created.txt")), "Captured stderr and working directory");
+Check(output["exe"]!.GetValue<string>().StartsWith(Path.Combine(root, "workspace", "runtimes")), "Interpreter extracted inside the portable workspace");
+Check(result["stderr"]!.GetValue<string>().Contains("stderr marker") && File.Exists(Path.Combine(ConversationWorkspace.DirectoryPath(41, Path.Combine(root, "database.sqlite")), "created.txt")), "Captured stderr and automatic conversation working directory");
 allowed = false;
 Check((await Tool("run_python_script", new() { ["path"] = "demo.py" })).Contains("denied"), "Execution permission can be denied separately");
 allowed = true;

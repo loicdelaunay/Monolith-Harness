@@ -45,7 +45,7 @@ public sealed partial class MainWindow
         else if (OperatingSystem.IsMacOS())
         {
             MacDesktop.DemandScreenCapture();
-            var folder = Path.Combine(PortableStorage.Root, "Captures");
+            var folder = PortableStorage.Folder("Captures");
             Directory.CreateDirectory(folder);
             var path = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".png");
             try

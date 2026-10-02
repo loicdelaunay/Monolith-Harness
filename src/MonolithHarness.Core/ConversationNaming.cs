@@ -35,7 +35,7 @@ public static class ConversationNaming
         if (provider.IsOpenCode)
         {
             var engine = new OpenCodeEngine(http);
-            var directory = Path.Combine(PortableStorage.Root, "naming"); Directory.CreateDirectory(directory);
+            var directory = PortableStorage.Folder("naming"); Directory.CreateDirectory(directory);
             var session = await engine.CreateSessionAsync(provider, secret, directory, "Conversation title", timeout.Token);
             response = await engine.PromptAsync(provider, secret, directory, session, content, instruction, [], _ => { }, timeout.Token, (_, _) => Task.FromResult("reject"), new("plan", "disabled"));
         }

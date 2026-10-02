@@ -18,7 +18,7 @@ public sealed partial class MainWindow
     void ApplyBrandingIcon(Window window)
     {
         if (!OperatingSystem.IsWindows()) return;
-        var custom = Path.Combine(PortableStorage.Root, "branding", "window-icon.ico");
+        var custom = Path.Combine(PortableStorage.Folder("branding"), "window-icon.ico");
         var path = !string.IsNullOrWhiteSpace(FeatureSettings.Read(state.FeaturesJson).LogoForTheme(root.RequestedTheme == ElementTheme.Dark)) && File.Exists(custom)
             ? custom : Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
         try { if (File.Exists(path)) window.AppWindow.SetIcon(path); }
@@ -73,7 +73,7 @@ public sealed partial class MainWindow
                 var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
                 if (logoPath.Length > 0 && png != null)
                 {
-                    var folder = Path.Combine(PortableStorage.Root, "branding"); Directory.CreateDirectory(folder);
+                    var folder = PortableStorage.Folder("branding"); Directory.CreateDirectory(folder);
                     icon = Path.Combine(folder, "window-icon.ico");
                     using var output = File.Create(icon); using var writer = new BinaryWriter(output);
                     using var bitmap = SKBitmap.Decode(png);

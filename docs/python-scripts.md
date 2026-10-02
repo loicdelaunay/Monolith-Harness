@@ -17,8 +17,8 @@ Then, using `run_python_script`:
 {"path":"report.py","args":[],"timeout_seconds":30}
 ```
 
-The working directory is the project's first source folder, or the conversation's
-scripts folder if no sources are attached. `working_directory` can select another
+The working directory is the first attached source folder, or the conversation's
+automatic `workspace/conversations/chat-<id>/` when no project folder is attached. `working_directory` can select another
 attached source folder. Imports between scripts are supported. Python isolated
 mode ignores `PYTHONHOME`, `PYTHONPATH` and the PC's user packages; it is **not a
 security sandbox**. Scripts run with the user's rights and can access the system
@@ -49,10 +49,12 @@ profile beside the Windows EXE (or the profile supplied by the Electron host):
 ```text
 MonolithHarness.exe
 database.sqlite
-skills/
-runtimes/python/3.13.15-20260901-win-x64/python/...
-scripts/python/chat-41/report.py
-temp/python/chat-41/...
+workspace/
+  conversations/chat-41/
+  skills/
+  runtimes/python/3.13.15-20260901-win-x64/python/...
+  scripts/python/chat-41/report.py
+  temp/python/chat-41/...
 ```
 
 The standard library, native extensions and distribution licenses are retained.

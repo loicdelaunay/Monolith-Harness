@@ -13,7 +13,7 @@ public sealed partial class HarnessService
         await using var db = Db();
         var chat = await db.Chats.SingleAsync(x => x.Id == id, ct);
         var project = await db.Projects.SingleAsync(x => x.Id == chat.ProjectId, ct);
-        project = ProjectResources.Effective(chat, project);
+        project = ProjectResources.Effective(chat, project, database);
         string terminal = S(p, "terminalId");
         switch (method)
         {

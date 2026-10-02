@@ -16,7 +16,7 @@ The default Monolith Harness logo uses an illuminated M in cyan, violet and mage
 
 `ApplicationName` and `LogoPath` are stored in the JSON settings in `database.sqlite`, without a new migration. A logo already inside the executable directory or a subfolder is referenced by a relative path, such as `my-logo.png` or `images/logo.png`.
 
-An external logo is copied into `branding/` when saved, using a content-derived filename. Its original file is retained. On Windows, `branding/window-icon.ico` is an adapted window-icon version. Copying **the complete folder**, including the database and images, preserves these references after relocation. Relative paths resolve from the actual portable directory, even for a self-extracting EXE.
+An external logo is copied into `workspace/branding/` when saved, using a content-derived filename. Its original file is retained. On Windows, `workspace/branding/window-icon.ico` is an adapted window-icon version. Copying **the complete folder**, including the database and images, preserves these references after relocation. Relative paths resolve from the actual portable directory, even for a self-extracting EXE.
 
 If a logo is missing or unreadable, the interface uses the original logo; Settings lets you choose a new image. Resetting does not delete image files.
 

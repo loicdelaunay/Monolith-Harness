@@ -18,7 +18,7 @@ public static class AppLog
         TaskScheduler.UnobservedTaskException += (_, args) => Write(AppLogLevel.Error, "task.unobserved", args.Exception);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => ShutdownAsync().GetAwaiter().GetResult();
     }
-    public static string DirectoryPath => Path.Combine(settings.Root, "logs");
+    public static string DirectoryPath => PortableStorage.Folder("logs", settings.Root);
     public static void Configure(FeatureSettings config)
     {
         settings = new(PortableStorage.Root, config.LogsEnabled, Enum.TryParse<AppLogLevel>(config.LogLevel, out var level) ? level : AppLogLevel.Information, Math.Clamp(config.LogRetentionDays, 1, 365));
@@ -50,7 +50,7 @@ public static class AppLog
             try
             {
                 if (entry.Flushed != null) continue;
-                var now = DateTime.UtcNow; var directory = Path.Combine(entry.Settings.Root, "logs");
+                var now = DateTime.UtcNow; var directory = PortableStorage.Folder("logs", entry.Settings.Root);
                 Directory.CreateDirectory(directory);
                 if (entry.Json.Length == 0 || lastPrune.GetValueOrDefault(directory) != DateOnly.FromDateTime(now))
                 { Prune(directory, entry.Settings.Days, now); lastPrune[directory] = DateOnly.FromDateTime(now); }

@@ -9,7 +9,7 @@ public sealed class AssetWorkspace
     public AssetWorkspace(string database, int chatId)
     {
         if (chatId <= 0) throw new ArgumentException("A saved conversation is required.");
-        Root = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(database))!, "assets", "chat-" + chatId);
+        Root = PortableStorage.Folder("assets/chat-" + chatId, Path.GetDirectoryName(Path.GetFullPath(database))!);
     }
     public static void ValidId(string id)
     {

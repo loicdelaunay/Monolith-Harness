@@ -53,7 +53,7 @@ public sealed partial class TerminalUi
         var assembly = Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase) ? typeof(TerminalUi).Assembly.Location : null;
         var directory = CurrentProject?.GetSourceFolders().FirstOrDefault(Directory.Exists) ?? Environment.CurrentDirectory;
         var fragment = TerminalProfiles.Build(theme, executable, client.Database, directory, assembly);
-        var portable = await TerminalProfiles.SaveAsync(fragment, Path.Combine(PortableStorage.Root, "terminal-profiles"), lifetime.Token);
+        var portable = await TerminalProfiles.SaveAsync(fragment, PortableStorage.Folder("terminal-profiles"), lifetime.Token);
         string destination = portable;
         if (action == "install")
         {

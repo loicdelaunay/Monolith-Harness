@@ -13,7 +13,7 @@ public sealed class LocalModel
     public long Bytes { get; set; }
     public int? ContextTokens { get; set; }
     public override string ToString() => Id;
-    public string FullPath => System.IO.Path.GetFullPath(System.IO.Path.IsPathRooted(Path) ? Path : System.IO.Path.Combine(PortableStorage.Root, Path));
+    public string FullPath => PortableStorage.ResolvePath(Path);
 }
 
 public sealed class LocalProviderSettings
@@ -23,7 +23,7 @@ public sealed class LocalProviderSettings
     public string ChatExecutable { get; set; } = "";
     public string ImageExecutable { get; set; } = "";
     public List<LocalModel> Models { get; set; } = [];
-    public string ModelDirectory => string.IsNullOrWhiteSpace(Directory) ? System.IO.Path.Combine(PortableStorage.Root, "model") : System.IO.Path.GetFullPath(System.IO.Path.IsPathRooted(Directory) ? Directory : System.IO.Path.Combine(PortableStorage.Root, Directory));
+    public string ModelDirectory => string.IsNullOrWhiteSpace(Directory) ? PortableStorage.Folder("model") : PortableStorage.ResolvePath(Directory);
     public static LocalProviderSettings Read(string json)
     {
         try { return JsonSerializer.Deserialize<LocalProviderSettings>(json) ?? new(); }

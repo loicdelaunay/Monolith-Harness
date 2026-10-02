@@ -30,7 +30,7 @@ public sealed class ChromiumBrowser : IDisposable
     }
     public async Task StartAsync(int chatId, string configured, CancellationToken ct, bool headless = false)
     {
-        var folder = Path.Combine(PortableStorage.Root, "Browser", "chat-" + chatId);
+        var folder = Path.Combine(PortableStorage.Folder("Browser"), "chat-" + chatId);
         Directory.CreateDirectory(folder);
         var portFile = Path.Combine(folder,"DevToolsActivePort");
         if(File.Exists(portFile)) File.Delete(portFile);

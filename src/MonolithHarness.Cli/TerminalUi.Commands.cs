@@ -101,7 +101,7 @@ public sealed partial class TerminalUi
                     var path = argument.Length > 0 ? argument : await Prompt(L("Dossier ou fichier source", "Source file or folder")); if (string.IsNullOrWhiteSpace(path)) return;
                     path = Path.GetFullPath(path.Trim('"'));
                     if (!Directory.Exists(path) && !File.Exists(path)) throw new FileNotFoundException(path);
-                    var paths = ProjectResources.Effective(selectedChat, project).GetSourceFolders().Append(path).Distinct(PlatformSupport.PathComparer).ToArray();
+                    var paths = ProjectResources.Effective(selectedChat, project, client.Database).GetSourceFolders().Append(path).Distinct(PlatformSupport.PathComparer).ToArray();
                     await client.Call("chat.resources", new { id, paths }); await Refresh(); Post(() => notice = L("Source attachée : ", "Source attached: ") + path);
                 }); break;
             case "/image":
@@ -142,7 +142,7 @@ public sealed partial class TerminalUi
                 Work(async () =>
                 {
                     var export = (await client.Call("chat.export", new { chatId = id, providerId = selectedProvider }))!.Deserialize<ConversationExport.Document>(HarnessService.Json)!;
-                    var path = argument.Length > 0 ? argument : await Prompt("Export Markdown", initial: Path.Combine(PortableStorage.Root, "exports", export.FileName));
+                    var path = argument.Length > 0 ? argument : await Prompt("Export Markdown", initial: Path.Combine(PortableStorage.Folder("exports"), export.FileName));
                     if (string.IsNullOrWhiteSpace(path)) return; path = Path.GetFullPath(path);
                     if (File.Exists(path) && await Prompt("Remplacer / Replace?", path, [new("no", "Non / No"), new("yes", "Oui / Yes")]) != "yes") return;
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!); await File.WriteAllTextAsync(path, export.Markdown, lifetime.Token); Post(() => notice = "Export → " + path);

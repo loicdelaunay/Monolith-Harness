@@ -33,8 +33,10 @@ Monolith Harness $channel $version ($Runtime)
 Extract into a writable folder. $start
 $platformNote
 
-To update, close the application and replace only $exe. Back up and keep your
-database.sqlite and existing resources. This download includes no user data.
+To update, close all application instances and replace only $exe. Back up and keep
+database.sqlite, workspace/ and existing resources. This download includes no user data.
+Startup groups managed resource folders in workspace/; folderless chats get their
+own workspace/conversations/chat-ID/ directory, with files retained across restarts.
 The chat model is not bundled; configure a provider. Optional integrations
 such as Git, Docker/Podman, OpenCode and MCP retain their own prerequisites.
 

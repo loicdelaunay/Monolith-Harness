@@ -22,6 +22,7 @@ public sealed partial class HarnessService
         if (text.Length == 0 && images.Count == 0) throw new ArgumentException("Message required.");
         using var run = new ConversationSession(chat, project, provider, options, text, images, database,await setup.Providers.ToListAsync(lifetime)){PendingInputId=I(p,"pendingInputId")};
         permissionProject.Value = run.Project;
+        project = run.Project;
         provider=run.Provider;
         using var consumption = TokenConsumption.Begin(database, "chat", project, chat);
         await using var mcp = CreateMcpSession(chat.Id);
@@ -275,7 +276,7 @@ public sealed partial class HarnessService
     }
     string OpenCodeDirectory(Project p)
     {
-        var directory = p.GetSourceFolders().FirstOrDefault(Directory.Exists) ?? Path.Combine(Path.GetDirectoryName(database)!, "OpenCodeWorkspaces", p.Id.ToString());
+        var directory = p.GetSourceFolders().FirstOrDefault(Directory.Exists) ?? Path.Combine(PortableStorage.Folder("OpenCodeWorkspaces", Path.GetDirectoryName(database)!), p.Id.ToString());
         Directory.CreateDirectory(directory); return directory;
     }
     async Task EnsureOpenCode(Provider p, string password, string directory, CancellationToken ct)

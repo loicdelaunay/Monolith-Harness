@@ -436,7 +436,7 @@ public sealed partial class MainWindow : Window
 
         return floatingInfoBar;
     }
-    Border CreateChip(string text, string tooltip, Func<Task> onRemove, bool isSource)
+    Border CreateChip(string text, string tooltip, Func<Task>? onRemove, bool isSource)
     {
         var chip = new Border
         {
@@ -475,8 +475,11 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
         ToolTipService.SetToolTip(closeBtn, isSource ? T("Détacher la source") : T("Retirer l'image"));
-        closeBtn.Click += async (_, _) => await Guard(onRemove);
-        panel.Children.Add(closeBtn);
+        if (onRemove != null)
+        {
+            closeBtn.Click += async (_, _) => await Guard(onRemove);
+            panel.Children.Add(closeBtn);
+        }
 
         chip.Child = panel;
         return chip;
@@ -513,16 +516,19 @@ public sealed partial class MainWindow : Window
             foreach (var folder in project.GetSourceFolders())
             {
                 var capturedFolder = folder;
+                var managed = chat != null && ConversationWorkspace.IsDirectory(folder, chat.Id);
                 var folderName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 if (string.IsNullOrWhiteSpace(folderName)) folderName = folder;
-                var sourceChip = CreateChip((File.Exists(folder) ? "📄 " : "📁 ") + folderName, folder, async () =>
+                if (managed) folderName = WorkflowText("Espace de travail", "Workspace");
+                Func<Task>? detach = managed ? null : async () =>
                 {
                     await SaveConversationResourcesAsync(project.GetSourceFolders().Where(x => !string.Equals(x, capturedFolder, StringComparison.OrdinalIgnoreCase)));
                     UpdateSourceLabel();
                     ResetWorkspaceTools();
                     UpdateFloatingAssets();
                     ShowStatus(T("Dossier source détaché."));
-                }, isSource: true);
+                };
+                var sourceChip = CreateChip((File.Exists(folder) ? "📄 " : "📁 ") + folderName, folder, detach, isSource: true);
                 assetsBar.Children.Add(sourceChip);
             }
         }
@@ -545,7 +551,9 @@ public sealed partial class MainWindow : Window
     void UpdateSourceLabel()
     {
         var folders = project?.GetSourceFolders() ?? [];
-        sourceLabel.Text = folders.Count == 0
+        sourceLabel.Text = chat != null && folders.Any(x => ConversationWorkspace.IsDirectory(x, chat.Id))
+            ? WorkflowText("Espace de travail de la conversation : ", "Conversation workspace: ") + ConversationWorkspace.DirectoryPath(chat.Id)
+            : folders.Count == 0
             ? T("Aucun dossier source · Associez un dossier pour l’explorer avec l’IA")
             : T("Sources partagées avec l’IA : ") + string.Join(" · ", folders);
     }
@@ -1805,7 +1813,7 @@ public sealed partial class MainWindow : Window
         using var scope = BrowserScope(owner.Id, owner.TabId);
         if (owner.Ready) return;
 #if WINDOWS
-        var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, Path.Combine(HarnessDb.DataDirectory, "WebView2", "chat-" + owner.Id), null);
+        var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, Path.Combine(PortableStorage.Folder("WebView2"), "chat-" + owner.Id), null);
         if(owner.Closed)throw new IOException("Navigateur fermé pendant le démarrage.");
         await owner.View.EnsureCoreWebView2Async(environment);
 #else

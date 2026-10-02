@@ -4,13 +4,13 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.47.3**; portable data remains compatible with existing workspaces.
+**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.48.0**; portable data remains compatible with existing workspaces.
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.47.3">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.47.3">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.48.0">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.48.0">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -24,7 +24,7 @@
 
 Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.47.3) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.47.3) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.48.0) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.48.0) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
@@ -123,8 +123,8 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.2), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.2) for a terminal workspace. The 1.45.2 archives cover Windows x64 and Fedora Linux x64.
-2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its skills folder beside the executable.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.48.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.48.0) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
+2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its portable resources under <code>workspace/</code> beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
 
@@ -134,7 +134,9 @@ The integrated browser uses the system Web engine: Edge WebView2 on Windows, Web
 
 ## Portable data and privacy
 
-Monolith Harness stores <code>database.sqlite</code>, <code>skills/</code>, <code>MCP.json</code>, browser profiles, and other application-managed resources beside the executable. In a fresh folder, it creates a new database with the required schema and starter settings, without importing old conversations from AppData. EF Core applies database migrations on startup. Do not place the app in a read-only directory such as <code>Program Files</code>. Close all instances before copying the folder to another machine.
+Monolith Harness keeps <code>database.sqlite</code> and <code>MCP.json</code> beside the executable and groups its resource folders under <code>workspace/</code>, including skills, models, browser profiles, scripts and logs. Startup moves existing managed folders and updates their saved paths; collisions retain both copies. External project folders keep their selected locations. In a fresh folder, it creates a new database with the required schema and starter settings, without importing old conversations from AppData. EF Core applies database migrations on startup. Do not place the app in a read-only directory such as <code>Program Files</code>. Close all instances before copying the folder to another machine.
+
+Conversations without a project folder can create and edit files in their own <code>workspace/conversations/chat-&lt;id&gt;/</code>. The GUI identifies it as **Workspace**; source tools and terminals use it automatically in both interfaces. Files survive restarting, switching chats and deleting a chat. Plan mode and tool approvals still apply. See [portable workspaces and migration](docs/portable-workspace.md).
 
 API keys use Windows DPAPI, the macOS Keychain or, on Linux, AES-GCM with an owner-only `.linux-key` file beside SQLite. On Linux, keep the entire portable folder private and copy the key with the database; anyone who can read both can recover the API keys. Windows/macOS keys are tied to the OS account and need re-entry when moving accounts or systems. The rest of SQLite is **not encrypted**. Only content used for a request is sent to its selected model provider; attaching a source folder does not upload the whole folder automatically.
 
@@ -184,7 +186,7 @@ Monolith Harness is available under the [MIT license](LICENSE).
 
 Monolith Harness combines a portable project workspace with dedicated visual tools: formatted translation and proofreading, model benchmarks, an asset canvas, local multilingual RAG, memory inspection, and usage charts. The table highlights that combination alongside the strengths of other harnesses.
 
-**Scope:** Monolith Harness 1.46.0, Pi's coding agent, OpenCode's CLI/desktop app, Hermes Agent/Desktop, and **LangChain Deep Agents + Deep Agents Code**. Sources inspected on **2026-10-02**; the exact source revisions and limitations are in the [comparison notes](docs/feature-comparison.md).
+**Scope:** Monolith Harness 1.48.0, Pi's coding agent, OpenCode's CLI/desktop app, Hermes Agent/Desktop, and **LangChain Deep Agents + Deep Agents Code**. Sources inspected on **2026-10-02**; the exact source revisions and limitations are in the [comparison notes](docs/feature-comparison.md).
 
 **✅** Built in, with normal provider/tool configuration. **⚠️** Partial support, an extension/integration, an experimental feature, or a different workflow; the cell states the difference. **❌** No matching built-in workflow documented in the inspected sources. Extensions and custom code can change these results.
 

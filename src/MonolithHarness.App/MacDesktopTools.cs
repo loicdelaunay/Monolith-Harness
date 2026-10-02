@@ -58,7 +58,7 @@ public sealed partial class MainWindow
         if(!await RequestAccessAsync("desktop|screenshot", "Capture d’écran / Screenshot", application?.Title ?? $"{region}", "Capture macOS",ct))return "Accès refusé / Access denied";
         MacDesktop.DemandScreenCapture();DesktopInput.Restore(foreground);await Task.Delay(180,ct);
         if(windowId!=null) { application=DesktopApplications.Resolve(windowId);DesktopApplications.ValidateCapture(application);region=((int)application.X,(int)application.Y,(int)application.Width,(int)application.Height); }
-        var folder=Path.Combine(PortableStorage.Root,"Captures");Directory.CreateDirectory(folder);var path=Path.Combine(folder,Guid.NewGuid().ToString("N")+".png");
+        var folder=PortableStorage.Folder("Captures");Directory.CreateDirectory(folder);var path=Path.Combine(folder,Guid.NewGuid().ToString("N")+".png");
         try
         {
             var start=new ProcessStartInfo("/usr/sbin/screencapture") { UseShellExecute=false,RedirectStandardError=true };

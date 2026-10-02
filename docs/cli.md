@@ -19,9 +19,9 @@ With a published build:
 .\MonolithHarness.exe --database "L:\OHM2\database.sqlite" --chat 12
 ~~~
 
-Without a project argument, the current working directory becomes the project's source folder. <code>--chat ID</code> resumes an existing chat without attaching the current directory. Each project folder is reused when already registered.
+Without a project argument, the current working directory becomes the project's source folder. <code>--chat ID</code> resumes an existing chat without attaching the current directory. Each project folder is reused when already registered. A resumed conversation without an attached folder uses its private `workspace/conversations/chat-<id>/` for files and terminals. Restarting retains those files. See [portable workspaces](portable-workspace.md).
 
-SQLite, skills, MCP configuration, RAG models and Python resources live beside the executable by default. <code>--database</code> explicitly selects another workspace and locates its resources beside that database. It can point to the desktop app's database to reuse providers, conversations, skills and memory. No AppData database is imported. API keys use Windows DPAPI/macOS Keychain; copying a workspace to another OS/account requires re-entering keys. Legacy Electron macOS keys need to be re-entered.
+SQLite and MCP configuration live beside the executable; skills, RAG models, Python and other managed folders live under `workspace/`. <code>--database</code> explicitly selects another workspace and locates its resources beside that database. It can point to the desktop app's database to reuse providers, conversations, skills and memory. No AppData database is imported. API keys use Windows DPAPI/macOS Keychain; copying a workspace to another OS/account requires re-entering keys. Legacy Electron macOS keys need to be re-entered.
 
 Use a terminal with Unicode and truecolor support, such as Windows Terminal. The minimum viewport is 56 columns × 18 rows. A compact header shows the provider, model and project folder above a single-column transcript. The composer sits between two thin separators, with model, speed and context usage below it. Use `/chats` to switch conversations and Ctrl+P for the searchable command list.
 
@@ -78,7 +78,7 @@ Favorite chats stay at the top with a star. AI naming is off by default; choose 
 
 Vision settings accept custom instructions and a component mode with labelled rectangles/polygons. The agent can override these per <code>analyze_image</code> call using <code>instruction</code> and <code>mode</code>. Bounds are approximate image coordinates, not direct screen coordinates or actual image crops.
 
-Diagnostic JSONL logs live in <code>logs</code> in the portable data directory. Settings control minimum severity, retention (seven days by default) and disabling. Logs exclude prompts, response bodies, keys and tool arguments. Nested project instructions load asynchronously, skipping inaccessible files, generated/dependency directories and instruction files above 32 KB; total loaded instructions remain limited to 64 KB without failing the run.
+Diagnostic JSONL logs live in <code>workspace/logs</code> in the portable data directory. Settings control minimum severity, retention (seven days by default) and disabling. Logs exclude prompts, response bodies, keys and tool arguments. Nested project instructions load asynchronously, skipping inaccessible files, generated/dependency directories and instruction files above 32 KB; total loaded instructions remain limited to 64 KB without failing the run.
 
 | Key | Action |
 | --- | --- |
@@ -142,7 +142,7 @@ MonolithHarness --render-demo --theme neon-synthwave
 
 Choose **Save and install font + profile** on Windows to install the bundled font for the current user and create a dedicated Windows Terminal profile. Open **Monolith Harness · …** in a new tab (restart Windows Terminal if needed) to apply the font and experimental CRT scanlines/glow. **Export** writes the profile and font/license beside the portable database; macOS users can install the exported TTF with their font manager. Missing system/custom fonts use the host terminal's fallback. Fonts installed for Windows are machine-local, under the user's Windows Fonts directory and HKCU font registration; exported copies remain portable.
 
-The portable JSON is kept under `terminal-profiles` beside the database. Installation adds only a Monolith Harness fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\MonolithHarness`; it does not rewrite `settings.json` or change your default terminal profile. Delete the exported fragment there to uninstall it. Regenerate after moving the portable application: launch paths are absolute. This optional terminal integration is machine-local; other application data remains portable.
+The portable JSON is kept under `workspace/terminal-profiles` beside the database. Installation adds only a Monolith Harness fragment under `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\MonolithHarness`; it does not rewrite `settings.json` or change your default terminal profile. Delete the exported fragment there to uninstall it. Regenerate after moving the portable application: launch paths are absolute. This optional terminal integration is machine-local; other application data remains portable.
 
 macOS and other terminals still display the theme's ANSI colors and borders; select fonts in that terminal's preferences. CRT glow is host-dependent, not simulated with flashing text. See [Windows Terminal appearance](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-appearance) and [profile fragments](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions).
 

@@ -75,8 +75,9 @@ public sealed class McpSession(
             foreach (var (key, value) in secrets.Environment) environment[key] = value;
             transport = new StdioClientTransport(new StdioClientTransportOptions
             {
-                Name = server.Name, Command = server.Command, Arguments = JsonSerializer.Deserialize<string[]>(server.ArgumentsJson),
-                WorkingDirectory = string.IsNullOrWhiteSpace(server.WorkingDirectory) ? null : server.WorkingDirectory,
+                Name = server.Name, Command = PortableStorage.ResolveArgument(server.Command),
+                Arguments = JsonSerializer.Deserialize<string[]>(server.ArgumentsJson)?.Select(x => PortableStorage.ResolveArgument(x)).ToArray(),
+                WorkingDirectory = string.IsNullOrWhiteSpace(server.WorkingDirectory) ? null : PortableStorage.ResolvePath(server.WorkingDirectory),
                 InheritEnvironmentVariables = false, EnvironmentVariables = environment, ShutdownTimeout = TimeSpan.FromSeconds(2)
             });
         }
