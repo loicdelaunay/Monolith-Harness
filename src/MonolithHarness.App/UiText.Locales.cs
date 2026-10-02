@@ -471,6 +471,15 @@ public static partial class UiText
     No permanent permissions.|Keine dauerhaften Berechtigungen.|No hay permisos permanentes.
     Settings saved.|Einstellungen gespeichert.|Ajustes guardados.
     GitHub updates|GitHub-Updates|Actualizaciones de GitHub
+    Automatic updates|Automatische Updates|Actualizaciones automáticas
+    Notify only|Nur informieren|Solo informar
+    Install automatically|Automatisch installieren|Instalar automáticamente
+    Update|Aktualisieren|Actualizar
+    Updating…|Wird aktualisiert…|Actualizando…
+    Disabled: no automatic checks. Otherwise, check at startup and every 2 hours. Automatic installation waits for agents, drafts and editing windows to finish.|Deaktiviert: keine automatischen Prüfungen. Sonst beim Start und alle 2 Stunden prüfen. Die automatische Installation wartet, bis Agenten, Entwürfe und Bearbeitungsfenster geschlossen sind.|Desactivadas: sin comprobaciones automáticas. Si se activan, se comprueba al iniciar y cada 2 horas. La instalación automática espera a que terminen los agentes y borradores y se cierren las ventanas de edición.
+    Installation requires a standalone Windows release.|Die Installation erfordert eine eigenständige Windows-Version.|La instalación requiere una versión autónoma para Windows.
+    Save or close settings before installing.|Vor der Installation Einstellungen speichern oder schließen.|Guarda o cierra los ajustes antes de instalar.
+    Automatic installation failed:|Automatische Installation fehlgeschlagen:|La instalación automática ha fallado:
     Check automatically at startup|Beim Start automatisch prüfen|Comprobar automáticamente al iniciar
     Check|Prüfen|Comprobar
     Check for a newer GUI release.|Nach einer neueren GUI-Version suchen.|Buscar una versión GUI más reciente.

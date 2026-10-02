@@ -186,6 +186,7 @@ public sealed partial class MainWindow : Window
         FluentDesign.IconButton(settingsButton, "\uE713", T("Réglages"));
         settingsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         settingsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
+        foot.Children.Add(BuildGuiUpdateButton());
         foot.Children.Add(BuildDedicatedToolsRow());
         foot.Children.Add(settingsButton);
         Grid.SetRow(foot, 3); panel.Children.Add(foot);
@@ -611,6 +612,7 @@ public sealed partial class MainWindow : Window
         FluentDesign.IconButton(stop, "\uE71A", T("Arrêter"), false);
         ToolTipService.SetToolTip(send, T("Envoyer  ↑")); ToolTipService.SetToolTip(stop, T("Arrêter"));
         RefreshToolLanguage();
+        RefreshGuiUpdateButton();
         UpdateSourceLabel();
         title.Text = chat?.Title ?? T("Nouvelle conversation");
         ToolTipService.SetToolTip(title, title.Text);
@@ -1701,6 +1703,7 @@ public sealed partial class MainWindow : Window
         RefreshNotificationBell(); RebuildProjectNavigation();
         UpdateProvider();
         PopulateModelSelector();
+        ConfigureAutomaticUpdates();
         ShowStatus(T("Configuration enregistrée."));
     }
 

@@ -10,11 +10,12 @@ using System.Text.RegularExpressions;
 namespace MonolithHarness.Core;
 
 public enum UpdateChannel { Gui, Cli }
+public enum AutomaticUpdateMode { Disabled, Notify, Install }
 public sealed record GitHubUpdate(string Version, string Tag, string Page, string AssetName, string DownloadUrl, string Sha256, long Size);
 
 public sealed class GitHubUpdates(HttpClient http)
 {
-    public const string CurrentVersion = "1.45.2";
+    public const string CurrentVersion = "1.46.0";
     public const string Repository = "https://github.com/loicdelaunay/Monolith-Harness";
     public const string Api = "https://api.github.com/repos/loicdelaunay/Monolith-Harness/releases";
     const long MaxBytes = 1024L * 1024 * 1024;

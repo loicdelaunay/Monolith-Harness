@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.46.0 - 2026-10-02
+
+- GUI About settings now offer three automatic-update levels: disabled (no automatic checks), notify only, or install automatically. Enabled modes check GitHub at startup and every two hours while the application is open. Existing preferences are preserved; notification remains the default and manual checks stay available in every mode.
+- A persistent Update button appears above Scheduled tasks when a newer compatible GUI release is available. It uses the existing verified download and restart flow. Automatic installation waits for agents, conversation drafts and editing windows to finish, rechecks before restarting, and preserves portable data; installation remains limited to standalone Windows releases.
+
 ## 1.45.2 - 2026-10-02
 
 - Fixes SQLite rollback of the local-model, cached-token and per-model context migrations. Returning to an older schema and upgrading again no longer fails on an unsupported EF table-rebuild operation; normal forward upgrades keep their existing behavior.

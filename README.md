@@ -4,13 +4,13 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.45.2**; portable data remains compatible with existing workspaces.
+**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current downloads are **1.46.0**; portable data remains compatible with existing workspaces.
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.2">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.2">Download CLI</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.46.0">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.46.0">Download CLI</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -24,7 +24,7 @@
 
 Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.45.2) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.45.2) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.46.0) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.46.0) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
@@ -179,3 +179,36 @@ The [Windows v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/re
 Detailed guides: [browser, RAG, and subagents](docs/browser-rag-agents.md), [memory](docs/memory.md), [custom skills](docs/skill-authoring.md), [MCP](docs/mcp.md), [scheduled tasks and models](docs/uno-tasks-models.md), [macOS](docs/macos.md), and the [full user guide](docs/guide.md).
 
 Monolith Harness is available under the [MIT license](LICENSE).
+
+## Feature comparison
+
+Monolith Harness combines a portable project workspace with dedicated visual tools: formatted translation and proofreading, model benchmarks, an asset canvas, local multilingual RAG, memory inspection, and usage charts. The table highlights that combination alongside the strengths of other harnesses.
+
+**Scope:** Monolith Harness 1.46.0, Pi's coding agent, OpenCode's CLI/desktop app, Hermes Agent/Desktop, and **LangChain Deep Agents + Deep Agents Code**. Sources inspected on **2026-10-02**; the exact source revisions and limitations are in the [comparison notes](docs/feature-comparison.md).
+
+**✅** Built in, with normal provider/tool configuration. **⚠️** Partial support, an extension/integration, an experimental feature, or a different workflow; the cell states the difference. **❌** No matching built-in workflow documented in the inspected sources. Extensions and custom code can change these results.
+
+| Feature / workflow | Monolith Harness | Pi | OpenCode | Hermes Agent | Deep Agents |
+| --- | --- | --- | --- | --- | --- |
+| Multiple model providers and local endpoints | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Interactive terminal + headless automation | ✅ | ✅ | ✅ | ✅ | ✅ Code |
+| Desktop GUI with projects and concurrent chats | ✅ | ❌ Terminal / SDK | ✅ Desktop | ✅ Desktop | ❌ Terminal / SDK |
+| Custom skills and MCP tools | ✅ | ✅ | ✅ | ✅ | ✅ Code |
+| Subagents and parallel delegation | ✅ | ⚠️ Example extension | ✅ | ✅ | ✅ |
+| Curated memory across conversations | ✅ Conversation + shared | ⚠️ Context files / extensions | ⚠️ Instructions / plugins | ✅ Memory + session search | ✅ Code / SDK backends |
+| Scheduled agent tasks | ✅ While app is open | ⚠️ External automation | ⚠️ External automation | ✅ Cron / gateway | ⚠️ Talon alpha |
+| Telegram / Discord / WhatsApp gateway | ❌ | ❌ | ❌ | ✅ | ⚠️ Talon alpha |
+| **Portable GUI + CLI workspace with data beside the launcher** | ✅ | ❌ CLI only | ⚠️ Separate data paths | ⚠️ Separate Hermes home | ❌ Python / SDK setup |
+| **Conversation/shared memory editor and database viewer** | ✅ | ❌ | ❌ | ⚠️ Different memory UI / files | ⚠️ Memory files / backends |
+| **Embedded multilingual semantic source search without an embedding API** | ✅ Local CPU RAG | ⚠️ Add integration | ⚠️ Add integration | ⚠️ Optional memory providers | ⚠️ Configure retrieval |
+| **Formatted translator and proofreader windows** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Model benchmark UI with generated interactive-app checks** | ✅ | ❌ | ❌ | ❌ | ⚠️ Separate evaluation tooling |
+| **Editable vector / pixel-art canvas, animation and GIF export** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **AI-generated detector UI for text, documents and web pages** | ✅ Model / SlopTotal | ❌ | ❌ | ❌ | ❌ |
+| **Usage timelines, model breakdowns and filtered CSV export** | ✅ | ⚠️ Session statistics | ⚠️ Usage / cost statistics | ⚠️ Usage / insights | ⚠️ Cost estimates / tracing |
+| **Embedded browser with independent tabs per conversation** | ✅ | ⚠️ MCP / extensions | ⚠️ MCP browser tools | ⚠️ Previews / browser backends | ⚠️ Custom / MCP tools |
+| **GUI GGUF import, Hugging Face downloads and engine management** | ✅ Beta | ⚠️ External llama.cpp router | ⚠️ Local endpoints | ⚠️ Canary / local flag | ⚠️ Local endpoints |
+| **Local Stable Diffusion checkpoint import and managed image engine** | ✅ Beta | ⚠️ Add integration | ⚠️ Add integration | ⚠️ Image providers / skills | ⚠️ Add tools |
+| **GUI updates: off / notify / install, startup + two-hour checks** | ✅ Windows install | ❌ No desktop GUI | ⚠️ Different updater | ⚠️ Package-specific updates | ❌ No desktop GUI |
+
+Local chat/image models and their runtimes download separately. SlopTotal needs a local or remote service; detector scores are indicators, and the benchmark is a local protocol rather than an official leaderboard. Scheduled Monolith tasks require the app to remain open. See the [comparison notes and official sources](docs/feature-comparison.md) for each qualification.

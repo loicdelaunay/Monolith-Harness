@@ -23,6 +23,10 @@ public sealed class FeatureSettings
     public string CliFont { get; set; } = "";
     public int CliFontSize { get; set; } = 14;
     public bool GuiCheckUpdates { get; set; } = true;
+    public AutomaticUpdateMode? GuiUpdateMode { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public AutomaticUpdateMode EffectiveGuiUpdateMode => GuiUpdateMode is { } mode && Enum.IsDefined(mode)
+        ? mode : GuiCheckUpdates ? AutomaticUpdateMode.Notify : AutomaticUpdateMode.Disabled;
     public bool CliCheckUpdates { get; set; } = true;
     public string ApplicationName { get; set; } = BrandingAssets.DefaultName;
     public bool ApplicationNameTwoLines { get; set; } = true;
@@ -101,12 +105,16 @@ public sealed class FeatureSettings
             settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
             settings.Compaction ??= new();
             settings.Compaction.Normalize();
+            if (settings.GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) settings.GuiUpdateMode = null;
             return settings;
         }
         catch { return new(); }
     }
     public string Json()
     {
+        if (GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) throw new ArgumentException("Invalid automatic update mode.");
+        // Keep older versions aware of the user's choice when reading the same portable profile.
+        GuiCheckUpdates = EffectiveGuiUpdateMode != AutomaticUpdateMode.Disabled;
         if (ImageGenerationProviderId < 0 || ImageGenerationModel == null || ImageGenerationModel.Length > 300 ||
             ImageGenerationWidth is < 256 or > 2048 || ImageGenerationHeight is < 256 or > 2048 || ImageGenerationWidth % 64 != 0 || ImageGenerationHeight % 64 != 0 || ImageGenerationSteps is < 1 or > 100)
             throw new ArgumentException("Réglages de génération d’image invalides : dimensions multiples de 64 entre 256 et 2048, de 1 à 100 étapes.");

@@ -48,6 +48,8 @@ Launch `artifacts\GUI\MonolithHarness.exe`, then **Settings → Providers**. Eac
 
 **About**, at the bottom of Settings, contains **GitHub updates** and **Enable logs**, including severity and retention. **Automatically name new conversations**, its provider and its model remain in **General**.
 
+**About → Automatic updates** offers **Disabled**, **Notify only** (the default), and **Install automatically**. Enabled modes check at startup and every two hours while the app is open. A compatible update adds an **Update** button above **Scheduled tasks**. Automatic installation waits for agents, drafts, queued messages and editing windows to finish before restarting. Manual checking remains available in every mode; installation requires a published Windows standalone executable.
+
 **Ctrl + mouse wheel** adjusts fonts in the window under the pointer, in 10% steps from 80% to 150%; **Ctrl + 0** resets that window to 100%. **Ctrl + Shift + mouse wheel** applies the size to all application windows and saves it in SQLite; **Ctrl + Shift + 0** resets the global size. Local overrides last for the window's lifetime or until the next global change. New messages, code and reasoning follow their window's scale. Browser content keeps its own zoom.
 
 **General → Automatic retry** controls retries after transient model request failures, with 0–10 retries and a 1–300 second delay (default: three retries, five seconds). **Settings → Notifications** controls the completion/action-required bell, sound, tone and volume. See [conversation workspace](conversation-workspace.md) for details.

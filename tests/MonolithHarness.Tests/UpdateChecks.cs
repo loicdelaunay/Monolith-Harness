@@ -12,6 +12,18 @@ static class UpdateChecks
     }
     public static async Task Run(Action<bool, string> check)
     {
+        check(FeatureSettings.Read("{}").EffectiveGuiUpdateMode == AutomaticUpdateMode.Notify, "Updates: new profiles notify without automatically installing");
+        check(FeatureSettings.Read("{\"GuiCheckUpdates\":false}").EffectiveGuiUpdateMode == AutomaticUpdateMode.Disabled, "Updates: legacy disabled preference stays disabled");
+        check(FeatureSettings.Read("{\"GuiCheckUpdates\":true}").EffectiveGuiUpdateMode == AutomaticUpdateMode.Notify, "Updates: legacy enabled preference stays notification-only");
+        foreach (var mode in Enum.GetValues<AutomaticUpdateMode>())
+        {
+            var saved = FeatureSettings.Read(new FeatureSettings { GuiUpdateMode = mode }.Json());
+            check(saved.EffectiveGuiUpdateMode == mode && saved.GuiCheckUpdates == (mode != AutomaticUpdateMode.Disabled), "Updates: mode persists and synchronizes legacy flag: " + mode);
+        }
+        check(FeatureSettings.Read("{\"GuiUpdateMode\":99,\"GuiCheckUpdates\":false}").EffectiveGuiUpdateMode == AutomaticUpdateMode.Disabled,
+            "Updates: unknown mode respects disabled legacy flag instead of installing");
+        check(FeatureSettings.Read("{\"GuiUpdateMode\":99}").EffectiveGuiUpdateMode == AutomaticUpdateMode.Notify,
+            "Updates: unknown mode cannot enable automatic installation");
         JsonObject Release(string tag, string name, bool preview = false) => new() {
             ["tag_name"] = tag, ["prerelease"] = preview, ["draft"] = false,
             ["assets"] = new JsonArray(new JsonObject { ["name"] = name, ["size"] = 123L, ["digest"] = "sha256:" + new string('a', 64),
