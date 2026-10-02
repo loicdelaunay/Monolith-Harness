@@ -174,7 +174,7 @@ public sealed partial class HarnessService
             {
                 if (name == "read_source")
                 {
-                    var requested = Path.GetFullPath(Path.IsPathFullyQualified(path) ? path : Path.Combine(Root(run.Project), path));
+                    var requested = PortableStorage.ResolvePath(Path.GetFullPath(Path.IsPathFullyQualified(path) ? path : Path.Combine(Root(run.Project), path)));
                     if (!await Approve("read-local|" + requested, "Lire et transmettre le fichier / Read and transmit file", requested, ct)) return new("Access denied.");
                     return new(await SourceAccess.ReadFileAsync(requested, ct, p["start_line"]?.GetValue<int>(), p["end_line"]?.GetValue<int>()));
                 }

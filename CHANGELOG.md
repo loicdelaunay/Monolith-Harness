@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.48.1 - 2026-10-02
+
+- Keeps historical local file links, previews and approved file reads working after the portable-folder migration. GUI and CLI resolve legacy locations before protected-file checks and access approvals, preserving history text and permission boundaries. GUI and CLI versions remain aligned.
+
 ## 1.48.0 - 2026-10-02
 
 - Conversations without an attached folder now receive a private file workspace under `workspace/conversations/chat-<id>` beside the executable or selected database. GUI and CLI source tools and terminals use it automatically, including conversations with file-only resources. Reopening a chat restores its files; attaching a real project folder uses that folder instead. Plan mode, enabled skills and approvals still apply.

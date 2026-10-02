@@ -527,7 +527,7 @@ public sealed partial class MainWindow
     async Task<string> ReadWithApprovalAsync(string requested, CancellationToken ct, Project? targetProject = null, int? startLine = null, int? endLine = null)
     {
         if(Uri.TryCreate(requested,UriKind.Absolute,out var uri) && uri.IsFile)requested=uri.LocalPath;
-        var path = Path.GetFullPath(Path.IsPathFullyQualified(requested) ? requested : Path.Combine(RequireDirectory(targetProject), requested));
+        var path = PortableStorage.ResolvePath(Path.GetFullPath(Path.IsPathFullyQualified(requested) ? requested : Path.Combine(RequireDirectory(targetProject), requested)));
         if (!await RequestAccessAsync(PermissionScope("read-local", path), T("Lire un fichier hors du périmètre du projet"), path + "\n\n" + T("Le contenu sera transmis au fournisseur IA pour cette demande."), T("Lecture et transmission de : ") + path, ct)) return T("Accès refusé par l’utilisateur.");
         return await SourceAccess.ReadFileAsync(path, ct, startLine, endLine);
     }

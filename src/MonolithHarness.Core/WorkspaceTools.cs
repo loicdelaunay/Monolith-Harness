@@ -121,7 +121,7 @@ public static class LocalPreview
     public static string ValidatePath(string path)
     {
         if (!Path.IsPathFullyQualified(path) || path.StartsWith(@"\\", StringComparison.Ordinal)) throw new UnauthorizedAccessException("Only absolute local paths are supported.");
-        var full = Path.GetFullPath(path);
+        var full = PortableStorage.ResolvePath(Path.GetFullPath(path));
         var current = Path.GetPathRoot(full)!;
         foreach (var part in full[current.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
         {

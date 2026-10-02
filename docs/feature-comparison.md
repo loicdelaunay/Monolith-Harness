@@ -1,6 +1,6 @@
 # Feature comparison: scope and sources
 
-The table at the bottom of the [README](../README.md#feature-comparison) compares documented workflows, inspected on **2026-10-02**. Monolith Harness is version **1.48.0**. Peer references are pinned to the source revisions below; their default branches may include features newer than a stable download. This is a documentation review, without running benchmarks or testing the other applications.
+The table at the bottom of the [README](../README.md#feature-comparison) compares documented workflows, inspected on **2026-10-02**. Monolith Harness is version **1.48.1**. Peer references are pinned to the source revisions below; their default branches may include features newer than a stable download. This is a documentation review, without running benchmarks or testing the other applications.
 
 **✅** means a documented built-in workflow, with normal configuration. **⚠️** means partial coverage, extra integration, experimental availability, or a different workflow. **❌** means the exact bundled workflow was not documented in the inspected standard interfaces. A cross does not establish that an extension, script, or custom SDK application could never implement it.
 

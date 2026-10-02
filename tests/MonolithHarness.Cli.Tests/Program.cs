@@ -215,6 +215,15 @@ try
         Check(ProjectResources.For(selected, owner, database).SequenceEqual([fileRoot]) && File.Exists(Path.Combine(fileRoot, "created.txt")),
             "Detaching the last CLI folder restores the original workspace and files");
     }
+    var legacyScript = Path.Combine(root, "scripts", "python", "historic.py");
+    Directory.CreateDirectory(Path.GetDirectoryName(legacyScript)!); File.WriteAllText(legacyScript, "historical script content");
+    step = 0; resumed = null;
+    api.Respond = (body, _) => Interlocked.Increment(ref step) == 1
+        ? FakeApi.Tool("read_source", new { path = legacyScript })
+        : (resumed = body) != null ? FakeApi.Text("Historical file restored") : "";
+    var legacyRead = await Run(execute: true, allow: true, chat: fileChat);
+    Check(legacyRead.Code == 0 && !File.Exists(legacyScript) && resumed!.ToJsonString().Contains("historical script content", StringComparison.Ordinal),
+        "Approved CLI reads retain historical generated-file links outside the current source folder");
     api.Respond = (_, _) => FakeApi.Tool("question", new { questions = new[] { new { question = "Choose an option", options = new[] { new { label = "A", description = "First" }, new { label = "B", description = "Second" } }, custom = false } } });
     var question = await Run(json: true);
     Check(question.Code == 3 && question.Output.Contains("\"event\":\"question\""), "Headless questions return an explicit needs-input code instead of hanging");

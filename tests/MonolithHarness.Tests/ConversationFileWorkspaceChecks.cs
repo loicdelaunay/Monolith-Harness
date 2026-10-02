@@ -86,6 +86,9 @@ static class ConversationFileWorkspaceChecks
             check(!Directory.Exists(Path.Combine(portable, "model")) && File.ReadAllText(PortableStorage.ResolvePath(oldModel)) == "model weights", "Legacy model folders move into workspace and old absolute paths still resolve");
             check(new LocalModel { Path = "model/nested/local.gguf" }.FullPath == PortableStorage.ResolvePath(oldModel), "Old relative model paths resolve after the portable migration");
             check(File.ReadAllText(BrandingAssets.Resolve("branding/logo.png")) == "logo" && !File.Exists(oldLogo), "Existing branding remains usable after migration");
+            check(LocalPreview.ValidatePath(oldLogo) == PortableStorage.ResolvePath(oldLogo), "Historical file preview links resolve to the migrated file");
+            try { LocalPreview.ValidatePath(Path.Combine(Path.GetDirectoryName(oldLogo)!, ".env")); throw new Exception("Expected preview restriction."); }
+            catch (UnauthorizedAccessException) { check(true, "Migrated preview links retain protected-file restrictions"); }
             check(File.Exists(Path.Combine(PortableStorage.Folder("logs"), "history.jsonl")) && File.Exists(Path.Combine(PortableStorage.Folder("WebView2"), "chat-1/profile")), "Logs and browser profiles retain their contents in workspace");
             check(File.Exists(Path.Combine(portable, "workspace/assets/chat-1/document.json")) && File.Exists(Path.Combine(portable, "assets/app.ico")), "Conversation drawings migrate while installed application assets remain in place");
             check(File.Exists(Path.Combine(portable, "workspace/runtimes/python/version/bin/python")) && File.Exists(Path.Combine(portable, "runtimes/linux-x64/native/library.so")), "Managed Python moves without relocating installed native runtime libraries");

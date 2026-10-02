@@ -52,6 +52,15 @@ public sealed partial class MainWindow
         Check(project!.GetSourceFolders().SequenceEqual([firstRoot]) && File.Exists(Path.Combine(firstRoot, "result.txt")),
             "Removing the last attached folder returns to the same conversation workspace.");
         Check(fixture.SourceFolder == "", "Conversation file workspaces never mutate the shared inbox project defaults.");
+        var oldExport = Path.Combine(PortableStorage.Root, "exports", "historic-link.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(oldExport)!); await File.WriteAllTextAsync(oldExport, "Historical generated file");
+        PortableStorage.MigrateLayout();
+        var preview = await Task.Run(() => FilePreviewDocument.ReadAsync(oldExport, default));
+        Check(preview.Text == "Historical generated file" && preview.Path == PortableStorage.ResolvePath(oldExport),
+            "Preview opens historical file links after the portable folder migration.");
+        var permissions = state.PermissionMode; state.PermissionMode = PermissionModes.Allow;
+        try { Check(await ReadWithApprovalAsync(oldExport, default) == "Historical generated file", "Approved GUI reads resolve historical generated-file paths."); }
+        finally { state.PermissionMode = permissions; }
         UiText.Language = state.Language = "en"; UpdateSourceLabel(); UpdateFloatingAssets(); ApplyTheme("fluent-light");
         Check(sourceLabel.Text.StartsWith("Conversation workspace:", StringComparison.Ordinal), "The workspace label follows the UI language.");
         await Wait(() => assetsScroll.Visibility == Visibility.Visible && assetsBar.Children.OfType<Border>().Any(x => x.ActualWidth > 0));
