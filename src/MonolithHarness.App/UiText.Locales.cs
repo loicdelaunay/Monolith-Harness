@@ -1123,5 +1123,18 @@ public static partial class UiText
     Support for thinking levels depends on the provider and model.|Die Unterstützung der Denkniveaus hängt vom Anbieter und Modell ab.|La compatibilidad de los niveles de razonamiento depende del proveedor y del modelo.
     Refreshing models…|Modelle werden aktualisiert…|Actualizando modelos…
     {0} models available for {1}.|{0} Modelle für {1} verfügbar.|{0} modelos disponibles para {1}.
+    ← Parent conversation|← Übergeordnete Unterhaltung|← Conversación principal
+    Preparing task plan…|Aufgabenplan wird erstellt…|Preparando el plan de tareas…
+    Task plan not provided|Kein Aufgabenplan mitgeteilt|Plan de tareas no proporcionado
+    tasks completed|Aufgaben abgeschlossen|tareas completadas
+    cancelled|abgebrochen|canceladas
+    This agent's plan|Plan dieses Agenten|Plan de este agente
+    Task plan updated|Aufgabenplan aktualisiert|Plan de tareas actualizado
+    Completed|Abgeschlossen|Completada
+    In progress|In Bearbeitung|En curso
+    Limit reached|Grenze erreicht|Límite alcanzado
+    Task|Aufgabe|Tarea
+    Tool completed|Werkzeug abgeschlossen|Herramienta finalizada
+    Compacting context|Kontext wird komprimiert|Compactando el contexto
     """;
 }

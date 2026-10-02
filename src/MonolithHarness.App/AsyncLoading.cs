@@ -70,6 +70,7 @@ public sealed partial class MainWindow
 
     async Task SelectProject()
     {
+        selectedSubagent = null; childPanel = null; parentConversationBar.Visibility = Visibility.Collapsed;
         var revision = ++projectLoadRevision;
         var selected = projects.SelectedItem as Project;
         SaveConversationDraft();
@@ -131,6 +132,7 @@ public sealed partial class MainWindow
         var ct = cancellation.Token;
         var revision = ++conversationLoadRevision;
         selectedSubagent = null; childPanel = null;
+        parentConversationBar.Visibility = Visibility.Collapsed;
         SaveConversationDraft();
         var selected = (chats.SelectedItem ?? archivedChats.SelectedItem) as Chat;
         chat = selected; state.ChatId = selected?.Id;

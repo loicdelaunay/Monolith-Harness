@@ -8,6 +8,10 @@ public sealed class SubagentRecord
     public string Task { get; set; } = "";
     public string Status { get; set; } = "running";
     public string Activity { get; set; } = "";
-    public string TranscriptJson { get; set; } = "[]";
+    string transcriptJson = "[]";
+    SubagentProgress? progress;
+    public string TranscriptJson { get => transcriptJson; set { transcriptJson = value; progress = null; } }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public SubagentProgress Progress => progress ??= SubagentTasks.Progress(TranscriptJson);
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
 }

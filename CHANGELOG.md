@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.51.0 - 2026-10-02
+
+- Subagents announce and maintain their own structured task lists through todowrite. Lists are isolated from the parent conversation, retained in the existing transcript and preserved through context compaction. GUI chat bubbles, sidebar rows, detailed agent views and CLI bars track completed versus declared tasks, with the current task and cancelled-task count. Unknown plans remain indeterminate; unperformed or unfinished tasks are never automatically marked completed. The configured model-step budget remains unchanged and is no longer displayed as task progress. OpenCode task polling updates the corresponding child plan when its native tools are enabled.
+- The native GUI's Parent conversation action is now an accent button in a fixed header above the subagent scroll area. It remains visible during scrolling and refreshes, returns to the parent chat and disappears when navigating away. Labels and agent statuses use the application's selected language, with new German/Spanish translations. The legacy desktop host also gains task-based progress and a sticky parent navigation header. GUI, CLI and legacy desktop versions remain aligned.
+
+## 1.50.0 - 2026-10-02
+
+- Renames the GUI Consumption tool to Dashboard and adds native Consumption and Speed tabs. Consumption retains its token totals, timeline, model distribution, call details and CSV export. Both tabs share Today / 3 / 7 / 30 days / 1 year, provider, model, activity and project filters, with automatic refresh every 15 seconds and independent detail pagination.
+- The Speed tab uses existing recorded output tokens and request durations to show duration-weighted average throughput, slowest/fastest per-call throughput, measured-call count, a timeline, model comparisons and a filtered CSV export. Durations include waiting and reasoning; estimated output counts are labelled. Failed/interrupted calls and records without a model, positive output count or valid duration are excluded with an explicit count. No new database fields or additional model requests are needed. GUI, CLI and legacy desktop versions remain aligned.
+
 ## 1.49.2 - 2026-10-02
 
 - Renames HTTP web research modes to Smart and Legacy throughout GUI/CLI settings, skill details, model instructions, tool schemas and new results. Smart remains the recommended default: models are instructed to search saved pages first, read only relevant passages, reuse cached results and stop when sufficient evidence is available. Legacy returns body and headers inline and is reserved for an explicit user choice or request. Historical partial/full preferences and tool calls remain accepted and map to Smart/Legacy; existing cached files stay readable. GUI, CLI and legacy desktop versions remain aligned.

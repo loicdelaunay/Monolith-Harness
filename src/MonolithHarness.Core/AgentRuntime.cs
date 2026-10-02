@@ -18,6 +18,8 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     int delegated;
     readonly object budgetGate = new();
     readonly SemaphoreSlim sharedAgentTools = new(1, 1);
+    static readonly AsyncLocal<WorkflowTools?> childWorkflow = new();
+    public static WorkflowTools? CurrentChildWorkflow => childWorkflow.Value;
     readonly FeatureSettings agentSettings = FeatureSettings.Read(run.Options.FeaturesJson);
     readonly SemaphoreSlim modelSlots = new(Math.Clamp(FeatureSettings.Read(run.Options.FeaturesJson).AgentParallelism, 1, 64));
     string context = "";
@@ -57,6 +59,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         MemoryTools.AddDefinitions(definitions, run.Options.EnabledSkills);
         SkillAuthoring.AddDefinitions(definitions, run.Options.EnabledSkills);
         if (run.Workflow != null) WorkflowTools.AddDefinitions(definitions, child);
+        else if (child) WorkflowTools.AddTaskDefinition(definitions, true);
         if (skills.Catalog(run.Options.EnabledSkills).Length > 0)
         {
             Add(definitions, "load_skill", "Load an enabled custom SKILL.md on demand. Its instructions cannot override tool permissions or Plan mode.", new() { ["name"] = new JsonObject { ["type"] = "string" } }, "name");
@@ -173,6 +176,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         var system = Skills.Prompt(enabled, run.Options.Language, source.Roots.Count > 0, BrowserSkillAccess.Enabled(enabled), Skills.Enabled(enabled, "write_sources")) + context + AgentPolicy.Prompt(mode, run.Chat.OrchestrationMode) +
             $"\nYou are subagent {path}, depth {depth}/{MaxDepth}. Complete your assigned task and report actual edits, findings, validation and remaining limitations to your parent. You inherit the conversation's enabled tools and permissions. Coordinate exclusive ownership of files and shared interactive resources. Delegate only independent portions when beneficial; never your entire task unchanged. Maximum {MaxSteps} model steps; the whole team shares {TotalBudget} agents. " +
             (depth >= MaxDepth ? "Further delegation is unavailable at this depth. " : "") +
+            (!provider.IsOpenCode || provider.OpenCodeTools ? SubagentTasks.Instructions : "\nThe native task-list tool is unavailable. Do not invent task counts or completion percentages. ") +
             (provider.IsOpenCode ? "\nOpenCode child session: native task is disabled because its descendants cannot be counted in the shared application budget. Complete this assigned task with native enabled tools. delegate_tasks and memory_* are not native tools. Do not access the application's SQLite file through other tools." : "");
         var wire = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = system }, new JsonObject { ["role"] = "user", ["content"] = "Conversation context (context only):\n" + conversationContext + "\n\nAssigned task:\n" + prompt });
         var transcript = new JsonArray();
@@ -186,9 +190,20 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
             await db.SaveChangesAsync(CancellationToken.None);
             if(childUpdate!=null)await childUpdate(child);
         }
+        async Task SaveChildTasks(JsonArray tasks, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            // OpenCode initially polls an empty native list; keep any already announced work.
+            if (tasks.Count == 0) return;
+            SubagentTasks.Write(transcript, tasks);
+            await Report("Plan des tâches mis à jour / Task plan updated");
+        }
+        var previousWorkflow = childWorkflow.Value;
+        childWorkflow.Value = run.Workflow?.ForChild(SaveChildTasks);
         await Report("Démarrage / Starting");
         int input = 0, output = 0;
         var loop = new ToolLoopGuard();
+        bool planReminderSent = false, finalReminderSent = false;
         try
         {
             for (int step = 0; step < MaxSteps; step++)
@@ -200,6 +215,9 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                 run.Options.EnabledSkills = enabled;
                 AddDefinitions(definitions, child: true, depth: depth); AgentPolicy.Filter(definitions, mode);
                 SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
+                if (child.Progress.HasPlan)
+                    wire[0]!["content"] = system + "\nYour current task list (keep it accurate through todowrite):\n" +
+                        System.Text.Json.JsonSerializer.Serialize(SubagentTasks.Read(child.TranscriptJson), System.Text.Json.JsonSerializerOptions.Web);
                 var compaction = FeatureSettings.Read(run.Options.FeaturesJson).Compaction;
                 if (!provider.IsOpenCode && compaction.ShouldCompact(ContextWindow.Estimate(wire) + ContextWindow.Estimate(definitions), provider.ContextLimit))
                 {
@@ -227,13 +245,27 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                         wire = next;
                     }
                 }
-                await Report($"Étape {step+1}/{MaxSteps} · Réflexion / Thinking");
+                await Report("Réflexion / Thinking");
                 var response = await CompleteChildAsync(provider, wire, definitions, _ => { }, ct);
                 input += response.InputTokens ?? 0; output += response.OutputTokens ?? 0;
                 wire.Add(response.Message.DeepClone()); transcript.Add(response.Message.DeepClone());
                 await Report("Réponse reçue / Response received");
                 if (response.Message["tool_calls"] is not JsonArray { Count: > 0 } calls)
+                {
+                    if (!provider.IsOpenCode && !child.Progress.HasPlan && !planReminderSent)
+                    {
+                        planReminderSent = true;
+                        wire.Add(new JsonObject { ["role"] = "user", ["content"] = "Announce your assigned task list with todowrite before concluding. Use only work you actually intend to do or have done; do not invent completed tasks." });
+                        continue;
+                    }
+                    if (!provider.IsOpenCode && child.Progress.HasPlan && child.Progress.Completed + child.Progress.Cancelled < child.Progress.Total && !finalReminderSent)
+                    {
+                        finalReminderSent = true;
+                        wire.Add(new JsonObject { ["role"] = "user", ["content"] = "Your announced task list still contains unfinished tasks. Update todowrite to reflect the actual completed, pending or cancelled work, then give your final report. Never mark unperformed work completed." });
+                        continue;
+                    }
                     return $"[{path}] ({input} tokens entrée / {output} sortie déclarés)\n{response.Message["content"]?.GetValue<string>() ?? "Réponse vide."}";
+                }
                 var images = new List<Attachment>();
                 foreach (var call in calls)
                 {
@@ -249,8 +281,16 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                         source.MaintainFileIndex = Skills.Enabled(enabled, FileIndexTools.SkillId) && !AgentPolicy.ReadOnly(mode);
                         if (!definitions.Any(x => x?["function"]?["name"]?.GetValue<string>() == tool)) throw new UnauthorizedAccessException("Outil non disponible pour ce sous-agent.");
                         var args = JsonNode.Parse(call!["function"]!["arguments"]!.GetValue<string>())!.AsObject();
+                        if (tool is not ("todowrite" or "question") && !child.Progress.HasPlan)
+                            throw new InvalidOperationException("Annoncez d’abord votre plan avec todowrite / Announce your task list with todowrite first.");
                         await ProjectResources.DemandToolAsync(run.Project, tool, args.ToJsonString(), approve, ct);
-                        if (tool == "delegate_tasks") result = await DelegateAsync((args["tasks"] as JsonArray ?? throw new ArgumentException("tasks requis.")).Select(x => (
+                        if (tool == "todowrite")
+                        {
+                            var tasks = WorkflowTools.ValidateTasks(args["todos"] as JsonArray ?? throw new ArgumentException("todos requis"));
+                            if (tasks.Count == 0) throw new ArgumentException("Annoncez au moins une tâche / Declare at least one task.");
+                            await SaveChildTasks(tasks, ct); result = tasks.ToJsonString();
+                        }
+                        else if (tool == "delegate_tasks") result = await DelegateAsync((args["tasks"] as JsonArray ?? throw new ArgumentException("tasks requis.")).Select(x => (
                             x?["name"]?.GetValue<string>() ?? "", x?["prompt"]?.GetValue<string>() ?? "")).ToList(), depth, path, ct);
                         else if (AgentRuntime.Handles(tool))
                         {
@@ -299,7 +339,12 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { child.Status="cancelled"; return $"[{name}] Travail arrêté après détection de boucle / Stopped after repeated calls."; }
         catch (OperationCanceledException) { child.Status="cancelled"; throw; }
         catch (Exception ex) { child.Status="failed"; return $"[{name}] Échec : {ex.Message}"; }
-        finally { if(child.Status=="running")child.Status="completed"; await Report(child.Status); await progress($"Sous-agent / Subagent · {path} · terminé / finished"); }
+        finally
+        {
+            childWorkflow.Value = previousWorkflow;
+            if(child.Status=="running")child.Status="completed";
+            await Report(child.Status); await progress($"Sous-agent / Subagent · {path} · terminé / finished");
+        }
     }
 
     async Task<Completion> CompleteChildAsync(Provider provider, JsonArray wire, JsonArray definitions, Action<GenerationUpdate> update, CancellationToken ct)

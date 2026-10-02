@@ -22,6 +22,8 @@ Direct subagents use the conversation's provider and model, with separate contex
 
 Forced OpenCode consultations use separate sessions and native read tools. Additional native OpenCode subagents are managed by OpenCode; they do not use the local `delegate_tasks` loop or its limits.
 
+See [subagent task progress](subagent-progress.md) for declared task counts, progress bars and the fixed return-to-parent action.
+
 ## Project instructions
 
 **AGENTS.md** files in attached roots and subfolders are loaded at the start of each message. Excluded paths and symbolic links are skipped or rejected. Each text is accompanied by its scope directory; subfolder rules take precedence for files in that subfolder. Files outside attached roots are not scanned.

@@ -4,7 +4,7 @@ namespace MonolithHarness.Cli;
 
 public sealed partial class TerminalUi
 {
-    // These bars deliberately remain indeterminate: an agent's step budget is not percent complete.
+    // Pending model work is indeterminate; declared agent tasks have their own determinate progress.
     static string ActivityBar(int tick, int width, bool complete = false, bool stopped = false, bool ascii = false)
     {
         char empty = ascii ? '.' : '·', filled = ascii ? '=' : '━';
@@ -40,8 +40,19 @@ public sealed partial class TerminalUi
                 "cancelled" => L("Arrêté", "Stopped"), "limited" => L("Budget atteint", "Budget reached"),
                 _ => AgentActivity(child.Activity)
             };
+            var taskProgress = child.Progress;
+            var bar = ActivityBar(frame + (first + row) * 7, barWidth, complete, stopped, ascii);
+            if (taskProgress.HasPlan)
+            {
+                var filled = (int)Math.Floor(barWidth * taskProgress.Completed / (double)taskProgress.Total);
+                bar = "[" + new string(ascii ? '=' : '━', filled) + new string(ascii ? '.' : '·', barWidth - filled) + "]";
+                activity = $"{taskProgress.Completed}/{taskProgress.Total} {L("tâches", "tasks")} · " + activity;
+                if (taskProgress.CurrentTask.Length > 0) activity += " · " + taskProgress.CurrentTask;
+                if (taskProgress.Cancelled > 0) activity += $" · {taskProgress.Cancelled} {L("annulée(s)", "cancelled")}";
+            }
+            else if (child.Status == "running") activity = L("Plan en préparation", "Preparing task plan") + " · " + activity;
             canvas.Write(x, y + row, (compact ? $"{first + row + 1}/{agents.Count} " : "") + child.Name, p.Normal, nameWidth);
-            canvas.Write(x + nameWidth + 1, y + row, ActivityBar(frame + (first + row) * 7, barWidth, complete, stopped, ascii), ink);
+            canvas.Write(x + nameWidth + 1, y + row, bar, ink);
             canvas.Write(x + nameWidth + barWidth + 4, y + row, activity, complete || stopped ? ink : p.Dim, width - nameWidth - barWidth - 4);
         }
         if (pages > 1 && !compact)
@@ -51,7 +62,9 @@ public sealed partial class TerminalUi
     string AgentActivity(string activity)
     {
         if (string.IsNullOrWhiteSpace(activity)) return L("Démarrage…", "Starting…");
+        activity = System.Text.RegularExpressions.Regex.Replace(activity, @"^Étape \d+/\d+ · ", "");
         return activity.Replace("Réflexion / Thinking", L("Réflexion", "Thinking"))
+            .Replace("Plan des tâches mis à jour / Task plan updated", L("Plan des tâches mis à jour", "Task plan updated"))
             .Replace("Outil terminé / Tool completed", L("Outil terminé", "Tool completed"))
             .Replace("Outil / Tool", L("Outil", "Tool"))
             .Replace("Réponse reçue / Response received", L("Réponse reçue", "Response received"))

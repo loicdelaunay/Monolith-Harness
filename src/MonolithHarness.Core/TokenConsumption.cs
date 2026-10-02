@@ -128,31 +128,31 @@ public static class ConsumptionReports
         var entries = available.Where(x => (filter.Provider.Length == 0 || ProviderKey(x) == filter.Provider) &&
             (filter.Model.Length == 0 || ModelKey(x) == filter.Model) && (filter.Activity.Length == 0 || x.Activity == filter.Activity) &&
             (filter.ProjectId == null || x.ProjectId == filter.ProjectId)).ToArray();
-        var timeline = new List<TokenBucket>();
-        void Bucket(DateTime a, DateTime b, string label)
+        var timeline = TimeBuckets(start, end, filter.Period).Select(bucket =>
         {
-            // UTC bounds preserve daylight-saving transitions; labels use the user's local calendar.
-            var left = a.ToUniversalTime(); var right = b.ToUniversalTime();
-            var values = entries.Where(x => x.CompletedUtc >= left && x.CompletedUtc < right).ToArray();
-            timeline.Add(new(label, values.Sum(x => x.InputTokens), values.Sum(x => x.OutputTokens), values.Length));
-        }
-        if (filter.Period == ConsumptionPeriod.Today)
+            var values = entries.Where(x => x.CompletedUtc >= bucket.FromUtc && x.CompletedUtc < bucket.UntilUtc).ToArray();
+            return new TokenBucket(bucket.Label, values.Sum(x => x.InputTokens), values.Sum(x => x.OutputTokens), values.Length);
+        }).ToArray();
+        return new(start, end, available, entries, timeline, undated);
+    }
+
+    internal static IEnumerable<(DateTime FromUtc, DateTime UntilUtc, string Label)> TimeBuckets(DateTime start, DateTime end, ConsumptionPeriod period)
+    {
+        // Both dashboard tabs share UTC bounds and local calendar labels, including daylight-saving transitions.
+        if (period == ConsumptionPeriod.Today)
         {
             // Hour buckets are UTC instants, so the repeated autumn hour is counted separately.
-            for (var instant = from; instant < until; instant = instant.AddHours(1))
-            {
-                var values = entries.Where(x => x.CompletedUtc >= instant && x.CompletedUtc < instant.AddHours(1)).ToArray();
-                timeline.Add(new(DateTime.SpecifyKind(instant, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm"),
-                    values.Sum(x => x.InputTokens), values.Sum(x => x.OutputTokens), values.Length));
-            }
+            for (var instant = start.ToUniversalTime(); instant < end.ToUniversalTime(); instant = instant.AddHours(1))
+                yield return (instant, instant.AddHours(1), DateTime.SpecifyKind(instant, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm"));
         }
-        else if (filter.Period == ConsumptionPeriod.Year)
+        else if (period == ConsumptionPeriod.Year)
         {
             for (var month = new DateTime(start.Year, start.Month, 1); month < end; month = month.AddMonths(1))
-                Bucket(month < start ? start : month, month.AddMonths(1) > end ? end : month.AddMonths(1), month.ToString("MMM yyyy"));
+                yield return ((month < start ? start : month).ToUniversalTime(),
+                    (month.AddMonths(1) > end ? end : month.AddMonths(1)).ToUniversalTime(), month.ToString("MMM yyyy"));
         }
-        else for (var day = start; day < end; day = day.AddDays(1)) Bucket(day, day.AddDays(1), day.ToString("dd/MM"));
-        return new(start, end, available, entries, timeline, undated);
+        else for (var day = start; day < end; day = day.AddDays(1))
+            yield return (day.ToUniversalTime(), day.AddDays(1).ToUniversalTime(), day.ToString("dd/MM"));
     }
     public static string ProviderKey(TokenUsage entry) => entry.ProviderId is int id ? $"provider:{id}" : "unrecorded:" + entry.ProviderName;
     public static string ModelKey(TokenUsage entry) => entry.Model.Length > 0 ? entry.Model : "model:unrecorded";

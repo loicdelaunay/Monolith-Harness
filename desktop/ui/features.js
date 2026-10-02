@@ -77,9 +77,16 @@ function childCard(child,compact){
   for(const [both,fr,en] of [['Réflexion / Thinking','Réflexion','Thinking'],['Démarrage / Starting','Démarrage','Starting'],['Réponse reçue / Response received','Réponse reçue','Response received'],['Outil / Tool','Outil','Tool']])activity=activity.replace(both,L(fr,en));
   const step=activity.match(/^Étape (\d+\/\d+) · /);if(step)activity=activity.slice(step[0].length);
   const card=el('span',null,'agent-card');card.dataset.status=child.status;
-  card.append(el('span',child.status==='completed'?'✓':child.status==='failed'?'!':'◈','agent-icon'),el('span',child.name,'agent-name'),el('span',compact?(step?.[1]||'›'):(states[child.status]||child.status),'agent-badge'),el('span',child.status==='running'?activity:states[child.status],'agent-activity'));
+  const plan=child.progress;
+  card.append(el('span',child.status==='completed'?'✓':child.status==='failed'?'!':'◈','agent-icon'),el('span',child.name,'agent-name'),el('span',compact?(plan?.hasPlan?`${plan.completed}/${plan.total}`:'…'):(states[child.status]||child.status),'agent-badge'),el('span',child.status==='running'?activity:states[child.status],'agent-activity'),childTaskProgress(child));
   if(!compact)card.append(el('span',child.task,'agent-task'));
   card.title=child.name+'\n'+activity+'\n'+child.task;return card;
+}
+function childTaskProgress(child){
+  const plan=child.progress,area=el('span',null,'agent-progress'),bar=el('progress');
+  const label=plan?.hasPlan?`${plan.completed}/${plan.total} ${L('tâches terminées','tasks completed')} · ${Math.round(plan.percentage)} %`+(plan.cancelled?` · ${plan.cancelled} ${L('annulée(s)','cancelled')}`:''):child.status==='running'?L('Plan en préparation…','Preparing task plan…'):L('Plan non communiqué','Task plan not provided');
+  if(plan?.hasPlan){bar.max=plan.total;bar.value=plan.completed;}else if(child.status!=='running'){bar.max=1;bar.value=0;}
+  bar.setAttribute('aria-label',label);area.append(el('span',label),bar);if(plan?.currentTask)area.append(el('span',plan.currentTask,'agent-current-task'));return area;
 }
 function renderChildRows(chat){
   for(const child of subagents.values())if(child.chatId===chat.id&&child.status==='running'){
@@ -96,11 +103,18 @@ function renderChildBubbles(){
 function renderChild(){
   renderPinnedTasks();
   const child=subagents.get(selectedChild);if(!child)return;
-  const scroll=$('messages'),offset=scroll.scrollTop;scroll.replaceChildren();
-  const back=el('button',L('← Conversation parente','← Parent conversation'));back.onclick=()=>{selectedChild=null;renderMessages(true);updateControls();};scroll.append(back,el('h2',child.name+' · '+child.status),el('p',child.activity),el('p',child.task));
-  for(const message of JSON.parse(child.transcriptJson||'[]')){
+  const scroll=$('messages'),offset=scroll.scrollTop;
+  let header=scroll.querySelector('.parent-conversation-header'),body=scroll.querySelector('.subagent-body');
+  if(!header){scroll.replaceChildren();header=el('div',null,'parent-conversation-header');const back=el('button',L('← Conversation parente','← Parent conversation'),'accent');back.onclick=()=>{selectedChild=null;renderMessages(true);updateControls();};header.append(back,el('span',child.name));scroll.append(header);body=el('div',null,'subagent-body');scroll.append(body);}
+  header.querySelector('span').textContent=child.name;
+  const states={running:L('En cours','Running'),completed:L('Terminé','Completed'),failed:L('Échec','Failed'),limited:L('Limite atteinte','Limit reached'),cancelled:L('Annulé','Cancelled'),interrupted:L('Interrompu','Interrupted')};
+  body.replaceChildren(el('h2',child.name+' · '+(states[child.status]||child.status)),childTaskProgress(child),el('p',child.task));
+  const transcript=JSON.parse(child.transcriptJson||'[]'),taskRecord=transcript.findLast(message=>message.role==='tasks');
+  if(taskRecord){const plan=el('section',null,'agent-plan');plan.append(el('h3',L('Plan de cet agent',"This agent's plan")));for(const task of JSON.parse(taskRecord.content||'[]'))plan.append(el('p',({completed:'✓',in_progress:'◉',cancelled:'—',pending:'○'}[task.status]||'○')+' '+task.content));body.append(plan);}
+  for(const message of transcript){
+    if(message.role==='tasks')continue;
     const block=el('article',null,'message');block.append(el('strong',message.role),el('div',message.content||'','body'));
-    if(message.tool_calls)block.append(el('pre',JSON.stringify(message.tool_calls,null,2)));scroll.append(block);
+    if(message.tool_calls)block.append(el('pre',JSON.stringify(message.tool_calls,null,2)));body.append(block);
   }
   scroll.scrollTop=offset;followMessages();
 }

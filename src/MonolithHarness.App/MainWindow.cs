@@ -246,9 +246,11 @@ public sealed partial class MainWindow : Window
         var chatHeading = new StackPanel { Spacing = 10 }; chatHeading.Children.Add(header); chatHeading.Children.Add(BuildChatFindBar());
         main.Children.Add(chatHeading);
         var conversationPanel = new Grid { RowSpacing = 8 };
+        conversationPanel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         conversationPanel.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         conversationPanel.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        scroll.Content = messages; conversationPanel.Children.Add(scroll);
+        conversationPanel.Children.Add(BuildParentConversationBar());
+        scroll.Content = messages; Grid.SetRow(scroll, 1); conversationPanel.Children.Add(scroll);
         ObserveChatScroll();
         status.TextWrapping = TextWrapping.Wrap;
         status.TextAlignment = TextAlignment.Center;
@@ -263,7 +265,7 @@ public sealed partial class MainWindow : Window
         status.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) =>
             statusChip.Visibility = string.IsNullOrWhiteSpace(status.Text) ? Visibility.Collapsed : Visibility.Visible);
         var glowingStatus = StatusGlow(statusChip);
-        Grid.SetRow(glowingStatus, 1); conversationPanel.Children.Add(glowingStatus);
+        Grid.SetRow(glowingStatus, 2); conversationPanel.Children.Add(glowingStatus);
         Grid.SetRow(conversationPanel, 1); main.Children.Add(conversationPanel);
         var composePanel = new StackPanel { Spacing = 4 };
         composePanel.Children.Add(pinnedTasks);

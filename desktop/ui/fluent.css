@@ -36,6 +36,12 @@ h2 { font-size: 24px; font-weight: 600; letter-spacing: -.3px; }
 .agent-badge { grid-column:3; font-size:10px; color:var(--accent); background:#80808015; border-radius:4px; padding:2px 5px; }
 .agent-activity { grid-column:2 / 4; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .agent-task { grid-column:2 / 4; margin-top:4px; font-size:12px; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.agent-progress { grid-column:2 / 4; display:flex; flex-direction:column; gap:4px; width:100%; min-width:0; color:var(--muted); font-size:11px; }
+.agent-progress progress { width:100%; height:6px; accent-color:var(--accent); }
+.agent-current-task { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.parent-conversation-header { position:sticky; top:0; z-index:4; display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px; background:var(--background, #202020); border-bottom:1px solid var(--line); }
+.parent-conversation-header span { min-width:0; overflow-wrap:anywhere; }
+.agent-plan { margin:16px 0; padding:12px; border:1px solid var(--line); border-radius:8px; }
 .agent-card[data-status=completed] .agent-icon { color:#40a66a; }
 .agent-card[data-status=failed] .agent-icon { color:#d95555; }
 .child-bubble { border-radius:10px; padding:14px; }

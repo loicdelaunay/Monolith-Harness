@@ -5,7 +5,7 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace MonolithHarness.App;
 
-internal sealed class ConsumptionWindow : Window
+internal sealed partial class DashboardWindow : Window
 {
     sealed record Choice(string Id, string Name) { public override string ToString() => Name; }
     internal Grid Panel { get; } = new() { Padding = new(24), RowSpacing = 14, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
@@ -15,6 +15,7 @@ internal sealed class ConsumptionWindow : Window
     readonly TextBlock total = Text("0", 24), input = Text("0", 24), output = Text("0", 24), calls = Text("0", 24);
     readonly TextBlock detailCount = Text("", 12, true), legacyNote = Text("", 12, true);
     readonly ConsumptionTimelineChart timeline = new();
+    readonly TabView dashboardTabs = new() { IsAddTabButtonVisible = false, CanDragTabs = false, CanReorderTabs = false, TabWidthMode = TabViewWidthMode.Equal };
     readonly StackPanel modelBars = new() { Spacing = 13 }, rows = new() { Spacing = 2 };
     readonly Button refresh, copy, previous, next;
     readonly DispatcherTimer debounce = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -44,13 +45,13 @@ internal sealed class ConsumptionWindow : Window
         button.Click += (_, _) => click(); return button;
     }
 
-    internal ConsumptionWindow(string database, ElementTheme theme)
+    internal DashboardWindow(string database, ElementTheme theme)
     {
         this.database = database; Panel.RequestedTheme = theme;
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
             Panel.RowDefinitions.Add(new() { Height = height });
-        Panel.Children.Add(Stack(Text(L("Consommation", "Token consumption"), 27), Text(L("Suivez les tokens utilisés par vos conversations, agents et outils.",
-            "Track tokens used by your chats, agents and tools."), 13, true)));
+        Panel.Children.Add(Stack(Text("Dashboard", 27), Text(L("Suivez la consommation de tokens et la vitesse de vos modèles.",
+            "Track token consumption and model speed."), 13, true)));
         period.Header = L("Période", "Period"); period.ItemsSource = new[] { L("Aujourd’hui", "Today"), L("3 jours", "3 days"), L("7 jours", "7 days"), L("30 jours", "30 days"), L("1 an", "1 year") }; period.SelectedIndex = 0;
         provider.Header = L("Fournisseur", "Provider"); model.Header = L("Modèle", "Model"); activity.Header = L("Usage", "Activity"); project.Header = L("Projet", "Project");
         changingFilters = true;
@@ -77,33 +78,12 @@ internal sealed class ConsumptionWindow : Window
         var messages = Stack(progress, notice); Grid.SetRow(messages, 2); Panel.Children.Add(messages);
         var content = new StackPanel { Spacing = 18 };
         content.Children.Add(periodLabel);
-        var stats = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
         var cards = new[] { Stat(L("Total des tokens", "Total tokens"), total), Stat(L("Tokens d’entrée", "Input tokens"), input),
             Stat(L("Tokens de sortie", "Output tokens"), output), Stat(L("Appels enregistrés", "Recorded calls"), calls) };
-        foreach (var card in cards) stats.Children.Add(card);
-        int statColumns = 0;
-        stats.SizeChanged += (_, e) =>
-        {
-            var count = e.NewSize.Width >= 750 * TextZoom.ForWindow(Panel) / 100d ? 4 : e.NewSize.Width >= 400 ? 2 : 1;
-            if (count == statColumns) return; statColumns = count; stats.ColumnDefinitions.Clear(); stats.RowDefinitions.Clear();
-            for (int i = 0; i < count; i++) stats.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-            for (int i = 0; i < (cards.Length + count - 1) / count; i++) stats.RowDefinitions.Add(new() { Height = GridLength.Auto });
-            for (int i = 0; i < cards.Length; i++) { Grid.SetColumn(cards[i], i % count); Grid.SetRow(cards[i], i / count); }
-        };
-        content.Children.Add(stats); content.Children.Add(empty);
-        var charts = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
-        charts.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); charts.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        charts.RowDefinitions.Add(new() { Height = GridLength.Auto }); charts.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        content.Children.Add(Cards(cards)); content.Children.Add(empty);
         var overTime = FluentDesign.Surface(Stack(Text(L("Évolution des tokens", "Token timeline"), 17), Legend(), timeline), 16);
         var byModel = FluentDesign.Surface(Stack(Text(L("Répartition par modèle", "Tokens by model"), 17), Legend(), modelBars), 16);
-        charts.Children.Add(overTime); Grid.SetColumn(byModel, 1); charts.Children.Add(byModel);
-        charts.SizeChanged += (_, e) =>
-        {
-            bool narrow = e.NewSize.Width < 950 * TextZoom.ForWindow(Panel) / 100d;
-            Grid.SetColumnSpan(overTime, narrow ? 2 : 1); Grid.SetColumnSpan(byModel, narrow ? 2 : 1);
-            Grid.SetRow(byModel, narrow ? 1 : 0); Grid.SetColumn(byModel, narrow ? 0 : 1);
-        };
-        content.Children.Add(charts);
+        content.Children.Add(Charts(overTime, byModel));
         content.Children.Add(Text(L("Les tokens d’entrée incluent l’historique renvoyé à chaque appel. ≈ indique une estimation. Ces chiffres couvrent cette installation, pas le relevé de facturation du fournisseur.",
             "Input tokens include history sent again with each call. ≈ marks estimates. These figures cover this installation, not the provider's billing statement."), 12, true));
         content.Children.Add(legacyNote);
@@ -115,7 +95,10 @@ internal sealed class ConsumptionWindow : Window
         content.Children.Add(FluentDesign.Surface(Stack(Text(L("Détail des appels", "Call details"), 17),
             new ScrollViewer { Content = table, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, TwoColumns(detailCount, pagination)), 16));
         var scroll = new ScrollViewer { Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetRow(scroll, 3); Panel.Children.Add(scroll);
+        dashboardTabs.TabItems.Add(new TabViewItem { Header = L("Consommation", "Consumption"), IsClosable = false, Content = scroll });
+        dashboardTabs.TabItems.Add(new TabViewItem { Header = L("Vitesse", "Speed"), IsClosable = false, Content = BuildSpeedPage() });
+        dashboardTabs.SelectedIndex = 0;
+        Grid.SetRow(dashboardTabs, 3); Panel.Children.Add(dashboardTabs);
         refresh = Action(L("Actualiser", "Refresh"), () => _ = RefreshAsync(), true);
         copy = Action(L("Copier le détail CSV", "Copy details as CSV"), CopyCsv);
         var reset = Action(L("Effacer les filtres", "Clear filters"), () => { changingFilters = true; foreach (var selector in selectors.Skip(1)) selector.SelectedIndex = 0; changingFilters = false; _ = RefreshAsync(); });
@@ -129,6 +112,7 @@ internal sealed class ConsumptionWindow : Window
         actions.SizeChanged += (_, e) => { bool narrow = e.NewSize.Width < 600 * TextZoom.ForWindow(Panel) / 100d;
             secondary.MaxWidth = e.NewSize.Width; Grid.SetColumnSpan(secondary, narrow ? 2 : 1); Grid.SetRow(refresh, narrow ? 1 : 0); };
         Grid.SetRow(actions, 4); Panel.Children.Add(actions);
+        dashboardTabs.SelectionChanged += (_, _) => { UpdateCopyAvailability(); TextZoom.Apply(Panel); };
         debounce.Tick += async (_, _) => { debounce.Stop(); await RefreshAsync(); };
         autoRefresh.Tick += async (_, _) => { if (request == null) await RefreshAsync(false); };
         Panel.Loaded += (_, _) => autoRefresh.Start();
@@ -137,6 +121,35 @@ internal sealed class ConsumptionWindow : Window
     }
 
     static Border Stat(string label, TextBlock value) => FluentDesign.Surface(Stack(Text(label, 12, true), value), 14);
+    Grid Cards(Border[] cards)
+    {
+        var grid = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
+        foreach (var card in cards) grid.Children.Add(card);
+        int columns = 0;
+        grid.SizeChanged += (_, e) =>
+        {
+            var count = e.NewSize.Width >= 750 * TextZoom.ForWindow(Panel) / 100d ? 4 : e.NewSize.Width >= 400 * TextZoom.ForWindow(Panel) / 100d ? 2 : 1;
+            if (count == columns) return; columns = count; grid.ColumnDefinitions.Clear(); grid.RowDefinitions.Clear();
+            for (int i = 0; i < count; i++) grid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+            for (int i = 0; i < (cards.Length + count - 1) / count; i++) grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            for (int i = 0; i < cards.Length; i++) { Grid.SetColumn(cards[i], i % count); Grid.SetRow(cards[i], i / count); }
+        };
+        return grid;
+    }
+    Grid Charts(FrameworkElement left, FrameworkElement right)
+    {
+        var grid = new Grid { ColumnSpacing = 16, RowSpacing = 16 };
+        grid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        grid.Children.Add(left); Grid.SetColumn(right, 1); grid.Children.Add(right);
+        grid.SizeChanged += (_, e) =>
+        {
+            bool narrow = e.NewSize.Width < 950 * TextZoom.ForWindow(Panel) / 100d;
+            Grid.SetColumnSpan(left, narrow ? 2 : 1); Grid.SetColumnSpan(right, narrow ? 2 : 1);
+            Grid.SetRow(right, narrow ? 1 : 0); Grid.SetColumn(right, narrow ? 0 : 1);
+        };
+        return grid;
+    }
     static StackPanel Legend()
     {
         var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
@@ -161,14 +174,19 @@ internal sealed class ConsumptionWindow : Window
     {
         if (closed) return; debounce.Stop(); request?.Cancel();
         using var cancellation = new CancellationTokenSource(); request = cancellation;
-        refresh.IsEnabled = false; progress.Visibility = Visibility.Visible; notice.Text = "";
+        refresh.IsEnabled = false; copy.IsEnabled = false; progress.Visibility = Visibility.Visible; notice.Text = "";
         var filter = new ConsumptionFilter((ConsumptionPeriod)Math.Max(0, period.SelectedIndex), Selected(provider), Selected(model), Selected(activity),
             int.TryParse(Selected(project), out var id) ? id : null);
         try
         {
-            var snapshot = await Task.Run(() => ConsumptionReports.ReadAsync(database, filter, cancellation.Token), cancellation.Token);
+            var (snapshot, speedSnapshot) = await Task.Run(async () =>
+            {
+                var consumption = await ConsumptionReports.ReadAsync(database, filter, cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                return (consumption, ModelSpeedReports.Create(consumption, filter.Period));
+            }, cancellation.Token);
             if (closed || cancellation.IsCancellationRequested) return;
-            report = snapshot; if (resetPage) page = 0;
+            report = snapshot; speedReport = speedSnapshot; if (resetPage) { page = 0; speedPage = 0; }
             changingFilters = true;
             try
             {
@@ -189,12 +207,12 @@ internal sealed class ConsumptionWindow : Window
                 "Old measurements are imported with the available information; provider, model or counters may be missing.") : "") +
                 (snapshot.UndatedLegacy > 0 ? " " + L("Anciennes réponses sans date exclues : ", "Old replies without dates excluded: ") + snapshot.UndatedLegacy.ToString("N0") + "." : "");
             legacyNote.Visibility = legacyNote.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-            timeline.SetValues(snapshot.Timeline); RenderModels(); RenderDetails(); copy.IsEnabled = snapshot.Entries.Count > 0;
+            timeline.SetValues(snapshot.Timeline); RenderModels(); RenderDetails(); RenderSpeed();
             TextZoom.Apply(Panel);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!closed && !cancellation.IsCancellationRequested) { notice.Text = ex.Message; notice.Foreground = FluentDesign.Resource("ToolMessageErrorStrokeBrush"); } }
-        finally { if (ReferenceEquals(request, cancellation)) { request = null; if (!closed) { refresh.IsEnabled = true; progress.Visibility = Visibility.Collapsed; } } }
+        finally { if (ReferenceEquals(request, cancellation)) { request = null; if (!closed) { refresh.IsEnabled = true; progress.Visibility = Visibility.Collapsed; UpdateCopyAvailability(); } } }
     }
 
     static string ProviderName(TokenUsage entry) => entry.ProviderName.Length == 0 ? L("Historique · fournisseur inconnu", "History · unknown provider") :
@@ -253,6 +271,7 @@ internal sealed class ConsumptionWindow : Window
     }
     void CopyCsv()
     {
+        if (dashboardTabs.SelectedIndex == 1) { CopySpeedCsv(); return; }
         if (report == null) return;
         static string Cell(string text) => "\"" + text.Replace("\"", "\"\"") + "\"";
         var header = "CompletedUtc,Provider,Model,Activity,Project,Chat,InputTokens,OutputTokens,InputEstimated,OutputEstimated,Seconds,Status,Legacy";
@@ -261,4 +280,6 @@ internal sealed class ConsumptionWindow : Window
         var data = new DataPackage(); data.SetText(header + "\r\n" + string.Join("\r\n", lines)); Clipboard.SetContent(data);
         notice.Text = L("Détail CSV copié.", "CSV details copied."); notice.Foreground = FluentDesign.Secondary;
     }
+    void UpdateCopyAvailability() => copy.IsEnabled = request == null &&
+        (dashboardTabs.SelectedIndex == 1 ? speedReport?.Entries.Count > 0 : report?.Entries.Count > 0);
 }

@@ -9,7 +9,7 @@ public sealed partial class MainWindow
 {
     readonly Dictionary<ModelToolKind, ModelToolsWindow> dedicatedTools = [];
     readonly HashSet<ModelToolKind> openingTools = [];
-    ConsumptionWindow? consumptionWindow;
+    DashboardWindow? dashboardWindow;
     AiDetectorWindow? aiDetectorWindow;
 
     Grid BuildDedicatedToolsRow()
@@ -28,8 +28,8 @@ public sealed partial class MainWindow
             item.Click += async (_, _) => await Guard(() => ShowDedicatedTool(kind));
             menu.Items.Add(item);
         }
-        var consumption = new MenuFlyoutItem { Text = WorkflowText("Consommation", "Token consumption"), Icon = FluentDesign.Icon("\uE9D2") };
-        consumption.Click += async (_, _) => await Guard(ShowConsumptionAsync); menu.Items.Add(consumption);
+        var dashboard = new MenuFlyoutItem { Text = "Dashboard", Icon = FluentDesign.Icon("\uE9D2") };
+        dashboard.Click += async (_, _) => await Guard(ShowDashboardAsync); menu.Items.Add(dashboard);
         var detector = new MenuFlyoutItem { Text = "AI Generated detector", Icon = FluentDesign.Icon("\uE9F5") };
         detector.Click += async (_, _) => await Guard(ShowAiDetectorAsync); menu.Items.Add(detector);
         var preview = new MenuFlyoutItem { Text = "Preview", Icon = FluentDesign.Icon("\uE8A5") };
@@ -37,15 +37,15 @@ public sealed partial class MainWindow
         var tools = new DropDownButton { Content = WorkflowText("Outils", "Tools"), Flyout = menu, FontSize = 12, Padding = new(8, 8, 8, 8) };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tools, WorkflowText("Outils dédiés", "Dedicated tools"));
         row.Children.Add(scheduled); Grid.SetColumn(tools, 1); row.Children.Add(tools);
-        Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); consumptionWindow?.Close(); aiDetectorWindow?.Close(); };
+        Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); };
         return row;
     }
 
-    async Task ShowConsumptionAsync()
+    async Task ShowDashboardAsync()
     {
-        if (consumptionWindow is { } existing) { existing.Activate(); await existing.RefreshAsync(); return; }
-        var window = new ConsumptionWindow(db.FilePath, root.RequestedTheme) { Title = DisplayApplicationName + " · " + WorkflowText("Consommation", "Token consumption") };
-        consumptionWindow = window; window.Closed += (_, _) => consumptionWindow = null;
+        if (dashboardWindow is { } existing) { existing.Activate(); await existing.RefreshAsync(); return; }
+        var window = new DashboardWindow(db.FilePath, root.RequestedTheme) { Title = DisplayApplicationName + " · Dashboard" };
+        dashboardWindow = window; window.Closed += (_, _) => dashboardWindow = null;
         ApplyBrandingIcon(window); ObserveTextZoom(window.Panel); window.Activate(); await window.RefreshAsync();
     }
 

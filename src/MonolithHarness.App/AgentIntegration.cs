@@ -14,7 +14,7 @@ public sealed partial class MainWindow
             await EnsureOpenCodeServerAsync(run.Provider, secret, ct, run.Project);
             var session = await openCodeEngine.CreateSessionAsync(run.Provider, secret, directory, "Sous-agent · " + run.Chat.Title, ct);
             return await openCodeEngine.PromptAsync(run.Provider, secret, directory, session, wire.Last()?["content"]?.GetValue<string>() ?? "",
-                wire[0]?["content"]?.GetValue<string>() ?? "", [], _ => { }, ct, policy: new("plan", "disabled"), workflow: run.Workflow?.ForChild(), retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
+                wire[0]?["content"]?.GetValue<string>() ?? "", [], _ => { }, ct, policy: new("plan", "disabled"), workflow: AgentRuntime.CurrentChildWorkflow ?? run.Workflow?.ForChild(), retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
         },
         (scope, diff, ct) => RequestAccessAsync(scope, scope.StartsWith("web-http|") ? "Recherche web · Requête HTTP" : scope.StartsWith("memory|") ? "Mémoire / Memory" : "Sous-agent · Patch", diff, scope.StartsWith("web-http|") ? "HTTP .NET" : scope.StartsWith("memory|") ? "Mémoire / Memory" : "Patch des sources", ct),
         text => { SetRunStatus(run, text); return Task.CompletedTask; },
@@ -27,7 +27,7 @@ public sealed partial class MainWindow
             var id=await openCodeEngine.CreateSessionAsync(target,key,directory,"Sous-agent · "+run.Chat.Title,ct);
             return await openCodeEngine.PromptAsync(target,key,directory,id,wire.Last()?["content"]?.GetValue<string>()??"",wire[0]?["content"]?.GetValue<string>()??"",[],update,ct,
                 authorize:(permission,token) => AuthorizeOpenCodePermissionAsync(target,directory,permission,token),
-                policy:new(definitions.Count == 0 ? "plan" : run.Chat.ExecutionMode,"disabled"),workflow:run.Workflow?.ForChild(),retrySettings:FeatureSettings.Read(run.Options.FeaturesJson));
+                policy:new(definitions.Count == 0 ? "plan" : run.Chat.ExecutionMode,"disabled"),workflow:AgentRuntime.CurrentChildWorkflow ?? run.Workflow?.ForChild(),retrySettings:FeatureSettings.Read(run.Options.FeaturesJson));
         }, async (id, ct) => {
             if (!Skills.Enabled(state.EnabledSkills, id)) state.EnabledSkills += "," + id;
             await db.SaveChangesAsync(ct);

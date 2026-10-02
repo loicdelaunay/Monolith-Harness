@@ -14,12 +14,24 @@ public sealed class WorkflowTools(Func<IReadOnlyList<AgentQuestion>, Cancellatio
     public static bool Handles(string name) => name is "todowrite" or "question";
     public static void AddDefinitions(JsonArray definitions, bool child = false)
     {
-        if (!child) definitions.Add(JsonNode.Parse("""
-        {"type":"function","function":{"name":"todowrite","description":"Replace the complete structured task list for this conversation. Keep completed tasks; send an empty list to clear.","parameters":{"type":"object","properties":{"todos":{"type":"array","maxItems":50,"items":{"type":"object","properties":{"content":{"type":"string"},"status":{"type":"string","enum":["pending","in_progress","completed","cancelled"]}},"required":["content","status"],"additionalProperties":false}}},"required":["todos"],"additionalProperties":false}}}
-        """));
+        AddTaskDefinition(definitions, child);
         definitions.Add(JsonNode.Parse("""
         {"type":"function","function":{"name":"question","description":"Wait for the user to answer 1 to 8 questions. Set multiple=true on a question to let the user select several options; omit it or use false for exactly one answer. Options can be empty for a free-text form. custom defaults to true. Each answer is returned as an array of selected labels and optional custom text. Do not use this as a substitute for tool access permissions.","parameters":{"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"object","properties":{"question":{"type":"string"},"options":{"type":"array","maxItems":12,"items":{"type":"object","properties":{"label":{"type":"string"},"description":{"type":"string"}},"required":["label","description"],"additionalProperties":false}},"multiple":{"type":"boolean","description":"False by default: choose exactly one answer (radio buttons). True: choose one or more answers (checkboxes); the answer contains all selected labels."},"custom":{"type":"boolean"}},"required":["question","options"],"additionalProperties":false}}},"required":["questions"],"additionalProperties":false}}}
         """));
+    }
+    public static void AddTaskDefinition(JsonArray definitions, bool child = false)
+    {
+        for (var i = definitions.Count - 1; i >= 0; i--)
+            if (definitions[i]?["function"]?["name"]?.GetValue<string>() == "todowrite") definitions.RemoveAt(i);
+        var definition = JsonNode.Parse("""
+        {"type":"function","function":{"name":"todowrite","description":"Replace the complete structured task list for this conversation. Keep completed tasks; send an empty list to clear.","parameters":{"type":"object","properties":{"todos":{"type":"array","maxItems":50,"items":{"type":"object","properties":{"content":{"type":"string"},"status":{"type":"string","enum":["pending","in_progress","completed","cancelled"]}},"required":["content","status"],"additionalProperties":false}}},"required":["todos"],"additionalProperties":false}}}
+        """)!;
+        if (child)
+        {
+            definition["function"]!["description"] = "Announce and update your own complete task list to report real task progress. Keep completed tasks; mark abandoned tasks cancelled. This never modifies the parent conversation's list. Call before doing work and after completing each task.";
+            definition["function"]!["parameters"]!["properties"]!["todos"]!["minItems"] = 1;
+        }
+        definitions.Add(definition);
     }
     public static JsonArray ValidateTasks(JsonArray items)
     {
@@ -72,7 +84,7 @@ public sealed class WorkflowTools(Func<IReadOnlyList<AgentQuestion>, Cancellatio
         var answer = await AskAsync(ParseQuestions(args["questions"] as JsonArray ?? throw new ArgumentException("questions requis")), ct);
         return System.Text.Json.JsonSerializer.Serialize(answer, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
     }
-    public WorkflowTools ForChild() => new(AskAsync, (_, _) => Task.CompletedTask);
+    public WorkflowTools ForChild(Func<JsonArray, CancellationToken, Task>? saveChildTasks = null) => new(AskAsync, saveChildTasks ?? ((_, _) => Task.CompletedTask));
     public Task SaveTasksAsync(JsonArray tasks, CancellationToken ct) => saveTasks(ValidateTasks(tasks), ct);
     public async Task<bool> DecideLoopAsync(string details, CancellationToken ct)
     {

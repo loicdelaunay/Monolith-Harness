@@ -15,7 +15,7 @@ public sealed partial class HarnessService
             var engine = new OpenCodeEngine(http);
             var session = await engine.CreateSessionAsync(run.Provider, secret, directory, "Sous-agent · " + run.Chat.Title, ct);
             return await engine.PromptAsync(run.Provider, secret, directory, session, wire.Last()?["content"]?.GetValue<string>() ?? "",
-                wire[0]?["content"]?.GetValue<string>() ?? "", [], _ => { }, ct, policy: new("plan", "disabled"), workflow: run.Workflow?.ForChild(), retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
+                wire[0]?["content"]?.GetValue<string>() ?? "", [], _ => { }, ct, policy: new("plan", "disabled"), workflow: AgentRuntime.CurrentChildWorkflow ?? run.Workflow?.ForChild(), retrySettings: FeatureSettings.Read(run.Options.FeaturesJson));
         },
         (scope, diff, ct) => Approve(scope, run.Chat.Title + (scope.StartsWith("web-http|") ? " · HTTP .NET" : scope.StartsWith("memory|") ? " · Mémoire / Memory" : " · Sous-agent · Patch"), diff, ct),
         text => emit(new { @event = "status", chatId = run.Chat.Id, text }),
@@ -29,7 +29,7 @@ public sealed partial class HarnessService
             var engine=new OpenCodeEngine(http);var id=await engine.CreateSessionAsync(target,key,directory,"Sous-agent · "+run.Chat.Title,ct);
             return await engine.PromptAsync(target,key,directory,id,wire.Last()?["content"]?.GetValue<string>()??"",wire[0]?["content"]?.GetValue<string>()??"",[],update,ct,
                 authorize: async (permission,token) => await Approve($"opencode|{target.Id}|{directory}|{permission.Action}|{string.Join('|',permission.Resources)}",run.Chat.Title + " · Sous-agent · " + permission.Action,string.Join('\n',permission.Resources) + "\n" + permission.Details,token) ? "once" : "reject",
-                policy:new(definitions.Count == 0 ? "plan" : run.Chat.ExecutionMode,"disabled"),workflow:run.Workflow?.ForChild(),retrySettings:FeatureSettings.Read(run.Options.FeaturesJson));
+                policy:new(definitions.Count == 0 ? "plan" : run.Chat.ExecutionMode,"disabled"),workflow:AgentRuntime.CurrentChildWorkflow ?? run.Workflow?.ForChild(),retrySettings:FeatureSettings.Read(run.Options.FeaturesJson));
         }, async (id, ct) => {
             await using var db = Db();
             var state = await db.States.SingleAsync(ct);

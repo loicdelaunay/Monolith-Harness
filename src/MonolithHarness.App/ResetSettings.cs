@@ -44,7 +44,7 @@ public sealed partial class MainWindow
                 {
                     var resetChatIds = await ReadStoreAsync(store => store.Chats.AsNoTracking().Select(x => x.Id).ToList());
                     foreach (var window in agentSettingsWindows.Values.ToArray()) window.Close();
-                    memoryDatabaseWindow?.Close(); consumptionWindow?.Close(); aiDetectorWindow?.Close(); tasksWindow?.Close();
+                    memoryDatabaseWindow?.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); tasksWindow?.Close();
                     foreach (var id in conversationBrowsers.Keys.Select(x => x.ChatId).Distinct().ToArray()) CloseConversationBrowser(id);
                     foreach (var id in resetChatIds) await terminals.RemoveChatAsync(id);
                     await Maintain(() => Task.Run(() => DatabaseMaintenance.ResetProjectDataAsync(HarnessDb.DatabasePath)));

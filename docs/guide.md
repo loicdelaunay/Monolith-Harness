@@ -92,6 +92,8 @@ Presets include OpenAI (`https://api.openai.com/v1`, `gpt-4.1-mini`) and DeepSee
 - Context: live token count during the answer. `≈` marks local estimation before exact provider counters arrive; the display adds input and current output. At 95% of the configured limit, the application automatically summarizes older complete turns, keeps recent exchanges and saves the summary for subsequent calls. Compaction makes an additional request to the selected provider.
 - French/English interface, dark/light themes, collapsible sidebar and responsive browser layout.
 
+The GUI **Tools → Dashboard** window has **Consumption** and **Speed** tabs with shared date, provider, model, activity and project filters. It includes token totals, throughput in output tokens per second, timelines, model comparisons, paginated details and CSV export. See the [Dashboard guide](dashboard.md) for measurement definitions.
+
 ## Data and privacy
 
 The native embedded browser is scoped per conversation: page, in-session navigation history, cookies, web storage and local-preview access are separated. Switching conversations displays its browser without redirecting background agents' calls. Profiles are stored in `WebView2/chat-<id>/` in WinUI and Chromium partitions `omh-browser-chat-<id>` in Electron. The old shared profile is retained but not shared with new profiles: log into sites again per conversation. Terminals are also scoped per conversation; Git and Files use the associated project's sources and reject stale results from a previous selection. Two chats attached to the same real folder still share its files. Real desktop mouse, keyboard and screenshots remain PC resources with existing permissions.
