@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.47.1 - 2026-10-02
+
+- The GUI Model and thinking panel now includes a settings icon immediately before model refresh. It opens Settings directly on Providers, reuses an already-open settings window and preserves unsaved edits. The destination is also retained when settings are still loading.
+- The Providers title, Add provider menu and editor Back button stay visible while provider cards or long forms scroll. Opening a provider, adding one or returning to the list resets the content to the top; ordinary field edits retain their scroll position. GUI and CLI versions remain aligned.
+
 ## 1.47.0 - 2026-10-02
 
 - Adds a native folder picker beside the local-model directory in GUI provider settings. The selected directory stays editable and is saved with the provider; cancelling keeps the previous path.

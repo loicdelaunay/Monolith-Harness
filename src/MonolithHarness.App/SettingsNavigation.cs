@@ -12,9 +12,11 @@ public sealed class SettingsNavigation : Grid
         IsPaneToggleButtonVisible = false, OpenPaneLength = 204, IsTitleBarAutoPaddingEnabled = false
     };
     readonly ScrollViewer body = new()
-    { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(24, 0, 24, 24) };
+    { Name = "SettingsPageBody", HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(24, 0, 24, 24) };
     readonly TextBlock heading = new() { FontSize = 24, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new(24, 20, 24, 20) };
+    readonly ContentPresenter header = new() { Margin = new(24, 0, 24, 16), Visibility = Visibility.Collapsed };
     readonly List<UIElement> pages = [];
+    readonly List<UIElement?> headers = [];
     readonly List<NavigationViewItem> items = [];
     public int SelectedIndex
     {
@@ -25,14 +27,18 @@ public sealed class SettingsNavigation : Grid
     {
         var content = new Grid();
         content.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new() { Height = GridLength.Auto });
         content.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        content.Children.Add(heading); SetRow(body, 1); content.Children.Add(body);
+        content.Children.Add(heading); SetRow(header, 1); content.Children.Add(header);
+        SetRow(body, 2); content.Children.Add(body);
         navigation.Content = content; Children.Add(navigation);
         navigation.SelectionChanged += (_, _) =>
         {
             if (SelectedIndex < 0) return;
             heading.Text = ((NavigationViewItem)navigation.SelectedItem).Content?.ToString() ?? "";
-            body.Content = pages[SelectedIndex]; body.ChangeView(null, 0, null);
+            header.Content = headers[SelectedIndex];
+            header.Visibility = header.Content == null ? Visibility.Collapsed : Visibility.Visible;
+            body.Content = pages[SelectedIndex]; ScrollToTop();
         };
         SizeChanged += (_, e) =>
         {
@@ -42,11 +48,13 @@ public sealed class SettingsNavigation : Grid
             navigation.IsPaneToggleButtonVisible = compact;
         };
     }
-    public int Add(string title,UIElement page, string? icon = null, bool footer = false)
+    public void ScrollToTop() => body.ChangeView(null, 0, null, true);
+
+    public int Add(string title,UIElement page, string? icon = null, bool footer = false, UIElement? fixedHeader = null)
     {
         string[] icons = ["\uE713", "\uE968", "\uE945", "\uE8F1", "\uE8D4", "\uE8A5", "\uE72E", "\uE774"];
         var item = new NavigationViewItem { Content = title, Icon = FluentDesign.Icon(icon ?? icons[Math.Min(pages.Count, icons.Length - 1)]) };
-        items.Add(item); pages.Add(page);
+        items.Add(item); pages.Add(page); headers.Add(fixedHeader);
         if (footer) navigation.FooterMenuItems.Add(item); else navigation.MenuItems.Add(item);
         if (pages.Count == 1) SelectedIndex = 0;
         return pages.Count - 1;

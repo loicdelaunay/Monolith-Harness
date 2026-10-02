@@ -1599,7 +1599,8 @@ public sealed partial class MainWindow : Window
         var tabs = new SettingsNavigation();
         tabs.Add(T("Général"),general);
         tabs.Add(WorkflowText("Apparence", "Appearance"), appearance.Panel, "\uE790");
-        var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968");
+        var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968", fixedHeader: providerEditor.Header);
+        providerEditor.ViewChanged = tabs.ScrollToTop;
         tabs.Add("Skills",skillPanel, "\uE945");
         tabs.Add(WorkflowText("Agents", "Agents"), agentAutomationSettings.Panel, "\uE8D7");
         tabs.Add(WorkflowText("Mémoire", "Memory"), BuildMemorySettings(skillToggles), "\uE8F1");
@@ -1611,6 +1612,8 @@ public sealed partial class MainWindow : Window
         tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
+        settingsNavigation = tabs; settingsProviderTab = providerTab;
+        if (providersRequested) { tabs.SelectedIndex = providerTab; providersRequested = false; }
         if (!await ShowSettingsWindowAsync(loadingWindow, tabs, () =>
         {
             if (!conversationPreferences.Validate() || !retentionSettings.Validate()) { tabs.SelectedIndex = 0; return false; }

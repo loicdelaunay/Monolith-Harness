@@ -7,10 +7,24 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     Window? settingsWindow;
+    SettingsNavigation? settingsNavigation;
+    int settingsProviderTab = -1;
+    bool providersRequested;
     bool editingSettings;
 
-    async Task Settings()
+    Task Settings() => Settings(showProviders: false);
+
+    async Task Settings(bool showProviders)
     {
+        if (showProviders)
+        {
+            providersRequested = true;
+            if (settingsNavigation != null)
+            {
+                settingsNavigation.SelectedIndex = settingsProviderTab;
+                providersRequested = false;
+            }
+        }
         if (editingSettings)
         {
             settingsWindow?.Activate();
@@ -26,7 +40,11 @@ public sealed partial class MainWindow
     {
         var window = new Window { Title = $"{DisplayApplicationName} · {T("Réglages")}" };
         settingsWindow = window;
-        window.Closed += (_, _) => { if (ReferenceEquals(settingsWindow, window)) settingsWindow = null; };
+        window.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(settingsWindow, window)) return;
+            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; providersRequested = false;
+        };
         window.Content = new Border
         {
             RequestedTheme = root.RequestedTheme,

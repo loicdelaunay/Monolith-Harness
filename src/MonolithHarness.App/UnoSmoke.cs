@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_PROVIDER_NAV_SMOKE") == "1") { await SmokeProviderNavigation(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_LOCAL_MODELS_SMOKE") == "1") { await SmokeLocalModels(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_UPDATES_SMOKE") == "1") { await SmokeApplicationUpdates(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_EDITOR_SMOKE") == "1") { await SmokeTextToolRegression(output); return; }
@@ -281,7 +282,7 @@ public sealed partial class MainWindow
             await SmokeScheduledExecutionAsync();
             var editor=BuildProviderEditor(fixture.Id);root.Children.Add(new ScrollViewer { Content=editor.Panel,Background=FluentDesign.Card,Padding=new(24),HorizontalAlignment=HorizontalAlignment.Stretch });
             await Task.Delay(300);await Capture(root,Path.Combine(output,"provider-cards.png"));
-            var providerCards=(StackPanel)editor.Panel.Children[1];
+            var providerCards=editor.Cards;
             var fixtureCard=providerCards.Children.OfType<Border>().Single(card=>Descendants(card).OfType<TextBlock>().Any(text=>text.Text=="Uno fixture"));
             Descendants(fixtureCard).OfType<Expander>().Single().IsExpanded=true;
             await Task.Delay(150);
@@ -337,7 +338,7 @@ public sealed partial class MainWindow
             var largeEditor=BuildProviderEditor(largeProvider.Id);
             var largeOverlay=new ScrollViewer { Content=largeEditor.Panel,Background=FluentDesign.Card,Padding=new(24) };
             root.Children.Add(largeOverlay);await Task.Delay(100);
-            var largeCards=(StackPanel)largeEditor.Panel.Children[1];
+            var largeCards=largeEditor.Cards;
             var largeCard=largeCards.Children.OfType<Border>().Single(card=>Descendants(card).OfType<TextBlock>().Any(text=>text.Text==largeProvider.Name));
             if(Descendants(largeCard).OfType<CheckBox>().Any())throw new Exception("Collapsed provider rendered model checkboxes eagerly.");
             Descendants(largeCard).OfType<Expander>().Single().IsExpanded=true;await Task.Delay(100);

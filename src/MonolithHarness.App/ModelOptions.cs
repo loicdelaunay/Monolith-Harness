@@ -56,13 +56,22 @@ public sealed partial class MainWindow
         var modelHeader = new Grid { ColumnSpacing = 10 };
         modelHeader.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         modelHeader.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        modelHeader.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var modelHeading = new TextBlock { FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
         modelHeader.Children.Add(modelHeading);
+        var providerSettings = new Button { Name = "ProviderSettingsButton", Width = 32, Height = 32, Padding = new(0) };
+        FluentDesign.IconButton(providerSettings, "\uE713", WorkflowText("Réglages des fournisseurs", "Provider settings"), false);
+        Grid.SetColumn(providerSettings, 1); modelHeader.Children.Add(providerSettings);
+        providerSettings.Click += async (_, _) =>
+        {
+            modelOptionsFlyout?.Hide();
+            await Guard(async () => await Settings(showProviders: true));
+        };
         refreshModelsBtn.Width = refreshModelsBtn.Height = 32;
         FluentDesign.IconButton(refreshModelsBtn, "\uE72C", WorkflowText("Actualiser les modèles", "Refresh models"), false);
         modelRefreshIcon = refreshModelsBtn.Content;
-        Grid.SetColumn(refreshModelsBtn, 1); modelHeader.Children.Add(refreshModelsBtn);
+        Grid.SetColumn(refreshModelsBtn, 2); modelHeader.Children.Add(refreshModelsBtn);
         modelSelector.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
             <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
                 <StackPanel Spacing="3" Padding="0,4">
@@ -109,6 +118,9 @@ public sealed partial class MainWindow
             thinkingSelector.Header = null;
             thinkingHeading.Text = WorkflowText("Réflexion", "Thinking");
             done.Content = WorkflowText("Terminer", "Done");
+            var providerSettingsLabel = WorkflowText("Réglages des fournisseurs", "Provider settings");
+            ToolTipService.SetToolTip(providerSettings, providerSettingsLabel);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(providerSettings, providerSettingsLabel);
             ToolTipService.SetToolTip(refreshModelsBtn, WorkflowText("Actualiser les modèles", "Refresh models"));
             RefreshModelOptions();
             TextZoom.SetWindow(panel, TextZoom.ForWindow(root));

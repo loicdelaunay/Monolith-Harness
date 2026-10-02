@@ -42,10 +42,13 @@ public sealed partial class MainWindow
     sealed class ProviderEditorState
     {
         public required StackPanel Panel { get; init; }
+        public required StackPanel Header { get; init; }
+        public required StackPanel Cards { get; init; }
         public required List<ProviderDraft> Drafts { get; init; }
         public required TextBlock Error { get; init; }
         public ProviderDraft? Selected { get; set; }
         public Action Commit { get; set; } = () => { };
+        public Action ViewChanged { get; set; } = () => { };
     }
 
     ProviderEditorState BuildProviderEditor(int selectedProviderId)
@@ -54,12 +57,12 @@ public sealed partial class MainWindow
             .Select(x => new ProviderDraft { Id = x.Id, Name = x.Name, BaseUrl = x.BaseUrl, Model = x.Model, ProtectedKey = [.. x.ProtectedKey], ContextLimit = x.ContextLimit, ModelContextsJson = x.ModelContextsJson, SupportsImages = x.SupportsImages,
                 DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, LocalModelsJson=x.LocalModelsJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
             .ToList();
-        var state = new ProviderEditorState { Panel = new StackPanel(), Drafts = drafts, Error = Label("", 12) };
+        var cards = new StackPanel { Spacing = 8 };
+        var state = new ProviderEditorState { Panel = new StackPanel(), Header = new StackPanel { Spacing = 8 }, Cards = cards, Drafts = drafts, Error = Label("", 12) };
         state.Error.Tag = null;
 
-        var cards = new StackPanel { Spacing = 8 };
         var editor = new StackPanel { Spacing = 12, Visibility = Visibility.Collapsed };
-        var back = new Button { Content = WorkflowText("← Fournisseurs", "← Providers") };
+        var back = new Button { Name = "BackToProviders", Content = WorkflowText("← Fournisseurs", "← Providers"), Visibility = Visibility.Collapsed };
         var editorTitle = Label("", 20); editorTitle.Tag = null;
         var chooser = new ComboBox { Header = T("Fournisseurs configurés"), HorizontalAlignment = HorizontalAlignment.Stretch };
         var name = new TextBox { Header = T("Nom du fournisseur"), MaxLength = 100 };
@@ -153,7 +156,10 @@ public sealed partial class MainWindow
         }
         void Refresh(ProviderDraft? draft)
         {
+            var viewChanged = state.Selected != draft || (editor.Visibility == Visibility.Visible) != (draft != null);
             refreshing = true; chooser.ItemsSource = null; chooser.ItemsSource = drafts.ToList(); chooser.SelectedItem = draft; refreshing = false; Select(draft); RenderCards(); editor.Visibility = draft == null ? Visibility.Collapsed : Visibility.Visible; cards.Visibility = draft == null ? Visibility.Visible : Visibility.Collapsed;
+            back.Visibility = editor.Visibility;
+            if (viewChanged) state.ViewChanged();
         }
         state.Commit = () =>
         {
@@ -488,15 +494,16 @@ public sealed partial class MainWindow
             }
             if (drafts.Count == 0) cards.Children.Add(Label(WorkflowText("Ajoutez un fournisseur pour commencer.", "Add a provider to get started.")));
         }
-        back.Click += (_, _) => { state.Commit(); RenderCards(); editor.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible; };
-        var add = new DropDownButton { Content = WorkflowText("＋ Ajouter un fournisseur", "＋ Add provider") };
+        back.Click += (_, _) => { state.Commit(); RenderCards(); editor.Visibility = back.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible; state.ViewChanged(); };
+        var add = new DropDownButton { Name = "AddProvider", Content = WorkflowText("＋ Ajouter un fournisseur", "＋ Add provider") };
         var presets = new MenuFlyout(); add.Flyout = presets;
         foreach (var item in new[] { addOpenAi, addDeepSeek }.Concat(cloudItems.Select(x => x.Item)).Concat([addOpenCode, addLocal, addComposite])) presets.Items.Add(item);
         state.Panel.Spacing = 12;
-        state.Panel.Children.Add(add); state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
-        foreach (var item in new UIElement[] { back, editorTitle, info, name, compositePanel, providerHelp, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, Row(duplicate, remove) }) editor.Children.Add(item);
+        state.Header.Children.Add(add); state.Header.Children.Add(back);
+        state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
+        foreach (var item in new UIElement[] { editorTitle, info, name, compositePanel, providerHelp, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, Row(duplicate, remove) }) editor.Children.Add(item);
         Refresh(drafts.FirstOrDefault(x => x.Id == selectedProviderId) ?? drafts.FirstOrDefault());
-        editor.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible;
+        editor.Visibility = back.Visibility = Visibility.Collapsed; cards.Visibility = Visibility.Visible;
         return state;
     }
 
