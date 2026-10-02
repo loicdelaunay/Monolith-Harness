@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.47.2 - 2026-10-02
+
+- Keeps the GUI thinking status chip at “Le modèle réfléchit” while the model reasons, instead of repeating excerpts or an idle counter in that chip. The separate reasoning panel still displays the full streamed reasoning, and the response and tool status indicators retain their existing behavior. GUI and CLI versions remain aligned.
+
 ## 1.47.1 - 2026-10-02
 
 - The GUI Model and thinking panel now includes a settings icon immediately before model refresh. It opens Settings directly on Providers, reuses an already-open settings window and preserves unsaved edits. The destination is also retained when settings are still loading.

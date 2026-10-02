@@ -15,7 +15,7 @@ public sealed record GitHubUpdate(string Version, string Tag, string Page, strin
 
 public sealed class GitHubUpdates(HttpClient http)
 {
-    public const string CurrentVersion = "1.47.1";
+    public const string CurrentVersion = "1.47.2";
     public const string Repository = "https://github.com/loicdelaunay/Monolith-Harness";
     public const string Api = "https://api.github.com/repos/loicdelaunay/Monolith-Harness/releases";
     const long MaxBytes = 1024L * 1024 * 1024;

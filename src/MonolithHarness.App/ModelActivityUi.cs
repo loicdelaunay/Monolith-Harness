@@ -53,9 +53,11 @@ public sealed partial class MainWindow
             else
             {
                 var idle = ModelActivity.IdleSeconds(run.LastModelProgress, DateTimeOffset.UtcNow);
-                var line = ModelActivity.ReasoningLine(run.ProgressReasoning);
-                var activity = run.ProgressText.Length > 0 ? WorkflowText("Réponse en cours", "Response in progress") : WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking");
-                status.Text = activity + (idle > 30 ? " · " + WorkflowText($"Pas de réponse depuis {idle} secondes", $"No response for {idle} seconds") : line.Length > 0 && run.ProgressText.Length == 0 ? " · " + line : "…");
+                var responding = run.ProgressText.Length > 0;
+                var activity = responding ? WorkflowText("Réponse en cours", "Response in progress") : WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking");
+                status.Text = responding
+                    ? activity + (idle > 30 ? " · " + WorkflowText($"Pas de réponse depuis {idle} secondes", $"No response for {idle} seconds") : "…")
+                    : activity;
             }
         }
         ToolTipService.SetToolTip(statusChipView ?? (FrameworkElement)status, details);
