@@ -12,6 +12,13 @@ public sealed partial class MainWindow
         var config = LocalProviderSettings.Read(draft.LocalModelsJson);
         var panel = new StackPanel { Spacing = 12 };
         var folder = new TextBox { Header = WorkflowText("Dossier des modèles", "Model directory"), Text = config.ModelDirectory };
+        folder.Name = "LocalModelDirectory";
+        var browseFolder = new Button { Name = "BrowseLocalModelDirectory", Content = T("Parcourir…"), VerticalAlignment = VerticalAlignment.Bottom };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(browseFolder, WorkflowText("Choisir le dossier des modèles", "Choose the model directory"));
+        var folderRow = new Grid { ColumnSpacing = 8 };
+        folderRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        folderRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        folderRow.Children.Add(folder); Grid.SetColumn(browseFolder, 1); folderRow.Children.Add(browseFolder);
         var backend = new ComboBox { Header = WorkflowText("Calcul local", "Local computing"), ItemsSource = new[] { "auto", "cpu", "vulkan" }, SelectedItem = config.Backend, HorizontalAlignment = HorizontalAlignment.Stretch };
         var purpose = new ComboBox { Header = WorkflowText("Type de modèle à importer", "Model type to import"), ItemsSource = new[] { WorkflowText("Conversation · GGUF", "Chat · GGUF"), WorkflowText("Image · checkpoint complet", "Image · complete checkpoint") }, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         var copy = new ToggleSwitch { Header = WorkflowText("Copier les imports dans le dossier des modèles", "Copy imports into the model directory"), IsOn = true };
@@ -57,16 +64,27 @@ public sealed partial class MainWindow
         {
             if (operation != null) return;
             operation = new(); draft.LocalBusy = true; var current = operation;
-            foreach (var control in new Control[] { import, search, load, unload, remove, folder, backend, purpose, copy, list, customChat, customImage }) control.IsEnabled = false;
+            foreach (var control in new Control[] { import, search, load, unload, remove, folder, browseFolder, backend, purpose, copy, list, customChat, customImage }) control.IsEnabled = false;
             cancel.Visibility = progress.Visibility = Visibility.Visible; progress.IsIndeterminate = true;
             try { Save(); await action(current.Token); }
             catch (OperationCanceledException) { status.Text = WorkflowText("Opération annulée.", "Operation cancelled."); }
             catch (Exception ex) { status.Text = ex.Message; }
-            finally { operation = null; draft.LocalBusy = false; current.Dispose(); foreach (var control in new Control[] { import, search, load, unload, remove, folder, backend, purpose, copy, list, customChat, customImage }) control.IsEnabled = true; cancel.Visibility = progress.Visibility = Visibility.Collapsed; Describe(); }
+            finally { operation = null; draft.LocalBusy = false; current.Dispose(); foreach (var control in new Control[] { import, search, load, unload, remove, folder, browseFolder, backend, purpose, copy, list, customChat, customImage }) control.IsEnabled = true; cancel.Visibility = progress.Visibility = Visibility.Collapsed; Describe(); }
         }
         var transfer = new Progress<LocalTransferProgress>(value => { progress.IsIndeterminate = !value.Percent.HasValue; progress.Value = value.Percent ?? 0; status.Text = value.Detail + (value.Percent is { } percent ? $" · {percent:0}%" : ""); });
         folder.TextChanged += (_, _) => Save(); backend.SelectionChanged += (_, _) => Save(); customChat.TextChanged += (_, _) => Save(); customImage.TextChanged += (_, _) => Save();
         list.SelectionChanged += (_, _) => Describe(); cancel.Click += (_, _) => operation?.Cancel();
+        browseFolder.Click += async (_, _) =>
+        {
+            browseFolder.IsEnabled = false;
+            try
+            {
+                var selected = await PickLocalModelFolderAsync(settingsWindow ?? this);
+                if (!string.IsNullOrWhiteSpace(selected) && operation == null) { folder.Text = selected; Save(); changed(); }
+            }
+            catch (Exception ex) { status.Text = ex.Message; }
+            finally { browseFolder.IsEnabled = operation == null; }
+        };
         import.Click += async (_, _) => await Run(async ct =>
         {
             var picker = new Windows.Storage.Pickers.FileOpenPicker(); picker.FileTypeFilter.Add(".gguf"); picker.FileTypeFilter.Add(".safetensors"); InitializePicker(picker, settingsWindow ?? this);
@@ -78,7 +96,7 @@ public sealed partial class MainWindow
         search.Click += async (_, _) => await Run(async ct =>
         {
             var secret = draft.PendingKey.Length > 0 ? draft.PendingKey : draft.DeleteKey ? "" : KeyVault.Decrypt(draft.ProtectedKey);
-            var imported = await SearchLocalModelsAsync(config, secret, draft.ContextLimit, search.XamlRoot!, ct);
+            var imported = await SearchLocalModelsAsync(config, secret, draft.ContextLimit, ct);
             if (imported != null) { config.Add(imported); Refresh(imported); status.Text = WorkflowText("Modèle téléchargé. Enregistrez les réglages pour le conserver.", "Model downloaded. Save settings to keep it."); }
         });
         load.Click += async (_, _) => await Run(async ct =>
@@ -106,7 +124,7 @@ public sealed partial class MainWindow
             status.Text = WorkflowText("Retiré de la liste ; le fichier est conservé sur le disque.", "Removed from list; the file remains on disk.");
         });
         var actions = Row(unload, load); actions.HorizontalAlignment = HorizontalAlignment.Right;
-        foreach (var item in new UIElement[] { folder, backend, new Expander { Header = WorkflowText("Caractéristiques de la machine", "Machine specifications"), Content = machineInfo, IsExpanded = true, HorizontalAlignment = HorizontalAlignment.Stretch },
+        foreach (var item in new UIElement[] { folderRow, backend, new Expander { Header = WorkflowText("Caractéristiques de la machine", "Machine specifications"), Content = machineInfo, IsExpanded = true, HorizontalAlignment = HorizontalAlignment.Stretch },
             list, compatibility, purpose, copy, Row(import, search, remove), new Expander { Header = WorkflowText("Moteurs déjà installés", "Already installed engines"), Content = new StackPanel { Children = { customChat, customImage } }, HorizontalAlignment = HorizontalAlignment.Stretch },
             status, progress, cancel, actions }) panel.Children.Add(item);
         panel.Children.Add(Label(WorkflowText("Les modèles restent dans model/ à côté de l’exécutable. Préparer télécharge uniquement un moteur officiel avec contrôle SHA-256. L’estimation dépend de la RAM, du contexte, de la VRAM et des pilotes ; la capacité réelle est confirmée au chargement. Les modèles vision nécessitant un projecteur ne sont pas gérés par cette bêta.",
@@ -118,5 +136,12 @@ public sealed partial class MainWindow
             catch (Exception ex) { machineInfo.Text = ex.Message; }
         };
         Refresh(); return panel;
+    }
+    Func<Window, Task<string?>>? smokeLocalModelFolderPicker;
+    async Task<string?> PickLocalModelFolderAsync(Window owner)
+    {
+        if (smokeLocalModelFolderPicker != null) return await smokeLocalModelFolderPicker(owner);
+        var picker = new Windows.Storage.Pickers.FolderPicker(); picker.FileTypeFilter.Add("*"); InitializePicker(picker, owner);
+        return (await picker.PickSingleFolderAsync())?.Path;
     }
 }

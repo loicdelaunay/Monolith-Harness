@@ -9,6 +9,7 @@ void Check(bool condition, string name) { if (!condition) throw new Exception("Ã
 async Task Throws<T>(Func<Task> action, string name) where T : Exception
 { try { await action(); } catch (T) { Check(true, name); return; } throw new Exception("Exception attendue : " + name); }
 string Event(object value) => "data: " + System.Text.Json.JsonSerializer.Serialize(value) + "\r\n\r\n";
+if (args.Contains("--local-models")) { await LocalModelChecks.Run(Check); Console.WriteLine($"{passed} local model checks passed."); return; }
 if (args.Contains("--text-tools")) { await TextToolRegressionChecks.Run(Check); Console.WriteLine($"{passed} text tool regression checks passed."); return; }
 if (args.Length == 0 || args.Contains("--git-file-index")) await GitFileIndexChecks.Run(Check);
 if (args.Contains("--git-file-index")) { Console.WriteLine($"{passed} Git and file index checks passed."); return; }

@@ -125,7 +125,7 @@ public sealed partial class MainWindow : Window
         ObserveTextZoom(root);
         root.Loaded += async (_, _) => await Guard(InitializeAsync);
         root.SizeChanged += (_, _) => ResizeLayout();
-        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
+        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); localModelsWindow?.Close(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
     }
     void BuildSidebar()
     {

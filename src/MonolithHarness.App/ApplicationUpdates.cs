@@ -141,7 +141,7 @@ public sealed partial class MainWindow
     bool GuiUpdateHasActiveWork() => conversationRuns.Count > 0 || !string.IsNullOrWhiteSpace(composer.Text) || pendingImages.Count > 0
         || conversationDrafts.Any(d => d.Key != chat?.Id && (!string.IsNullOrWhiteSpace(d.Value.Text) || d.Value.Images.Count > 0));
 
-    bool GuiUpdateHasOpenEditors() => editingSettings || settingsWindow != null || tasksWindow != null
+    bool GuiUpdateHasOpenEditors() => editingSettings || settingsWindow != null || tasksWindow != null || localModelsWindow != null
         || dedicatedTools.Count > 0 || aiDetectorWindow != null || agentSettingsWindows.Count > 0
         || memoryDatabaseWindow != null || approvalQueue.CurrentCount == 0 || loading
         || databaseMaintenanceBusy || conversationLoading || refreshingModels;

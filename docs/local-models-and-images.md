@@ -1,10 +1,10 @@
-# Local models and image generation (1.41.0, beta)
+# Local models and image generation (1.47.0, beta)
 
 ## Configure a local provider
 
 1. Open **Settings → Providers → Add → Local**.
-2. Keep the default `model/` directory next to the executable, or select another writable location. Imported files are copied there by default; disabling the copy switch keeps a reference to the original file.
-3. Import a file, or open **Hugging Face** and choose Chat or Image generation. Select a repository and a file/quantization, review its licence and the support estimate, then download and import it. Protected repositories require a read token and accepting the author's conditions on Hugging Face. Tokens use the existing protected credential storage.
+2. Keep the default `model/` directory next to the executable, type another writable location or choose **Browse…** beside the directory field. Cancelling the native folder picker keeps the previous path. Imported files are copied there by default; disabling the copy switch keeps a reference to the original file.
+3. Import a file, or open **Hugging Face** in its independent, resizable window. Search and choose Chat or Images in the top bar. Models appear on the left; selecting one shows its repository statistics, licence, files/quantizations, support estimate and model card on the right. Compatible files appear first; unsupported components remain visible with their reasons. The panes stack in smaller windows. Choose **Download and import** at the bottom right; cancelling keeps the browser open, while closing stops the transfer. Protected repositories require a read token and accepting the author's conditions on Hugging Face. Tokens use the existing protected credential storage.
 4. Select an imported model and choose **Prepare / load**. This downloads an official inference engine, checks its published SHA-256 and installs it under `model/.runtime/`. Chat models are loaded into a private local server. Image engines are prepared here; image checkpoints are loaded when generating, then released.
 5. Save settings. Local chat models become available in the regular model selector. Image-only providers remain in settings and in the image skill selector. Removing a model from the list keeps its file. Unload releases idle chat processes; active requests prevent unloading.
 
@@ -21,7 +21,7 @@ Hugging Face model cards and file names are hints, not proof of compatibility. T
 
 ## Support estimates
 
-The dialog shows installed/free RAM, CPU threads and graphics adapters. NVIDIA VRAM is read from `nvidia-smi` when available; Windows adapter memory is labelled as an estimate because it can be incomplete. Unknown hardware remains unknown.
+The browser's **Your machine** section shows installed/free RAM, CPU threads and graphics adapters. NVIDIA VRAM is read from `nvidia-smi` when available; Windows adapter memory is labelled as an estimate because it can be incomplete. Unknown hardware remains unknown.
 
 For chat, the conservative budget is weights × 1.15 plus roughly 1 GiB per 8,192 context tokens. For images, it is weights × 1.25 plus 2 GiB (SD 1/2) or 5 GiB (SDXL), with that overhead scaled up above 1024×1024 at generation time. These are rough budgets, not architecture-specific KV-cache calculations. Resolution, batches, drivers, concurrent local models and other applications can change actual consumption. A RAM budget above 85% of installed memory is marked unsupported; a budget exceeding currently free memory is marked “check first”. Insufficient VRAM can require CPU or partial GPU computation; no token rate is promised.
 
@@ -46,4 +46,4 @@ The shared engine exposes the skill to GUI and CLI sessions. The GUI provides th
 - [stable-diffusion.cpp checkpoints, engines and CLI](https://github.com/leejet/stable-diffusion.cpp)
 - [Hugging Face Hub API](https://huggingface.co/docs/hub/api)
 
-Compilation and publication of GUI/CLI are separate from inference validation. No multi-gigabyte model download, real image generation, interactive GUI check or automated test was requested for this update.
+Compilation, publication and browser checks are separate from inference validation. The GUI checks use small offline fixture files; loading real model weights and image generation still depend on the selected model, runtime and hardware.

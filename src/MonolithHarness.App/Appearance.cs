@@ -36,6 +36,8 @@ public sealed partial class MainWindow
         { settingsRoot.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(settingsWindow); }
         if (tasksWindow?.Content is FrameworkElement tasksRoot)
         { tasksRoot.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(tasksWindow); }
+        if (localModelsWindow != null)
+        { localModelsWindow.Panel.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(localModelsWindow); }
     }
     void UpdateInfoPanel()
     {

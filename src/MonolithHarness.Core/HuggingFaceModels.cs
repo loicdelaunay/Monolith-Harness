@@ -6,6 +6,12 @@ namespace MonolithHarness.Core;
 
 public sealed record HubModel(string Id, string Purpose, string Family, bool Gated, string License, string Revision)
 {
+    public long Downloads { get; init; }
+    public long Likes { get; init; }
+    public DateTimeOffset? LastModified { get; init; }
+    public string Architecture { get; init; } = "";
+    public string BaseModel { get; init; } = "";
+    public string Description { get; init; } = "";
     public override string ToString() => Id;
 }
 public sealed record HubModelFile(string Name, long Bytes, string Sha256)
@@ -19,28 +25,53 @@ public sealed record LocalTransferProgress(long Bytes, long? Total, string Detai
 
 public sealed class HuggingFaceModels
 {
-    static readonly HttpClient http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    static readonly HttpClient sharedHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
+    readonly HttpClient http;
+    public HuggingFaceModels(HttpClient? client = null) => http = client ?? sharedHttp;
     public async Task<List<HubModel>> SearchAsync(string query, string purpose, string token, CancellationToken ct)
     {
         var filter = purpose == "chat" ? "gguf" : "text-to-image";
         var path = "https://huggingface.co/api/models?search=" + Uri.EscapeDataString(query.Trim()) + "&filter=" + filter + "&sort=downloads&direction=-1&limit=40&full=true";
         var node = await ReadAsync(path, token, ct);
         return (node as JsonArray ?? []).OfType<JsonObject>().Where(x => purpose != "chat" || x["pipeline_tag"]?.ToString() is not ("text-to-image" or "image-to-image" or "text-to-video"))
-            .Select(x => new HubModel(x["id"]?.ToString() ?? "", purpose,
+            .Select(x => Metadata(x, new HubModel(x["id"]?.ToString() ?? "", purpose,
             purpose == "image" ? LocalModelCompatibility.ImageFamily(x["id"]?.ToString() ?? "", x) : "", x["gated"]?.ToString() is not (null or "False" or "false"),
-            x["cardData"]?["license"]?.ToString() ?? "à consulter sur le dépôt", x["sha"]?.ToString() ?? "main")).Where(x => x.Id.Length > 0).ToList();
+            Text(x["cardData"]?["license"]), x["sha"]?.ToString() ?? "main"))).Where(x => x.Id.Length > 0).ToList();
     }
     public async Task<(HubModel Model, List<HubModelFile> Files)> FilesAsync(HubModel model, string token, CancellationToken ct)
     {
         var info = (await ReadAsync("https://huggingface.co/api/models/" + RepositoryPath(model.Id) + "?blobs=true", token, ct)).AsObject();
         var family = model.Purpose == "image" ? LocalModelCompatibility.ImageFamily(model.Id, info) : "";
-        model = model with { Family = family, Revision = info["sha"]?.ToString() ?? "main" };
+        model = Metadata(info, model) with { Family = family, Revision = info["sha"]?.ToString() ?? "main" };
         var files = (info["siblings"] as JsonArray ?? []).OfType<JsonObject>().Select(x => new HubModelFile(x["rfilename"]?.ToString() ?? "",
             long.TryParse((x["size"] ?? x["lfs"]?["size"])?.ToString(), out var size) ? size : 0,
             (x["lfs"]?["sha256"] ?? x["lfs"]?["oid"])?.ToString() ?? ""))
             .Where(x => x.Name.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) || model.Purpose == "image" && x.Name.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
         return (model, files);
+    }
+    public async Task<string> ReadmeAsync(HubModel model, string token, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://huggingface.co/" + RepositoryPath(model.Id) + "/raw/" + Uri.EscapeDataString(model.Revision) + "/README.md");
+        if (!string.IsNullOrWhiteSpace(token)) request.Headers.Authorization = new("Bearer", token);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return "";
+        response.EnsureSuccessStatusCode();
+        const int limit = 512 * 1024;
+        using var content = new MemoryStream();
+        await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var count = await input.ReadAsync(buffer, timeout.Token); if (count == 0) break;
+            if (content.Length + count > limit) throw new IOException("Fiche trop volumineuse ; consultez-la sur Hugging Face.");
+            content.Write(buffer, 0, count);
+        }
+        var markdown = System.Text.Encoding.UTF8.GetString(content.ToArray()).Replace("\r\n", "\n");
+        if (markdown.StartsWith("---\n", StringComparison.Ordinal) && markdown.IndexOf("\n---\n", 4, StringComparison.Ordinal) is var end && end >= 0)
+            markdown = markdown[(end + 5)..];
+        return markdown.Trim();
     }
     public async Task<LocalModel> DownloadAsync(HubModel model, HubModelFile file, LocalProviderSettings settings, string token,
         IProgress<LocalTransferProgress>? progress, CancellationToken ct)
@@ -63,7 +94,19 @@ public sealed class HuggingFaceModels
             throw new ArgumentException("Identifiant Hugging Face invalide.");
         return string.Join('/', pieces.Select(Uri.EscapeDataString));
     }
-    static async Task<JsonNode> ReadAsync(string url, string token, CancellationToken ct)
+    static HubModel Metadata(JsonObject info, HubModel model) => model with
+    {
+        Downloads = long.TryParse(info["downloads"]?.ToString(), out var downloads) ? downloads : model.Downloads,
+        Likes = long.TryParse(info["likes"]?.ToString(), out var likes) ? likes : model.Likes,
+        LastModified = DateTimeOffset.TryParse(info["lastModified"]?.ToString() ?? info["last_modified"]?.ToString(), out var date) ? date : model.LastModified,
+        License = info["cardData"]?["license"] is { } license ? Text(license) : model.License,
+        Gated = info["gated"] is { } gated ? gated.ToString() is not ("False" or "false") : model.Gated,
+        Architecture = info["config"]?["model_type"]?.ToString() ?? model.Architecture,
+        BaseModel = info["cardData"]?["base_model"] is { } original ? Text(original) : model.BaseModel,
+        Description = info["cardData"]?["description"]?.ToString() ?? info["description"]?.ToString() ?? model.Description
+    };
+    static string Text(JsonNode? value) => value is JsonArray array ? string.Join(", ", array.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x))) : value?.ToString() ?? "";
+    async Task<JsonNode> ReadAsync(string url, string token, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(30));
         using var request = new HttpRequestMessage(HttpMethod.Get, url);

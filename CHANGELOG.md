@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.47.0 - 2026-10-02
+
+- Adds a native folder picker beside the local-model directory in GUI provider settings. The selected directory stays editable and is saved with the provider; cancelling keeps the previous path.
+- Replaces the Hugging Face modal with an independent, resizable model browser. Search and model-type filters sit above a model list and a detail pane with repository metadata, downloadable files, machine compatibility estimates and the model card. The panes stack in smaller windows, and download/import actions stay at the bottom right. Unsupported components remain visible with their reasons; cancelling or closing stops transfers and removes partial files. GUI and CLI versions remain aligned.
+
 ## 1.46.0 - 2026-10-02
 
 - GUI About settings now offer three automatic-update levels: disabled (no automatic checks), notify only, or install automatically. Enabled modes check GitHub at startup and every two hours while the application is open. Existing preferences are preserved; notification remains the default and manual checks stay available in every mode.
