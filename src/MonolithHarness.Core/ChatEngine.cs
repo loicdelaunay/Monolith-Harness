@@ -43,7 +43,7 @@ public sealed class ChatEngine(HttpClient http)
         using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint(provider.BaseUrl, "models"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         using var response = await http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode) throw new HttpRequestException($"Liste des modèles : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
+        if (!response.IsSuccessStatusCode) throw new HttpRequestException($"Liste des modèles : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {await ProviderErrorDetails.ReadAsync(response, key, ct)}", null, response.StatusCode);
         var data = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
         if (data?["data"] is not JsonArray models) return [];
         var chatModels = models.OfType<JsonObject>().Where(x =>
@@ -130,17 +130,7 @@ public sealed class ChatEngine(HttpClient http)
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(ct);
-                string detail;
-                try
-                {
-                    var error = JsonNode.Parse(body);
-                    detail = error?["error"] is JsonObject nested ? nested["message"]?.ToString() ?? nested.ToJsonString()
-                        : (error?["message"] ?? error?["error"] ?? error?["detail"])?.ToString() ?? "Aucun détail retourné par le fournisseur.";
-                }
-                catch { detail = "Réponse d’erreur du fournisseur non structurée."; }
-                if (key.Length > 0) detail = detail.Replace(key, "[secret]");
-                detail = detail[..Math.Min(detail.Length, 1500)];
+                var detail = await ProviderErrorDetails.ReadAsync(response, key, ct);
                 if ((int)response.StatusCode is 400 or 422 && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase))) continue;
                 throw new HttpRequestException($"API : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {detail}", null, response.StatusCode);
             }

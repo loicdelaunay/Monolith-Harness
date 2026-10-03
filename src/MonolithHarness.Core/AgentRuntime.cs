@@ -30,6 +30,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     int MaxSteps => Math.Clamp(agentSettings.AgentMaxSteps, 8, 2000);
     public async Task<string> InitializeAsync(CancellationToken ct)
     {
+        if (ConversationModes.IsChat(run.Chat.InteractionMode)) return ResponseStyles.Prompt(agentSettings.ResponseStyle);
         var catalog = skills.Catalog(run.Options.EnabledSkills);
         context = await ProjectInstructions.LoadAsync(run.Project.GetSourceFolders(), ct);
         if (!run.Provider.IsOpenCode && Skills.Enabled(run.Options.EnabledSkills, "web"))
@@ -54,6 +55,11 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                 ["required"] = new JsonArray(required.Select(x => (JsonNode?)JsonValue.Create(x)).ToArray()) } } });
     public void AddDefinitions(JsonArray definitions, bool child = false, int depth = 0)
     {
+        if (ConversationModes.IsChat(run.Chat.InteractionMode))
+        {
+            definitions.Clear(); foreach (var definition in ConversationModes.ToolDefinitions(run.Chat, run.Options)) definitions.Add(definition!.DeepClone());
+            return;
+        }
         if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
             WebHttpTools.AddDefinitions(definitions, run.Options.EnabledSkills, agentSettings.WebHttpResponseMode);
         MemoryTools.AddDefinitions(definitions, run.Options.EnabledSkills);
@@ -73,10 +79,10 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     public static bool Handles(string name) => WebHttpTools.Handles(name) || MemoryTools.Handles(name) || SkillAuthoring.Handles(name) || WorkflowTools.Handles(name) || name is "load_skill" or "read_skill_resource" or "delegate_tasks";
     public async Task<string> CallAsync(string name, JsonObject args, CancellationToken ct)
     {
-        AgentPolicy.Demand(run.Chat.ExecutionMode, name);
+        AgentPolicy.Demand(run.Chat, name);
         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
         if (WebHttpTools.Handles(name)) return await run.WebHttp.CallAsync(name, args,
-            liveSkills ?? (_ => Task.FromResult(run.Options.EnabledSkills)), approve, ct);
+            async token => ConversationModes.EffectiveSkills(run.Chat, liveSkills == null ? run.Options.EnabledSkills : await liveSkills(token), run.Provider.IsOpenCode), approve, ct);
         if (SkillAuthoring.Handles(name))
         {
             var enabledSkills = liveSkills == null ? run.Options.EnabledSkills : await liveSkills(ct);
@@ -111,6 +117,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     public Task<string> ForcedAsync(CancellationToken ct) => StartAsync(ct, true);
     async Task<string> StartAsync(CancellationToken ct, bool force)
     {
+        if (ConversationModes.IsChat(run.Chat.InteractionMode)) return "";
         if (run.Chat.OrchestrationMode == "disabled" && !force) return "";
         var forced = force || run.Chat.OrchestrationMode == "forced";
         if (run.Composite is { } composite)

@@ -119,7 +119,7 @@ async function selectChat(id){
   if(!$('tools').hidden){if(tab==='git')guard(refreshGit);if(tab==='files'&&conversationResources().length)guard(loadFiles);}
   await call('state.save',{chatId:id,projectId});
 }
-function updateControls(){if(typeof renderInbox==='function')renderInbox();$('composer').disabled=!!selectedChild;$('send').disabled=!!selectedChild||!chatId||!providerId;$('stop').disabled=!running.has(chatId);$('rename-chat').disabled=$('delete-chat').disabled=!chatId;$('new-chat').disabled=!projectId;}
+function updateControls(){if(typeof renderInbox==='function')renderInbox();if(typeof updateConversationMode==='function')updateConversationMode();$('composer').disabled=!!selectedChild;$('send').disabled=!!selectedChild||!chatId||!providerId;$('stop').disabled=!running.has(chatId);$('rename-chat').disabled=$('delete-chat').disabled=!chatId;$('new-chat').disabled=!projectId;}
 function renderAssets(){
   // Attachments and source access are kept per conversation.
   $('assets').replaceChildren();currentDraft().images.forEach((image,index)=>{const box=el('div',null,'asset');const img=el('img');img.src=`data:${image.mime};base64,${image.data}`;img.alt=image.name;const remove=el('button','×');remove.onclick=()=>{currentDraft().images.splice(index,1);renderAssets();};box.append(img,remove);$('assets').append(box);});
@@ -164,6 +164,7 @@ function renderMetrics(){
   const value=metrics.get(chatId);$('speed').textContent=value?`${value.estimated?'≈ ':''}${value.speed.toFixed(1)} tok/s`:'— tok/s';
   $('context').textContent=value?`${value.estimated?'≈ ':''}${value.tokens.toLocaleString()} / ${value.limit.toLocaleString()}`:'— tokens';
   $('context-progress').value=value?Math.min(100,value.tokens/value.limit*100):0;
+  if(typeof renderCollapsedMetrics==='function')renderCollapsedMetrics();
 }
 async function send(){
   if($('send').disabled)return;saveDraft();const id=chatId,draft=currentDraft();if(!draft.text.trim()&&!draft.images.length)return;
@@ -213,19 +214,23 @@ $('project-delete').onclick=()=>guard(async()=>{if(!confirm(L('Supprimer le proj
 $('plus').onclick=()=>{
   const menu=$('composer-menu');menu.replaceChildren();function item(label,fn){const button=el('button',label);button.onclick=()=>guard(async()=>{await fn();});menu.append(button);}
   item(L('Joindre des images','Attach images'),async()=>{const images=await api.host('pick.images');if(currentDraft().images.length+images.length>4)throw new Error('4 images maximum');currentDraft().images.push(...images);renderAssets();});
-  item(L('Fichiers et dossiers de la conversation','Conversation files and folders'),resourceDialog);
-  item(L('Afficher la liste de tâches','Show task list'),async()=>{await call('chat.tasks',{id:chatId,dismissed:false});await refresh();renderPinnedTasks();});
+  const chatOnly=isChatMode();
+  if(!chatOnly)item(L('Fichiers et dossiers de la conversation','Conversation files and folders'),resourceDialog);
+  if(!chatOnly)item(L('Afficher la liste de tâches','Show task list'),async()=>{await call('chat.tasks',{id:chatId,dismissed:false});await refresh();renderPinnedTasks();});
   const selectedChat=snapshot.chats.find(x=>x.id===chatId);
-  if(selectedChat){
+  if(selectedChat&&chatOnly)addChatSkills(menu,selectedChat);
+  if(selectedChat&&!chatOnly){
     addSandboxMenu(menu, selectedChat);
     const mode=field(menu,L('Mode (prochain envoi)','Mode (next message)'),'select');mode.append(option('execute',L('Exécution','Execution')),option('plan','Plan'));mode.value=selectedChat.executionMode||'execute';
     const orchestration=field(menu,L('Orchestration sous-agents','Subagent orchestration'),'select');for(const [value,label] of [['disabled','Disable'],['auto','Auto'],['forced','Forced']])orchestration.append(option(value,label));orchestration.value=selectedChat.orchestrationMode||'disabled';if(snapshot.providers.find(x=>x.id===providerId)?.kind==='composite'){orchestration.value='forced';orchestration.disabled=true;}
     for(const input of [mode,orchestration])input.onchange=()=>guard(async()=>{await call('chat.modes',{id:selectedChat.id,executionMode:mode.value,orchestrationMode:orchestration.value});await refresh();status(L('Appliqué au prochain envoi','Applied to next message'));});
   }
+  if(!chatOnly){
   const skillDetails=el('details');skillDetails.append(el('summary','Skills'));for(const skill of snapshot.skills){const label=el('label');const check=el('input');check.type='checkbox';check.checked=snapshot.state.enabledSkills.split(',').includes(skill.id);check.onchange=()=>guard(async()=>{const enabled=new Set(snapshot.state.enabledSkills.split(','));check.checked?enabled.add(skill.id):enabled.delete(skill.id);await call('state.save',{enabledSkills:[...enabled].join(',')});await refresh();});label.append(check,document.createTextNode(' '+L(skill.frenchName,skill.englishName)));skillDetails.append(label);}menu.append(skillDetails);
   const mcpDetails=el('details');mcpDetails.append(el('summary','MCP'));
   for(const server of snapshot.mcpServers||[]){const label=el('label'),check=el('input');check.type='checkbox';check.checked=server.enabled;check.onchange=()=>guard(async()=>{await call('mcp.toggle',{id:server.id,enabled:check.checked});await refresh();});label.append(check,document.createTextNode(' '+server.name));mcpDetails.append(label);}
   button(mcpDetails,L('Configurer MCP…','Configure MCP…'),async()=>{settingsTab='mcp';await showSettings();});menu.append(mcpDetails);
+  }
   const templates=el('details');templates.append(el('summary','Templates'));for(const template of snapshot.templates){const button=el('button',template.name);button.onclick=()=>{if($('composer').value&&!confirm(L('Remplacer le brouillon ?','Replace draft?')))return;$('composer').value=template.content;saveDraft();};templates.append(button);}menu.append(templates);menu.hidden=!menu.hidden;
 };
 
@@ -405,7 +410,7 @@ function renderPinnedTasks(){
   const region=$('pinned-tasks');if(!region)return;
   const expanded=region.querySelector('details')?.open??true;region.replaceChildren();
   const message=(histories.get(chatId)||[]).find(x=>x.role==='tasks');let tasks=[];try{tasks=JSON.parse(message?.content||'[]');}catch{}
-  region.hidden=!!selectedChild||snapshot.chats.find(x=>x.id===chatId)?.todoDismissed||!tasks.some(x=>x.status==='pending'||x.status==='in_progress');if(region.hidden)return;
+  region.hidden=isChatMode()||!!selectedChild||snapshot.chats.find(x=>x.id===chatId)?.todoDismissed||!tasks.some(x=>x.status==='pending'||x.status==='in_progress');if(region.hidden)return;
   const current=tasks.find(x=>x.status==='in_progress')||tasks.find(x=>x.status==='pending');
   const card=el('details',null,'pinned-checklist');card.open=expanded;
   const summary=el('summary',L('Étape ','Step ')+(tasks.indexOf(current)+1)+'/'+tasks.length+' · '+current.content),close=el('button','×');close.title=L('Masquer · réouvrir depuis +','Hide · reopen from +');

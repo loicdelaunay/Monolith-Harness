@@ -55,11 +55,14 @@ public sealed partial class MainWindow
         idleOnly.Add(plus);
         var menu = new Flyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.TopEdgeAlignedLeft }; plus.Flyout = menu;
         menu.Opening += (_, _) => BuildComposerMenu(menu);
-        overlay.Children.Add(plus);
+        plus.Margin = new(0);
+        var left = Row(BuildConversationModeSelector(), plus);
+        left.HorizontalAlignment = HorizontalAlignment.Left; left.VerticalAlignment = VerticalAlignment.Bottom; left.Margin = new(10, 0, 0, 10);
+        overlay.Children.Add(left);
         send.Content = "↑"; send.Width = 38; send.Height = 38; send.Padding = new(0); send.FontSize = 22;
         stop.Content = "■"; stop.Width = 38; stop.Height = 38; stop.Padding = new(0);
         var right = Row(stop, send); right.HorizontalAlignment = HorizontalAlignment.Right; right.VerticalAlignment = VerticalAlignment.Bottom; right.Margin = new(0, 0, 10, 10);
-        FluentDesign.IconButton(plus, "\uE710", WorkflowText("Joindre et configurer", "Attach and configure"), false);
+        FluentDesign.IconButton(plus, "\uE713", WorkflowText("Configurer le chat et joindre des fichiers", "Configure chat and attach files"), false);
         FluentDesign.IconButton(send, "\uE724", T("Envoyer"), false);
         FluentDesign.IconButton(stop, "\uE71A", T("Arrêter"), false);
         overlay.Children.Add(right);
@@ -126,16 +129,18 @@ public sealed partial class MainWindow
         menuHeader.Children.Add(settingsShortcut);
         content.Children.Add(menuHeader);
         var resources = new Grid { ColumnSpacing = 6 };
-        for (int i = 0; i < 3; i++) resources.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        for (int i = 0; i < (ChatInteraction ? 2 : 3); i++) resources.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         var images = ResourceTile(WorkflowText("Images", "Images"), "\uE91B", AttachImages);
         var folder = ResourceTile(WorkflowText("Dossier source", "Source folder"), "\uE8B7", AttachFolder);
-        var files = ResourceTile(WorkflowText("Fichiers sources", "Source files"), "\uE8A5", AttachFilesAsync);
-        resources.Children.Add(images); Grid.SetColumn(folder, 1); resources.Children.Add(folder); Grid.SetColumn(files, 2); resources.Children.Add(files);
+        var files = ResourceTile(ChatInteraction ? WorkflowText("Documents", "Documents") : WorkflowText("Fichiers sources", "Source files"), "\uE8A5", ChatInteraction ? AttachChatDocumentsAsync : AttachFilesAsync);
+        resources.Children.Add(images);
+        if (!ChatInteraction) { Grid.SetColumn(folder, 1); resources.Children.Add(folder); }
+        Grid.SetColumn(files, ChatInteraction ? 1 : 2); resources.Children.Add(files);
         content.Children.Add(resources);
-        content.Children.Add(Item(WorkflowText("Utiliser les dossiers du projet", "Use project folders"), "\uE8B7", async () =>
+        if (!ChatInteraction) content.Children.Add(Item(WorkflowText("Utiliser les dossiers du projet", "Use project folders"), "\uE8B7", async () =>
         { if (chat == null) return; chat.ResourcePathsJson = ""; await db.SaveChangesAsync(); await SelectChat(); }));
 
-        if (chat is { } selectedChat)
+        if (!ChatInteraction && chat is { } selectedChat)
         {
             content.Children.Add(Heading(WorkflowText("MODE DE TRAVAIL", "WORK MODE")));
             var modes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
@@ -189,10 +194,20 @@ public sealed partial class MainWindow
             content.Children.Add(ChoiceRow(WorkflowText("Sous-agents", "Subagents"), Row(agentsPicker, agentCount, configureAgents)));
             AddSandboxMenu(content, selectedChat);
         }
-        content.Children.Add(Item(WorkflowText("Afficher la liste de tâches", "Show task list"), "\uE8FD", async () =>
+        if (!ChatInteraction) content.Children.Add(Item(WorkflowText("Afficher la liste de tâches", "Show task list"), "\uE8FD", async () =>
         { if (chat == null) return; chat.TodoDismissed = false; await db.SaveChangesAsync(); await RefreshPinnedTasksAsync(); }));
         content.Children.Add(new Border { Height = 1, Margin = new(0, 4, 0, 0), Background = FluentDesign.Stroke });
         content.Children.Add(Heading(WorkflowText("OUTILS ET CONTENU", "TOOLS AND CONTENT")));
+        if (ChatInteraction && chat != null)
+        {
+            var chatSkills = Section("Skills · Chat");
+            if (chatSkills.Tag is Expander chatExpander) chatExpander.IsExpanded = true;
+            chatSkills.Children.Add(ChatSkillChoice("web", menu.Hide));
+            chatSkills.Children.Add(ChatSkillChoice("python", menu.Hide));
+            if (NativeChatProvider) chatSkills.Children.Add(new TextBlock { Text = WorkflowText("OpenCode utilise ses outils web natifs ; le skill Python Monolith nécessite un autre fournisseur.", "OpenCode uses its native web tools; the Monolith Python skill requires another provider."), TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = FluentDesign.Secondary, Margin = new(4, 3, 4, 4) });
+        }
+        if (!ChatInteraction)
+        {
         var availableSkills = Skills.Available(project?.GetSourceFolders(), project?.Id ?? 0).ToArray();
         var skillMenu = Section("Skills · " + WorkflowText($"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} actifs", $"{availableSkills.Count(x => Skills.Enabled(state.EnabledSkills, x.Id))} enabled"));
         foreach (var skill in availableSkills)
@@ -209,6 +224,7 @@ public sealed partial class MainWindow
             skillMenu.Children.Add(SkillChoiceRow(skill, toggle, menu.Hide));
         }
         skillMenu.Children.Add(new Border { Height = 1, Margin = new(0, 4, 0, 4), Background = FluentDesign.Stroke });
+        }
         var availableTemplates = db.Templates.Local.Where(x => db.Entry(x).State != EntityState.Deleted).OrderBy(x => x.Name).ToArray();
         var templates = Section($"Templates · {availableTemplates.Length}");
         if (availableTemplates.Length == 0) templates.Children.Add(new TextBlock { Text = WorkflowText("Aucun template", "No template"), Foreground = FluentDesign.Secondary });
@@ -227,6 +243,8 @@ public sealed partial class MainWindow
         }
         templates.Children.Add(Item(WorkflowText("Modifier les templates…", "Edit templates…"), "\uE713", Settings));
 
+        if (!ChatInteraction)
+        {
         var servers = db.McpServers.Local.Where(x => db.Entry(x).State != EntityState.Deleted).OrderBy(x => x.Name).ToArray();
         var mcpMenu = Section(servers.Length == 0 ? WorkflowText("MCP · aucun serveur", "MCP · no servers") : $"MCP · {servers.Count(x => x.Enabled)}/{servers.Length}");
         if (servers.Length == 0) mcpMenu.Children.Add(new TextBlock { Text = WorkflowText("Aucun serveur configuré", "No server configured"), Foreground = FluentDesign.Secondary });
@@ -238,7 +256,7 @@ public sealed partial class MainWindow
             mcpMenu.Children.Add(toggle);
         }
         mcpMenu.Children.Add(Item(WorkflowText("Configurer MCP…", "Configure MCP…"), "\uE713", Settings));
-
+        }
     }
 
     void BuildToolsPane()

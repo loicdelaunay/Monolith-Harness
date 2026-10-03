@@ -52,6 +52,7 @@ public sealed partial class HarnessService
     }
     JsonArray Definitions(ConversationSession run)
     {
+        if (ConversationModes.IsChat(run.Chat.InteractionMode)) return ConversationModes.ToolDefinitions(run.Chat, run.Options);
         var skills = run.Options.EnabledSkills;
         var browserAccess = BrowserSkillAccess.Enabled(skills);
         var domAccess = BrowserSkillAccess.DomEnabled(skills);
@@ -105,10 +106,10 @@ public sealed partial class HarnessService
         permissionProject.Value = run.Project;
         if (FeatureSettings.Read(run.Options.FeaturesJson).AutoFocusTool)
             await emit(new { @event = "tool-focus", chatId = run.Chat.Id, name });
-        AgentPolicy.Demand(run.Chat.ExecutionMode, name);
+        AgentPolicy.Demand(run.Chat, name);
         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
         await using var db = Db();
-        var skills = await db.States.Select(x => x.EnabledSkills).SingleAsync(ct);
+        var skills = ConversationModes.EffectiveSkills(run.Chat, await db.States.Select(x => x.EnabledSkills).SingleAsync(ct), run.Provider.IsOpenCode);
         var browserAccess = BrowserSkillAccess.Enabled(skills);
         var domAccess = BrowserSkillAccess.DomEnabled(skills);
         if (AssetTools.Handles(name))
@@ -125,7 +126,7 @@ public sealed partial class HarnessService
         }
         if (PythonTools.Handles(name)) return new(await PythonTools.CallAsync(run, name, p, () => skills, async (scope, title, detail, token) => {
             var allowed = await Approve(scope, title, detail, token);
-            skills = await db.States.Select(x => x.EnabledSkills).SingleAsync(token);
+            skills = ConversationModes.EffectiveSkills(run.Chat, await db.States.Select(x => x.EnabledSkills).SingleAsync(token), run.Provider.IsOpenCode);
             return allowed;
         }, ct));
         if (RagTools.Handles(name)) return new(await RagTools.CallAsync(run,name,p,Decrypt,Approve,ct));

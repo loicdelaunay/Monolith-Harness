@@ -109,6 +109,16 @@ namespace MonolithHarness.Core.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InteractionMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ChatPythonEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ChatWebEnabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsArchived")
                         .HasColumnType("INTEGER");
 

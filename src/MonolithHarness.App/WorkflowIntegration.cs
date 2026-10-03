@@ -21,7 +21,7 @@ public sealed partial class MainWindow
     void ShowPinnedTasks(string? json)
     {
         var items = string.IsNullOrWhiteSpace(json) ? new JsonArray() : JsonNode.Parse(json) as JsonArray ?? [];
-        if (selectedSubagent != null || chat?.TodoDismissed == true || !items.Any(x => x?["status"]?.GetValue<string>() is "pending" or "in_progress"))
+        if (ChatInteraction || selectedSubagent != null || chat?.TodoDismissed == true || !items.Any(x => x?["status"]?.GetValue<string>() is "pending" or "in_progress"))
         { pinnedTasks.Child = null; pinnedTasks.Visibility = Visibility.Collapsed; return; }
         var panel = new StackPanel { Spacing = 4 };
         foreach (var item in items)

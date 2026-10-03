@@ -200,7 +200,9 @@ public sealed class OpenCodeEngine(HttpClient http)
             : await DisabledToolsAsync(provider, password, directory, ct);
         if (policy != null)
         {
-            if (AgentPolicy.ReadOnly(policy.Mode))
+            if (AgentPolicy.Mode(policy.Mode) == "chat") payload["tools"] = new JsonObject
+            { ["*"] = false, ["webfetch"] = provider.OpenCodeTools && policy.ChatWebEnabled, ["websearch"] = provider.OpenCodeTools && policy.ChatWebEnabled };
+            else if (AgentPolicy.ReadOnly(policy.Mode))
             {
                 // OpenCode converts this ordered map into session permission rules. Deny every
                 // native/custom/MCP tool, then allow only its built-in source-reading operations.
@@ -211,11 +213,11 @@ public sealed class OpenCodeEngine(HttpClient http)
         }
         // Use explicit session rules so the loop guard remains "ask", even with automatic tool permissions.
         // prompt_async.tools would overwrite these rules with boolean allow/deny entries.
-        if (workflow != null && provider.OpenCodeTools)
+        if (provider.OpenCodeTools && (workflow != null || policy != null && AgentPolicy.Mode(policy.Mode) == "chat"))
         {
             var rules = new JsonArray();
-            foreach (var rule in (JsonObject)payload["tools"]!) rules.Add(new JsonObject { ["permission"] = rule.Key, ["pattern"] = "*", ["action"] = rule.Value!.GetValue<bool>() ? "allow" : "deny" });
-            rules.Add(new JsonObject { ["permission"] = "doom_loop", ["pattern"] = "*", ["action"] = "ask" });
+            foreach (var rule in (JsonObject)payload["tools"]!) rules.Add(new JsonObject { ["permission"] = rule.Key, ["pattern"] = "*", ["action"] = rule.Value!.GetValue<bool>() ? policy?.Mode == "chat" ? "ask" : "allow" : "deny" });
+            if (workflow != null && policy?.Mode != "chat") rules.Add(new JsonObject { ["permission"] = "doom_loop", ["pattern"] = "*", ["action"] = "ask" });
             await JsonAsync(provider, password, HttpMethod.Patch, $"session/{Uri.EscapeDataString(sessionId)}", directory, new JsonObject { ["permission"] = rules }, ct);
             payload.Remove("tools");
         }
@@ -236,7 +238,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                     {
                         var response = permission.Action == "doom_loop"
                             ? workflow != null && await workflow.DecideLoopAsync(permission.Details + "\n" + string.Join("\n", permission.Resources), ct) ? "once" : "reject"
-                            : authorize == null || policy != null && AgentPolicy.ReadOnly(policy.Mode) ? "reject" : await authorize(permission, ct);
+                            : authorize == null || policy != null && AgentPolicy.ReadOnly(policy.Mode) && !policy.AllowsChatWeb(permission.Action) ? "reject" : await authorize(permission, ct);
                         if (permission.Action == "doom_loop" && response == "reject") throw new OperationCanceledException("Boucle OpenCode arrêtée / OpenCode loop stopped.", ct);
                         if (response is not ("once" or "always" or "reject")) response = "reject";
                         await JsonAsync(provider, password, HttpMethod.Post,
@@ -259,7 +261,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                     update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds) { CachedInputTokens = parsed.CachedInputTokens });
                 }
                 if (!parsed.Completed) continue;
-                if (provider.OpenCodeTools && workflow != null)
+                if (provider.OpenCodeTools && (workflow != null || policy?.Mode == "chat" && policy.ChatWebEnabled))
                 {
                     var status = await JsonAsync(provider, password, HttpMethod.Get, "session/status", directory, null, ct);
                     if (status?[sessionId]?["type"]?.GetValue<string>() is "busy" or "retry") continue;

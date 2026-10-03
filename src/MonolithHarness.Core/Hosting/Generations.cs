@@ -24,6 +24,7 @@ public sealed partial class HarnessService
         permissionProject.Value = run.Project;
         project = run.Project;
         provider=run.Provider;
+        options = run.Options;
         using var consumption = TokenConsumption.Begin(database, "chat", project, chat);
         await using var mcp = CreateMcpSession(chat.Id);
         if (!runs.TryAdd(chat.Id, run))
@@ -60,13 +61,14 @@ public sealed partial class HarnessService
             await NotifyInbox(chat.Id);
             await emit(new { @event = "message", chatId = chat.Id, title = run.Chat.Title, message = MessageView(user) });
             var definitions = Definitions(run);
-            var system = Skills.Prompt(options.EnabledSkills, options.Language, project.GetSourceFolders().Count > 0,
+            var chatOnly = ConversationModes.IsChat(run.Chat.InteractionMode);
+            var system = chatOnly ? ConversationModes.ChatPrompt(options.Language, run.Chat, provider.IsOpenCode, provider.OpenCodeTools) : Skills.Prompt(options.EnabledSkills, options.Language, project.GetSourceFolders().Count > 0,
                 BrowserSkillAccess.Enabled(options.EnabledSkills) && FeatureSettings.Read(options.FeaturesJson).BrowserMode == "embedded",
                 Skills.Enabled(options.EnabledSkills, "write_sources"));
-            run.Workflow = CreateWorkflow(run);
+            run.Workflow = chatOnly ? null : CreateWorkflow(run);
             var agent = CreateAgentRuntime(run, secret, mcp);
             system += await agent.InitializeAsync(ct);
-            system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
+            if (!chatOnly) system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
             if (run.Chat.OrchestrationMode != "disabled")
             {
                 var report = await agent.StartAsync(ct);
@@ -93,13 +95,13 @@ public sealed partial class HarnessService
                 if (!provider.IsOpenCode)
                 {
                     definitions = Definitions(run);
-                    agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat.ExecutionMode);
+                    agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
                     SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
                     if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                         foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 }
                 if (!provider.IsOpenCode) history = await Compact(run, history, system, definitions, secret, ct);
-                var wire = Wire(system, history);
+                var wire = Wire(system, ConversationModes.History(history, run.Chat));
                 wire = await VisionFor(run).PrepareAsync(wire, ct);
                 int input = ContextWindow.Estimate(wire) + ContextWindow.Estimate(definitions);
                 active = new Message { ChatId = chat.Id, Role = "assistant", State = "interrupted" };
@@ -153,7 +155,7 @@ public sealed partial class HarnessService
                             await emit(new { @event = "status", chatId = chat.Id, text = "Outil / Tool: " + name });
                             try
                             {
-                                AgentPolicy.Demand(run.Chat.ExecutionMode, name);
+                                AgentPolicy.Demand(run.Chat, name);
                                 SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
                                 await ProjectResources.DemandToolAsync(run.Project, name, arguments, (scope, details, token) => Approve(scope, "Projet · " + name, details, token), ct);
                                 if (AgentRuntime.Handles(name)) result = new(await agent.CallAsync(name, JsonNode.Parse(arguments) as JsonObject ?? [], ct));
@@ -243,7 +245,7 @@ public sealed partial class HarnessService
                 var summaryProvider = new Provider { Id = run.Provider.Id, Name = run.Provider.Name, Kind = run.Provider.Kind, BaseUrl = run.Provider.BaseUrl,
                     Model = run.Provider.Model, Username = run.Provider.Username, ContextLimit = run.Provider.ContextLimit, OpenCodeTools = false };
                 var engine = new OpenCodeEngine(http);
-                var directory = OpenCodeDirectory(run.Project);
+                var directory = OpenCodeDirectory(run.OpenCodeProject);
                 if (nativeBrief == null)
                 {
                     var link = await run.Db.ExternalChatSessions.SingleOrDefaultAsync(x => x.ChatId == run.Chat.Id && x.ProviderId == run.Provider.Id, token);
@@ -307,7 +309,7 @@ public sealed partial class HarnessService
     }
     async Task<Completion> OpenCode(ConversationSession run, string password, List<Message> history, string system, Action<GenerationUpdate> update, CancellationToken ct)
     {
-        var p = run.Provider; var directory = OpenCodeDirectory(run.Project);
+        var p = run.Provider; var directory = OpenCodeDirectory(run.OpenCodeProject);
         await EnsureOpenCode(p, password, directory, ct);
         var engine = new OpenCodeEngine(http);
         var link = await run.Db.ExternalChatSessions.SingleOrDefaultAsync(x => x.ChatId == run.Chat.Id && x.ProviderId == p.Id, ct);
@@ -315,7 +317,7 @@ public sealed partial class HarnessService
         {
             link = new ExternalChatSession { ChatId = run.Chat.Id, ProviderId = p.Id, SessionId = await engine.CreateSessionAsync(p, password, directory, run.Chat.Title, ct) };
             run.Db.ExternalChatSessions.Add(link); await run.Db.SaveChangesAsync(ct);
-            system += "\nPrevious history:\n" + string.Join("\n", history.TakeLast(20).Select(x => $"[{x.Role}] {x.Content}"));
+            system += "\nPrevious history:\n" + string.Join("\n", ConversationModes.History(history, run.Chat).TakeLast(20).Select(x => $"[{x.Role}] {x.Content}"));
         }
         var pendingUsers=history.AsEnumerable().Reverse().TakeWhile(x=>x.Role=="user").Reverse().ToList();
         var prompt = pendingUsers.Count>0?string.Join("\n\n",pendingUsers.Select(x=>x.Content)):run.Prompt;
@@ -328,6 +330,6 @@ public sealed partial class HarnessService
         return await engine.PromptAsync(p, password, directory, link.SessionId, prompt, system,
             attachments.Select(x => new OpenCodeAttachment(x.Name, x.Mime, x.Data)).ToList(), update, ct,
             async (permission, token) => await Approve($"opencode|{p.Id}|{directory}|{permission.Action}|{string.Join('|', permission.Resources)}",
-                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
+                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode, run.Chat.ChatWebEnabled), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
     }
 }

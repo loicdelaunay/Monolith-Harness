@@ -1,0 +1,18 @@
+.interaction-switch{display:inline-flex;align-items:center;gap:7px;padding:5px 9px;margin:0;border:1px solid var(--line);border-radius:20px;background:var(--surface);cursor:pointer;white-space:nowrap;font-size:12px}
+.interaction-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.interaction-track{width:32px;height:18px;border:1px solid var(--line);border-radius:12px;background:var(--muted);position:relative;transition:background .18s}
+.interaction-track:after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--surface);transition:transform .18s}
+.interaction-switch input:checked+.interaction-track{background:var(--accent)}
+.interaction-switch input:checked+.interaction-track:after{transform:translateX(14px)}
+.interaction-switch:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.interaction-switch:has(input:disabled){opacity:.55;cursor:default}
+@media(prefers-reduced-motion:reduce){.interaction-track,.interaction-track:after{transition:none}}
+
+#info-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--background)}
+#info-heading{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.composer-shell .metrics{background:var(--background)}
+.collapsed-metrics{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;font-size:10px;white-space:nowrap;line-height:16px}
+.collapsed-metrics[hidden]{display:none}
+.collapsed-context-ring{width:16px;height:16px;border-radius:50%;background:conic-gradient(var(--accent) var(--context-angle,0deg),var(--line) 0);position:relative}
+.collapsed-context-ring:after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--background)}
+#collapsed-context{color:var(--accent-text,var(--accent))}

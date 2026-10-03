@@ -9,6 +9,7 @@ async function saveResources(paths,inherit=false){
   status(L('Ressources disponibles au prochain envoi.','Resources available on the next send.'));
 }
 function renderResourceChips(){
+  if(isChatMode())return;
   for(const path of conversationResources()){
     const chip=el('div',null,'resource-chip');chip.title=path;chip.append(el('span','📎 '+path.split(/[\\/]/).filter(Boolean).at(-1)));
     const remove=el('button','×');remove.setAttribute('aria-label',L('Détacher ','Detach ')+path);remove.onclick=()=>guard(()=>saveResources(conversationResources().filter(x=>x!==path)));chip.append(remove);$('assets').append(chip);

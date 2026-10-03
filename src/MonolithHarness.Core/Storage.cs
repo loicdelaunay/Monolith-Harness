@@ -40,6 +40,9 @@ public sealed class Chat
     public int Id { get; set; }
     public int ProjectId { get; set; }
     public string Title { get; set; } = "Nouvelle conversation";
+    public string InteractionMode { get; set; } = "agent";
+    public bool ChatWebEnabled { get; set; } = true;
+    public bool ChatPythonEnabled { get; set; }
     public string ExecutionMode { get; set; } = "execute";
     public string OrchestrationMode { get; set; } = "disabled";
     public bool SandboxEnabled { get; set; }

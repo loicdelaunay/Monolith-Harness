@@ -43,7 +43,8 @@ public sealed partial class MainWindow
     readonly Dictionary<int, List<Message>> conversationHistory = [];
     readonly SemaphoreSlim toolQueue = new(1, 1);
     ConversationRun? ActiveRun => chat != null ? conversationRuns.GetValueOrDefault(chat.Id) : null;
-    string RunSkills(ConversationRun run) => run.IsScheduled ? run.Options.EnabledSkills : state.EnabledSkills;
+    string RunSkills(ConversationRun run) => ConversationModes.EffectiveSkills(run.Chat,
+        run.IsScheduled ? run.Options.EnabledSkills : state.EnabledSkills, run.Provider.IsOpenCode);
     string ToolSkills => automaticToolRun.Value is { } run ? RunSkills(run) : state.EnabledSkills;
     static StackPanel CreateMessagePanel() => ChatDensity.Track(new StackPanel { MaxWidth = 1120, HorizontalAlignment = HorizontalAlignment.Stretch }, "messages");
     bool IsVisible(ConversationRun run) => selectedSubagent == null && chat?.Id == run.Chat.Id;
@@ -67,6 +68,7 @@ public sealed partial class MainWindow
 
     void RefreshGenerationControls()
     {
+        RefreshConversationMode();
         // Keep navigation, settings and drafts usable; only sending to this running chat is blocked.
         send.IsEnabled = selectedSubagent == null && chat != null && conversationReady && !conversationLoading && !conversationRetentionBusy && !databaseMaintenanceBusy;
         stop.IsEnabled = ActiveRun != null;

@@ -7,19 +7,35 @@ function applyAppearance(){
   }
   const expanded=config.ComposerInfoExpanded!==false;
   $('info-toggle').setAttribute('aria-expanded',String(expanded));
-  $('info-toggle').textContent=(expanded?'⌄  ':'›  ')+L('Modèle, débit et contexte','Model, speed and context');
+  $('info-heading').textContent=(expanded?'⌄  ':'›  ')+L('Modèle, débit et contexte','Model, speed and context');
+  $('collapsed-metrics').hidden=expanded;
+  renderCollapsedMetrics();
   document.querySelector('.metrics').hidden=!expanded;
 }
 const composerShell=document.createElement('div');composerShell.className='composer-shell';
 const metricsPanel=document.querySelector('.metrics'),composerPanel=document.querySelector('.composer');
 metricsPanel.before(composerShell);
 const infoToggle=document.createElement('button');infoToggle.id='info-toggle';infoToggle.type='button';
+const infoHeading=el('span');infoHeading.id='info-heading';
+const collapsedMetrics=el('span',null,'collapsed-metrics');collapsedMetrics.id='collapsed-metrics';
+const contextRing=el('span',null,'collapsed-context-ring');contextRing.id='collapsed-context-ring';contextRing.setAttribute('aria-hidden','true');
+const contextSummary=el('span');contextSummary.id='collapsed-context';const speedSummary=el('span');speedSummary.id='collapsed-speed';
+collapsedMetrics.append(contextRing,contextSummary,speedSummary);infoToggle.append(infoHeading,collapsedMetrics);
 composerShell.append(infoToggle,metricsPanel,$('assets'),composerPanel);
 composerShell.before($('pinned-tasks'),$('inbox'));
 infoToggle.onclick=()=>guard(async()=>{
   const config=featureConfig();config.ComposerInfoExpanded=config.ComposerInfoExpanded===false;
   await call('state.save',{featuresJson:JSON.stringify(config)});await refresh();
 });
+
+function renderCollapsedMetrics(){
+  if(!$('collapsed-metrics'))return;
+  const value=metrics.get(chatId),percent=value&&value.limit>0?Math.max(0,Math.min(100,value.tokens/value.limit*100)):0;
+  $('collapsed-context-ring').style.setProperty('--context-angle',`${percent*3.6}deg`);
+  $('collapsed-context').textContent=value?`${value.estimated?'≈ ':''}${percent.toFixed(1)} %`:'— %';
+  $('collapsed-speed').textContent='⚡ '+$('speed').textContent;
+  $('info-toggle').title=L('Contexte : ','Context: ')+$('context').textContent+' · '+$('speed').textContent;
+}
 
 function providerActions(parent,provider){
   if(!provider.id)return;

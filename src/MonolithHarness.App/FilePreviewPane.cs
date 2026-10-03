@@ -85,15 +85,10 @@ public sealed partial class MainWindow
     void ResetFilePreview()
     {
         CancelFilePreview(); previewDocument = null; previewProject = null; previewPages.Clear(); previewImage = null;
-        previewName.Text = "Preview"; previewLocation.Text = "";
-        previewInfo.Text = WorkflowText("Images · Texte · Markdown", "Images · Text · Markdown");
+        previewName.Text = ""; previewLocation.Text = ""; previewInfo.Text = "";
+        previewName.Visibility = previewLocation.Visibility = previewInfo.Visibility = Visibility.Collapsed;
         previewRaw.Text = ""; previewRendered.Children.Clear();
-        var empty = new StackPanel { Spacing = 12, Margin = new(8, 28, 8, 8) };
-        empty.Children.Add(new FontIcon { Glyph = "\uE8A5", FontSize = 36, Foreground = FluentDesign.Secondary });
-        empty.Children.Add(Label(WorkflowText("Un aperçu à portée de clic", "A preview one click away"), 18));
-        empty.Children.Add(Label(WorkflowText("Cliquez sur une image ou un fichier TXT / Markdown dans le chat, ou ouvrez un fichier ci-dessous.",
-            "Click an image or a TXT / Markdown file in the chat, or open a file below."), 13));
-        previewRendered.Children.Add(empty); previewLoading.Visibility = Visibility.Collapsed;
+        previewLoading.Visibility = Visibility.Collapsed;
         if (previewRefresh != null) UpdateFilePreviewActions();
     }
 
@@ -129,6 +124,7 @@ public sealed partial class MainWindow
         var revision = previewRevision;
         previewZoom.SelectedIndex = 0;
         previewRequest = new(); var ct = previewRequest.Token;
+        previewName.Visibility = previewLocation.Visibility = previewInfo.Visibility = Visibility.Visible;
         previewName.Text = name; previewLocation.Text = path ?? WorkflowText("Pièce jointe du chat", "Chat attachment");
         ToolTipService.SetToolTip(previewLocation, previewLocation.Text);
         previewInfo.Text = WorkflowText("Chargement…", "Loading…"); previewLoading.Visibility = Visibility.Visible;

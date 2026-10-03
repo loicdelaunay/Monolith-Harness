@@ -37,7 +37,7 @@ public static class PythonTools
     {
         void Check()
         {
-            AgentPolicy.Demand(run.Chat.ExecutionMode, name); SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
+            AgentPolicy.Demand(run.Chat, name); SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
             if (!Skills.Enabled(skills(), "python")) throw new UnauthorizedAccessException("Skill Script Python désactivé.");
             ct.ThrowIfCancellationRequested();
         }

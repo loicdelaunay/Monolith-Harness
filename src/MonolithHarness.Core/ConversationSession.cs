@@ -28,6 +28,9 @@ public class ConversationSession : IDisposable
     }
     public Chat Chat { get; }
     public Project Project { get; }
+    // OpenCode sessions remain bound to their original directory when the interaction mode changes.
+    // This routing context is never used as model tool access in Chat mode.
+    public Project OpenCodeProject { get; }
     public Provider Provider { get; }
     public AppState Options { get; }
     public string Prompt { get; }
@@ -39,20 +42,31 @@ public class ConversationSession : IDisposable
         string prompt, IEnumerable<Attachment> images, string? databasePath = null, IEnumerable<Provider>? availableProviders = null)
     {
         Chat = new Chat { Id = chat.Id, ProjectId = chat.ProjectId, Title = chat.Title, IsFavorite = chat.IsFavorite, IsPinned = chat.IsPinned, IsArchived = chat.IsArchived, UpdatedUtc = chat.UpdatedUtc, AgentOptionsJson = chat.AgentOptionsJson,
-            SandboxEnabled = chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, TodoDismissed = chat.TodoDismissed, ExecutionMode = AgentPolicy.Mode(chat.ExecutionMode), OrchestrationMode = AgentPolicy.Orchestration(chat.OrchestrationMode) };
+            InteractionMode = ConversationModes.Normalize(chat.InteractionMode),
+            ChatWebEnabled = chat.ChatWebEnabled, ChatPythonEnabled = chat.ChatPythonEnabled,
+            SandboxEnabled = !ConversationModes.IsChat(chat.InteractionMode) && chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, TodoDismissed = chat.TodoDismissed,
+            ExecutionMode = ConversationModes.IsChat(chat.InteractionMode) ? "chat" : AgentPolicy.Mode(chat.ExecutionMode),
+            OrchestrationMode = ConversationModes.IsChat(chat.InteractionMode) ? "disabled" : AgentPolicy.Orchestration(chat.OrchestrationMode) };
         Project = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
-        Project.SetSourceFolders(ProjectResources.For(chat, project, databasePath));
+        Project.SetSourceFolders(ConversationModes.IsChat(Chat.InteractionMode) ? [] : ProjectResources.For(chat, project, databasePath));
         Provider = JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(provider))!;
         SelectedProviderId=provider.Id;
         if(provider.IsComposite)
         {
             var available=availableProviders?.ToList() ?? throw new InvalidOperationException("Fournisseurs du modèle composé requis.");
-            Composite=CompositeModel.Read(provider.CompositeJson);Composite.Validate(available);
+            Composite=CompositeModel.Read(provider.CompositeJson);
+            if (!ConversationModes.IsChat(Chat.InteractionMode)) Composite.Validate(available);
             Provider=CompositeModel.Resolve(Composite.Orchestrator,available);
-            foreach(var agent in Composite.Agents)AgentProviders[agent.Name]=CompositeModel.Resolve(agent,available);
-            Chat.OrchestrationMode="forced";
+            if (!ConversationModes.IsChat(Chat.InteractionMode))
+            {
+                foreach(var agent in Composite.Agents)AgentProviders[agent.Name]=CompositeModel.Resolve(agent,available);
+                Chat.OrchestrationMode="forced";
+            }
         }
+        OpenCodeProject = Provider.IsOpenCode && ConversationModes.IsChat(Chat.InteractionMode)
+            ? ProjectResources.Effective(chat, project, databasePath) : Project;
         Options = new AppState { FeaturesJson = options.FeaturesJson, Language = options.Language, EnabledSkills = options.EnabledSkills, ThinkingLevel = options.ThinkingLevel, AutoContinue = options.AutoContinue };
+        Options.EnabledSkills = ConversationModes.EffectiveSkills(Chat, options.EnabledSkills, Provider.IsOpenCode);
         Prompt = prompt;
         Images = images.Select(x => new Attachment { Name = x.Name, Mime = x.Mime, Data = [.. x.Data] }).ToList();
         Db = new HarnessDb(databasePath);

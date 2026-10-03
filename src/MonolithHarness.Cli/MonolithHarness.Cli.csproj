@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>MonolithHarness.Cli</AssemblyName>
     <RootNamespace>MonolithHarness.Cli</RootNamespace>
-    <Version>1.51.0</Version>
+    <Version>1.54.0</Version>
     <AssemblyTitle>Monolith Harness CLI</AssemblyTitle>
     <Product>Monolith Harness</Product>
     <ImplicitUsings>enable</ImplicitUsings>

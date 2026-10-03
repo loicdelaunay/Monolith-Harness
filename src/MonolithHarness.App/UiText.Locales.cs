@@ -1136,5 +1136,24 @@ public static partial class UiText
     Task|Aufgabe|Tarea
     Tool completed|Werkzeug abgeschlossen|Herramienta finalizada
     Compacting context|Kontext wird komprimiert|Compactando el contexto
+    Chat mode|Chat-Modus|Modo Chat
+    Agent mode|Agentenmodus|Modo Agente
+    Chat · conversation and attachments, no tools|Chat · Unterhaltung und Anhänge, ohne Werkzeuge|Chat · conversación y archivos adjuntos, sin herramientas
+    Agent · tools, planning and subagents according to your settings|Agent · Werkzeuge, Planung und Unteragenten gemäß Ihren Einstellungen|Agente · herramientas, planificación y subagentes según tus ajustes
+    Stop the response before changing mode.|Stoppen Sie die Antwort, bevor Sie den Modus wechseln.|Detén la respuesta antes de cambiar de modo.
+    Mode applies to the next message:|Modus für die nächste Nachricht:|Modo para el próximo mensaje:
+    Add at most four documents at a time.|Fügen Sie höchstens vier Dokumente gleichzeitig hinzu.|Añade como máximo cuatro documentos a la vez.
+    The conversation or mode changed. Attach the documents again.|Die Unterhaltung oder der Modus hat sich geändert. Fügen Sie die Dokumente erneut hinzu.|La conversación o el modo ha cambiado. Adjunta de nuevo los documentos.
+    Conversation without tools|Unterhaltung ohne Werkzeuge|Conversación sin herramientas
+    Tools, planning and subagents|Werkzeuge, Planung und Unteragenten|Herramientas, planificación y subagentes
+    Switch to Agent to configure planning and subagents.|Wechseln Sie zu Agent, um Planung und Unteragenten einzurichten.|Cambia a Agente para configurar la planificación y los subagentes.
+    Documents|Dokumente|Documentos
+    TEMPLATES|VORLAGEN|PLANTILLAS
+    Chat / Agent|Chat / Agent|Chat / Agente
+    Conversation, web and optional Python|Unterhaltung, Web und optionales Python|Conversación, web y Python opcional
+    Chat · conversation, web research and optional Python in +|Chat · Unterhaltung, Websuche und optionales Python unter +|Chat · conversación, búsqueda web y Python opcional en +
+    Python script execution|Python-Skripte ausführen|Ejecución de scripts Python
+    Python requires a provider using Monolith tools. OpenCode uses its native web tools.|Python erfordert einen Anbieter mit Monolith-Werkzeugen. OpenCode verwendet seine eigenen Webwerkzeuge.|Python requiere un proveedor que utilice las herramientas de Monolith. OpenCode utiliza sus herramientas web nativas.
+    OpenCode uses its native web tools; the Monolith Python skill requires another provider.|OpenCode verwendet seine eigenen Webwerkzeuge; der Python-Skill von Monolith erfordert einen anderen Anbieter.|OpenCode utiliza sus herramientas web nativas; el skill Python de Monolith requiere otro proveedor.
     """;
 }

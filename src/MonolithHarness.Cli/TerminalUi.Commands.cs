@@ -23,6 +23,9 @@ public sealed partial class TerminalUi
         new("/image", "Joindre une image / Attach image", "/image chemin.png"),
         new("/clear-images", "Retirer les images jointes / Clear attached images"),
         new("/mode", "Plan / Exécution", "Protection technique des écritures"),
+        new("/chat", "Mode Chat / Chat mode", "Discussion, web et Python en option"),
+        new("/agent", "Mode Agent / Agent mode", "Outils, plan et sous-agents"),
+        new("/chat-skills", "Skills du Chat / Chat skills", "Recherche web · Python"),
         new("/agents", "Sous-agents / Subagents", "Disabled · Auto · Forced"),
         new("/skills", "Skills", "Activer / désactiver"),
         new("/mcp", "Serveurs MCP / MCP servers", "MCP.json · activations"),
@@ -79,6 +82,19 @@ public sealed partial class TerminalUi
             case "/connect": Work(() => Connect()); break;
             case "/providers": Work(() => Providers(snapshot)); break;
             case "/models": Work(() => Models(snapshot, selectedProvider)); break;
+            case "/chat": case "/agent":
+                Work(async () => { await client.Call("chat.modes", new { id, interactionMode = command[1..] }); await Refresh(); Post(() => notice = command == "/chat" ? L("Mode Chat · /chat-skills", "Chat mode · /chat-skills") : L("Mode Agent", "Agent mode")); }); break;
+            case "/chat-skills":
+                Work(async () =>
+                {
+                    var skill = await Prompt("Skills · Chat", L("Réglages propres à cette conversation. Python reste soumis aux autorisations.", "Settings for this conversation. Python still requires permission."),
+                        [new("web", (selectedChat.ChatWebEnabled ? "[x] " : "[ ] ") + L("Recherche web", "Web research")), new("python", (selectedChat.ChatPythonEnabled ? "[x] " : "[ ] ") + L("Exécution de scripts Python", "Python script execution"))]);
+                    if (skill == null) return;
+                    if (skill == "python" && CurrentProvider?.IsOpenCode == true) throw new InvalidOperationException(L("Python nécessite un fournisseur utilisant les outils Monolith.", "Python requires a provider using Monolith tools."));
+                    if (skill == "web") await client.Call("chat.modes", new { id, chatWebEnabled = !selectedChat.ChatWebEnabled });
+                    else await client.Call("chat.modes", new { id, chatPythonEnabled = !selectedChat.ChatPythonEnabled });
+                    await Refresh();
+                }); break;
             case "/mode":
                 Work(async () =>
                 {

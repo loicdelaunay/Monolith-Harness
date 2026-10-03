@@ -118,3 +118,28 @@ function renderChild(){
   }
   scroll.scrollTop=offset;followMessages();
 }
+function isChatMode(){return snapshot?.chats.find(x=>x.id===chatId)?.interactionMode==='chat';}
+function addChatSkills(menu,chat){
+  const section=el('details');section.open=true;section.append(el('summary','Skills · Chat'));
+  const provider=snapshot.providers.find(x=>x.id===providerId),native=provider?.kind==='opencode';
+  for(const [key,label,enabled] of [['chatWebEnabled',L('Recherche web','Web research'),chat.chatWebEnabled!==false],['chatPythonEnabled',L('Exécution de scripts Python','Python script execution'),chat.chatPythonEnabled===true]]){
+    const row=el('label'),check=el('input');check.type='checkbox';check.checked=enabled&&(!native||key!=='chatPythonEnabled');check.disabled=running.has(chat.id)||native&&key==='chatPythonEnabled';
+    check.onchange=()=>guard(async()=>{try{await call('chat.modes',{id:chat.id,[key]:check.checked});await refresh();}catch(error){check.checked=enabled;throw error;}});
+    row.append(check,document.createTextNode(' '+label));section.append(row);
+  }
+  if(native)section.append(el('p',L('OpenCode utilise ses outils web natifs ; Python nécessite un autre fournisseur.','OpenCode uses its native web tools; Python requires another provider.'),'muted'));
+  menu.append(section);
+}
+function updateConversationMode(){
+  let selector=$('interaction-mode');
+  if(!selector){
+    selector=el('label',null,'interaction-switch');selector.id='interaction-mode';
+    const choice=el('input');choice.type='checkbox';choice.setAttribute('role','switch');choice.setAttribute('aria-label','Chat / Agent');
+    const track=el('span',null,'interaction-track'),caption=el('span',null,'interaction-caption');track.setAttribute('aria-hidden','true');
+    choice.onchange=()=>guard(async()=>{try{await call('chat.modes',{id:chatId,interactionMode:choice.checked?'agent':'chat'});$('composer-menu').hidden=true;await refresh();updateControls();renderAssets();renderPinnedTasks();}catch(error){updateControls();throw error;}});
+    selector.append(choice,track,caption);
+    $('plus').before(selector);
+  }
+  const choice=selector.querySelector('input');choice.checked=!isChatMode();choice.disabled=!chatId||!!selectedChild||running.has(chatId);
+  selector.querySelector('.interaction-caption').textContent=isChatMode()?'💬 Chat':'⚙ Agent';
+}

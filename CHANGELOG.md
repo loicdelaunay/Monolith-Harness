@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.54.0 - 2026-10-03
+
+- Moves composer configuration to the right of the Chat / Agent switch and replaces its plus icon with a settings icon. Model, speed and context now uses the sidebar background; its collapsed header shows a live context ring, percentage and tokens per second aligned to the right within the existing header height. Values and estimates stay synchronized with the expanded panel, including conversation switches. GUI and legacy desktop layouts are aligned.
+- Preserves useful provider error details in GUI and CLI, including upstream messages, provider names/codes, quota reasons, rate-limit counters and suggested Retry-After delays when available. Selected fields are bounded and credentials are redacted; retry behavior remains unchanged.
+
+## 1.53.0 - 2026-10-03
+
+- Adds two optional Chat skills under the GUI + menu: Web research enabled by default and Python script execution disabled by default. Choices are persisted per conversation and copied into branches, independently of Agent skills. Chat exposes only the enabled HTTP research and bundled-Python tools; permissions still apply, other project/terminal/MCP/subagent tools remain unavailable. Smart HTTP results preserve bounded search/read behavior and their tool exchanges are retained correctly between model rounds. Python uses the conversation scripts directory without attaching project folders. The CLI exposes the same choices through /chat-skills.
+- Replaces the separate Chat/Agent buttons with an actual styled switch, rounded housing, mode icons and accessible labels. OpenCode Chat allows only its configured native webfetch/websearch tools after authorization and keeps other native tools denied; the Monolith Python skill is visibly unavailable for OpenCode connections. GUI, CLI and legacy desktop versions remain aligned.
+
+## 1.52.0 - 2026-10-03
+
+- Adds a Chat / Agent selector beside the GUI attachment button, with Agent enabled by default and the choice saved per conversation. Chat uses the selected model and reasoning level with a conversational prompt, images and explicitly attached documents. It exposes no model tools, MCP, project-folder access, autonomous goals or subagent execution; unexpected tool calls and native OpenCode tools are denied by the shared engine. Saved Agent plan/execution, team and sandbox settings remain available when switching back. Stored history is preserved; historical tool envelopes are converted to passive context for Chat requests. Switching is disabled during an active response. GUI slash commands and CLI commands provide /chat and /agent; branches retain the parent's mode.
+- Simplifies the Preview pane's empty state by removing its redundant heading, format list and introductory text. Removes Preview from the Tools dropdown while retaining the tool-panel tab and previews opened from chat images and compatible file links. GUI, CLI and legacy desktop versions remain aligned.
+
 ## 1.51.0 - 2026-10-02
 
 - Subagents announce and maintain their own structured task lists through todowrite. Lists are isolated from the parent conversation, retained in the existing transcript and preserved through context compaction. GUI chat bubbles, sidebar rows, detailed agent views and CLI bars track completed versus declared tasks, with the current task and cancelled-task count. Unknown plans remain indeterminate; unperformed or unfinished tasks are never automatically marked completed. The configured model-step budget remains unchanged and is no longer displayed as task progress. OpenCode task polling updates the corresponding child plan when its native tools are enabled.

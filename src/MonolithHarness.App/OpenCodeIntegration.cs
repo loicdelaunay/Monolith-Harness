@@ -459,9 +459,9 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             }
 
-            await EnsureOpenCodeServerAsync(provider, password, ct, run.Project);
+            await EnsureOpenCodeServerAsync(provider, password, ct, run.OpenCodeProject);
 
-            var directory = OpenCodeDirectory(run.Project);
+            var directory = OpenCodeDirectory(run.OpenCodeProject);
 
             var link = await db.ExternalChatSessions.SingleOrDefaultAsync(x => x.ChatId == chat.Id && x.ProviderId == provider.Id, ct);
 
@@ -487,13 +487,14 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                 : "Tu es connecté à travers OpenCode dans Monolith Harness. Réponds directement à l’utilisateur en français. Respecte chaque refus d’autorisation de l’application.";
 
-            run.Workflow = CreateWorkflow(run);
+            if (ConversationModes.IsChat(run.Chat.InteractionMode)) system = ConversationModes.ChatPrompt(run.Options.Language, run.Chat, true, provider.OpenCodeTools);
+            run.Workflow = ConversationModes.IsChat(run.Chat.InteractionMode) ? null : CreateWorkflow(run);
 
             await using var agentMcp = CreateMcpSession(run.Chat.Id);
             var agent = CreateAgentRuntime(run, password, agentMcp);
 
             system += await agent.InitializeAsync(ct);
-            system += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
+            if (!ConversationModes.IsChat(run.Chat.InteractionMode)) system += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
             system += "\n" + Skills.ReplyLanguage(run.Options.Language);
 
             if (run.Chat.OrchestrationMode != "disabled")
@@ -528,7 +529,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                 var transcript = new StringBuilder("\n\nHistorique précédent de cette conversation Monolith Harness :\n");
 
-                foreach (var item in priorHistory.TakeLast(20))
+                foreach (var item in ConversationModes.History(priorHistory, run.Chat).TakeLast(20))
 
                 {
 
@@ -596,7 +597,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                         if (IsVisible(run)) ScrollToBottom();
 
-                    }, ct, (permission, token) => AuthorizeOpenCodePermissionAsync(provider, directory, permission, token), new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
+                    }, ct, (permission, token) => AuthorizeOpenCodePermissionAsync(provider, directory, permission, token), new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode, run.Chat.ChatWebEnabled), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
 
                     CancelModelRetryFeedback(run); run.WaitingForModel = false; RefreshModelActivity();
                     break;

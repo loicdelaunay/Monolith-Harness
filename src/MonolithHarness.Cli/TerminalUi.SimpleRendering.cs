@@ -112,7 +112,7 @@ public sealed partial class TerminalUi
         int limit = view.Limit > 0 ? view.Limit : CurrentProvider?.ContextLimit ?? 0;
         string context = limit > 0 ? $"{100.0 * view.Tokens / limit:0.#}%" : "—";
         var model = CurrentProvider?.Model ?? "/connect";
-        string summary = $"{model} · {view.Speed:0.#} tok/s · {context}";
+        string summary = $"{(ConversationModes.IsChat(CurrentChat?.InteractionMode) ? "Chat" : "Agent")} · {model} · {view.Speed:0.#} tok/s · {context}";
         int summaryWidth = Math.Min(TerminalText.Width(summary), bodyWidth - 24);
         canvas.Write(left, height - 1, thinking ? L("Tapez pour préparer un message", "Type to draft a message") : "/help · Ctrl+P", p.Dim, bodyWidth - summaryWidth - 2);
         canvas.Write(left + bodyWidth - summaryWidth, height - 1, summary, p.Dim, summaryWidth);

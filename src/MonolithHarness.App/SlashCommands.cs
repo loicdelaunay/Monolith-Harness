@@ -15,6 +15,8 @@ public sealed partial class MainWindow
     bool slashDismissed;
     SlashChoice[] SlashCatalog() =>
     [
+        new("chat", "", WorkflowText("Discussion, web et Python en option", "Conversation, web and optional Python")),
+        new("agent", "", WorkflowText("Outils, plan et sous-agents", "Tools, planning and subagents")),
         new("agents", "[off|auto|on|nombre]", WorkflowText("Sous-agents et rôles de la conversation", "Conversation subagents and roles")),
         new("plan", "[on|off]", WorkflowText("Mode plan ou exécution", "Plan or execution mode")),
         new("goal", "[objectif|off]", WorkflowText("Définir l’objectif de la conversation", "Set the conversation goal")),
@@ -37,7 +39,8 @@ public sealed partial class MainWindow
     {
         var text = composer.Text.TrimStart();
         if (slashDismissed || !all && (!text.StartsWith('/') || text.Any(char.IsWhiteSpace))) { slashSuggestions.Visibility = Visibility.Collapsed; return; }
-        var items = SlashCatalog().Where(x => all || x.Name.StartsWith(text[1..], StringComparison.OrdinalIgnoreCase)).ToArray();
+        var items = SlashCatalog().Where(x => !ChatInteraction || x.Name is not ("agents" or "plan" or "goal"))
+            .Where(x => all || x.Name.StartsWith(text[1..], StringComparison.OrdinalIgnoreCase)).ToArray();
         slashChoices.ItemsSource = items;
         slashChoices.SelectedIndex = items.Length > 0 ? 0 : -1;
         slashSuggestions.Visibility = items.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -77,10 +80,14 @@ public sealed partial class MainWindow
             return true;
         }
         if (name == "help") { RefreshSlashSuggestions(all: true); return true; }
-        if (chat == null && name is "agents" or "plan" or "goal") return true;
+        if (chat == null && name is "chat" or "agent" or "agents" or "plan" or "goal") return true;
+        if (ChatInteraction && name is "agents" or "plan" or "goal")
+            throw new InvalidOperationException(WorkflowText("Passez en Agent pour configurer le plan et les sous-agents.", "Switch to Agent to configure planning and subagents."));
         var owner = chat;
         switch (name)
         {
+            case "chat": case "agent":
+                await ChangeConversationModeAsync(name); composer.Text = ""; return true;
             case "settings": composer.Text = ""; await Settings(); return true;
             case "stop": generation?.Cancel(); if (owner != null) await terminals.StopChatAsync(owner.Id); break;
             case "agents":
@@ -125,7 +132,7 @@ public sealed partial class MainWindow
                 if (provider == null || !ProviderModels.Visible(provider).Contains(argument)) throw new ArgumentException(WorkflowText("Modèle indisponible chez ce fournisseur.", "Model unavailable from this provider."));
                 provider.Model = argument; PopulateModelSelector(); UpdateProvider(); break;
         }
-        await db.SaveChangesAsync(); composer.Text = ""; RefreshModelActivity();
+        await db.SaveChangesAsync(); composer.Text = ""; RefreshModelActivity(); RefreshGenerationControls();
         ShowStatus(WorkflowText("Réglage enregistré · ", "Setting saved · ") + "/" + name, StatusKind.Notice);
         return true;
     }

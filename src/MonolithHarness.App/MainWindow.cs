@@ -513,7 +513,7 @@ public sealed partial class MainWindow : Window
     void UpdateFloatingAssets()
     {
         assetsBar.Children.Clear();
-        if (project != null)
+        if (project != null && !ChatInteraction)
         {
             foreach (var folder in project.GetSourceFolders())
             {
@@ -1927,7 +1927,7 @@ public sealed partial class MainWindow : Window
         }
         catch { argsObj = []; }
 
-        AgentPolicy.Demand(run.Chat.ExecutionMode, name);
+        AgentPolicy.Demand(run.Chat, name);
         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
         if (run.CurrentTool == null) SetRunStatus(run, T("Outil : ") + name + (ToolActivity.Detail(name, argsObj.ToJsonString()) is { Length: > 0 } detail ? " · " + detail : ""));
         permissionProject.Value = run.Project;
@@ -1957,7 +1957,7 @@ public sealed partial class MainWindow : Window
             if (output.Image != null) SetPendingMcpImage(output.Image);
             return output.Text;
         }
-        if (PythonTools.Handles(name)) return await PythonTools.CallAsync(run, name, argsObj, () => state.EnabledSkills,
+        if (PythonTools.Handles(name)) return await PythonTools.CallAsync(run, name, argsObj, () => RunSkills(run),
             (scope, title, detail, token) => RequestAccessAsync(scope, title, detail, "Script Python", token), ct);
         if (RagTools.Handles(name)) return await RagTools.CallAsync(run, name, argsObj, (secret, _) => Task.FromResult(KeyVault.Decrypt(secret)),
             (key, title, detail, token) => RequestAccessAsync(key,title,detail,title,token), ct);
@@ -2223,6 +2223,10 @@ public sealed partial class MainWindow : Window
         if (ActiveRun is { } running) { RestoreRunMetrics(running); return; }
         var limit = provider?.ContextLimit ?? ModelContexts.DefaultContextLimit;
         var currentDetails = ContextDetails.From(VisibleHistory(), limit);
+        var lastReply = VisibleHistory().LastOrDefault(x => x.Role == "assistant" && x.State == "complete" && x.OutputTokens.HasValue);
+        speedValueText.Text = lastReply is { Seconds: > 0, OutputTokens: > 0 }
+            ? $"⚡ {lastReply.OutputTokens.Value / lastReply.Seconds:F1} tok/s" : "⚡ — tok/s";
+        speedOutputText.Text = T("Sortie : ") + (lastReply?.OutputTokens?.ToString("N0") ?? "—");
         if (currentDetails.Estimated && currentDetails.ActiveMessages > 0)
         {
             ShowContextUsage(currentDetails.Used, true, limit); RefreshSpeedPopover(); return;
@@ -2304,13 +2308,14 @@ public sealed partial class MainWindow : Window
         var canWriteSources = sourceFolders.Count > 0 && Skills.Enabled(run.Options.EnabledSkills, "write_sources");
         var hasBrowser = BrowserSkillAccess.Enabled(run.Options.EnabledSkills) && Skills.Enabled(run.Options.EnabledSkills, "web")
             && FeatureSettings.Read(run.Options.FeaturesJson).BrowserMode == "embedded";
-        var systemPrompt = Skills.Prompt(run.Options.EnabledSkills, run.Options.Language, hasSources, hasBrowser, canWriteSources) +
+        var chatOnly = ConversationModes.IsChat(run.Chat.InteractionMode);
+        var systemPrompt = chatOnly ? ConversationModes.ChatPrompt(run.Options.Language, run.Chat) : Skills.Prompt(run.Options.EnabledSkills, run.Options.Language, hasSources, hasBrowser, canWriteSources) +
             "\nAdditional tools may request one-time user approval for local previews, files outside the project and terminal commands. Never claim approval before the tool returns success. A denial is final for that action; explain it and do not retry to bypass it.";
-        run.Workflow = CreateWorkflow(run);
+        run.Workflow = chatOnly ? null : CreateWorkflow(run);
         await using var mcp = CreateMcpSession(run.Chat.Id);
         var agent = CreateAgentRuntime(run, secret, mcp);
         systemPrompt += await agent.InitializeAsync(ct);
-        systemPrompt += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
+        if (!chatOnly) systemPrompt += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
         if (run.Chat.OrchestrationMode != "disabled")
         {
             var report = await agent.StartAsync(ct);
@@ -2325,10 +2330,10 @@ public sealed partial class MainWindow : Window
         SourceTools.AddDefinitions(definitions, sourceFolders.Count > 0, run.Options.EnabledSkills);
         AddWorkspaceToolDefinitions(definitions, run);
         FeatureSettings.Read(state.FeaturesJson).FilterBrowser(definitions);
-        agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat.ExecutionMode);
+        agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
         SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
         history = await AutoCompactHistoryAsync(run, history, systemPrompt, definitions, secret, ct);
-        var wire = ComposeWire(systemPrompt, history);
+        var wire = ComposeWire(systemPrompt, ConversationModes.History(history, run.Chat));
         var source = new SourceAccess(sourceFolders);
         Message? active = null; AssistantMessageUi? activeAssistantUi = null;
         try
@@ -2336,7 +2341,7 @@ public sealed partial class MainWindow : Window
             for (var round = 0; ; round++)
             {
                 ct.ThrowIfCancellationRequested();
-                if((await ApplySteeringAsync(run,ct)).Count>0){wire=ComposeWire(systemPrompt,await LoadContextHistoryAsync(run,ct));round=0;}
+                if((await ApplySteeringAsync(run,ct)).Count>0){wire=ComposeWire(systemPrompt,ConversationModes.History(await LoadContextHistoryAsync(run,ct),run.Chat));round=0;}
                 wire = await VisionFor(run).PrepareAsync(wire, ct);
                 if (round > 0 && round % 12 == 0)
                 {
@@ -2434,7 +2439,7 @@ public sealed partial class MainWindow : Window
                             }
                             try
                             {
-                                AgentPolicy.Demand(run.Chat.ExecutionMode, toolName);
+                                AgentPolicy.Demand(run.Chat, toolName);
                                 SandboxWorkspace.Demand(run.Chat.SandboxEnabled, toolName);
                                 await ProjectResources.DemandToolAsync(run.Project, toolName, call["function"]?["arguments"]?.ToString() ?? "", (scope, details, token) => RequestAccessAsync(scope, "Projet · " + toolName, details, toolName, token), ct);
                                 if (AgentRuntime.Handles(toolName)) result = await agent.CallAsync(toolName, JsonNode.Parse(call["function"]!["arguments"]!.GetValue<string>())!.AsObject(), ct);
@@ -2484,7 +2489,7 @@ public sealed partial class MainWindow : Window
                 if(steered.Count>0)round=0;
                 var persistedHistory = await LoadContextHistoryAsync(run, ct);
                 persistedHistory = await AutoCompactHistoryAsync(run, persistedHistory, systemPrompt, definitions, secret, ct);
-                wire = ComposeWire(systemPrompt, persistedHistory);
+                wire = ComposeWire(systemPrompt, ConversationModes.History(persistedHistory, run.Chat));
                 if (toolResults.Count == 0 && steered.Count==0) { SetRunStatus(run, T("Réponse terminée · historique enregistré."), StatusKind.Notice); active = null; break; }
                 if (string.IsNullOrEmpty(assistantUi.CurrentText)) assistantUi.UpdateContent(T("Consultation des outils…"));
                 active = null;
