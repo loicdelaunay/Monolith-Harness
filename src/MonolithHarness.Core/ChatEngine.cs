@@ -90,17 +90,18 @@ public sealed class ChatEngine(HttpClient http)
     }
     public Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
         Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null,
-        Action<ContextRequestProgress>? requestProgress = null)
+        Action<ContextRequestProgress>? requestProgress = null, bool requireNoReasoning = false)
     {
         var inputEstimate = ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools);
         return RequestRetry.RunAsync(() => TokenConsumption.TrackAsync(provider, inputEstimate,
-            progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, reasoningEffort, inputEstimate, requestProgress), update), retrySettings, ct,
+            progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, requireNoReasoning ? "none" : reasoningEffort, inputEstimate, requestProgress, requireNoReasoning), update), retrySettings, ct,
             retry => update(new("", "", null, null, 0) { Retry = retry }));
     }
 
     async Task<Completion> StreamOnceAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
-        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort, int inputEstimate, Action<ContextRequestProgress>? requestProgress)
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort, int inputEstimate, Action<ContextRequestProgress>? requestProgress, bool requireNoReasoning)
     {
+        if (requireNoReasoning) ChatReasoning.CheckModel(provider);
         var progress = new ContextRequestProgress(ContextRequestStage.Preparing, inputEstimate, messages.Count);
         requestProgress?.Invoke(progress);
         using var local = provider.IsLocal ? await LocalModelRuntime.ChatAsync(provider, ct) : null;
@@ -113,8 +114,9 @@ public sealed class ChatEngine(HttpClient http)
         {
             payload["reasoning_effort"] = reasoningEffort.ToLowerInvariant();
         }
-        var compatibilityKey = provider.Id + "|" + provider.BaseUrl + "|" + provider.Model + "|" + provider.SupportsImages;
+        var compatibilityKey = provider.Id + "|" + provider.BaseUrl + "|" + provider.Model + "|" + provider.SupportsImages + (requireNoReasoning ? "|chat" : "");
         var profile = compatibility.GetOrAdd(compatibilityKey, _ => new()).Copy();
+        if (requireNoReasoning) profile.NoEffort = false;
         if (!provider.SupportsImages && messages.OfType<JsonObject>().Any(m => m["content"] is JsonArray a && a.Any(p => p?["type"]?.GetValue<string>() == "image_url"))) profile.DisableImages();
         for (int attempt = 0; ; attempt++)
         {
@@ -124,6 +126,7 @@ public sealed class ChatEngine(HttpClient http)
             using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint(baseUrl, "chat/completions"));
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
             ProviderPresets.ConfigureRequest(provider, actual, request);
+            if (requireNoReasoning) ChatReasoning.Disable(provider, actual);
             request.Content = new StringContent(actual.ToJsonString(), Encoding.UTF8, "application/json");
             progress = progress with { Stage = ContextRequestStage.Sending, PayloadBytes = request.Content.Headers.ContentLength };
             requestProgress?.Invoke(progress);
@@ -131,13 +134,21 @@ public sealed class ChatEngine(HttpClient http)
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await ProviderErrorDetails.ReadAsync(response, key, ct);
-                if ((int)response.StatusCode is 400 or 422 && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase))) continue;
+                if ((int)response.StatusCode is 400 or 422 && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (requireNoReasoning && profile.NoEffort) throw ChatReasoning.Unsupported(provider.Model, detail);
+                    continue;
+                }
                 throw new HttpRequestException($"API : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {detail}", null, response.StatusCode);
             }
             requestProgress?.Invoke(progress with { Stage = ContextRequestStage.AwaitingOutput });
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
             compatibility[compatibilityKey] = profile.Copy();
-            return await ParseStreamAsync(reader, value => update(value with { CompatibilityNotice = compatibilityNotice }), ct);
+            return await ParseStreamAsync(reader, value =>
+            {
+                if (requireNoReasoning && value.Reasoning.Length > 0) throw ChatReasoning.Unsupported(provider.Model);
+                update(value with { CompatibilityNotice = compatibilityNotice });
+            }, ct);
         }
     }
     public static async Task<Completion> ParseStreamAsync(TextReader reader, Action<GenerationUpdate> update, CancellationToken ct)

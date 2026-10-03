@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.55.0 - 2026-10-03
+
+- Replaces the width-dependent model information heading with a stable More information label, removing its resize feedback and rapid flickering in both expanded and collapsed states. Collapsed context and speed metrics retain their existing height.
+- Moves the existing tool tabs into the panel header, alongside maximize/close actions. Web, Terminal, Git, Files, Assets and Preview use one compact toolbar per page with information and accessible action icons; asset guides, grid and frame editing remain available in an options flyout. Narrow action areas scroll horizontally instead of wrapping.
+- Adds Desktop/Mobile responsive display to the Web toolbar and a browser_viewport model tool. Mobile uses a 390-pixel-wide embedded view, desktop fills the panel, and switching preserves the current page. Choices are isolated per native browser tab and reset with the browser session; the tool reports the actual viewport. This is responsive layout preview, not mobile OS, touch or user-agent emulation. Browser skill, Chat restrictions and Chrome MCP routing remain enforced. The legacy desktop browser follows the same display controls.
+- Makes Complete design proactive for moderately complex tasks: clarify missing audience, visual direction, platform and technology choices; define acceptance criteria, implement, verify and deliver a complete usable result. Existing answers and explicit user limits are respected; unperformed checks are reported clearly.
+
+## 1.54.1 - 2026-10-03
+
+- Chat requests now require reasoning to be disabled across GUI, CLI and the legacy desktop host. The reasoning selector is locked off in Chat while preserving the Agent preference. Provider-specific off controls are enforced after compatibility transforms; unsupported models produce an explanation instead of silently reverting to automatic reasoning. OpenCode uses an explicitly disabled variant or a declared non-reasoning model.
+- Places the settings button inside one compact Chat / Agent capsule. The model information header shows the active model name when it fits, preserving the single-line header and collapsed metrics height.
+
 ## 1.54.0 - 2026-10-03
 
 - Moves composer configuration to the right of the Chat / Agent switch and replaces its plus icon with a settings icon. Model, speed and context now uses the sidebar background; its collapsed header shows a live context ring, percentage and tokens per second aligned to the right within the existing header height. Values and estimates stay synchronized with the expanded panel, including conversation switches. GUI and legacy desktop layouts are aligned.

@@ -13,7 +13,7 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly ComboBox assetPicker = new() { HorizontalAlignment=HorizontalAlignment.Stretch, MinWidth=160 };
+    readonly ComboBox assetPicker = new() { HorizontalAlignment=HorizontalAlignment.Stretch, MinWidth=0 };
     readonly Image assetImage = new() { Stretch=Stretch.Uniform, HorizontalAlignment=HorizontalAlignment.Center, VerticalAlignment=VerticalAlignment.Center, UseLayoutRounding=false };
     readonly StackPanel assetLayers = new() { Spacing=5 };
     readonly TextBlock assetStatus = new() { TextWrapping=TextWrapping.Wrap, FontSize=12 };
@@ -48,15 +48,9 @@ public sealed partial class MainWindow
         assetEmpty.Text=WorkflowText("Activez le skill Générateur d’assets, puis décrivez votre dessin à l’IA.","Enable Asset generator, then describe your drawing to the AI.");
         assetTransparent.Content=WorkflowText("Fond transparent","Transparent background");
         var pane = new Grid { RowSpacing=8, Padding=new(4,8,4,4) };
-        foreach(var h in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1,GridUnitType.Star), GridLength.Auto, GridLength.Auto }) pane.RowDefinitions.Add(new() { Height=h });
-        var header = new Grid { ColumnSpacing=6 };
-        header.ColumnDefinitions.Add(new() { Width=new(1,GridUnitType.Star) }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto }); header.ColumnDefinitions.Add(new() { Width=GridLength.Auto });
-        header.Children.Add(assetPicker);
-        Grid.SetColumn(assetZoom,1);header.Children.Add(assetZoom);
-        var create = Action("+",CreateAssetManuallyAsync); ToolTipService.SetToolTip(create,WorkflowText("Nouveau canevas","New canvas"));
-        Grid.SetColumn(create,2);header.Children.Add(create);
-        var refresh = Action("↻",()=>RefreshAssetsAsync());ToolTipService.SetToolTip(refresh,WorkflowText("Actualiser","Refresh"));Grid.SetColumn(refresh,3);header.Children.Add(refresh);
-        pane.Children.Add(header);
+        foreach(var h in new[] { GridLength.Auto, new GridLength(1,GridUnitType.Star), GridLength.Auto, GridLength.Auto }) pane.RowDefinitions.Add(new() { Height=h });
+        var create = ToolAction("\uE710", WorkflowText("Nouveau canevas", "New canvas"), CreateAssetManuallyAsync);
+        var refresh = ToolAction("\uE72C", WorkflowText("Actualiser", "Refresh"), () => RefreshAssetsAsync());
         var exportButton = new Button { Content=WorkflowText("Exporter…","Export…") };
         var exportOptions = new StackPanel { Spacing=8, Width=260 };
         exportOptions.Children.Add(Label("Format",12));exportOptions.Children.Add(assetFormat);
@@ -107,16 +101,21 @@ public sealed partial class MainWindow
             await CurrentAssets().UpdateAsync(doc.Id,doc.Revision,d=>AssetTools.Edit(d,new JsonArray(new JsonObject { ["action"]="frame_duration",["frame_id"]=frame.Id,["duration_ms"]=(int)duration.Value })),CancellationToken.None);
             await RefreshAssetsAsync(doc.Id);
         });
-        var drawingTools=new StackPanel { Orientation=Orientation.Horizontal, Spacing=5 };
-        foreach (var control in new FrameworkElement[] { paletteButton, exportButton, assetGuides, assetGrid }) drawingTools.Children.Add(control);
+        foreach (var button in new[] { paletteButton, exportButton, assetPlay })
+        { button.Width = button.Height = 32; button.MinWidth = button.MinHeight = 0; button.Padding = new(0); }
+        FluentDesign.IconButton(paletteButton, "\uE790", WorkflowText("Palette", "Palette"), false);
+        FluentDesign.IconButton(exportButton, "\uE74E", WorkflowText("Exporter…", "Export…"), false);
+        ToolTipService.SetToolTip(assetPlay, WorkflowText("Lire / arrêter l’animation", "Play / stop animation"));
+        var options = new StackPanel { Spacing = 8, MinWidth = 220 };
+        options.Children.Add(assetGuides); options.Children.Add(assetGrid);
+        options.Children.Add(Label(WorkflowText("Animation", "Animation"), 12)); options.Children.Add(assetFramePicker);
+        options.Children.Add(Row(addFrame, deleteFrame, durationFrame));
+        var more = new DropDownButton { Content = "…", Width = 32, Height = 32, MinWidth = 0, MinHeight = 0, Padding = new(0), Flyout = new Flyout { Content = options } };
+        ToolTipService.SetToolTip(more, WorkflowText("Repères, grille et frames", "Guides, grid and frames"));
         ToolTipService.SetToolTip(assetZoom,WorkflowText("Zoom · pixels écran par cellule","Zoom · screen pixels per cell"));
         ToolTipService.SetToolTip(assetGrid,WorkflowText("Grille visible à partir de 5 pixels écran par cellule","Grid visible from 5 screen pixels per cell"));
         assetZoom.SelectionChanged += async (_,_) => {if(!populatingAssetZoom && selectedAsset is {} doc && chat!=null)await Guard(()=>RefreshAssetImageAsync(doc,assetLoadRevision,chat.Id));};
-        var frameTools=new StackPanel { Orientation=Orientation.Horizontal, Spacing=5 };
-        foreach (var control in new FrameworkElement[] { assetFramePicker, addFrame, deleteFrame, durationFrame, assetPlay }) frameTools.Children.Add(control);
-        var toolbar=new StackPanel { Spacing=5 };
-        toolbar.Children.Add(new ScrollViewer { Content=drawingTools, HorizontalScrollBarVisibility=ScrollBarVisibility.Auto, VerticalScrollBarVisibility=ScrollBarVisibility.Disabled });
-        toolbar.Children.Add(new ScrollViewer { Content=frameTools, HorizontalScrollBarVisibility=ScrollBarVisibility.Auto, VerticalScrollBarVisibility=ScrollBarVisibility.Disabled });
+        pane.Children.Add(ToolToolbar(assetPicker, assetZoom, assetPlay, paletteButton, exportButton, create, refresh, more));
         assetPlayback.Tick += (_,_) =>
         {
             if (selectedAsset is not {} doc || doc.Frames.Count==0) { assetPlayback.Stop(); assetPlay.Content="▶"; return; }
@@ -132,7 +131,6 @@ public sealed partial class MainWindow
         assetFramePicker.SelectionChanged += async (_,_) => { if(!populatingAssetFrames && selectedAsset is {} doc) { selectedAssetFrame=assetFramePicker.SelectedIndex-1; if(assetPlayback.IsEnabled) await RefreshAssetImageAsync(doc,assetLoadRevision,chat?.Id ?? 0); else await RefreshAssetsAsync(doc.Id); } };
         assetGuides.Click += async (_,_) => { if(selectedAsset is {} doc) await RefreshAssetImageAsync(doc,assetLoadRevision,chat?.Id ?? 0); };
         assetGrid.Click += async (_,_) => { if(selectedAsset is {} doc) await RefreshAssetImageAsync(doc,assetLoadRevision,chat?.Id ?? 0); };
-        Grid.SetRow(toolbar,1);pane.Children.Add(toolbar);
         var canvas = new Grid { MinHeight=180, Background=FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
         assetCanvas=canvas;
         canvas.SizeChanged += async (_,_) =>
@@ -163,11 +161,11 @@ public sealed partial class MainWindow
         };
         canvas.Children.Add(viewport);canvas.Children.Add(assetEmpty);
         var frame=new Border { Child=canvas, Padding=new(12), CornerRadius=new(12), BorderThickness=new(1), BorderBrush=FluentDesign.Stroke };
-        Grid.SetRow(frame,2);pane.Children.Add(frame);
+        Grid.SetRow(frame,1);pane.Children.Add(frame);
         var layerSection = new Expander { Header=WorkflowText("Calques · premier plan en haut","Layers · front first"), IsExpanded=true, HorizontalAlignment=HorizontalAlignment.Stretch, HorizontalContentAlignment=HorizontalAlignment.Stretch,
             Content=new ScrollViewer { Content=assetLayers, MaxHeight=190, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled } };
-        Grid.SetRow(layerSection,3);pane.Children.Add(layerSection);
-        var footer=new StackPanel { Spacing=4 }; footer.Children.Add(assetLoading);footer.Children.Add(assetStatus);Grid.SetRow(footer,4);pane.Children.Add(footer);
+        Grid.SetRow(layerSection,2);pane.Children.Add(layerSection);
+        var footer=new StackPanel { Spacing=4 }; footer.Children.Add(assetLoading);footer.Children.Add(assetStatus);Grid.SetRow(footer,3);pane.Children.Add(footer);
         assetPicker.SelectionChanged += async (_,_) => { if(!populatingAssets && assetPicker.SelectedItem is ComboBoxItem { Tag:string id })await Guard(()=>RefreshAssetsAsync(id)); };
         return pane;
     }

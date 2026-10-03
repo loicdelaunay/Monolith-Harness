@@ -195,6 +195,11 @@ public sealed class OpenCodeEngine(HttpClient http)
             ["system"] = systemPrompt,
             ["parts"] = parts
         };
+        if (policy?.Mode == "chat")
+        {
+            ChatReasoning.CheckModel(provider);
+            payload["variant"] = await ChatVariantAsync(provider, password, directory, separator, ct);
+        }
         payload["tools"] = provider.OpenCodeTools
             ? new JsonObject { ["question"] = workflow != null }
             : await DisabledToolsAsync(provider, password, directory, ct);
@@ -255,6 +260,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 var assistant = messages.LastOrDefault(x => IsAssistant(x) && !known.Contains(MessageId(x)));
                 if (assistant == null) continue;
                 var parsed = ParseAssistant(assistant, timer.Elapsed.TotalSeconds);
+                if (policy?.Mode == "chat" && parsed.Reasoning.Length > 0) throw ChatReasoning.Unsupported(provider.Model);
                 if (parsed.Text != lastText || parsed.Reasoning != lastReasoning || parsed.Completed)
                 {
                     lastText = parsed.Text; lastReasoning = parsed.Reasoning;
@@ -272,6 +278,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 if (parsed.Reasoning.Length > 0) message["reasoning_content"] = parsed.Reasoning;
                 var calls = messages.Where(x => IsAssistant(x) && !known.Contains(MessageId(x)))
                     .Select(x => ParseAssistant(x!, timer.Elapsed.TotalSeconds)).ToArray();
+                if (policy?.Mode == "chat" && calls.Any(x => x.Reasoning.Length > 0)) throw ChatReasoning.Unsupported(provider.Model);
                 return new Completion(message, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds)
                 {
                     CachedInputTokens = parsed.CachedInputTokens,
@@ -291,6 +298,22 @@ public sealed class OpenCodeEngine(HttpClient http)
             try { await JsonAsync(provider, password, HttpMethod.Post, $"session/{Uri.EscapeDataString(sessionId)}/abort", directory, new JsonObject(), abort.Token); } catch { }
             throw;
         }
+    }
+
+    async Task<string> ChatVariantAsync(Provider provider, string password, string directory, int separator, CancellationToken ct)
+    {
+        var json = await JsonAsync(provider, password, HttpMethod.Get, "provider", directory, null, ct);
+        var providers = json?["all"] as JsonArray ?? json?["providers"] as JsonArray ?? json as JsonArray ?? [];
+        var owner = providers.OfType<JsonObject>().FirstOrDefault(x => String(x, "id", "providerID", "key") == provider.Model[..separator]);
+        var modelId = provider.Model[(separator + 1)..];
+        var model = owner?["models"] is JsonObject models ? models[modelId] :
+            (owner?["models"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(x => String(x, "id", "modelID", "key") == modelId);
+        if (model?["variants"] is JsonObject variants)
+            foreach (var variant in variants)
+                if (ChatReasoning.ExplicitlyDisabled(variant.Value)) return variant.Key;
+        if (ChatReasoning.IsFalse(model?["capabilities"]?["reasoning"]))
+            return "default"; // Explicit non-reasoning model; reset any previous reasoning variant.
+        throw ChatReasoning.Unsupported(provider.Model, "OpenCode ne déclare aucune variante sans raisonnement / OpenCode exposes no non-reasoning variant.");
     }
 
     async Task<string> PollWorkflowAsync(Provider provider, string password, string directory, string sessionId, WorkflowTools workflow, string previous, CancellationToken ct)

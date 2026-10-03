@@ -32,14 +32,14 @@ public sealed partial class MainWindow
     Grid BuildFilePreviewPane()
     {
         var panel = new Grid { RowSpacing = 8 };
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
+        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star) })
             panel.RowDefinitions.Add(new() { Height = height });
-        var header = new StackPanel { Spacing = 4 };
-        previewName.IsTextSelectionEnabled = previewLocation.IsTextSelectionEnabled = true;
+        previewName.FontSize = 12; previewName.TextWrapping = TextWrapping.NoWrap; previewName.TextTrimming = TextTrimming.CharacterEllipsis;
+        previewName.IsTextSelectionEnabled = true;
         previewLocation.Foreground = previewInfo.Foreground = previewPageLabel.Foreground = FluentDesign.Secondary;
-        previewLocation.MaxLines = 2; previewLocation.TextTrimming = TextTrimming.CharacterEllipsis;
-        header.Children.Add(previewName); header.Children.Add(previewLocation); header.Children.Add(previewInfo);
-        panel.Children.Add(header); Grid.SetRow(previewLoading, 1); panel.Children.Add(previewLoading);
+        foreach (var text in new[] { previewName, previewLocation, previewInfo })
+            text.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ToolTipService.SetToolTip(previewName, previewLocation.Text + "\n" + previewInfo.Text));
+        Grid.SetRow(previewLoading, 1); panel.Children.Add(previewLoading);
         previewScroll.Content = previewRendered;
         ScrollViewer.SetHorizontalScrollBarVisibility(previewRaw, ScrollBarVisibility.Auto);
         ScrollViewer.SetVerticalScrollBarVisibility(previewRaw, ScrollBarVisibility.Auto);
@@ -56,21 +56,15 @@ public sealed partial class MainWindow
         foreach (var value in new[] { WorkflowText("Ajuster", "Fit"), "50 %", "100 %", "200 %" }) previewZoom.Items.Add(value);
         previewZoom.SelectionChanged += (_, _) => ResizePreviewImage();
         previewScroll.SizeChanged += (_, _) => ResizePreviewImage();
-        var pagination = new Grid { ColumnSpacing = 6 };
-        pagination.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); pagination.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        pagination.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        pagination.Children.Add(previewZoom);
-        previewPageLabel.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(previewPageLabel, 1); pagination.Children.Add(previewPageLabel);
-        var pageActions = Row(previewBack, previewNext); Grid.SetColumn(pageActions, 2); pagination.Children.Add(pageActions);
-        Grid.SetRow(pagination, 3); panel.Children.Add(pagination);
-        previewRefresh = Action("Actualiser", RefreshFilePreviewAsync);
-        previewCopy = Action("Copier", CopyFilePreviewAsync);
+        previewPageLabel.VerticalAlignment = VerticalAlignment.Center;
+        previewRefresh = ToolAction("\uE72C", UiText.T("Actualiser"), RefreshFilePreviewAsync);
+        previewCopy = ToolAction("\uE8C8", UiText.T("Copier"), CopyFilePreviewAsync);
         previewDiskActions = new DropDownButton { Content = "…", Visibility = Visibility.Collapsed };
         ToolTipService.SetToolTip(previewDiskActions, WorkflowText("Actions du fichier", "File actions"));
-        var open = Action(WorkflowText("Ouvrir un fichier", "Open a file"), PickFilePreviewAsync);
-        open.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
-        var actions = Row(previewDiskActions, previewRefresh, previewCopy, open); actions.HorizontalAlignment = HorizontalAlignment.Right;
-        Grid.SetRow(actions, 4); panel.Children.Add(actions);
+        var open = ToolAction("\uE8B7", WorkflowText("Ouvrir un fichier", "Open a file"), PickFilePreviewAsync);
+        previewDiskActions.Width = previewDiskActions.Height = 32; previewDiskActions.MinWidth = previewDiskActions.MinHeight = 0; previewDiskActions.Padding = new(0);
+        foreach (var button in new[] { previewBack, previewNext }) { button.Width = button.Height = 32; button.MinWidth = button.MinHeight = 0; button.Padding = new(0); }
+        panel.Children.Add(ToolToolbar(previewName, previewPageLabel, previewBack, previewNext, previewZoom, previewDiskActions, previewRefresh, previewCopy, open));
         Closed += (_, _) => { previewClosed = true; CancelFilePreview(); };
         ResetFilePreview();
         return panel;

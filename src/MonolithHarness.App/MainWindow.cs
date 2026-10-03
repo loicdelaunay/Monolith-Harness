@@ -383,7 +383,7 @@ public sealed partial class MainWindow : Window
 
         thinkingSelector.SelectionChanged += async (_, _) =>
         {
-            if (loading || updatingThinkingSelector) return;
+            if (loading || updatingThinkingSelector || ChatInteraction) return;
             var level = thinkingSelector.SelectedIndex switch
             {
                 1 => "low",
@@ -675,7 +675,7 @@ public sealed partial class MainWindow : Window
                 $"🧠 {T("Élevé")}",
                 $"🧠 {T("Désactivé")}"
             };
-            thinkingSelector.SelectedIndex = (state.ThinkingLevel ?? "auto").ToLowerInvariant() switch
+            thinkingSelector.SelectedIndex = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel).ToLowerInvariant() switch
             {
                 "low" => 1,
                 "medium" => 2,
@@ -683,6 +683,7 @@ public sealed partial class MainWindow : Window
                 "none" => 4,
                 _ => 0
             };
+            thinkingSelector.IsEnabled = !ChatInteraction && ActiveRun == null;
             ToolTipService.SetToolTip(thinkingSelector, T("Niveau de réflexion / thinking du modèle (reasoning effort)"));
         }
         finally
@@ -2037,6 +2038,12 @@ public sealed partial class MainWindow : Window
                     return T("Erreur : une URL est requise pour naviguer.");
                 return await NavigateAsync(url, ct);
 
+            case "browser_viewport":
+                if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills) || FeatureSettings.Read(state.FeaturesJson).BrowserMode != "embedded")
+                    return T("Outil navigateur non autorisé.");
+                await ShowToolAsync(0);
+                return await SetBrowserViewportAsync(argsObj["mode"]?.GetValue<string>() ?? "", ct);
+
             case "browser_tabs":
             case "browser_tab_new":
             case "browser_tab_select":
@@ -2063,7 +2070,7 @@ public sealed partial class MainWindow : Window
                 }
                 else if (!conversationBrowsers.Keys.Any(key => key.ChatId == tabChatId)) NewBrowserTab(tabChatId);
                 return JsonSerializer.Serialize(new { selected_tab_id = SelectedBrowserTab(tabChatId), tabs = conversationBrowsers.Values
-                    .Where(item => item.Id == tabChatId).Select(item => new { tab_id = item.TabId, title = BrowserTabTitle(item), url = item.Address, selected = item.TabId == SelectedBrowserTab(tabChatId) }) });
+                    .Where(item => item.Id == tabChatId).Select(item => new { tab_id = item.TabId, title = BrowserTabTitle(item), url = item.Address, viewport_mode = item.ViewportMode, selected = item.TabId == SelectedBrowserTab(tabChatId) }) });
 
             case "read_page":
                 if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills))
@@ -2394,7 +2401,7 @@ public sealed partial class MainWindow : Window
                 {
                     ContextRequestProgressed(run, progress);
                     assistantUi.UpdateContent(progress.Label(run.Options.Language));
-                });
+                }, requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode));
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 CancelModelRetryFeedback(run); run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
                 active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;

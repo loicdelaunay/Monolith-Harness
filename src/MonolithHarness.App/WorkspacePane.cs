@@ -50,19 +50,21 @@ public sealed partial class MainWindow
         composer.CornerRadius = new(8); composer.FontSize = 15;
         composer.MinHeight = 124; composer.MaxHeight = 260; composer.Padding = new Thickness(14, 12, 14, 58);
         overlay.Children.Add(composer);
-        var plus = new Button { Content = "+", FontSize = 24, Width = 38, Height = 38, Padding = new(0),
+        var plus = new Button { Width = 28, Height = 28, MinWidth = 0, MinHeight = 0, Padding = new(0),
+            BorderThickness = new(0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new(10, 0, 0, 10) };
         idleOnly.Add(plus);
         var menu = new Flyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.TopEdgeAlignedLeft }; plus.Flyout = menu;
         menu.Opening += (_, _) => BuildComposerMenu(menu);
         plus.Margin = new(0);
-        var left = Row(BuildConversationModeSelector(), plus);
+        var left = BuildConversationModeSelector(plus);
         left.HorizontalAlignment = HorizontalAlignment.Left; left.VerticalAlignment = VerticalAlignment.Bottom; left.Margin = new(10, 0, 0, 10);
         overlay.Children.Add(left);
         send.Content = "↑"; send.Width = 38; send.Height = 38; send.Padding = new(0); send.FontSize = 22;
         stop.Content = "■"; stop.Width = 38; stop.Height = 38; stop.Padding = new(0);
         var right = Row(stop, send); right.HorizontalAlignment = HorizontalAlignment.Right; right.VerticalAlignment = VerticalAlignment.Bottom; right.Margin = new(0, 0, 10, 10);
         FluentDesign.IconButton(plus, "\uE713", WorkflowText("Configurer le chat et joindre des fichiers", "Configure chat and attach files"), false);
+        plus.Content = FluentDesign.Icon("\uE713", 14);
         FluentDesign.IconButton(send, "\uE724", T("Envoyer"), false);
         FluentDesign.IconButton(stop, "\uE71A", T("Arrêter"), false);
         overlay.Children.Add(right);
@@ -261,19 +263,16 @@ public sealed partial class MainWindow
 
     void BuildToolsPane()
     {
-        var container = new Grid { Padding = new(10), RowSpacing = 8 };
-        container.RowDefinitions.Add(new() { Height = GridLength.Auto }); container.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        var toolbar = new Grid(); toolbar.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        toolbar.Children.Add(Label("Outils", 16));
-        var actions = Row(Action("⛶", () => { toolsMaximized = !toolsMaximized; ResizeLayout(); return Task.CompletedTask; }), Action("×", ToggleBrowser));
-        ToolTipService.SetToolTip(actions.Children[0], T("Agrandir / restaurer le panneau"));
-        Grid.SetColumn(actions, 1); toolbar.Children.Add(actions); container.Children.Add(toolbar);
+        var container = new Grid { Padding = new(10) };
+        var actions = Row(ToolAction("\uE740", T("Agrandir / restaurer le panneau"), () => { toolsMaximized = !toolsMaximized; ResizeLayout(); return Task.CompletedTask; }),
+            ToolAction("\uE711", T("Fermer"), ToggleBrowser));
+        actions.Spacing = 4; toolTabs.SetHeaderActions(actions);
         var web = new Grid { RowSpacing = 8 };
         web.RowDefinitions.Add(new() { Height = GridLength.Auto }); web.RowDefinitions.Add(new() { Height = GridLength.Auto }); web.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        var nav = new Grid { ColumnSpacing = 4 }; nav.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); nav.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); nav.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        nav.Children.Add(address);
-        var go = Action("→", async () => { await NavigateAsync(address.Text, CancellationToken.None); }); Grid.SetColumn(go, 1); nav.Children.Add(go);
-        var local = Action("📂", PickPreviewAsync, true); Grid.SetColumn(local, 2); nav.Children.Add(local); ToolTipService.SetToolTip(local, T("Ouvrir un fichier local"));
+        var go = ToolAction("\uE72A", WorkflowText("Ouvrir l’adresse", "Open address"), async () => { await NavigateAsync(address.Text, CancellationToken.None); });
+        var local = ToolAction("\uE8B7", T("Ouvrir un fichier local"), PickPreviewAsync, true);
+        var nav = ToolToolbar(address, browserViewportMode, go, local);
+        InitializeBrowserViewportSelector();
         address.KeyDown += async (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { e.Handled = true; await Guard(async () => { await NavigateAsync(address.Text, CancellationToken.None); }); } };
         Grid.SetRow(nav, 0); web.Children.Add(nav);
         webTabs.Height = 44;
@@ -294,13 +293,14 @@ public sealed partial class MainWindow
 
         toolTabs.AddTab("Terminal", BuildTerminals());
 
-        var git = new Grid { RowSpacing = 8 }; git.RowDefinitions.Add(new() { Height = GridLength.Auto }); git.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        git.Children.Add(Action("Actualiser les changements", async () => { await RefreshGitAsync(CancellationToken.None); }));
-        git.RowDefinitions.Add(new() { Height = new(2, GridUnitType.Star) });
-        var gitHeader = new StackPanel { Spacing = 6 }; var refreshGit = git.Children[0]; git.Children.Clear();
-        gitHeader.Children.Add(refreshGit); gitHeader.Children.Add(gitSummary); git.Children.Add(gitHeader);
-        gitHeader.Children.Add(GitPreviewSelector());
-        gitHeader.Children.Add(gitLoading);
+        var git = new Grid { RowSpacing = 6 };
+        foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(2, GridUnitType.Star) }) git.RowDefinitions.Add(new() { Height = height });
+        gitSummary.FontSize = 12; gitSummary.TextWrapping = TextWrapping.NoWrap; gitSummary.TextTrimming = TextTrimming.CharacterEllipsis;
+        gitSummary.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ToolTipService.SetToolTip(gitSummary, gitSummary.Text));
+        var gitHeader = ToolToolbar(gitSummary, GitPreviewSelector(), ToolAction("\uE72C", T("Actualiser les changements"), async () => { await RefreshGitAsync(CancellationToken.None); }));
+        git.Children.Add(gitHeader);
+        // Loading feedback is an overlay, not another toolbar row.
+        gitLoading.VerticalAlignment = VerticalAlignment.Bottom; git.Children.Add(gitLoading);
         Grid.SetRow(gitFiles, 1); git.Children.Add(gitFiles);
         var diffScroll = new ScrollViewer { Content = gitDiff, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(diffScroll, 2); git.Children.Add(diffScroll);
@@ -315,9 +315,11 @@ public sealed partial class MainWindow
         });
         toolTabs.AddTab("Git", git);
 
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(1, GridUnitType.Star) }) filePanel.RowDefinitions.Add(new() { Height = height });
-        filePanel.RowSpacing = 8;
-        filePanel.Children.Add(Row(Action("↑", async () =>
+        foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(1, GridUnitType.Star) }) filePanel.RowDefinitions.Add(new() { Height = height });
+        filePanel.RowSpacing = 6;
+        fileLocation.TextWrapping = TextWrapping.NoWrap; fileLocation.TextTrimming = TextTrimming.CharacterEllipsis;
+        fileLocation.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ToolTipService.SetToolTip(fileLocation, fileLocation.Text));
+        var fileUp = ToolAction("\uE74A", WorkflowText("Dossier parent", "Parent folder"), async () =>
         {
             var folders = project?.GetSourceFolders() ?? [];
             if (folders.Count == 0 || fileDirectory == null) return;
@@ -334,11 +336,12 @@ public sealed partial class MainWindow
                 if (matchingRoot != null) await LoadFilesAsync(parent);
                 else if (folders.Count > 1) await LoadFilesAsync(null);
             }
-        }), Action("Actualiser", () => LoadFilesAsync(fileDirectory)), Action("Ouvrir dans Web", async () => { if (selectedFile != null) await OpenLocalPreviewAsync(selectedFile, CancellationToken.None); })));
-        var fileHeader = new StackPanel { Spacing = 4 };
-        fileHeader.Children.Add(fileLocation); fileHeader.Children.Add(filesLoading);
-        Grid.SetRow(fileHeader, 1); filePanel.Children.Add(fileHeader);
-        Grid.SetRow(fileList, 2); filePanel.Children.Add(fileList); Grid.SetRow(fileContent, 3); filePanel.Children.Add(fileContent);
+        });
+        filePanel.Children.Add(ToolToolbar(fileLocation, fileUp,
+            ToolAction("\uE72C", T("Actualiser"), () => LoadFilesAsync(fileDirectory)),
+            ToolAction("\uE774", T("Ouvrir dans Web"), async () => { if (selectedFile != null) await OpenLocalPreviewAsync(selectedFile, CancellationToken.None); })));
+        filesLoading.VerticalAlignment = VerticalAlignment.Bottom; filePanel.Children.Add(filesLoading);
+        Grid.SetRow(fileList, 1); filePanel.Children.Add(fileList); Grid.SetRow(fileContent, 2); filePanel.Children.Add(fileContent);
         fileList.ItemClick += async (_, e) => await Guard(async () =>
         {
             if (e.ClickedItem is not FileEntry file) return;
@@ -364,7 +367,7 @@ public sealed partial class MainWindow
         toolTabs.AddTab("Assets", BuildAssetsPane());
         toolTabs.AddTab("Preview", BuildFilePreviewPane());
         toolTabs.SelectionChanged += async (_, _) => { SyncBrowserPresentation(); if (browserVisible) await Guard(ActivateToolAsync); };
-        Grid.SetRow(toolTabs, 1); container.Children.Add(toolTabs);
+        container.Children.Add(toolTabs);
         browserPanel.Child = container; Grid.SetColumn(browserPanel, 1); workspace.Children.Add(browserPanel);
     }
     void RefreshToolLanguage()
@@ -1499,6 +1502,7 @@ public sealed partial class MainWindow
         if (Skills.Enabled(state.EnabledSkills, "web")) Add("open_local_file", "Requests user approval, then previews a local file and reads its page. Use a project-relative or absolute path. Never bypass a refusal.", new() { ["path"] = StringProperty() }, "path");
         if (Skills.Enabled(state.EnabledSkills, "web") && BrowserSkillAccess.Enabled(state.EnabledSkills) && FeatureSettings.Read(state.FeaturesJson).BrowserMode == "embedded")
         {
+            MonolithHarness.Core.BrowserViewport.AddDefinition(definitions);
             Add("browser_tabs", "Lists all browser tabs in this conversation, with their IDs, URLs and selected state. Read-only.", []);
             Add("browser_tab_new", "Opens a new browser tab in this conversation and selects it. Optional HTTPS URL to navigate immediately.", new() { ["url"] = StringProperty("Optional HTTP(S) URL") });
             Add("browser_tab_select", "Selects an existing browser tab by its ID so subsequent browse, read_page, DOM and screenshot tools use that tab.", new() { ["tab_id"] = StringProperty("Tab ID from browser_tabs") }, "tab_id");

@@ -138,8 +138,12 @@ function updateConversationMode(){
     const track=el('span',null,'interaction-track'),caption=el('span',null,'interaction-caption');track.setAttribute('aria-hidden','true');
     choice.onchange=()=>guard(async()=>{try{await call('chat.modes',{id:chatId,interactionMode:choice.checked?'agent':'chat'});$('composer-menu').hidden=true;await refresh();updateControls();renderAssets();renderPinnedTasks();}catch(error){updateControls();throw error;}});
     selector.append(choice,track,caption);
-    $('plus').before(selector);
+    const housing=el('span',null,'interaction-controls');
+    $('plus').before(housing);housing.append(selector,$('plus'));
   }
   const choice=selector.querySelector('input');choice.checked=!isChatMode();choice.disabled=!chatId||!!selectedChild||running.has(chatId);
   selector.querySelector('.interaction-caption').textContent=isChatMode()?'💬 Chat':'⚙ Agent';
+  $('thinking').value=isChatMode()?'none':snapshot?.state.thinkingLevel||'auto';
+  $('thinking').disabled=isChatMode()||running.has(chatId);
+  $('thinking').title=isChatMode()?L('Le raisonnement est désactivé en mode Chat.','Reasoning is disabled in Chat mode.'):'';
 }

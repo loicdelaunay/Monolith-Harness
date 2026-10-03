@@ -7,7 +7,7 @@ function applyAppearance(){
   }
   const expanded=config.ComposerInfoExpanded!==false;
   $('info-toggle').setAttribute('aria-expanded',String(expanded));
-  $('info-heading').textContent=(expanded?'⌄  ':'›  ')+L('Modèle, débit et contexte','Model, speed and context');
+  refreshInfoHeading();
   $('collapsed-metrics').hidden=expanded;
   renderCollapsedMetrics();
   document.querySelector('.metrics').hidden=!expanded;
@@ -34,6 +34,7 @@ function renderCollapsedMetrics(){
   $('collapsed-context-ring').style.setProperty('--context-angle',`${percent*3.6}deg`);
   $('collapsed-context').textContent=value?`${value.estimated?'≈ ':''}${percent.toFixed(1)} %`:'— %';
   $('collapsed-speed').textContent='⚡ '+$('speed').textContent;
+  refreshInfoHeading();
   $('info-toggle').title=L('Contexte : ','Context: ')+$('context').textContent+' · '+$('speed').textContent;
 }
 
@@ -59,4 +60,11 @@ async function mcpJsonEditor(){
   });
   button(area,L('Recharger le fichier','Reload file'),mcpJsonEditor);
   button(area,L('Retour','Back'),renderSettings);
+}
+
+function refreshInfoHeading(){
+  const heading=$('info-heading');if(!heading)return;
+  const prefix=$('info-toggle').getAttribute('aria-expanded')==='true'?'⌄  ':'›  ';
+  heading.textContent=prefix+L('Plus d’information','More information');
+  heading.title=snapshot?.providers.find(x=>x.id===providerId)?.model||'';
 }

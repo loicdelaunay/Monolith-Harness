@@ -150,7 +150,10 @@ public sealed partial class MainWindow
         selectedThinking.Text = thinkingSelector.SelectedItem?.ToString() ?? "🧠 Auto";
         modelPickerProvider.Text = choice?.ProviderName ?? WorkflowText("Aucun modèle sélectionné", "No model selected");
         ToolTipService.SetToolTip(modelPickerProvider, modelPickerProvider.Text);
-        thinkingDescription.Text = thinkingSelector.SelectedIndex switch
+        RefreshInfoHeading();
+        thinkingDescription.Text = ChatInteraction
+            ? WorkflowText("Le mode Chat désactive le raisonnement. Choisissez un modèle qui permet sa désactivation.", "Chat mode disables reasoning. Choose a model that supports disabling it.")
+            : thinkingSelector.SelectedIndex switch
         {
             1 => WorkflowText("Demande une réflexion courte pour privilégier la rapidité.", "Requests brief thinking to favor speed."),
             2 => WorkflowText("Demande un équilibre entre réflexion et rapidité.", "Requests a balance between thinking and speed."),

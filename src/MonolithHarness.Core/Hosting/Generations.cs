@@ -132,7 +132,7 @@ public sealed partial class HarnessService
                 var completion = provider.IsOpenCode
                     ? await OpenCode(run, secret, history, system, Update, ct)
                     : await engine.StreamAsync(provider, secret, wire, definitions, Update, ct, options.ThinkingLevel, FeatureSettings.Read(options.FeaturesJson), progress =>
-                        emit(new { @event = "status", chatId = chat.Id, text = progress.Caption(options.Language, 0), contextPreload = progress }).GetAwaiter().GetResult());
+                        emit(new { @event = "status", chatId = chat.Id, text = progress.Caption(options.Language, 0), contextPreload = progress }).GetAwaiter().GetResult(), requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode));
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 lastUpdate = DateTime.MinValue;
                 Update(new GenerationUpdate(active.Content, completion.Message["reasoning_content"]?.GetValue<string>() ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens });

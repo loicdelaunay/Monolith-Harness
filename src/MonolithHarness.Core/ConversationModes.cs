@@ -6,6 +6,7 @@ public static class ConversationModes
 {
     public static string Normalize(string? mode) => mode == "chat" ? "chat" : "agent";
     public static bool IsChat(string? mode) => Normalize(mode) == "chat";
+    public static string EffectiveThinking(Chat? chat, string? level) => IsChat(chat?.InteractionMode) ? "none" : level ?? "auto";
     public static string EffectiveSkills(Chat chat, string enabledSkills, bool nativeOpenCode = false) => !IsChat(chat.InteractionMode) ? enabledSkills :
         string.Join(',', new[] { chat.ChatWebEnabled ? "web" : "", chat.ChatPythonEnabled && !nativeOpenCode ? "python" : "", VisionBridge.Enabled(enabledSkills) ? "vision_bridge" : "" }.Where(x => x.Length > 0));
     public static bool ToolAllowed(Chat chat, string tool) =>
@@ -19,7 +20,7 @@ public static class ConversationModes
     }
     public static string ChatPrompt(string language, Chat chat, bool nativeOpenCode = false, bool nativeToolsEnabled = true) =>
         "You are a conversational assistant. Answer questions, explain, draft and analyze the text and attachments supplied by the user. " +
-        "CHAT MODE: Only explicitly enabled web research and Python skills are available. No project-folder tools, terminal, browser control, Git, MCP, memory tools or agents. " +
+        "CHAT MODE: Answer directly without extended reasoning. Only explicitly enabled web research and Python skills are available. No project-folder tools, terminal, browser control, Git, MCP, memory tools or agents. " +
         (chat.ChatWebEnabled && (!nativeOpenCode || nativeToolsEnabled) ? nativeOpenCode ? "Web research is available through webfetch and websearch when supported by the server. Cite fetched URLs and read only the information needed. " : WebHttpTools.Instructions + " " : "Web research is disabled. ") +
         (chat.ChatPythonEnabled && !nativeOpenCode ? Skills.All.Single(x => x.Id == "python").Instruction + " No project folders are attached. Omit working_directory to use this conversation's scripts directory. " : "Python execution is disabled. ") +
         "Never claim to have performed an action without a successful tool result. Ask clarifying questions in your response when needed. " +

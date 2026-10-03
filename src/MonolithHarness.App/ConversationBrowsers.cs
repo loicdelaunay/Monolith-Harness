@@ -12,6 +12,8 @@ public sealed partial class MainWindow
         public int Id { get; } = id;
         public string TabId { get; } = tabId;
         public Microsoft.UI.Xaml.Controls.WebView2 View { get; } = new();
+        public ScrollViewer Frame { get; } = new() { VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        public string ViewportMode = "desktop";
 #if !WINDOWS
         public LocalPreviewServer? PreviewServer;
 #endif
@@ -43,7 +45,8 @@ public sealed partial class MainWindow
         if (!conversationBrowsers.TryGetValue((chatId, tabId), out var value))
         {
             value = new(chatId, tabId); conversationBrowsers.Add((chatId, tabId), value);
-            backgroundBrowsers.Children.Add(value.View);
+            value.Frame.Content = value.View;
+            ApplyBrowserViewport(value); backgroundBrowsers.Children.Add(value.Frame);
             value.View.PointerMoved += (_, e) => { var p = e.GetCurrentPoint(value.View).Position; value.PointerX = p.X; value.PointerY = p.Y; };
             SyncBrowserPresentation();
         }
@@ -117,11 +120,12 @@ public sealed partial class MainWindow
         foreach (var item in conversationBrowsers.Values)
         {
             var destination = item.Id == shownId && item.TabId == selected && item.Ready && browserVisible && toolTabs.SelectedIndex == 0 ? browserHost : backgroundBrowsers;
-            if (item.View.Parent == destination) continue;
-            (item.View.Parent as Panel)?.Children.Remove(item.View);
-            destination.Children.Add(item.View);
+            if (item.Frame.Parent == destination) continue;
+            (item.Frame.Parent as Panel)?.Children.Remove(item.Frame);
+            destination.Children.Add(item.Frame);
         }
         address.Text = conversationBrowsers.TryGetValue((shownId, selected), out var current) ? current.Address : "about:blank";
+        RefreshBrowserViewportSelector(current?.ViewportMode ?? "desktop");
         if (current?.Ready == true) browserHost.Children.Remove(browserNotice);
         else if (browserVisible && toolTabs.SelectedIndex == 0) ShowBrowserNotice();
         SyncWebTabs();
@@ -129,7 +133,7 @@ public sealed partial class MainWindow
     void DisposeBrowser(ConversationBrowser item)
     {
         item.Closed = true; item.Ready = false;
-        try { (item.View.Parent as Panel)?.Children.Remove(item.View);
+        try { (item.Frame.Parent as Panel)?.Children.Remove(item.Frame);
 #if WINDOWS
             item.View.Close();
 #else

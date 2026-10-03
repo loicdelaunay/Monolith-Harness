@@ -7,16 +7,31 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly ToggleSwitch conversationModeSwitch = new() { IsOn = true, FontSize = 12, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
+    readonly ToggleSwitch conversationModeSwitch = new() { IsOn = true, FontSize = 11, MinWidth = 0, MinHeight = 0, Height = 28, Padding = new(0), VerticalAlignment = VerticalAlignment.Center };
     bool updatingConversationMode;
     bool ChatInteraction => ConversationModes.IsChat(chat?.InteractionMode);
 
-    FrameworkElement BuildConversationModeSelector()
+    FrameworkElement BuildConversationModeSelector(Button configureButton)
     {
+        // The default template reserves 10 px above and below its 20 px track.
+        // Match those insets to this compact control's height, including text zoom.
+        void CenterSwitchTrack()
+        {
+            var inset = Math.Max(0, (conversationModeSwitch.Height - 20) / 2);
+            conversationModeSwitch.Resources["ToggleSwitchPreContentMargin"] = inset;
+            conversationModeSwitch.Resources["ToggleSwitchPostContentMargin"] = inset;
+        }
+        CenterSwitchTrack();
+        conversationModeSwitch.RegisterPropertyChangedCallback(FrameworkElement.HeightProperty, (_, _) => CenterSwitchTrack());
+        conversationModeSwitch.VerticalContentAlignment = VerticalAlignment.Center;
+        configureButton.VerticalAlignment = VerticalAlignment.Center;
+        configureButton.VerticalContentAlignment = VerticalAlignment.Center;
+        configureButton.HorizontalContentAlignment = HorizontalAlignment.Center;
         FrameworkElement Caption(string name, string glyph)
         {
-            var label = new TextBlock { Text = name, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var row = Row(FluentDesign.Icon(glyph, 14), label); row.Spacing = 5; return row;
+            var label = new TextBlock { Text = name, FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var icon = FluentDesign.Icon(glyph, 12); icon.VerticalAlignment = VerticalAlignment.Center;
+            var row = Row(icon, label); row.Spacing = 4; row.VerticalAlignment = VerticalAlignment.Center; return row;
         }
         conversationModeSwitch.OffContent = Caption("Chat", "\uE8BD");
         conversationModeSwitch.OnContent = Caption("Agent", "\uE713");
@@ -26,8 +41,9 @@ public sealed partial class MainWindow
             await Guard(() => ChangeConversationModeAsync(conversationModeSwitch.IsOn ? "agent" : "chat"));
         };
         RefreshConversationMode();
-        return new Border { Child = conversationModeSwitch, CornerRadius = new(19), BorderThickness = new(1),
-            BorderBrush = FluentDesign.Stroke, Background = FluentDesign.Card, Padding = new(10, 1, 10, 1), MinHeight = 38 };
+        var controls = Row(conversationModeSwitch, configureButton); controls.Spacing = 4; controls.VerticalAlignment = VerticalAlignment.Center;
+        return new Border { Child = controls, CornerRadius = new(17), BorderThickness = new(1),
+            BorderBrush = FluentDesign.Stroke, Background = FluentDesign.Card, Padding = new(8, 1, 3, 1), MinHeight = 32 };
     }
     void RefreshConversationMode()
     {
@@ -39,6 +55,13 @@ public sealed partial class MainWindow
             ? WorkflowText("Chat · discussion, recherche web et Python dans les réglages du chat", "Chat · conversation, web research and Python in chat settings")
             : WorkflowText("Agent · outils, plan et sous-agents selon vos réglages", "Agent · tools, planning and subagents according to your settings"));
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(conversationModeSwitch, WorkflowText("Chat / Agent", "Chat / Agent"));
+        if (thinkingSelector.Items.Count > 0)
+        {
+            var index = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel).ToLowerInvariant() switch
+            { "low" => 1, "medium" => 2, "high" => 3, "none" => 4, _ => 0 };
+            if (thinkingSelector.SelectedIndex != index) PopulateThinkingSelector();
+            else thinkingSelector.IsEnabled = !ChatInteraction && ActiveRun == null;
+        }
     }
     bool NativeChatProvider => provider?.IsOpenCode == true || provider?.IsComposite == true &&
         db.Providers.Local.Any(x => x.Id == CompositeModel.Read(provider.CompositeJson).Orchestrator.ProviderId && x.IsOpenCode);

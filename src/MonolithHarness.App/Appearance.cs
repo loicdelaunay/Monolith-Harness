@@ -48,13 +48,19 @@ public sealed partial class MainWindow
     {
         bool expanded = composerInfoExpanded;
         floatingInfoBar.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        infoHeading.Text = (expanded ? "⌄  " : "›  ") + WorkflowText("Modèle, débit et contexte", "Model, speed and context");
+        RefreshInfoHeading();
         collapsedMetrics.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
         RefreshCollapsedMetrics();
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(infoToggle, WorkflowText("Afficher les informations du modèle", "Show model information"));
     }
+    void RefreshInfoHeading()
+    {
+        infoHeading.Text = (composerInfoExpanded ? "⌄  " : "›  ") + WorkflowText("Plus d’information", "More information");
+        ToolTipService.SetToolTip(infoHeading, ActiveRun?.Provider.Model ?? provider?.Model ?? "");
+    }
     void RefreshCollapsedMetrics()
     {
+        RefreshInfoHeading();
         collapsedContextRing.Update(contextBar.Value / 100d);
         collapsedContextText.Text = contextPercentText.Text;
         collapsedSpeedText.Text = speedValueText.Text;
@@ -70,6 +76,7 @@ public sealed partial class MainWindow
         var header = new Grid { ColumnSpacing = 10 };
         header.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        infoHeading.TextWrapping = TextWrapping.NoWrap;
         infoHeading.TextTrimming = TextTrimming.CharacterEllipsis;
         infoHeading.VerticalAlignment = VerticalAlignment.Center;
         header.Children.Add(infoHeading);

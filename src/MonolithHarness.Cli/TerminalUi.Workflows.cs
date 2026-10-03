@@ -133,6 +133,7 @@ public sealed partial class TerminalUi
         if (action == "logs") await LogSettings(snapshot);
         if (action == "continue") await client.State(s => s.AutoContinue = !s.AutoContinue);
         if (action == "language") { var value = await Prompt("Language", choices: [new("fr", "Français"), new("en", "English")]); if (value != null) await client.State(s => s.Language = value); }
+        if (action == "thinking" && ConversationModes.IsChat(CurrentChat?.InteractionMode)) { Post(() => notice = L("Chat : raisonnement désactivé", "Chat: reasoning disabled")); return; }
         if (action == "thinking") { var value = await Prompt("Thinking", choices: new[] { "auto", "low", "medium", "high", "none" }.Select(s => new Choice(s, s)).ToList()); if (value != null) await client.State(s => s.ThinkingLevel = value); }
         if (action == "theme") await ChooseCliTheme(snapshot);
         if (action == "permissions")

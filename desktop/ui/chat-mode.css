@@ -16,3 +16,19 @@
 .collapsed-context-ring{width:16px;height:16px;border-radius:50%;background:conic-gradient(var(--accent) var(--context-angle,0deg),var(--line) 0);position:relative}
 .collapsed-context-ring:after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--background)}
 #collapsed-context{color:var(--accent-text,var(--accent))}
+
+.interaction-controls{display:inline-flex;align-items:center;gap:3px;padding:2px 3px 2px 7px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}
+.interaction-controls .interaction-switch{border:0;background:transparent;padding:1px 0;gap:5px;font-size:11px}
+.interaction-controls #plus{width:28px;height:28px;min-width:0;min-height:0;padding:0;margin:0;border:0;background:transparent;font-size:16px;border-radius:50%}
+.interaction-controls #plus:hover{background:var(--background)}
+#info-heading{flex:1}
+
+#tools>header{gap:4px;align-items:center}
+#tools>header #tool-tabs{flex:1;min-width:0;display:flex;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;margin:0}
+#tools>header #tools-full,#tools>header #tools-close{flex:none;width:32px;min-height:32px;padding:0}
+#tools .browser-controls,#tools .tool-toolbar,#tools .terminal-toolbar{display:flex;align-items:center;flex-wrap:nowrap;gap:4px;white-space:nowrap;min-height:34px}
+#tools .browser-controls input{flex:1;min-width:0}
+#tools .browser-controls button,#tools .tool-toolbar button,#tools .terminal-toolbar>button{flex:none;min-width:32px;padding:4px 7px}
+#web-display{flex:none;max-width:122px;padding:5px;font-size:12px}
+#git-summary{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;font-size:12px}
+#terminal-tabs{flex:1;min-width:0;overflow-x:auto;white-space:nowrap}

@@ -31,7 +31,7 @@ function createBrowser(win, chatId = 0) {
   const view = new WebContentsView({ webPreferences: { session: webSession, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
   // Keep background render surfaces alive underneath the opaque application UI.
   win.contentView.addChildView(view,0); view.setBounds({x:0,y:0,width:1024,height:768}); view.setVisible(true);
-  let visible=false;
+  let visible=false, viewportMode="desktop", displayBounds={x:0,y:0,width:1024,height:768};
   const wc = view.webContents;
   wc.on('render-process-gone',(_,details)=>{if(!win.isDestroyed())win.webContents.send('harness:event',{event:'browser-error',chatId,error:'Browser stopped: '+details.reason});});
   wc.setWindowOpenHandler(({ url }) => { if (allowedNavigation(url)) wc.loadURL(url).catch(() => {}); return { action:'deny' }; });
@@ -99,14 +99,24 @@ function createBrowser(win, chatId = 0) {
       case 'browser.bounds': {
         const [width,height]=win.getContentSize();
         const x=Math.max(0,Math.min(width,Math.round(p.x||0))), y=Math.max(0,Math.min(height,Math.round(p.y||0)));
-        view.setBounds({x,y,width:Math.max(0,Math.min(width-x,Math.round(p.width||0))),height:Math.max(0,Math.min(height-y,Math.round(p.height||0)))});
+        displayBounds={...p,x,y};
+        const available=Math.max(0,Math.min(width-x,Math.round(p.width||0))), paneHeight=Math.max(0,Math.min(height-y,Math.round(p.height||0)));
+        const pageWidth=viewportMode==='mobile'?Math.min(390,available):available;
+        view.setBounds({x:x+Math.floor((available-pageWidth)/2),y,width:pageWidth,height:paneHeight});
         if(p.visible&&!visible){win.contentView.removeChildView(view);win.contentView.addChildView(view);visible=true;}
         return true;
       }
       case 'browser.navigate': case 'browse': return navigate(p.url);
       case 'browser.back': if(wc.navigationHistory.canGoBack())wc.navigationHistory.goBack(); return true;
       case 'browser.reload': wc.reload(); return true;
-      case 'browser.state': return {url:wc.getURL(),origin:new URL(wc.getURL() || 'about:blank').origin};
+      case 'browser.state': return {url:wc.getURL(),origin:new URL(wc.getURL() || 'about:blank').origin,viewportMode};
+      case 'browser_viewport': {
+        if(!['desktop','mobile'].includes(p.mode))throw new Error('mode must be desktop or mobile');
+        viewportMode=p.mode;await execute('browser.bounds',displayBounds);
+        win.webContents.send('harness:event',{event:'browser-viewport',chatId,mode:viewportMode});
+        await new Promise(resolve=>setTimeout(resolve,80));
+        return {mode:viewportMode,viewport:await evaluate(()=>({width:innerWidth,height:innerHeight,device_pixel_ratio:devicePixelRatio})),responsive_preview:true,device_emulation:false};
+      }
       case 'browser.local': {
         const id=randomUUID(); local.set(id,p.folder); return navigate(`omh-preview://${id}/${encodeURIComponent(path.basename(p.path))}`);
       }

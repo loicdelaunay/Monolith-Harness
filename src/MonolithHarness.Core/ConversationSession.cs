@@ -65,7 +65,7 @@ public class ConversationSession : IDisposable
         }
         OpenCodeProject = Provider.IsOpenCode && ConversationModes.IsChat(Chat.InteractionMode)
             ? ProjectResources.Effective(chat, project, databasePath) : Project;
-        Options = new AppState { FeaturesJson = options.FeaturesJson, Language = options.Language, EnabledSkills = options.EnabledSkills, ThinkingLevel = options.ThinkingLevel, AutoContinue = options.AutoContinue };
+        Options = new AppState { FeaturesJson = options.FeaturesJson, Language = options.Language, EnabledSkills = options.EnabledSkills, ThinkingLevel = ConversationModes.EffectiveThinking(Chat, options.ThinkingLevel), AutoContinue = options.AutoContinue };
         Options.EnabledSkills = ConversationModes.EffectiveSkills(Chat, options.EnabledSkills, Provider.IsOpenCode);
         Prompt = prompt;
         Images = images.Select(x => new Attachment { Name = x.Name, Mime = x.Mime, Data = [.. x.Data] }).ToList();

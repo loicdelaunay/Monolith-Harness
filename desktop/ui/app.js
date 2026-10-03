@@ -72,11 +72,12 @@ function translate(){
   $('export-chat').textContent=L('Exporter','Export');
   document.documentElement.lang=snapshot.state.language;
   $('new-chat').textContent=L('＋ Nouvelle conversation','＋ New conversation');$('settings-open').textContent=L('⚙ Réglages','⚙ Settings');
-  $('tools-toggle').textContent=L('▤ Outils','▤ Tools');$('tools-title').textContent=L('Outils','Tools');$('composer').placeholder=L('Posez une question…','Ask a question…');
+  $('tools-toggle').textContent=L('▤ Outils','▤ Tools');$('composer').placeholder=L('Posez une question…','Ask a question…');
   $('shortcut').textContent=L('Entrée ↵ · Ctrl+Entrée : nouvelle ligne','Enter ↵ · Ctrl+Enter: new line');
-  $('terminal-run').textContent=L('Exécuter','Run');$('git-refresh').textContent=L('Actualiser','Refresh');
+  $('terminal-run').textContent='▶';$('terminal-run').title=L('Exécuter','Run');$('terminal-run').setAttribute('aria-label',$('terminal-run').title);
+  $('git-refresh').textContent='↻';$('git-refresh').title=L('Actualiser','Refresh');$('git-refresh').setAttribute('aria-label',$('git-refresh').title);
   $('shell-info').textContent=snapshot.shell+' · '+L('Dossier du projet · nouvelle session','Project directory · fresh session');
-  $('file-preview').textContent=L('Ouvrir dans Web','Open in browser');
+  $('file-preview').textContent='🌐';$('file-preview').title=L('Ouvrir dans Web','Open in browser');$('file-preview').setAttribute('aria-label',$('file-preview').title);
   const settingNames={general:L('Général','General'),providers:L('Fournisseurs','Providers'),skills:'Skills',mcp:'MCP',permissions:L('Autorisations','Permissions'),templates:'Templates',browser:L('Navigateur','Browser'),rag:'RAG'};
   document.querySelectorAll('[data-settings]').forEach(button=>button.textContent=settingNames[button.dataset.settings]);
   document.querySelector('[data-tab="files"]').textContent=L('Fichiers','Files');
@@ -108,7 +109,7 @@ async function selectChat(id){
   gitRevision++;fileRevision++;fileSelected='';$('git-files').replaceChildren();$('git-diff').replaceChildren();$('git-summary').textContent='';
   $('file-list').replaceChildren();$('file-content').textContent='';$('file-preview').hidden=true;$('file-path').value='.';
   $('address').value='about:blank';
-  api.host('browser.select',{chatId:id}).then(state=>{if(chatId===id){$('address').value=state.url||'about:blank';updateBrowserBounds();}}).catch(error=>status(error.message,true));
+  api.host('browser.select',{chatId:id}).then(state=>{if(chatId===id){$('address').value=state.url||'about:blank';$('web-display').value=state.viewportMode||'desktop';updateBrowserBounds();}}).catch(error=>status(error.message,true));
   $('chat-title').textContent=snapshot.chats.find(x=>x.id===id)?.title||L('Créez une conversation','Create a conversation');
   $('composer').value=currentDraft().text;renderAssets();renderChats();updateControls();renderMetrics();await refreshInbox();
   status(statuses.get(id)||'');
@@ -177,6 +178,7 @@ async function send(){
 }
 api.onEvent(event=>{
   if(event.event==='tool-focus'){if(event.chatId===chatId&&!selectedChild)focusLatestTool(event.name);return;}
+  if(event.event==='browser-viewport'){if(event.chatId===chatId){$('web-display').value=event.mode;updateBrowserBounds();}return;}
   if(event.event==='started'){running.add(event.chatId);renderChats();updateControls();return;}
   if(event.event==='inbox'){inboxes.set(event.chatId,event.items);if(chatId===event.chatId)renderInbox();return;}
   if(event.event==='subagent'){subagents.set(event.child.id,event.child);renderChats();if(event.chatId===chatId){if(selectedChild===event.child.id)renderChild();else if(!selectedChild){renderChildBubbles();followMessages();}}return;}
@@ -197,7 +199,7 @@ $('send').onclick=()=>guard(send);$('stop').onclick=()=>guard(()=>call('stop',{c
 $('composer').oninput=saveDraft;$('composer').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();if(e.ctrlKey){const t=e.target;t.setRangeText('\n',t.selectionStart,t.selectionEnd,'end');saveDraft();}else guard(send);}};
 $('projects').onchange=()=>guard(async()=>{saveDraft();projectId=Number($('projects').value);gitRevision++;$('git-files').replaceChildren();$('git-diff').replaceChildren();if(tab==='git')await refreshGit();renderChats();await selectChat(snapshot.chats.find(x=>x.projectId===projectId)?.id);});
 $('providers').onchange=()=>guard(async()=>{providerId=Number($('providers').value);await call('state.save',{providerId});});
-$('thinking').onchange=()=>guard(()=>call('state.save',{thinkingLevel:$('thinking').value}));
+$('thinking').onchange=()=>{if(!isChatMode())guard(()=>call('state.save',{thinkingLevel:$('thinking').value}));};
 $('new-chat').onclick=()=>guard(async()=>{const result=await call('chat.save',{projectId,title:L('Nouvelle conversation','New conversation')});await refresh();await selectChat(result.id);});
 $('rename-chat').onclick=()=>{$('new-name').value=snapshot.chats.find(x=>x.id===chatId)?.title||'';showDialog('name-dialog');};
 $('name-form').onsubmit=e=>{e.preventDefault();guard(async()=>{await call('chat.save',{id:chatId,title:$('new-name').value});$('name-dialog').close();await refresh();$('chat-title').textContent=$('new-name').value;});};
@@ -258,6 +260,7 @@ document.querySelectorAll('[data-tab]').forEach(button=>button.onclick=()=>selec
 function updateBrowserBounds(){if(!chatId)return;const r=$('browser-surface').getBoundingClientRect();api.host('browser.bounds',{chatId,x:r.x,y:r.y,width:r.width,height:r.height,visible:featureConfig().BrowserMode==='embedded'&&!$('tools').hidden&&tab==='web'&&!document.querySelector('dialog[open]')}).catch(()=>{});}
 new ResizeObserver(updateBrowserBounds).observe($('browser-surface'));window.addEventListener('resize',updateBrowserBounds);
 $('web-go').onclick=()=>guard(async()=>{if(featureConfig().BrowserMode!=='embedded')throw new Error(L('Utilisez les outils Chrome MCP dans le chat.','Use Chrome MCP tools in chat.'));await api.host('browser.navigate',{chatId,url:$('address').value});updateBrowserBounds();});$('address').onkeydown=e=>{if(e.key==='Enter')$('web-go').click();};$('web-back').onclick=()=>guard(()=>api.host('browser.back',{chatId}));
+$('web-display').onchange=()=>guard(async()=>{await api.host('browser_viewport',{chatId,mode:$('web-display').value});updateBrowserBounds();});
 $('web-file').onclick=()=>guard(async()=>{const id=chatId;const files=await api.host('pick.file');if(files[0])await call('preview',{chatId:id,path:files[0]});});
 
 let terminalRows=[],terminalScope=null,terminalSelected=null,terminalPolling=false,terminalTabSignature='';
@@ -270,7 +273,7 @@ function renderTerminalTabs(){
   $('shell-info').textContent=selected?selected.shell+' · '+selected.status+'\n'+selected.directory:L('Cliquez sur + pour ouvrir un terminal dans cette conversation.','Click + to open a terminal in this conversation.');
   const output=selected?'> '+selected.command+'\n'+selected.output:'';if($('terminal-output').textContent!==output)$('terminal-output').textContent=output;
   $('terminal-run').disabled=!selected||selected.status==='running'||selected.sandbox;$('terminal-stop').disabled=selected?.status!=='running';$('command').disabled=!selected||selected.sandbox;
-  $('terminal-add').disabled=!chatId;$('terminal-stop').textContent=L('Arrêter','Stop');
+  $('terminal-add').disabled=!chatId;$('terminal-stop').textContent='■';$('terminal-stop').title=L('Arrêter','Stop');$('terminal-stop').setAttribute('aria-label',$('terminal-stop').title);
 }
 async function refreshTerminals(){
   const id=chatId;

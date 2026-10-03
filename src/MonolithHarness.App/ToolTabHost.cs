@@ -6,6 +6,7 @@ namespace MonolithHarness.App;
 /// <summary>Only the selected tool page is kept visible, including its native WebView.</summary>
 internal sealed class ToolTabHost : Grid
 {
+    readonly Grid headerBar = new() { ColumnSpacing = 6 };
     readonly StackPanel headers = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     readonly List<(TextBlock Label, Border Indicator, FrameworkElement Page)> tabs = [];
     int selectedIndex;
@@ -31,7 +32,15 @@ internal sealed class ToolTabHost : Grid
         var headerScroll = new ScrollViewer { Content = headers,
             HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
             VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Children.Add(headerScroll);
+        headerBar.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        headerBar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        headerBar.Children.Add(headerScroll); Children.Add(headerBar);
+        RowSpacing = 6;
+    }
+
+    public void SetHeaderActions(FrameworkElement actions)
+    {
+        actions.VerticalAlignment = VerticalAlignment.Center; SetColumn(actions, 1); headerBar.Children.Add(actions);
     }
 
     public void AddTab(string title, FrameworkElement page)
