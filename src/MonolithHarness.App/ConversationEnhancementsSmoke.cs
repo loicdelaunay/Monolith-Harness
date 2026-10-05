@@ -50,8 +50,12 @@ public sealed partial class MainWindow
             Microsoft.UI.Xaml.Documents.Span span => string.Concat(span.Inlines.Select(InlineText)),
             _ => ""
         };
-        static string DisplayedText(StackPanel panel) => string.Concat(panel.Children.OfType<TextBlock>()
-            .Select(block => block.Text + string.Concat(block.Inlines.Select(InlineText))));
+        static string DisplayedText(UIElement element) => element switch
+        {
+            TextBlock block => block.Text + string.Concat(block.Inlines.Select(InlineText)),
+            Panel panel => string.Concat(panel.Children.Select(DisplayedText)),
+            _ => ""
+        };
         var first = assistant.BodyContainer.Children[0];
         var oldLast = assistant.BodyContainer.Children[^1];
         var pausedText = DisplayedText(assistant.BodyContainer);
