@@ -44,13 +44,22 @@ public sealed partial class MainWindow
         if (queueCard.Child is not Grid grid || grid.ColumnDefinitions.Count != 3 || grid.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Count() != 5) throw new Exception("Queue actions are not five inline buttons.");
         AddMessage("user", "Je lis le début de la réponse pendant que l’agent continue.", [], messages);
         var assistant = AddAssistantMessage("## Résultat\n\nPremier paragraphe terminé.\n\nRéponse en cours", target: messages);
+        static string InlineText(Microsoft.UI.Xaml.Documents.Inline inline) => inline switch
+        {
+            Microsoft.UI.Xaml.Documents.Run run => run.Text,
+            Microsoft.UI.Xaml.Documents.Span span => string.Concat(span.Inlines.Select(InlineText)),
+            _ => ""
+        };
+        static string DisplayedText(StackPanel panel) => string.Concat(panel.Children.OfType<TextBlock>()
+            .Select(block => block.Text + string.Concat(block.Inlines.Select(InlineText))));
         var first = assistant.BodyContainer.Children[0];
         var oldLast = assistant.BodyContainer.Children[^1];
+        var pausedText = DisplayedText(assistant.BodyContainer);
         SetChatFollow(false);
         assistant.UpdateContent("## Résultat\n\nPremier paragraphe terminé.\n\nRéponse en cours, nouveau texte", streaming: true);
-        if (!ReferenceEquals(first, assistant.BodyContainer.Children[0]) || !ReferenceEquals(oldLast, assistant.BodyContainer.Children[^1])) throw new Exception("Streaming repainted paused reading content.");
+        if (!ReferenceEquals(first, assistant.BodyContainer.Children[0]) || !ReferenceEquals(oldLast, assistant.BodyContainer.Children[^1]) || DisplayedText(assistant.BodyContainer) != pausedText) throw new Exception("Streaming repainted paused reading content.");
         SetChatFollow(true);
-        if (!ReferenceEquals(first, assistant.BodyContainer.Children[0]) || ReferenceEquals(oldLast, assistant.BodyContainer.Children[^1])) throw new Exception("Resuming did not preserve stable blocks and flush the latest text.");
+        if (!ReferenceEquals(first, assistant.BodyContainer.Children[0]) || !DisplayedText(assistant.BodyContainer).Contains("nouveau texte")) throw new Exception("Resuming did not preserve stable blocks and flush the latest text.");
         assistant.SetDuration(73.2);
         if (!assistant.Duration.Text.Contains("1 min")) throw new Exception("Duration missing from response footer.");
         if (assistant.Duration.Visibility != Visibility.Visible || assistant.Duration.Opacity != 0) throw new Exception("Response duration should reserve its space but remain hidden until hover.");
