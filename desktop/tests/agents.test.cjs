@@ -34,7 +34,12 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
     else if(scenario==='forced'&&body.messages[0].content.includes('Evaluate the request and plan concrete independent subtasks.'))delta={content:JSON.stringify({tasks:[{name:'Exploration',prompt:'Inspect project conventions'},{name:'Validation',prompt:'Review project sources'}]})};
     else if(scenario==='forced'&&isChild)delta=toolOrFinish();
     else if(scenario==='execute'&&!previous.length)delta=tool('write_source',{path:'allowed.md',content:'written'});
-    function toolOrFinish(){return previous.length?{content:'Child verified sources'}:tool('read_source',{path:'AGENTS.md'});}
+    function toolOrFinish(){
+      if(previous.length===0)return tool('todowrite',{todos:[{content:'Inspect project conventions',status:'in_progress'}]});
+      if(previous.length===1)return tool('read_source',{path:'AGENTS.md'});
+      if(previous.length===2){assert.ok(previous[1].content.includes('PROJECT-CONVENTION-TEST'));return tool('todowrite',{todos:[{content:'Inspect project conventions',status:'completed'}]});}
+      return {content:'Child verified sources'};
+    }
     res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta}]})+'\n\ndata: [DONE]\n\n');
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -50,10 +55,10 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
   assert.ok(!payloads[0].tools.some(x=>['write_source','run_terminal','delegate_tasks'].includes(x.function.name)));
   assert.ok(!payloads[0].messages[0].content.includes('# Exemple de skill personnalisable'));
   scenario='skill';const skill=await run('plan','disabled');assert.ok(skill.some(x=>x.role==='tool'&&x.content.includes('# Exemple de skill personnalisable')));assert.ok(skill.some(x=>x.role==='tool'&&x.content.includes('# Checklist')));
-  scenario='auto';const auto=await run('plan','auto');assert.equal(childCalls,2);assert.ok(auto.some(x=>x.role==='tool'&&x.content.includes('Child verified sources')));
+  scenario='auto';const auto=await run('plan','auto');assert.equal(childCalls,4);assert.ok(auto.some(x=>x.role==='tool'&&x.content.includes('Child verified sources')));
   scenario='disabled';await run('execute','disabled');assert.equal(childCalls,0);
-  scenario='forced';const forced=await run('plan','forced');assert.equal(childCalls,4);assert.equal(rootCalls,2);assert.ok(forced.some(x=>x.content.includes('Sous-agents / Subagents')&&x.content.includes('Exploration')));
+  scenario='forced';const forced=await run('plan','forced');assert.equal(childCalls,8);assert.equal(rootCalls,2);assert.ok(forced.some(x=>x.content.includes('Sous-agents / Subagents')&&x.content.includes('Exploration')));
   scenario='execute';await run('execute','disabled');assert.equal(await fs.readFile(path.join(directory,'allowed.md'),'utf8'),'written');
   assert.ok(events.some(x=>x.event==='status'&&x.text.includes('Subagent')));
-  const snap=await rpc('snapshot');assert.ok(snap.skills.some(x=>x.id==='custom:exemple-revue'));assert.equal(snap.skillsDirectory,skillRoot);assert.equal(snap.running.length,0);
+  const snap=await rpc('snapshot');assert.ok(snap.skills.some(x=>x.id==='custom:exemple-revue'));assert.equal(snap.skillsDirectory,path.join(directory,'workspace','skills'));assert.equal(snap.running.length,0);
 });

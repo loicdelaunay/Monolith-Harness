@@ -275,5 +275,8 @@ test('desktop service: SQLite, providers, skills, permissions and simultaneous c
   const pythonChat=await rpc('chat.save',{projectId:project.id,title:'Python tools'});
   await rpc('send',{chatId:pythonChat.id,providerId:pythonProvider.id,text:'Create and execute a script'});
   assert.equal((await rpc('history',{chatId:pythonChat.id})).at(-1).content,'Bundled Python completed.');
-  assert.equal(await fs.readFile(path.join(directory,'scripts','python','chat-'+pythonChat.id,'api-test.py'),'utf8'),"print('python-api-ok')");
+  const pythonInfo=(await rpc('history',{chatId:pythonChat.id})).find(x=>x.role==='tool'&&x.content.startsWith('python_info\n')).content;
+  const scriptsDirectory=JSON.parse(pythonInfo.slice(pythonInfo.indexOf('\n')+1)).scripts_directory;
+  assert.equal(scriptsDirectory,path.join(directory,'workspace','scripts','python','chat-'+pythonChat.id));
+  assert.equal(await fs.readFile(path.join(scriptsDirectory,'api-test.py'),'utf8'),"print('python-api-ok')");
 });

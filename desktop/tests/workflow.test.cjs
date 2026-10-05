@@ -96,7 +96,7 @@ test('structured tasks, interactive questions, concurrent chats and loop decisio
   assert.equal((await rpc('snapshot')).chats.find(x=>x.id===sandboxChat.id).sandboxEnabled,true);
   let review=await rpc('sandbox.review',{chatId:sandboxChat.id});assert.equal(review.count,0);await rpc('sandbox.close',{token:review.token});
   const hash=require('node:crypto').createHash('sha256').update(path.join(dir,'database.sqlite')).digest('hex').toUpperCase().slice(0,16);
-  const sandboxRoot=path.join(dir,'sandboxes',hash,String(sandboxChat.id),'work',path.basename(dir));
+  const sandboxRoot=path.join(dir,'workspace','sandboxes',hash,String(sandboxChat.id),'work',path.basename(dir));
   await fs.writeFile(path.join(sandboxRoot,'read.txt'),'sandbox output');
   review=await rpc('sandbox.review',{chatId:sandboxChat.id});assert.equal(review.count,1);assert.ok(review.diff.includes('+sandbox output'));
   assert.equal(await fs.readFile(path.join(dir,'read.txt'),'utf8'),'test','review never writes original, even with global auto-approval');
