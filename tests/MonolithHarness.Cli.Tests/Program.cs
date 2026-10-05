@@ -10,6 +10,7 @@ using MonolithHarness.Core.Hosting;
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); Console.WriteLine("OK: " + name); passed++; }
+if (args.Contains("--connect")) { await ConnectChecks.Run(Check); Console.WriteLine($"{passed} connection checks passed."); return; }
 Check(Skills.All.Where(s => !CliClient.DesktopSkills.Contains(s.Id)).Any(s => s.Id == CompleteDesignSkill.Id),
     "Complete design remains available in the CLI skill picker");
 Check(CliClient.DesktopSkills.Contains(BrowserSkillAccess.Access) && CliClient.DesktopSkills.Contains(BrowserSkillAccess.Dom),

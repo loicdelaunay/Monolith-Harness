@@ -20,7 +20,7 @@ public class ConversationSession : IDisposable
     public async Task PrepareSandboxAsync(CancellationToken ct)
     {
         if (!Chat.SandboxEnabled) return;
-        if (Provider.IsOpenCode || AgentProviders.Values.Any(x=>x.IsOpenCode)) throw new InvalidOperationException("Sandbox : OpenCode n'est pas encore isolé. Choisissez un fournisseur OpenAI compatible ou DeepSeek pour l’orchestrateur et les sous-agents / OpenCode is not supported in sandbox mode.");
+        if (Provider.IsExternalAgent || AgentProviders.Values.Any(x=>x.IsExternalAgent)) throw new InvalidOperationException("Sandbox : les agents externes OpenCode / ACP ne sont pas encore isolés. Choisissez un fournisseur OpenAI compatible ou DeepSeek pour l’orchestrateur et les sous-agents / OpenCode is not supported in sandbox mode.");
         SandboxEngine = await SandboxContainer.CheckAsync(ct);
         Sandbox = await SandboxWorkspace.OpenAsync(Db.Database.GetDbConnection().DataSource, Chat.Id, Project.GetSourceFolders(), ct);
         Project.SetSourceFolders(Sandbox.WorkRoots);
@@ -65,8 +65,9 @@ public class ConversationSession : IDisposable
         }
         OpenCodeProject = Provider.IsOpenCode && ConversationModes.IsChat(Chat.InteractionMode)
             ? ProjectResources.Effective(chat, project, databasePath) : Project;
-        Options = new AppState { FeaturesJson = options.FeaturesJson, Language = options.Language, EnabledSkills = options.EnabledSkills, ThinkingLevel = ConversationModes.EffectiveThinking(Chat, options.ThinkingLevel), AutoContinue = options.AutoContinue };
-        Options.EnabledSkills = ConversationModes.EffectiveSkills(Chat, options.EnabledSkills, Provider.IsOpenCode);
+        if (Provider.IsAcp) { Chat.ChatWebEnabled = false; Chat.ChatPythonEnabled = false; }
+        Options = new AppState { FeaturesJson = options.FeaturesJson, Language = options.Language, EnabledSkills = options.EnabledSkills, ThinkingLevel = ConversationModes.EffectiveThinking(Chat, options.ThinkingLevel, options.ChatThinkingLevel), ChatThinkingLevel = options.ChatThinkingLevel, AutoContinue = options.AutoContinue, PermissionMode = options.PermissionMode };
+        Options.EnabledSkills = ConversationModes.EffectiveSkills(Chat, options.EnabledSkills, Provider.IsExternalAgent);
         Prompt = prompt;
         Images = images.Select(x => new Attachment { Name = x.Name, Mime = x.Mime, Data = [.. x.Data] }).ToList();
         Db = new HarnessDb(databasePath);

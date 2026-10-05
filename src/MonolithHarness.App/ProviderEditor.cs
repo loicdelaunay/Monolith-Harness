@@ -28,6 +28,7 @@ public sealed partial class MainWindow
         public string SelectedModelsJson { get; set; } = "";
         public string Username { get; set; } = "";
         public string ExecutablePath { get; set; } = "";
+        public string AcpArgumentsJson { get; set; } = "[]";
         public bool AutoStart { get; set; }
         public bool OpenCodeTools { get; set; }
         public bool BypassFreeLimitation { get; set; }
@@ -55,7 +56,7 @@ public sealed partial class MainWindow
     {
         var drafts = db.Providers.Local.Where(x => db.Entry(x).State != EntityState.Deleted).OrderBy(x => x.Id)
             .Select(x => new ProviderDraft { Id = x.Id, Name = x.Name, BaseUrl = x.BaseUrl, Model = x.Model, ProtectedKey = [.. x.ProtectedKey], ContextLimit = x.ContextLimit, ModelContextsJson = x.ModelContextsJson, SupportsImages = x.SupportsImages,
-                DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, LocalModelsJson=x.LocalModelsJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
+                DetectedModelsJson=x.DetectedModelsJson, SelectedModelsJson=x.SelectedModelsJson, Kind = x.Kind, CompositeJson=x.CompositeJson, LocalModelsJson=x.LocalModelsJson, Username = x.Username, ExecutablePath = x.ExecutablePath, AcpArgumentsJson = x.AcpArgumentsJson, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools, BypassFreeLimitation = x.BypassFreeLimitation })
             .ToList();
         var cards = new StackPanel { Spacing = 8 };
         var state = new ProviderEditorState { Panel = new StackPanel(), Header = new SettingsHeaderPanel { Spacing = 8 }, Cards = cards, Drafts = drafts, Error = Label("", 12) };
@@ -81,6 +82,10 @@ public sealed partial class MainWindow
         Grid.SetColumn(executable, 0); Grid.SetColumn(browseExecutable, 1);
         browseExecutable.Margin = new Thickness(8, 0, 0, 0);
         execGrid.Children.Add(executable); execGrid.Children.Add(browseExecutable);
+        var acpArguments = new TextBox { Header = WorkflowText("Arguments ACP (tableau JSON, facultatif)", "ACP arguments (optional JSON array)"), Text = "[]" };
+        var launchPanel = new StackPanel { Spacing = 12 }; launchPanel.Children.Add(execGrid); launchPanel.Children.Add(acpArguments);
+        var connectionLaunch = new Expander { Name = "AcpLaunchOptions", Header = WorkflowText("Options de lancement (avancé)", "Launch options (advanced)"), Content = launchPanel, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        var connectAccount = new Button { Name = "AcpConnectAccount", Content = WorkflowText("Connecter mon compte ChatGPT", "Connect my ChatGPT account"), HorizontalAlignment = HorizontalAlignment.Right, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         var autoStart = new CheckBox { Content = T("Démarrer automatiquement le serveur OpenCode") };
         var openCodeTools = new CheckBox { Content = T("Activer les outils agent OpenCode avec demande d’autorisation") };
         var bypassFreeLimitation = new CheckBox { Content = T("BETA Bypass free limitation (utiliser les modèles gratuits sur un autre harnais)") };
@@ -92,6 +97,7 @@ public sealed partial class MainWindow
         var addOpenAi = new MenuFlyoutItem { Text = T("+ OpenAI compatible") };
         var addDeepSeek = new MenuFlyoutItem { Text = "+ DeepSeek" };
         var addOpenCode = new MenuFlyoutItem { Text = "+ OpenCode" };
+        var acpItems = AcpProviders.Presets.Select(preset => (Preset: preset, Item: new MenuFlyoutItem { Text = "+ " + preset.Name })).ToList();
         var addComposite = new MenuFlyoutItem { Text = "+ Modèle composé / Composite" };
         var addLocal = new MenuFlyoutItem { Text = "+ Local · Bêta" };
         var cloudItems = ProviderPresets.Cloud.Select(preset =>
@@ -115,7 +121,7 @@ public sealed partial class MainWindow
         }
 
         Provider AsProvider(ProviderDraft draft) => new() { Name = draft.Name, BaseUrl = draft.BaseUrl, Model = draft.Model, ContextLimit = draft.ContextLimit, SupportsImages = draft.SupportsImages,
-            DetectedModelsJson=draft.DetectedModelsJson, SelectedModelsJson=draft.SelectedModelsJson, Kind = draft.Kind, LocalModelsJson=draft.LocalModelsJson, Username = draft.Username, ExecutablePath = draft.ExecutablePath, AutoStart = draft.AutoStart, OpenCodeTools = draft.OpenCodeTools, BypassFreeLimitation = draft.BypassFreeLimitation, ModelContextsJson = draft.ModelContextsJson };
+            DetectedModelsJson=draft.DetectedModelsJson, SelectedModelsJson=draft.SelectedModelsJson, Kind = draft.Kind, LocalModelsJson=draft.LocalModelsJson, Username = draft.Username, ExecutablePath = draft.ExecutablePath, AcpArgumentsJson = draft.AcpArgumentsJson, AutoStart = draft.AutoStart, OpenCodeTools = draft.OpenCodeTools, BypassFreeLimitation = draft.BypassFreeLimitation, ModelContextsJson = draft.ModelContextsJson };
         void RefreshLimit(ProviderDraft? draft)
         {
             var target = draft == null ? null : AsProvider(draft);
@@ -131,12 +137,23 @@ public sealed partial class MainWindow
             remove.IsEnabled = duplicate.IsEnabled = enabled;
             name.Text = draft?.Name ?? ""; url.Text = draft?.BaseUrl ?? ""; model.Text = draft?.Model ?? "";
             model.ItemsSource = draft == null ? null : ModelCatalog.GetModelsForProvider(AsProvider(draft));
+            model.SelectedItem = draft?.Model; model.Text = draft?.Model ?? "";
             RefreshLimit(draft); vision.IsChecked = draft?.SupportsImages ?? true; deleteKey.IsChecked = draft?.DeleteKey ?? false;
             username.Text = draft?.Username ?? ""; executable.Text = draft?.ExecutablePath ?? ""; autoStart.IsChecked = draft?.AutoStart ?? false;
             openCodeTools.IsChecked = draft?.OpenCodeTools ?? false;
             bypassFreeLimitation.IsChecked = draft?.BypassFreeLimitation ?? false;
+            acpArguments.Text = draft?.AcpArgumentsJson ?? "[]";
+            var acp = AcpProviders.Find(draft?.Kind) != null;
             var openCode = draft?.Kind == "opencode";
+            connectionLaunch.Visibility = acp || openCode ? Visibility.Visible : Visibility.Collapsed; connectionLaunch.IsExpanded = openCode;
+            info.Text = acp ? WorkflowText("Connexion au compte de l’agent, sans clé API dans l’application.", "Connect to the agent account without an API key in the application.") : T("Créez autant de connexions que nécessaire. Chaque instance conserve sa propre clé, son URL, son modèle et sa limite de contexte.");
             username.Visibility = execGrid.Visibility = autoStart.Visibility = openCodeTools.Visibility = bypassFreeLimitation.Visibility = openCode ? Visibility.Visible : Visibility.Collapsed;
+            if (acp) { execGrid.Visibility = openCodeTools.Visibility = Visibility.Visible; }
+            acpArguments.Visibility = acp ? Visibility.Visible : Visibility.Collapsed;
+            connectAccount.Visibility = draft?.Kind == "chatgpt-acp" ? Visibility.Visible : Visibility.Collapsed;
+            executable.Header = acp ? WorkflowText("Exécutable ACP personnalisé (facultatif)", "Custom ACP executable (optional)") : T("Chemin vers opencode.exe (facultatif)");
+            executable.PlaceholderText = acp ? WorkflowText("Vide : adaptateur installé automatiquement via Node.js", "Blank: adapter installed automatically through Node.js") : @"C:\…\OpenCode.exe";
+            openCodeTools.Content = acp ? WorkflowText("Activer les outils natifs de l’agent ACP", "Enable ACP agent native tools") : T("Activer les outils agent OpenCode avec demande d’autorisation");
             key.Header = T(openCode ? "Mot de passe du serveur (vide : aucun)" : "Clé API (vide : conserver la clé enregistrée)");
             importModels.Content = T(openCode ? "Importer les modèles OpenCode" : "Importer les modèles");
             key.Password = draft?.PendingKey ?? "";
@@ -144,6 +161,7 @@ public sealed partial class MainWindow
             var composite=draft?.Kind=="composite";
             ShowProviderHelp(draft);
             foreach(var control in new UIElement[]{url,key,model,limit,vision,deleteKey,testConnection,importModels})control.Visibility=composite?Visibility.Collapsed:Visibility.Visible;
+            if (acp) foreach (var control in new UIElement[] { url, key, deleteKey }) control.Visibility = Visibility.Collapsed;
             compositePanel.Children.Clear();if(composite)compositePanel.Children.Add(BuildCompositeModelEditor(draft!,drafts));
             localPanel.Children.Clear();
             if (draft?.Kind == "local")
@@ -179,6 +197,7 @@ public sealed partial class MainWindow
             state.Selected.Name = name.Text; state.Selected.BaseUrl = url.Text; state.Selected.Model = model.Text;
             RefreshLimit(state.Selected);
             state.Selected.SupportsImages = vision.IsChecked == true; state.Selected.DeleteKey = deleteKey.IsChecked == true; state.Selected.PendingKey = key.Password;
+            state.Selected.AcpArgumentsJson = acpArguments.Text;
             state.Selected.Username = username.Text; state.Selected.ExecutablePath = executable.Text; state.Selected.AutoStart = autoStart.IsChecked == true;
             state.Selected.OpenCodeTools = openCodeTools.IsChecked == true;
             state.Selected.BypassFreeLimitation = bypassFreeLimitation.IsChecked == true;
@@ -217,6 +236,7 @@ public sealed partial class MainWindow
         deleteKey.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.DeleteKey = true; };
         deleteKey.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.DeleteKey = false; };
         username.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.Username = username.Text; };
+        acpArguments.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.AcpArgumentsJson = acpArguments.Text; };
         executable.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.ExecutablePath = executable.Text; };
         browseExecutable.Click += async (_, _) =>
         {
@@ -260,6 +280,7 @@ public sealed partial class MainWindow
                 var draft = new ProviderDraft { Name = NextName(preset.Name), BaseUrl = preset.BaseUrl, Model = preset.DefaultModel, ContextLimit = ModelContexts.DefaultContextLimit, SupportsImages = true };
                 drafts.Add(draft); Refresh(draft); key.Focus(FocusState.Programmatic);
             };
+        foreach (var (preset, item) in acpItems) item.Click += (_, _) => { state.Commit(); var target = AcpProviders.Create(preset); var draft = new ProviderDraft { Name = NextName(target.Name), Kind = target.Kind, BaseUrl = "", Model = target.Model, SupportsImages = false, OpenCodeTools = true, DetectedModelsJson = target.DetectedModelsJson, SelectedModelsJson = target.SelectedModelsJson }; drafts.Add(draft); Refresh(draft); };
         addOpenCode.Click += (_, _) =>
         {
             var defaultDesktop = ResolveOpenCodeExecutable(null);
@@ -285,7 +306,7 @@ public sealed partial class MainWindow
             state.Commit();
             var source = state.Selected;
             var draft = new ProviderDraft { Name = NextName(source.Name + " " + T("copie")), BaseUrl = source.BaseUrl, Model = source.Model, ContextLimit = source.ContextLimit, ModelContextsJson = source.ModelContextsJson, SupportsImages = source.SupportsImages,
-                DetectedModelsJson=source.DetectedModelsJson, SelectedModelsJson=source.SelectedModelsJson, Kind = source.Kind, CompositeJson=source.CompositeJson, LocalModelsJson=source.LocalModelsJson, Username = source.Username, ExecutablePath = source.ExecutablePath, AutoStart = source.AutoStart, OpenCodeTools = source.OpenCodeTools, BypassFreeLimitation = source.BypassFreeLimitation };
+                DetectedModelsJson=source.DetectedModelsJson, SelectedModelsJson=source.SelectedModelsJson, Kind = source.Kind, CompositeJson=source.CompositeJson, LocalModelsJson=source.LocalModelsJson, Username = source.Username, ExecutablePath = source.ExecutablePath, AcpArgumentsJson = source.AcpArgumentsJson, AutoStart = source.AutoStart, OpenCodeTools = source.OpenCodeTools, BypassFreeLimitation = source.BypassFreeLimitation };
             drafts.Add(draft); Refresh(draft); name.Focus(FocusState.Programmatic); name.SelectAll();
         };
         remove.Click += async (_, _) =>
@@ -326,15 +347,26 @@ public sealed partial class MainWindow
             catch (Exception ex) { info.Text = ex.Message; }
             finally { testConnection.IsEnabled = true; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
         };
-        async Task<List<string>?> Discover(ProviderDraft draft, bool selectAll = false)
+        connectAccount.Click += async (_, _) =>
+        {
+            if (state.Selected is not { } draft) return;
+            connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = false;
+            editorBusy.IsActive = true; editorBusy.Visibility = Visibility.Visible;
+            info.Text = WorkflowText("Connexion OpenAI : terminez l’authentification dans le navigateur…", "OpenAI sign-in: complete authentication in your browser…");
+            try { await Discover(draft, selectAll: true, authenticate: true); await SaveTestedProviderAsync(draft); info.Text = WorkflowText("Compte connecté · modèles enregistrés.", "Account connected · models saved."); }
+            catch (Exception ex) { info.Text = ex.Message; }
+            finally { connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = true; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
+        };
+        async Task<List<string>?> Discover(ProviderDraft draft, bool selectAll = false, bool authenticate = false)
         {
             state.Commit();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            using var timeout = new CancellationTokenSource(authenticate ? TimeSpan.FromMinutes(5) : AcpProviders.Find(draft.Kind) != null ? TimeSpan.FromMinutes(2) : TimeSpan.FromSeconds(25));
             var target = AsProvider(draft);
             var endpoint = target.BaseUrl;
             var secret = draft.PendingKey.Length > 0 ? draft.PendingKey : draft.DeleteKey ? "" : KeyVault.Decrypt(draft.ProtectedKey);
             List<string> list;
-            if (target.IsOpenCode)
+            if (target.IsAcp) list = await new AcpEngine().ModelsAsync(target, timeout.Token, authenticate);
+            else if (target.IsOpenCode)
             {
                 await EnsureOpenCodeServerAsync(target, secret, timeout.Token);
                 var directory = project?.GetSourceFolders().FirstOrDefault();
@@ -354,12 +386,14 @@ public sealed partial class MainWindow
                 draft.Model = list[0];
                 ProviderModels.Select(target, selectAll ? list : [draft.Model]);
             }
+            draft.SupportsImages = target.SupportsImages;
+            if (state.Selected == draft) vision.IsChecked = target.SupportsImages;
             draft.DetectedModelsJson = target.DetectedModelsJson;
             draft.SelectedModelsJson = target.SelectedModelsJson;
             ModelContexts.Select(target, draft.Model);
             draft.LocalModelsJson = target.LocalModelsJson;
             draft.ModelContextsJson = target.ModelContextsJson; draft.ContextLimit = target.ContextLimit;
-            if (state.Selected == draft) { model.ItemsSource = list; model.Text = draft.Model; RefreshLimit(draft); }
+            if (state.Selected == draft) { model.ItemsSource = list; model.SelectedItem = draft.Model; model.Text = draft.Model; RefreshLimit(draft); }
             info.Text = $"{list.Count} modèles détectés / models detected";
             return list;
         }
@@ -375,6 +409,8 @@ public sealed partial class MainWindow
         void ShowProviderHelp(ProviderDraft? draft)
         {
             providerHelp.Children.Clear();
+            var acpPreset = AcpProviders.Find(draft?.Kind);
+            if (acpPreset != null) { providerHelp.Visibility = Visibility.Visible; providerHelp.Children.Add(Label(WorkflowText(acpPreset.DescriptionFr, acpPreset.DescriptionEn), 12)); providerHelp.Children.Add(new HyperlinkButton { Content = WorkflowText("Installation et connexion", "Installation and sign-in"), NavigateUri = new Uri(acpPreset.Documentation) }); return; }
             var preset = draft == null || draft.Kind is "local" or "opencode" or "composite" ? null : ProviderPresets.Resolve(draft.BaseUrl);
             providerHelp.Visibility = preset == null ? Visibility.Collapsed : Visibility.Visible;
             if (preset == null) return;
@@ -500,18 +536,18 @@ public sealed partial class MainWindow
                     if (draft.ModelsExpanded) BuildModelBody();
                     details.Children.Add(expander);
                 }
-                cards.Children.Add(FluentDesign.Setting(draft.Name, draft.Kind == "composite" ? WorkflowText("Modèle composé", "Composite model") : ProviderPresets.Resolve(draft.BaseUrl)?.Name ?? draft.Kind, gear, details));
+                cards.Children.Add(FluentDesign.Setting(draft.Name, draft.Kind == "composite" ? WorkflowText("Modèle composé", "Composite model") : AcpProviders.Find(draft.Kind)?.Name ?? ProviderPresets.Resolve(draft.BaseUrl)?.Name ?? draft.Kind, gear, details));
             }
             if (drafts.Count == 0) cards.Children.Add(Label(WorkflowText("Ajoutez un fournisseur pour commencer.", "Add a provider to get started.")));
         }
         var add = new DropDownButton { Name = "AddProvider", Content = WorkflowText("＋ Ajouter un fournisseur", "＋ Add provider") };
         back.Click += (_, _) => { state.Commit(); Refresh(null); add.Focus(FocusState.Programmatic); };
         var presets = new MenuFlyout(); add.Flyout = presets;
-        foreach (var item in new[] { addOpenAi, addDeepSeek }.Concat(cloudItems.Select(x => x.Item)).Concat([addOpenCode, addLocal, addComposite])) presets.Items.Add(item);
+        foreach (var item in new[] { addOpenAi, addDeepSeek }.Concat(cloudItems.Select(x => x.Item)).Concat(acpItems.Select(x => x.Item)).Concat([addOpenCode, addLocal, addComposite])) presets.Items.Add(item);
         state.Panel.Spacing = 12;
         state.Header.Children.Add(add); state.Header.Children.Add(back);
         state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
-        foreach (var item in new UIElement[] { editorTitle, info, name, compositePanel, providerHelp, url, username, key, execGrid, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, Row(duplicate, remove) }) editor.Children.Add(item);
+        foreach (var item in new UIElement[] { editorTitle, info, name, compositePanel, providerHelp, connectAccount, url, username, key, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, connectionLaunch, Row(duplicate, remove) }) editor.Children.Add(item);
         Refresh(null);
         return state;
     }
@@ -536,6 +572,7 @@ public sealed partial class MainWindow
                 try{CompositeModel.Read(draft.CompositeJson).Validate(editor.Drafts.Where(x=>x.Id>0).Select(x=>new Provider{Id=x.Id,Kind=x.Kind}));}
                 catch(Exception ex){return draft.Name+" : "+ex.Message;}continue;
             }
+            if (AcpProviders.Find(draft.Kind) != null) { try { AcpProviders.Validate(new Provider { Kind = draft.Kind, ExecutablePath = draft.ExecutablePath, AcpArgumentsJson = draft.AcpArgumentsJson }); } catch (Exception ex) { return draft.Name + " : " + ex.Message; } if (string.IsNullOrWhiteSpace(draft.Model)) return T("Modèle requis."); continue; }
             try { ChatEngine.Endpoint(draft.BaseUrl.Trim(), draft.Kind == "opencode" ? "global/health" : "chat/completions"); }
             catch { return T("URL HTTP(S) invalide.") + " " + draft.Name; }
             if (string.IsNullOrWhiteSpace(draft.Model) || draft.ContextLimit < 1024) return T("Modèle et limite de contexte requis.") + " " + draft.Name;
@@ -548,6 +585,8 @@ public sealed partial class MainWindow
         entity.Name = draft.Name.Trim(); entity.BaseUrl = draft.BaseUrl.Trim().TrimEnd('/'); entity.Model = draft.Model.Trim();
         entity.SupportsImages = draft.SupportsImages;
         entity.Kind = draft.Kind; entity.Username = draft.Username.Trim(); entity.ExecutablePath = draft.ExecutablePath.Trim(); entity.AutoStart = draft.AutoStart;
+        entity.AcpArgumentsJson = draft.AcpArgumentsJson;
+        if (entity.IsAcp) { entity.ProtectedKey = []; entity.BaseUrl = ""; }
         entity.OpenCodeTools = draft.OpenCodeTools;
         entity.BypassFreeLimitation = draft.BypassFreeLimitation;
         entity.CompositeJson = draft.CompositeJson;
@@ -559,7 +598,7 @@ public sealed partial class MainWindow
             var config = CompositeModel.Read(entity.CompositeJson); var target = CompositeModel.Resolve(config.Orchestrator, db.Providers.Local);
             entity.Model = target.Model; entity.ContextLimit = target.ContextLimit; entity.SupportsImages = target.SupportsImages; entity.BaseUrl = ""; entity.ProtectedKey = [];
         }
-        if (!string.IsNullOrWhiteSpace(draft.PendingKey)) entity.ProtectedKey = KeyVault.Encrypt(draft.PendingKey.Trim());
+        if (!entity.IsAcp && !string.IsNullOrWhiteSpace(draft.PendingKey)) entity.ProtectedKey = KeyVault.Encrypt(draft.PendingKey.Trim());
         else if (draft.DeleteKey) entity.ProtectedKey = [];
     }
 

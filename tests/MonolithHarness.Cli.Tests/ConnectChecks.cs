@@ -45,6 +45,10 @@ static class ConnectChecks
         check(early.Draft == null && early.Api.Calls == 0, "Cancelling credentials saves nothing and makes no request");
         var opencode = await Scenario(["opencode", "fixture-key", "http://localhost:4096", "opencode", "yes", "auto", "OpenCode", "save"]);
         check(opencode.Api.Path == "/provider" && opencode.Api.Authorization?.StartsWith("Basic ") == true && opencode.Draft is { Kind: "opencode", Model: "demo/chat", BypassFreeLimitation: true }, "OpenCode uses its native catalog and authentication");
+        var chatgpt = await Scenario(["chatgpt-acp", "", "later", "ChatGPT Plus", "save"]);
+        check(chatgpt.Api.Calls == 0 && chatgpt.Draft is { Kind: "chatgpt-acp", Model: "default", BaseUrl: "", ProtectedKey.Length: 0 } && !chatgpt.Steps.Any(x => x.Secret), "ChatGPT subscription wizard saves without HTTP discovery or API-key prompts");
+        var antigravity = await Scenario(["antigravity-acp", "", "later", "Antigravity", "save"]);
+        check(antigravity.Draft is { Kind: "antigravity-acp", OpenCodeTools: true } && antigravity.Api.Calls == 0, "Antigravity ACP wizard preserves native tools and agent default model");
         foreach (var size in new[] { (56, 18), (80, 24), (118, 36), (180, 50) })
         {
             foreach (bool commands in new[] { false, true })

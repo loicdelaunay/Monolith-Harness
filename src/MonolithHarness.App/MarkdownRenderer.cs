@@ -57,6 +57,12 @@ public sealed class MarkdownRenderer
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;
         var blocks = MarkdownPipelineHelper.Parse(markdown);
+        if (MarkdownDisplay.HasVisuals(blocks))
+        {
+            var view = container.Children.Count == 1 ? container.Children[0] as AdvancedMarkdownView : null;
+            if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile); container.Children.Add(view); }
+            view.Update(markdown); state.Keys.Clear(); state.Density = ChatDensity.Id; return;
+        }
         var groups = GroupTextBlocks(blocks).ToList();
         var keys = groups.Select(group => markdown.Substring(group[0].Span.Start,
             group[^1].Span.End - group[0].Span.Start + 1)).ToList();
@@ -140,6 +146,10 @@ public sealed class MarkdownRenderer
     {
         var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown), ct);
         ct.ThrowIfCancellationRequested();
+        if (MarkdownDisplay.HasVisuals(blocks))
+        {
+            var visual = new AdvancedMarkdownView(openFile); target.Children.Add(visual); visual.Update(markdown); return;
+        }
         var renderer = new MarkdownRenderer(openFile, fileMenu);
         int imageCount = 0, blockCount = 0;
         foreach (var block in blocks)
@@ -270,6 +280,7 @@ public sealed class MarkdownRenderer
             if (flow.Inlines.Count > 0)
             {
                 flow.Inlines.Add(new LineBreak());
+                if (depth == 0) flow.Inlines.Add(new LineBreak());
             }
             if(depth > 0) p.Inlines.Add(new Run { Text = new string(' ', depth * 2) });
             if (prefix.Length > 0) p.Inlines.Add(new Run { Text = prefix, Foreground = Brush(130, 175, 245) });
@@ -285,6 +296,7 @@ public sealed class MarkdownRenderer
         }
         else if (block is ListBlock list)
         {
+            if (depth == 0 && flow.Inlines.Count > 0) flow.Inlines.Add(new LineBreak());
             int number = int.TryParse(list.OrderedStart, out var start) ? start : 1;
             foreach (var item in list.OfType<ListItemBlock>())
             {

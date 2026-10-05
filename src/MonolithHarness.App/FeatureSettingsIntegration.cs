@@ -21,7 +21,7 @@ public sealed partial class MainWindow
         browser.Children.Add(Label(WorkflowText("Le panneau Outils fonctionne sans navigateur. WebView2 démarre uniquement à la demande. En mode Chrome, l’IA utilise Chrome DevTools MCP dans une fenêtre externe, avec un profil par conversation. Chrome et Node.js doivent être installés. Les autorisations MCP restent applicables.", "Tools work without a browser. Chrome mode uses an external MCP browser with a per-conversation profile; Chrome and Node.js are required."),13));
         var rag = new StackPanel { Spacing=12 };
         var ragMode = new ComboBox { Header="Embeddings", ItemsSource=new[] { WorkflowText("MiniLM multilingue · CPU", "Multilingual MiniLM · CPU"), "OpenAI v1 API" }, SelectedIndex=config.RagMode=="api"?1:0 };
-        var providers = db.Providers.Local.Where(x=>!x.IsOpenCode&&!x.IsComposite).ToList();
+        var providers = db.Providers.Local.Where(x=>!x.IsExternalAgent&&!x.IsComposite).ToList();
         var provider = new ComboBox { Header=WorkflowText("Fournisseur d’embeddings", "Embeddings provider"), ItemsSource=providers, SelectedItem=providers.FirstOrDefault(x=>x.Id==config.RagProviderId) ?? providers.FirstOrDefault() };
         var model = new TextBox { Header=WorkflowText("Modèle API", "API model"), Text=config.RagModel };
         var maxFiles = new NumberBox { Header=WorkflowText("Nombre maximum de fichiers", "Maximum files"), Minimum=1,Maximum=2000,Value=config.RagMaxFiles };

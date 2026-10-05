@@ -2,7 +2,7 @@ function featureConfig(){return {BrowserMode:'embedded',RagMode:'local',RagModel
 function renderVisionSettings(area){
   const config=featureConfig();
   const provider=field(area,L('Fournisseur vision','Vision provider'),'select');provider.append(option(0,L('Choisir un fournisseur','Choose a provider')));
-  snapshot.providers.filter(x=>x.kind!=='opencode'&&x.kind!=='composite').forEach(x=>provider.append(option(x.id,x.name)));provider.value=config.VisionProviderId||0;
+  snapshot.providers.filter(x=>!['opencode','antigravity-acp','chatgpt-acp','composite'].includes(x.kind)).forEach(x=>provider.append(option(x.id,x.name)));provider.value=config.VisionProviderId||0;
   const model=field(area,L('Modèle vision','Vision model'),'text',config.VisionModel||'');model.setAttribute('list','vision-models');
   const choices=document.createElement('datalist');choices.id='vision-models';area.append(choices);
   provider.onchange=()=>{choices.replaceChildren();model.value=snapshot.providers.find(x=>x.id===Number(provider.value))?.model||'';};
@@ -19,6 +19,12 @@ function renderInbox(){
   for(const item of items){
     const row=el('div',null,'inbox-row');row.append(el('span',item.mode==='steering'?'↳':String(items.indexOf(item)+1),'queue-index'),el('span',item.text.slice(0,220)+(item.text.length>220?'…':''),'queue-text'));
     const actions=el('div',null,'inbox-actions');
+    for(const direction of [-1,1]){
+      const move=el('button',direction<0?'↑':'↓'),neighbor=items.indexOf(item)+direction;
+      move.title=direction<0?L('Monter','Move up'):L('Descendre','Move down');move.setAttribute('aria-label',move.title);
+      move.disabled=neighbor<0||neighbor>=items.length||items[neighbor].mode!==item.mode;
+      move.onclick=()=>guard(async()=>{await call('inbox.move',{id:item.id,chatId:id,direction});});actions.append(move);
+    }
     button(actions,L('Supprimer','Delete'),async()=>{await call('inbox.delete',{id:item.id,chatId:id});});
     button(actions,L('Modifier','Edit'),async()=>{
       const dialog=document.createElement('dialog'),editor=el('textarea');editor.value=item.text;editor.rows=5;editor.style.width='100%';
@@ -63,7 +69,7 @@ function renderFeatureSettings(area,embedded=false){
     button(area,L('Enregistrer','Save'),async()=>{config.BrowserMode=mode.value;config.ChromePath=executable.value;await call('state.save',{featuresJson:JSON.stringify(config)});await refresh();updateBrowserBounds();renderSettings();});
   }else{
     const mode=field(area,'Embeddings','select');mode.append(option('local',L('MiniLM multilingue · CPU','Multilingual MiniLM · CPU')),option('api','OpenAI v1 API'));mode.value=config.RagMode;
-    const provider=field(area,L('Fournisseur embeddings','Embeddings provider'),'select');snapshot.providers.filter(x=>x.kind!=='opencode'&&x.kind!=='composite').forEach(x=>provider.append(option(x.id,x.name)));provider.value=config.RagProviderId||provider.value;
+    const provider=field(area,L('Fournisseur embeddings','Embeddings provider'),'select');snapshot.providers.filter(x=>!['opencode','antigravity-acp','chatgpt-acp','composite'].includes(x.kind)).forEach(x=>provider.append(option(x.id,x.name)));provider.value=config.RagProviderId||provider.value;
     const model=field(area,L('Modèle API','API model'),'text',config.RagModel);
     const files=field(area,L('Fichiers maximum (1–2000)','Maximum files (1–2000)'),'number',config.RagMaxFiles);
     const hits=field(area,L('Résultats (1–20)','Results (1–20)'),'number',config.RagTopK);
@@ -121,13 +127,13 @@ function renderChild(){
 function isChatMode(){return snapshot?.chats.find(x=>x.id===chatId)?.interactionMode==='chat';}
 function addChatSkills(menu,chat){
   const section=el('details');section.open=true;section.append(el('summary','Skills · Chat'));
-  const provider=snapshot.providers.find(x=>x.id===providerId),native=provider?.kind==='opencode';
+  const provider=snapshot.providers.find(x=>x.id===providerId),acp=['antigravity-acp','chatgpt-acp'].includes(provider?.kind),native=provider?.kind==='opencode'||acp;
   for(const [key,label,enabled] of [['chatWebEnabled',L('Recherche web','Web research'),chat.chatWebEnabled!==false],['chatPythonEnabled',L('Exécution de scripts Python','Python script execution'),chat.chatPythonEnabled===true]]){
-    const row=el('label'),check=el('input');check.type='checkbox';check.checked=enabled&&(!native||key!=='chatPythonEnabled');check.disabled=running.has(chat.id)||native&&key==='chatPythonEnabled';
+    const row=el('label'),check=el('input');check.type='checkbox';const unavailable=acp||native&&key==='chatPythonEnabled';check.checked=enabled&&!unavailable;check.disabled=running.has(chat.id)||unavailable;
     check.onchange=()=>guard(async()=>{try{await call('chat.modes',{id:chat.id,[key]:check.checked});await refresh();}catch(error){check.checked=enabled;throw error;}});
     row.append(check,document.createTextNode(' '+label));section.append(row);
   }
-  if(native)section.append(el('p',L('OpenCode utilise ses outils web natifs ; Python nécessite un autre fournisseur.','OpenCode uses its native web tools; Python requires another provider.'),'muted'));
+  if(native)section.append(el('p',acp?L('En mode Chat, les skills web et Python Monolith ne sont pas disponibles avec ACP. Utilisez le mode Agent pour les outils natifs.','Monolith web and Python skills are unavailable with ACP in Chat mode. Use Agent mode for native tools.'):L('Avec OpenCode, le skill web est transmis comme consigne ; Python nécessite un autre fournisseur.','With OpenCode, the web skill is forwarded as instructions; Python requires another provider.'),'muted'));
   menu.append(section);
 }
 function updateConversationMode(){
@@ -143,7 +149,7 @@ function updateConversationMode(){
   }
   const choice=selector.querySelector('input');choice.checked=!isChatMode();choice.disabled=!chatId||!!selectedChild||running.has(chatId);
   selector.querySelector('.interaction-caption').textContent=isChatMode()?'💬 Chat':'⚙ Agent';
-  $('thinking').value=isChatMode()?'none':snapshot?.state.thinkingLevel||'auto';
-  $('thinking').disabled=isChatMode()||running.has(chatId);
-  $('thinking').title=isChatMode()?L('Le raisonnement est désactivé en mode Chat.','Reasoning is disabled in Chat mode.'):'';
+  $('thinking').value=isChatMode()?snapshot?.state.chatThinkingLevel||'none':snapshot?.state.thinkingLevel||'auto';
+  $('thinking').disabled=running.has(chatId);
+  $('thinking').title=isChatMode()?L('Désactivé par défaut en mode Chat. Vous pouvez choisir un autre niveau selon le modèle.','Disabled by default in Chat mode. You can choose another level supported by the model.'):'';
 }

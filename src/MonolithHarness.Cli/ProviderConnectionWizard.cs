@@ -5,7 +5,7 @@ namespace MonolithHarness.Cli;
 public sealed record ConnectionStep(string Title, string Body = "", List<Choice>? Choices = null, bool Secret = false, string Initial = "");
 public sealed record ProviderPreset(string Id, string Name, string Url, string Kind, bool OptionalKey);
 
-public sealed class ProviderConnectionWizard(HttpClient http,
+public sealed partial class ProviderConnectionWizard(HttpClient http,
     Func<ConnectionStep, Task<string?>> prompt, Func<Provider, string, CancellationToken, Task<int>> save,
     Action<string>? progress = null)
 {
@@ -16,6 +16,8 @@ public sealed class ProviderConnectionWizard(HttpClient http,
         new("compatible", "Autre API compatible OpenAI / Other compatible API", "", "openai", true),
         new("local-model", "Local · GGUF · Beta", "model/", "local", true),
         new("local", "API locale compatible OpenAI / Local compatible API", "", "openai", true),
+        new("antigravity-acp", "Antigravity · ACP", "", "antigravity-acp", true),
+        new("chatgpt-acp", "ChatGPT Plus / Pro · Codex", "", "chatgpt-acp", true),
         new("opencode", "OpenCode", "http://127.0.0.1:4096", "opencode", true)
     }).ToArray();
     public async Task<int?> RunAsync(CancellationToken ct)
@@ -25,6 +27,7 @@ public sealed class ProviderConnectionWizard(HttpClient http,
         if (type == null) return null;
         var preset = Presets.Single(p => p.Id == type);
         var cloudPreset = ProviderPresets.Find(preset.Id);
+        if (AcpProviders.Find(preset.Kind) is { } acpPreset) return await AcpAsync(acpPreset, ct);
         if (preset.Kind == "local") return await LocalAsync(ct);
         var draft = new Provider { Name = preset.Name.Split(" / ")[0], Kind = preset.Kind, BaseUrl = preset.Url, Model = "", Username = preset.Kind == "opencode" ? "opencode" : "" };
         // Credentials stay in memory until the final confirmation, including during discovery.

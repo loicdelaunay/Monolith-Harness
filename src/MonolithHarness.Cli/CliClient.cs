@@ -110,7 +110,8 @@ public sealed class CliClient : IAsyncDisposable
     }
     public async Task<int> SaveProvider(Provider provider, string key, CancellationToken ct)
     {
-        _ = ChatEngine.Endpoint(provider.BaseUrl, "models");
+        if (provider.IsAcp) AcpProviders.Validate(provider);
+        else _ = ChatEngine.Endpoint(provider.BaseUrl, "models");
         await using var db = OpenDb();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         provider.ProtectedKey = key.Length == 0 ? [] : KeyVault.Encrypt(key);

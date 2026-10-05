@@ -50,7 +50,7 @@ public static class ConversationExport
             Setting("OpenCode auto-start / tools", $"{provider.AutoStart} / {provider.OpenCodeTools}");
         }
         Setting(L("Langue", "Language"), state.Language);
-        Setting("Thinking", state.ThinkingLevel);
+        Setting("Thinking", ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel));
         var features=FeatureSettings.Read(state.FeaturesJson);
         Setting("Navigateur / Browser",features.BrowserMode);
         Setting("RAG",features.RagMode+" · "+(features.RagMode=="local"?LocalEmbeddings.ModelName:features.RagModel));

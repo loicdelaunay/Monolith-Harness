@@ -45,7 +45,8 @@ public static class AgentPolicy
             "\nCoordinate independent subtasks with delegate_tasks. Use parallel teams and additional waves within the shared run budget; subagents may delegate independent portions of their task within the configured depth. Review and integrate actual results. Assign exclusive file ownership and avoid overlapping writes or shared browser/desktop interactions. Do not delegate the entire task unchanged or form delegation cycles.");
 }
 
-public sealed record OpenCodeRunPolicy(string Mode, string Orchestration, bool ChatWebEnabled = false)
+public sealed record OpenCodeRunPolicy(string Mode, string Orchestration, bool ChatWebEnabled = false, string ThinkingLevel = "none")
 {
+    public bool RequireNoReasoning => Mode == "chat" && ThinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase);
     public bool AllowsChatWeb(string action) => Mode == "chat" && ChatWebEnabled && action is "webfetch" or "websearch";
 }

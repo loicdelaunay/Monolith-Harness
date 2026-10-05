@@ -30,7 +30,7 @@ public sealed class VisionBridge(ConversationSession run, HttpClient http,
         if (!Enabled(state.EnabledSkills)) throw new UnauthorizedAccessException("Skill Bypass image AI désactivé / disabled.");
         var config = FeatureSettings.Read(state.FeaturesJson);
         var provider = await db.Providers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == config.VisionProviderId, ct);
-        if (provider == null || provider.IsComposite || provider.IsOpenCode || string.IsNullOrWhiteSpace(config.VisionModel))
+        if (provider == null || provider.IsComposite || provider.IsExternalAgent || string.IsNullOrWhiteSpace(config.VisionModel))
             throw new InvalidOperationException("Configurez le fournisseur et le modèle vision dans Réglages > Skills > Bypass image AI.");
         provider.Model = config.VisionModel; provider.SupportsImages = true;
         _ = ChatEngine.Endpoint(provider.BaseUrl, "chat/completions");
@@ -77,10 +77,11 @@ public sealed class VisionBridge(ConversationSession run, HttpClient http,
     }
     public async Task<JsonArray> PrepareAsync(JsonArray wire, CancellationToken ct)
     {
-        if (run.Provider.SupportsImages) return wire;
+        if (run.Provider.SupportsImages && !Enabled(run.Options.EnabledSkills)) return wire;
         if (!Enabled(run.Options.EnabledSkills))
         {
-            if (!run.Provider.IsOpenCode) return wire; // ChatEngine supplies a visible compatibility notice.
+            if (run.Provider.IsAcp && !run.Provider.SupportsImages && wire.Any(x => x?["content"] is JsonArray a && a.Any(p => p?["type"]?.ToString() == "image_url"))) throw new InvalidOperationException("Cet agent ACP ne prend pas en charge les images. Activez le relais vision dans les réglages.");
+            if (!run.Provider.IsExternalAgent) return wire; // ChatEngine supplies a visible compatibility notice.
             var payload = new JsonObject { ["messages"] = wire.DeepClone() };
             var fallback = new ProviderCompatibility(); fallback.DisableImages(); fallback.Apply(payload);
             return payload["messages"]!.AsArray();
@@ -89,6 +90,10 @@ public sealed class VisionBridge(ConversationSession run, HttpClient http,
         foreach (var message in result.OfType<JsonObject>())
         {
             if (message["content"] is not JsonArray parts || !parts.Any(x => x?["type"]?.GetValue<string>() == "image_url")) continue;
+            // Asset captures use the configured observer even when the drawing model has vision.
+            var assetCapture = parts.Any(x => x?["type"]?.GetValue<string>() == "text" &&
+                (x["text"]?.GetValue<string>() ?? "").Contains("asset_capture", StringComparison.Ordinal));
+            if (run.Provider.SupportsImages && !assetCapture) continue;
             var text = new List<string>();
             foreach (var part in parts)
             {

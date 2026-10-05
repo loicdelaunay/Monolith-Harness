@@ -1,0 +1,13 @@
+body { margin: 0; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
+#markdown { overflow-wrap: anywhere; padding: 2px; }
+p { margin: 0 0 .9em; }
+h1,h2,h3,h4,h5,h6 { line-height: 1.25; margin: 1.15em 0 .55em; font-weight: 600; }
+#markdown > :first-child { margin-top: 0; }
+h1 { font-size: 1.55em; } h2 { font-size: 1.3em; } h3 { font-size: 1.15em; }
+ul,ol { margin: .7em 0 1em; padding-left: 1.7em; } li { padding-left: .25em; margin: .3em 0; }
+li p { margin: .3em 0; } blockquote { border-left: 3px solid #7b8caa; margin: .9em 0; padding-left: 1em; }
+a { color: #6bafff; } pre { white-space: pre; overflow: auto; padding: 12px; background: #80808018; border-radius: 8px; }
+code { font-family: Consolas, monospace; } table { border-collapse: collapse; margin: .9em 0; } th,td { border: 1px solid #80808060; padding: 6px 10px; }
+img { max-width: 100%; } .katex-display { overflow-x: auto; overflow-y: hidden; padding: .6em 0; }
+.mermaid-diagram { overflow: auto; margin: 1em 0; } .mermaid-diagram svg { max-width: 100%; height: auto; }
+.visual-error { font-size: .85em; color: #c88032; } .katex-error { white-space: pre-wrap; }

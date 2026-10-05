@@ -40,6 +40,13 @@ static class VisionChecks
             check(cross && requests==1,"Vision : identifiant hors conversation refusé avant transmission");
             await File.WriteAllBytesAsync(Path.Combine(folder,"source.png"),[5,6]);
             check((await bridge.CallAsync("analyze_image",new(){["path"]="source.png",["question"]="Read the label"},default)).Contains("red circle"),"Vision : image du projet analysée avec question ciblée");
+            run.Provider.SupportsImages = true;
+            var native = await bridge.PrepareAsync(wire, default);
+            check(native.ToJsonString().Contains("image_url"), "Vision: ordinary images preserve direct vision support");
+            var capture = new JsonArray(ChatEngine.ToWire(new Message { Content = "[Image issue de l’outil asset_capture]", Attachments = [new() { Name = "asset.png", Mime = "image/png", Data = [11, 12] }] }));
+            var observed = await bridge.PrepareAsync(capture, default);
+            check(!observed.ToJsonString().Contains("image_url") && observed.ToJsonString().Contains("red circle") && capture.ToJsonString().Contains("image_url"), "Vision: asset captures use the configured bypass even with a vision-capable main model");
+            run.Provider.SupportsImages = false;
             state.EnabledSkills="";await db.SaveChangesAsync();bool disabled=false;try{await bridge.PrepareAsync(wire,default);}catch(UnauthorizedAccessException){disabled=true;}
             check(disabled,"Vision : désactivation du skill respectée même avec cache");
             var definitions=new JsonArray();VisionBridge.AddDefinitions(definitions,"vision_bridge");AgentPolicy.Filter(definitions,"plan");check(definitions.Count==2,"Vision : lecture autorisée en mode Plan");

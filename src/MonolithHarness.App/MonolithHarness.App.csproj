@@ -11,8 +11,8 @@
     <Product>Monolith Harness</Product>
     <ApplicationId>com.monolithharness.app</ApplicationId>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <ApplicationDisplayVersion>1.55.0</ApplicationDisplayVersion>
-    <ApplicationVersion>82</ApplicationVersion>
+    <ApplicationDisplayVersion>1.57.0</ApplicationDisplayVersion>
+    <ApplicationVersion>85</ApplicationVersion>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
@@ -31,6 +31,7 @@
     <EmbeddedResource Include="../../CHANGELOG.md" LogicalName="MonolithHarness.Changelog.md" />
     <EmbeddedResource Include="Assets/rich-text-editor.html" />
     <EmbeddedResource Include="Assets/benchmark-preview.html" />
+    <EmbeddedResource Include="Assets/Markdown/*" />
     <Content Include="Assets\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

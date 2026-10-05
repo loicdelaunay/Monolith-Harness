@@ -44,7 +44,7 @@ public sealed partial class MainWindow
     readonly SemaphoreSlim toolQueue = new(1, 1);
     ConversationRun? ActiveRun => chat != null ? conversationRuns.GetValueOrDefault(chat.Id) : null;
     string RunSkills(ConversationRun run) => ConversationModes.EffectiveSkills(run.Chat,
-        run.IsScheduled ? run.Options.EnabledSkills : state.EnabledSkills, run.Provider.IsOpenCode);
+        run.IsScheduled ? run.Options.EnabledSkills : state.EnabledSkills, run.Provider.IsExternalAgent);
     string ToolSkills => automaticToolRun.Value is { } run ? RunSkills(run) : state.EnabledSkills;
     static StackPanel CreateMessagePanel() => ChatDensity.Track(new StackPanel { MaxWidth = 1120, HorizontalAlignment = HorizontalAlignment.Stretch }, "messages");
     bool IsVisible(ConversationRun run) => selectedSubagent == null && chat?.Id == run.Chat.Id;
@@ -229,7 +229,7 @@ public sealed partial class MainWindow
         }
         var run = new ConversationRun(chat, project, provider, state, composer.Text.Trim(), pendingImages,db.Providers.Local) { Messages = messages };
         var secret = KeyVault.Decrypt(run.Provider.ProtectedKey);
-        if ((!run.Provider.IsOpenCode && secret.Length == 0) || string.IsNullOrWhiteSpace(run.Provider.Model))
+        if ((!run.Provider.IsExternalAgent && !run.Provider.IsLocal && secret.Length == 0) || string.IsNullOrWhiteSpace(run.Provider.Model))
         { run.Dispose();await Settings(); return; }
         conversationRuns.Add(run.Chat.Id, run); // Reserve before the first await, preventing duplicate sends.
         composer.Text = ""; pendingImages.Clear(); UpdateAttachments();

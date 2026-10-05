@@ -36,7 +36,7 @@ public static class RagTools
         var source = new SourceAccess(run.Project.GetSourceFolders());
         if (name == "rag_read") return DocumentText.Lines(await DocumentText.ReadAsync(source.Resolve(args["path"]!.GetValue<string>()), ct), args["start_line"]!.GetValue<int>(), args["end_line"]!.GetValue<int>());
         Provider? provider = settings.RagMode == "api" ? await db.Providers.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==settings.RagProviderId,ct) ?? throw new InvalidOperationException("Choisissez un fournisseur d'embeddings dans Réglages > Skills > Recherche sémantique RAG.") : null;
-        if (provider?.IsOpenCode == true || provider?.IsComposite == true) throw new InvalidOperationException("RAG requiert un fournisseur OpenAI v1 embeddings.");
+        if (provider?.IsExternalAgent == true || provider?.IsComposite == true) throw new InvalidOperationException("RAG requiert un fournisseur OpenAI v1 embeddings.");
         var model = provider == null ? LocalEmbeddings.ModelId : provider.BaseUrl + "|" + settings.RagModel;
         var indexed = db.RagChunks.Where(x=>x.ProjectId==run.Project.Id && x.Model==model);
         bool Accessible(string path) { try { source.Resolve(path); return true; } catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException) { return false; } }

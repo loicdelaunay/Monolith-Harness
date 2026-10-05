@@ -95,6 +95,8 @@ public static class Skills
 
         if (Enabled(selection, GitTools.SkillId))
             prompt += "\nGIT CAPABILITIES: read=" + GitTools.ReadEnabled(selection) + ", write=" + GitTools.WriteEnabled(selection) + ". Do not call a disabled capability or substitute a native tool for it.";
-        return prompt + "\n" + PlatformSupport.SystemPrompt;
+        if (Enabled(selection, AssetTools.SkillId) && VisionBridge.Enabled(selection))
+            prompt += "\nAsset captures automatically use the configured Bypass image AI observer, including when the main model supports images. Use asset_capture after edits to receive its visual observations; keep its uncertainties and do not claim direct sight.";
+        return prompt + "\n" + MarkdownDisplay.Instructions + "\n" + PlatformSupport.SystemPrompt;
     }
 }

@@ -25,10 +25,11 @@ public sealed partial class MainWindow
             .OrderBy(x => x.Id).Select(x => new ProviderDraft { Id = x.Id, Name = x.Name, BaseUrl = x.BaseUrl, Model = x.Model,
                 ProtectedKey = [.. x.ProtectedKey], Kind = x.Kind, ContextLimit = x.ContextLimit, ModelContextsJson = x.ModelContextsJson, SupportsImages = x.SupportsImages,
                 DetectedModelsJson = x.DetectedModelsJson, SelectedModelsJson = x.SelectedModelsJson, Username = x.Username,
-                ExecutablePath = x.ExecutablePath, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools,
+                ExecutablePath = x.ExecutablePath, AcpArgumentsJson = x.AcpArgumentsJson, AutoStart = x.AutoStart, OpenCodeTools = x.OpenCodeTools,
                 BypassFreeLimitation = x.BypassFreeLimitation, LocalModelsJson = x.LocalModelsJson }).ToList();
         drafts.Add(new ProviderDraft { Name = WorkflowText("Autre API compatible", "Other compatible API"), Kind = "openai", SupportsImages = false });
         drafts.Add(new ProviderDraft { Name = "OpenCode", Kind = "opencode", BaseUrl = "http://127.0.0.1:4096", Username = "opencode", OpenCodeTools = true });
+        foreach (var preset in AcpProviders.Presets) { var p = AcpProviders.Create(preset); drafts.Add(new ProviderDraft { Name = p.Name, Kind = p.Kind, Model = p.Model, SupportsImages = false, OpenCodeTools = true, DetectedModelsJson = p.DetectedModelsJson, SelectedModelsJson = p.SelectedModelsJson }); }
         var selected = drafts.FirstOrDefault(x => x.Id == state.ProviderId) ?? drafts[0];
         var panel = new StackPanel { Spacing = 12 };
         var host = new ContentControl { Content = panel, HorizontalContentAlignment = HorizontalAlignment.Stretch };
@@ -42,11 +43,12 @@ public sealed partial class MainWindow
         var progress = new ProgressRing { Width = 20, Height = 20, IsActive = false, Visibility = Visibility.Collapsed };
         var username = new TextBox { Header = T("Utilisateur OpenCode"), MaxLength = 100 };
         var executable = new TextBox { Header = T("Chemin vers opencode.exe (facultatif)") };
+        var acpArguments = new TextBox { Header = WorkflowText("Arguments ACP (tableau JSON)", "ACP arguments (JSON array)"), Text = "[]" };
         var autoStart = new CheckBox { Content = WorkflowText("Démarrer OpenCode automatiquement", "Start OpenCode automatically") };
         var limit = new ModelContextEditor();
         var vision = new CheckBox { Content = T("Ce modèle accepte les images") };
         var advanced = new StackPanel { Spacing = 10 };
-        foreach (var control in new UIElement[] { limit, vision, username, executable, autoStart }) advanced.Children.Add(control);
+        foreach (var control in new UIElement[] { limit, vision, username, executable, acpArguments, autoStart }) advanced.Children.Add(control);
         bool refreshing = false;
         void BindLimit()
         {
@@ -59,6 +61,7 @@ public sealed partial class MainWindow
         {
             selected.Name = name.Text; selected.BaseUrl = endpoint.Text; selected.Model = model.Text;
             selected.PendingKey = key.Password; selected.Username = username.Text; selected.ExecutablePath = executable.Text;
+            selected.AcpArgumentsJson = acpArguments.Text;
             selected.AutoStart = autoStart.IsChecked == true; selected.SupportsImages = vision.IsChecked == true;
             BindLimit();
             return selected;
@@ -67,6 +70,7 @@ public sealed partial class MainWindow
         {
             var draft = Read();
             if (string.IsNullOrWhiteSpace(draft.Name)) return T("Le nom du fournisseur est requis.");
+            if (AcpProviders.Find(draft.Kind) != null) { try { AcpProviders.Validate(new Provider { Kind = draft.Kind, ExecutablePath = draft.ExecutablePath, AcpArgumentsJson = draft.AcpArgumentsJson }); } catch (Exception ex) { return ex.Message; } return string.IsNullOrWhiteSpace(draft.Model) ? T("Modèle requis.") : null; }
             try { ChatEngine.Endpoint(draft.BaseUrl.Trim(), draft.Kind == "opencode" ? "global/health" : "models"); }
             catch { return T("URL HTTP(S) invalide."); }
             if (string.IsNullOrWhiteSpace(draft.Model) || draft.ContextLimit is < 1024 or > 10_000_000)
@@ -82,7 +86,13 @@ public sealed partial class MainWindow
             BindLimit(); vision.IsChecked = draft.SupportsImages;
             username.Text = draft.Username; executable.Text = draft.ExecutablePath; autoStart.IsChecked = draft.AutoStart;
             foreach (var control in new UIElement[] { username, executable, autoStart }) control.Visibility = draft.Kind == "opencode" ? Visibility.Visible : Visibility.Collapsed;
-            info.Text = WorkflowText("Saisissez vos informations, puis chargez les modèles ou indiquez directement leur identifiant. Une API locale peut fonctionner sans clé.",
+            var acp = AcpProviders.Find(draft.Kind);
+            endpoint.Visibility = key.Visibility = acp == null ? Visibility.Visible : Visibility.Collapsed;
+            if (acp != null) executable.Visibility = acpArguments.Visibility = Visibility.Visible; else acpArguments.Visibility = Visibility.Collapsed;
+            executable.Header = acp != null ? WorkflowText("Exécutable ACP personnalisé (facultatif)", "Custom ACP executable (optional)") : T("Chemin vers opencode.exe (facultatif)");
+            acpArguments.Text = draft.AcpArgumentsJson;
+            load.Content = draft.Kind == "chatgpt-acp" ? WorkflowText("Connecter mon compte ChatGPT", "Connect my ChatGPT account") : WorkflowText("Charger les modèles", "Load models");
+            info.Text = acp != null ? WorkflowText(acp.DescriptionFr, acp.DescriptionEn) : WorkflowText("Saisissez vos informations, puis chargez les modèles ou indiquez directement leur identifiant. Une API locale peut fonctionner sans clé.",
                 "Enter your details, then load models or type a model ID directly. A local API may work without a key.");
             refreshing = false;
         }
@@ -102,20 +112,21 @@ public sealed partial class MainWindow
         {
             if (form.Busy) return;
             var draft = Read();
-            try { ChatEngine.Endpoint(draft.BaseUrl, draft.Kind == "opencode" ? "global/health" : "models"); }
+            try { if (AcpProviders.Find(draft.Kind) == null) ChatEngine.Endpoint(draft.BaseUrl, draft.Kind == "opencode" ? "global/health" : "models"); }
             catch { info.Text = T("URL HTTP(S) invalide."); return; }
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            using var timeout = new CancellationTokenSource(AcpProviders.Find(draft.Kind) != null ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(25));
             form.Request = timeout; host.IsEnabled = false; progress.IsActive = true; progress.Visibility = Visibility.Visible; form.BusyChanged(true);
             info.Text = WorkflowText("Recherche des modèles…", "Finding models…");
             try
             {
                 var secret = draft.PendingKey.Length > 0 ? draft.PendingKey : KeyVault.Decrypt(draft.ProtectedKey);
                 var target = new Provider { Name = draft.Name, BaseUrl = draft.BaseUrl, Model = draft.Model, Kind = draft.Kind,
-                    Username = draft.Username, ExecutablePath = draft.ExecutablePath, AutoStart = draft.AutoStart,
+                    Username = draft.Username, ExecutablePath = draft.ExecutablePath, AcpArgumentsJson = draft.AcpArgumentsJson, AutoStart = draft.AutoStart,
                     BypassFreeLimitation = draft.BypassFreeLimitation, DetectedModelsJson = draft.DetectedModelsJson, SelectedModelsJson = draft.SelectedModelsJson,
                     LocalModelsJson = draft.LocalModelsJson, ModelContextsJson = draft.ModelContextsJson };
                 List<string> models;
-                if (target.IsOpenCode)
+                if (target.IsAcp) models = await new AcpEngine().ModelsAsync(target, timeout.Token, authenticate: target.Kind == "chatgpt-acp");
+                else if (target.IsOpenCode)
                 {
                     await EnsureOpenCodeServerAsync(target, secret, timeout.Token);
                     models = (await openCodeEngine.ModelsAsync(target, secret, project?.GetSourceFolders().FirstOrDefault(), timeout.Token)).Select(x => x.Reference).ToList();
@@ -127,6 +138,7 @@ public sealed partial class MainWindow
                 ProviderModels.Refresh(target, models);
                 if (!models.Contains(draft.Model, StringComparer.Ordinal)) draft.Model = models[0];
                 ProviderModels.Select(target, ProviderModels.Visible(target).Append(draft.Model));
+                draft.SupportsImages = target.SupportsImages; vision.IsChecked = target.SupportsImages;
                 draft.DetectedModelsJson = target.DetectedModelsJson; draft.SelectedModelsJson = target.SelectedModelsJson;
                 draft.ModelContextsJson = target.ModelContextsJson; draft.LocalModelsJson = target.LocalModelsJson;
                 refreshing = true; model.ItemsSource = models; model.Text = draft.Model; refreshing = false;

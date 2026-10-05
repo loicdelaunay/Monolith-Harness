@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.57.0 - 2026-10-05
+
+- Adds Antigravity ACP and ChatGPT Plus / Pro through Codex to the provider settings, welcome flow and CLI connection wizard. ChatGPT uses account sign-in and the plan’s Codex allowance, without an API key or fallback to API billing.
+- Adds ACP v1 streaming, reasoning and tool activity, native model discovery, supported effort selection, cancellation and local history replay. ACP permission requests use the application’s approval flow; Chat and Plan select Codex read-only mode.
+- Keeps Antigravity permissions enabled. Its current adapter requires Agent / Execute mode and exposes no model catalog; its permissions remain managed by Antigravity. Node.js and authenticated agent installations are described in the connection settings. Native agent tools replace the application’s local tool and subagent orchestration protocols for ACP connections.
+
+## 1.56.0 - 2026-10-05
+
+- Improves Markdown readability with paragraph and section spacing, a clearer line height, and embedded offline LaTeX/KaTeX and Mermaid rendering in chat and file previews. Chat and Agent prompts explain the supported display formats; incomplete diagrams retain their source.
+- Groups reasoning, intermediate replies and tool activity into one expandable bubble per user turn. Its collapsed summary follows the latest activity; Show reasoning details controls its initial state while manual choices remain effective during streaming. The final answer stays directly visible.
+- Adds persistent up/down controls for queued messages in the GUI, CLI and legacy desktop host, preserving content, attachments, provider routing and steering priority.
+- Routes asset captures through the configured Bypass image AI observer when enabled, including with a vision-capable main model. Ordinary images retain direct vision where supported.
+
+## 1.55.1 - 2026-10-03
+
+- Restores the thinking selector in Chat mode: Auto, Low, Medium, High and Disabled can be selected according to model support. Chat starts with Disabled and stores its preference separately from Agent across GUI, CLI and the legacy desktop host. Existing installations initialize the Chat preference to Disabled.
+- Applies reasoning-off request enforcement only when Disabled is selected. Chat prompts and OpenCode variants now follow the selected level; unavailable OpenCode levels report an explanation. Conversation exports reflect the active mode preference.
+
 ## 1.55.0 - 2026-10-03
 
 - Replaces the width-dependent model information heading with a stable More information label, removing its resize feedback and rapid flickering in both expanded and collapsed states. Collapsed context and speed metrics retain their existing height.

@@ -32,6 +32,7 @@ public sealed class ChatEngine(HttpClient http)
     }
     public async Task<List<string>> ModelsAsync(Provider provider, string key, CancellationToken ct)
     {
+        if (provider.IsAcp) return await new AcpEngine().ModelsAsync(provider, ct);
         if (provider.IsLocal)
         {
             var config = LocalProviderSettings.Read(provider.LocalModelsJson);
@@ -90,8 +91,10 @@ public sealed class ChatEngine(HttpClient http)
     }
     public Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
         Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null,
-        Action<ContextRequestProgress>? requestProgress = null, bool requireNoReasoning = false)
+        Action<ContextRequestProgress>? requestProgress = null, bool requireNoReasoning = false, AcpRunOptions? acp = null)
     {
+        if (provider.IsAcp) return TokenConsumption.TrackAsync(provider, ContextWindow.Estimate(messages),
+            progress => new AcpEngine().PromptAsync(provider, messages, progress, ct, reasoningEffort, acp), update);
         var inputEstimate = ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools);
         return RequestRetry.RunAsync(() => TokenConsumption.TrackAsync(provider, inputEstimate,
             progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, requireNoReasoning ? "none" : reasoningEffort, inputEstimate, requestProgress, requireNoReasoning), update), retrySettings, ct,

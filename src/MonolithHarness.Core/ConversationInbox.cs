@@ -11,10 +11,29 @@ public sealed class PendingInput
     public string Mode { get; set; } = "queued";
     public string Text { get; set; } = "";
     public string ImagesJson { get; set; } = "[]";
+    public long SortOrder { get; set; }
     public List<Attachment> Images() => JsonSerializer.Deserialize<List<Attachment>>(ImagesJson) ?? [];
 }
 public static class ConversationInbox
 {
+    public static IQueryable<PendingInput> Ordered(IQueryable<PendingInput> inputs) => inputs
+        .OrderByDescending(x => x.Mode == "steering").ThenBy(x => x.SortOrder == 0 ? x.Id : x.SortOrder).ThenBy(x => x.Id);
+
+    public static async Task MoveAsync(string database, int chatId, int id, int direction, CancellationToken ct = default)
+    {
+        if (direction is not (-1 or 1)) throw new ArgumentException("Direction invalide.");
+        await using var db = new HarnessDb(database);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var items = await Ordered(db.PendingInputs.Where(x => x.ChatId == chatId)).ToListAsync(ct);
+        int index = items.FindIndex(x => x.Id == id);
+        if (index < 0) throw new InvalidOperationException("Ce message a déjà été envoyé ou supprimé.");
+        int next = index + direction;
+        if (next < 0 || next >= items.Count || items[next].Mode != items[index].Mode) return;
+        (items[index], items[next]) = (items[next], items[index]);
+        for (int i = 0; i < items.Count; i++) items[i].SortOrder = i + 1;
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+    }
     public static async Task UpdateAsync(string database, int chatId, int id, string expectedText, string text, bool steer = false, int? providerId = null, CancellationToken ct = default)
     {
         await using var db = new HarnessDb(database);
@@ -33,12 +52,15 @@ public static class ConversationInbox
         if(string.IsNullOrWhiteSpace(text)&&attachments.Count==0) throw new ArgumentException("Message requis.");
         await using var db=new HarnessDb(database);
         var input=new PendingInput{ChatId=chatId,ProviderId=providerId,Text=text,Mode=mode,ImagesJson=JsonSerializer.Serialize(attachments)};
-        db.PendingInputs.Add(input);await db.SaveChangesAsync(ct);return input;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var last = await db.PendingInputs.Where(x => x.ChatId == chatId).Select(x => (long?)(x.SortOrder == 0 ? x.Id : x.SortOrder)).MaxAsync(ct) ?? 0;
+        input.SortOrder = last + 1;
+        db.PendingInputs.Add(input);await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);return input;
     }
     public static async Task<List<Message>> ApplySteeringAsync(ConversationSession run, CancellationToken ct)
     {
         await using var transaction=await run.Db.Database.BeginTransactionAsync(ct);
-        var inputs=await run.Db.PendingInputs.Where(x=>x.ChatId==run.Chat.Id && x.Mode=="steering").OrderBy(x=>x.Id).ToListAsync(ct);
+        var inputs=await Ordered(run.Db.PendingInputs.Where(x=>x.ChatId==run.Chat.Id && x.Mode=="steering")).ToListAsync(ct);
         var messages=inputs.Select(x=>new Message{ChatId=run.Chat.Id,Content=x.Text,Attachments=x.Images()}).ToList();
         // Called only between complete assistant/tool groups, never during an in-flight request.
         run.Db.Messages.AddRange(messages);run.Db.PendingInputs.RemoveRange(inputs);

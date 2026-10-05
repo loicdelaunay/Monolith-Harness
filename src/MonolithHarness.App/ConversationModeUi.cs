@@ -57,21 +57,22 @@ public sealed partial class MainWindow
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(conversationModeSwitch, WorkflowText("Chat / Agent", "Chat / Agent"));
         if (thinkingSelector.Items.Count > 0)
         {
-            var index = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel).ToLowerInvariant() switch
+            var index = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel).ToLowerInvariant() switch
             { "low" => 1, "medium" => 2, "high" => 3, "none" => 4, _ => 0 };
             if (thinkingSelector.SelectedIndex != index) PopulateThinkingSelector();
-            else thinkingSelector.IsEnabled = !ChatInteraction && ActiveRun == null;
+            else thinkingSelector.IsEnabled = ActiveRun == null;
         }
     }
-    bool NativeChatProvider => provider?.IsOpenCode == true || provider?.IsComposite == true &&
-        db.Providers.Local.Any(x => x.Id == CompositeModel.Read(provider.CompositeJson).Orchestrator.ProviderId && x.IsOpenCode);
+    bool NativeChatProvider => provider?.IsExternalAgent == true || provider?.IsComposite == true &&
+        db.Providers.Local.Any(x => x.Id == CompositeModel.Read(provider.CompositeJson).Orchestrator.ProviderId && x.IsExternalAgent);
 
+    bool AcpChatProvider => provider?.IsAcp == true || provider?.IsComposite == true && db.Providers.Local.Any(x => x.Id == CompositeModel.Read(provider.CompositeJson).Orchestrator.ProviderId && x.IsAcp);
     FrameworkElement ChatSkillChoice(string id, Action? beforeOpen = null)
     {
         var owner = chat!;
         var python = id == "python";
-        var toggle = new CheckBox { IsChecked = python ? !NativeChatProvider && owner.ChatPythonEnabled : owner.ChatWebEnabled,
-            IsEnabled = ActiveRun == null && (!python || !NativeChatProvider) };
+        var toggle = new CheckBox { IsChecked = python ? !NativeChatProvider && owner.ChatPythonEnabled : !AcpChatProvider && owner.ChatWebEnabled,
+            IsEnabled = ActiveRun == null && !AcpChatProvider && (!python || !NativeChatProvider) };
         var definition = Skills.All.Single(x => x.Id == id);
         if (python) definition = definition with { FrenchName = "Exécution de scripts Python", EnglishName = "Python script execution" };
         toggle.Click += async (_, _) => await Guard(async () =>
@@ -83,7 +84,8 @@ public sealed partial class MainWindow
             catch { if (python) owner.ChatPythonEnabled = previous; else owner.ChatWebEnabled = previous; toggle.IsChecked = previous; throw; }
         });
         var row = SkillChoiceRow(definition, toggle, beforeOpen);
-        if (python && NativeChatProvider) ToolTipService.SetToolTip(row, WorkflowText("Python nécessite un fournisseur utilisant les outils Monolith. OpenCode utilise ses propres outils web.", "Python requires a provider using Monolith tools. OpenCode uses its native web tools."));
+        if (python && NativeChatProvider) ToolTipService.SetToolTip(row, WorkflowText("Python nécessite un fournisseur utilisant les outils Monolith. Les agents externes utilisent leurs propres outils.", "Python requires a provider using Monolith tools. External agents use their own tools."));
+        if (AcpChatProvider) ToolTipService.SetToolTip(row, WorkflowText("Les outils ACP sont disponibles en mode Agent. Les skills web et Python Monolith ne sont pas transmis à cet agent.", "ACP tools are available in Agent mode. Monolith web and Python skills are not forwarded to this agent."));
         return row;
     }
     async Task ChangeConversationModeAsync(string value)

@@ -6,7 +6,7 @@ public static class ModelCatalog
     {
         if (provider == null) return [];
         var available = ProviderModels.Available(provider);
-        var examples = available.Count == 0 && !provider.IsLocal && !provider.IsOpenCode && !provider.IsComposite
+        var examples = available.Count == 0 && !provider.IsLocal && !provider.IsExternalAgent && !provider.IsComposite
             ? ProviderPresets.Resolve(provider.BaseUrl)?.SuggestedChatModels ?? [] : [];
         return ProviderModels.Normalize(available.Concat(ProviderModels.Visible(provider)).Concat(examples));
     }

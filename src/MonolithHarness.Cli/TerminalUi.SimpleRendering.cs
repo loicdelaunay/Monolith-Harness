@@ -129,7 +129,7 @@ public sealed partial class TerminalUi
         int brandLeft = textLeft + TerminalText.Width(title) + 3;
         if (appearance.Crt && brandLeft + TerminalText.Width(appearance.Brand) < left + width)
             canvas.Write(brandLeft, 1, appearance.Brand, p.Dim, left + width - brandLeft);
-        var thinking = ConversationModes.EffectiveThinking(CurrentChat, workspace?.State.ThinkingLevel);
+        var thinking = ConversationModes.EffectiveThinking(CurrentChat, workspace?.State.ThinkingLevel, workspace?.State.ChatThinkingLevel);
         canvas.Write(textLeft, 2, (CurrentProvider == null ? L("Aucun fournisseur · /connect", "No provider · /connect") : CurrentProvider.Name + " · " + CurrentProvider.Model) + " (" + thinking + ")", p.Dim, textWidth);
         canvas.Write(textLeft, 3, CurrentProject?.GetSourceFolders().FirstOrDefault() ?? Environment.CurrentDirectory, p.Dim, textWidth);
         int active = runs.Count(r => !r.Value.IsCompleted);

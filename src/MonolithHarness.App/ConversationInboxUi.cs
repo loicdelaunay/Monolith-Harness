@@ -16,7 +16,7 @@ public sealed partial class MainWindow
     async Task RefreshInboxAsync()
     {
         var id=chat?.Id; var revision = conversationLoadRevision;
-        var pending=id==null?new List<PendingInput>():await ReadStoreAsync(context => context.PendingInputs.AsNoTracking().Where(x=>x.ChatId==id).OrderBy(x=>x.Id).ToList());
+        var pending=id==null?new List<PendingInput>():await ReadStoreAsync(context => ConversationInbox.Ordered(context.PendingInputs.AsNoTracking().Where(x=>x.ChatId==id)).ToList());
         if(chat?.Id!=id || revision != conversationLoadRevision)return;
         inboxPanel.Children.Clear();
         foreach(var item in pending)
@@ -38,6 +38,19 @@ public sealed partial class MainWindow
             Grid.SetColumn(text, 1);
             row.Children.Add(text);
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+            foreach (var direction in new[] { -1, 1 })
+            {
+                var neighbor = pending.IndexOf(item) + direction;
+                var move = Action(direction < 0 ? "↑" : "↓", async () =>
+                {
+                    await ConversationInbox.MoveAsync(HarnessDb.DatabasePath, item.ChatId, item.Id, direction);
+                    await RefreshInboxAsync();
+                });
+                move.IsEnabled = neighbor >= 0 && neighbor < pending.Count && pending[neighbor].Mode == item.Mode;
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(move, direction < 0 ? WorkflowText("Monter", "Move up") : WorkflowText("Descendre", "Move down"));
+                ToolTipService.SetToolTip(move, direction < 0 ? WorkflowText("Monter", "Move up") : WorkflowText("Descendre", "Move down"));
+                actions.Children.Add(move);
+            }
             var delete = Action(WorkflowText("Supprimer", "Delete"), async()=>{await using var db=new HarnessDb();await db.PendingInputs.Where(x=>x.Id==item.Id && x.ChatId==item.ChatId).ExecuteDeleteAsync();await RefreshInboxAsync();});
             async Task EditAsync()
             {
@@ -94,7 +107,7 @@ public sealed partial class MainWindow
         while (conversationLoading && chat?.Id == chatId) await Task.Delay(20);
         if(conversationRuns.ContainsKey(chatId))return;
         await using var context=new HarnessDb();
-        var item=await context.PendingInputs.Where(x=>x.ChatId==chatId).OrderByDescending(x=>x.Mode=="steering").ThenBy(x=>x.Id).FirstOrDefaultAsync();
+        var item=await ConversationInbox.Ordered(context.PendingInputs.Where(x=>x.ChatId==chatId)).FirstOrDefaultAsync();
         if(item==null)return;
         var target=await context.Chats.SingleAsync(x=>x.Id==chatId);
         var project=await context.Projects.SingleAsync(x=>x.Id==target.ProjectId);

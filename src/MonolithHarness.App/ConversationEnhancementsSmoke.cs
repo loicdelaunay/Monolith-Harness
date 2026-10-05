@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         var pending = new PendingInput { ChatId = target.Id, ProviderId = state.ProviderId, Text = "Corrige les problèmes suivants dans l’UI et CLI : vérifier les tests puis résumer les modifications.\nConserver les fonctionnalités existantes." };
         db.PendingInputs.Add(pending); await db.SaveChangesAsync(); await RefreshInboxAsync();
         var queueCard = inboxPanel.Children.OfType<Border>().Single();
-        if (queueCard.Child is not Grid grid || grid.ColumnDefinitions.Count != 3 || grid.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Count() != 3) throw new Exception("Queue actions are not three inline buttons.");
+        if (queueCard.Child is not Grid grid || grid.ColumnDefinitions.Count != 3 || grid.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Count() != 5) throw new Exception("Queue actions are not five inline buttons.");
         AddMessage("user", "Je lis le début de la réponse pendant que l’agent continue.", [], messages);
         var assistant = AddAssistantMessage("## Résultat\n\nPremier paragraphe terminé.\n\nRéponse en cours", target: messages);
         var first = assistant.BodyContainer.Children[0];

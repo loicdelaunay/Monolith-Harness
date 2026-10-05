@@ -206,7 +206,7 @@ public sealed partial class MainWindow
             if (chatSkills.Tag is Expander chatExpander) chatExpander.IsExpanded = true;
             chatSkills.Children.Add(ChatSkillChoice("web", menu.Hide));
             chatSkills.Children.Add(ChatSkillChoice("python", menu.Hide));
-            if (NativeChatProvider) chatSkills.Children.Add(new TextBlock { Text = WorkflowText("OpenCode utilise ses outils web natifs ; le skill Python Monolith nécessite un autre fournisseur.", "OpenCode uses its native web tools; the Monolith Python skill requires another provider."), TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = FluentDesign.Secondary, Margin = new(4, 3, 4, 4) });
+            if (NativeChatProvider) chatSkills.Children.Add(new TextBlock { Text = WorkflowText(AcpChatProvider ? "Les outils ACP sont disponibles en mode Agent. Les skills web et Python Monolith nécessitent un autre fournisseur." : "OpenCode utilise ses outils web natifs ; le skill Python Monolith nécessite un autre fournisseur.", AcpChatProvider ? "ACP tools are available in Agent mode. Monolith web and Python skills require another provider." : "OpenCode uses its native web tools; the Monolith Python skill requires another provider."), TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = FluentDesign.Secondary, Margin = new(4, 3, 4, 4) });
         }
         if (!ChatInteraction)
         {

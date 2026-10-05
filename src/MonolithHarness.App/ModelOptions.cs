@@ -151,14 +151,14 @@ public sealed partial class MainWindow
         modelPickerProvider.Text = choice?.ProviderName ?? WorkflowText("Aucun modèle sélectionné", "No model selected");
         ToolTipService.SetToolTip(modelPickerProvider, modelPickerProvider.Text);
         RefreshInfoHeading();
-        thinkingDescription.Text = ChatInteraction
-            ? WorkflowText("Le mode Chat désactive le raisonnement. Choisissez un modèle qui permet sa désactivation.", "Chat mode disables reasoning. Choose a model that supports disabling it.")
-            : thinkingSelector.SelectedIndex switch
+        thinkingDescription.Text = thinkingSelector.SelectedIndex switch
         {
             1 => WorkflowText("Demande une réflexion courte pour privilégier la rapidité.", "Requests brief thinking to favor speed."),
             2 => WorkflowText("Demande un équilibre entre réflexion et rapidité.", "Requests a balance between thinking and speed."),
             3 => WorkflowText("Demande une réflexion approfondie pour les tâches complexes.", "Requests deeper thinking for complex tasks."),
-            4 => WorkflowText("Demande une réponse sans raisonnement étendu.", "Requests a response without extended reasoning."),
+            4 => ChatInteraction
+                ? WorkflowText("Réponse sans raisonnement étendu, sélectionnée par défaut en mode Chat.", "Response without extended reasoning, selected by default in Chat mode.")
+                : WorkflowText("Demande une réponse sans raisonnement étendu.", "Requests a response without extended reasoning."),
             _ => WorkflowText("Utilise le niveau de réflexion par défaut du modèle.", "Uses the model's default thinking level.")
         };
         ToolTipService.SetToolTip(thinkingDescription, WorkflowText("La prise en charge des niveaux de réflexion dépend du fournisseur et du modèle.",

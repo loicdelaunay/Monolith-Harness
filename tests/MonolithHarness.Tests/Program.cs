@@ -4,11 +4,17 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using MonolithHarness.Core;
 using System.Text.Json.Nodes;
 
+if (args.Contains("--input-format=stream-json") && Environment.GetEnvironmentVariable("MONOLITHHARNESS_FAKE_AGY_TRACE") is { } trace) { await AcpChecks.FakeAgy(trace, args); return; }
+if (args.Contains("--acp-live-antigravity")) { await AcpChecks.LiveAntigravityAdapter(); return; }
+if (args.Length >= 2 && args[0] == "--acp-fake") { await AcpChecks.Fake(args[1]); return; }
+if (args.Contains("--acp-live-probe")) { using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2)); await new AcpEngine().ProbeAsync(AcpProviders.Create(AcpProviders.Find("chatgpt-acp")!), timeout.Token); Console.WriteLine("Live Codex ACP initialization and ChatGPT authentication capability passed (no login or model request)."); return; }
 int passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception("ÉCHEC : " + name); Console.WriteLine("OK : " + name); passed++; }
 async Task Throws<T>(Func<Task> action, string name) where T : Exception
 { try { await action(); } catch (T) { Check(true, name); return; } throw new Exception("Exception attendue : " + name); }
 string Event(object value) => "data: " + System.Text.Json.JsonSerializer.Serialize(value) + "\r\n\r\n";
+if (args.Contains("--acp")) { await AcpChecks.Run(Check); Console.WriteLine($"{passed} ACP checks passed."); return; }
+if (args.Contains("--message-display")) { await MessageDisplayChecks.Run(Check); await InboxChecks.Run(Check); await VisionChecks.Run(Check); Console.WriteLine($"{passed} message display and vision checks passed."); return; }
 if (args.Contains("--local-models")) { await LocalModelChecks.Run(Check); Console.WriteLine($"{passed} local model checks passed."); return; }
 if (args.Contains("--conversation-files")) { await ConversationFileWorkspaceChecks.Run(Check); Console.WriteLine($"{passed} conversation file workspace checks passed."); return; }
 if (args.Contains("--portable-storage")) { await PortableStorageChecks.Run(Check); Console.WriteLine($"{passed} portable storage checks passed."); return; }

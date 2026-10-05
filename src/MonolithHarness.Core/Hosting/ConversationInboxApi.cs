@@ -14,9 +14,15 @@ public sealed partial class HarnessService
     async Task<object> Inbox(JsonObject p,CancellationToken ct)
     {
         var id=I(p,"chatId");await using var db=Db();
-        return await db.PendingInputs.Where(x=>x.ChatId==id).OrderBy(x=>x.Id).Select(x=>new{x.Id,x.ChatId,x.Text,x.Mode}).ToListAsync(ct);
+        return await ConversationInbox.Ordered(db.PendingInputs.Where(x=>x.ChatId==id)).Select(x=>new{x.Id,x.ChatId,x.Text,x.Mode}).ToListAsync(ct);
     }
     async Task NotifyInbox(int id)=>await emit(new{@event="inbox",chatId=id,items=await Inbox(new(){["chatId"]=id},CancellationToken.None)});
+    async Task<object> MoveInbox(JsonObject p, CancellationToken ct)
+    {
+        var id = I(p, "chatId");
+        await ConversationInbox.MoveAsync(database, id, I(p, "id"), I(p, "direction"), ct);
+        await NotifyInbox(id); return true;
+    }
     async Task<object> UpdateInbox(JsonObject p, CancellationToken ct)
     {
         var id = I(p, "chatId"); bool steer = B(p, "steer"); int? providerId = null;
@@ -45,7 +51,7 @@ public sealed partial class HarnessService
     {
         if(runs.ContainsKey(id))return false;
         await using var db=Db();
-        var item=await db.PendingInputs.Where(x=>x.ChatId==id).OrderByDescending(x=>x.Mode=="steering").ThenBy(x=>x.Id).FirstOrDefaultAsync(ct);
+        var item=await ConversationInbox.Ordered(db.PendingInputs.Where(x=>x.ChatId==id)).FirstOrDefaultAsync(ct);
         if(item==null)return false;
         return await Send(new(){["chatId"]=id,["providerId"]=item.ProviderId,["text"]=item.Text,["images"]=System.Text.Json.JsonSerializer.SerializeToNode(item.Images(),Json),["pendingInputId"]=item.Id},ct);
     }

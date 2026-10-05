@@ -10,6 +10,7 @@ public static class MarkdownPipelineHelper
         .UsePipeTables()
         .UseTaskLists()
         .UseEmphasisExtras()
+        .UseMathematics()
         .Build();
 
     public static MarkdownDocument Parse(string? markdown)

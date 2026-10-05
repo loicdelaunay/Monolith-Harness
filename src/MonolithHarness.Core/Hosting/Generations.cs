@@ -62,14 +62,16 @@ public sealed partial class HarnessService
             await emit(new { @event = "message", chatId = chat.Id, title = run.Chat.Title, message = MessageView(user) });
             var definitions = Definitions(run);
             var chatOnly = ConversationModes.IsChat(run.Chat.InteractionMode);
-            var system = chatOnly ? ConversationModes.ChatPrompt(options.Language, run.Chat, provider.IsOpenCode, provider.OpenCodeTools) : Skills.Prompt(options.EnabledSkills, options.Language, project.GetSourceFolders().Count > 0,
+            var system = chatOnly ? ConversationModes.ChatPrompt(options.Language, run.Chat, provider.IsOpenCode, provider.OpenCodeTools, options.ThinkingLevel) : Skills.Prompt(options.EnabledSkills, options.Language, project.GetSourceFolders().Count > 0,
                 BrowserSkillAccess.Enabled(options.EnabledSkills) && FeatureSettings.Read(options.FeaturesJson).BrowserMode == "embedded",
                 Skills.Enabled(options.EnabledSkills, "write_sources"));
+            if (provider.IsAcp) definitions.Clear();
             run.Workflow = chatOnly ? null : CreateWorkflow(run);
             var agent = CreateAgentRuntime(run, secret, mcp);
-            system += await agent.InitializeAsync(ct);
+            if (provider.IsAcp) system = AcpProviders.SystemPrompt(options.Language, run.Chat.ExecutionMode);
+            else system += await agent.InitializeAsync(ct);
             if (!chatOnly) system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
-            if (run.Chat.OrchestrationMode != "disabled")
+            if (!provider.IsAcp && run.Chat.OrchestrationMode != "disabled")
             {
                 var report = await agent.StartAsync(ct);
                 if (report.Length > 0)
@@ -92,7 +94,7 @@ public sealed partial class HarnessService
                     { completionStatus = "12 étapes atteintes / 12 steps reached. Send continue to proceed."; await emit(new { @event = "status", chatId = chat.Id, text = completionStatus }); break; }
                     await emit(new { @event = "status", chatId = chat.Id, text = "Continuation automatique / Auto-continue…" });
                 }
-                if (!provider.IsOpenCode)
+                if (!provider.IsExternalAgent)
                 {
                     definitions = Definitions(run);
                     agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
@@ -100,7 +102,7 @@ public sealed partial class HarnessService
                     if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                         foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 }
-                if (!provider.IsOpenCode) history = await Compact(run, history, system, definitions, secret, ct);
+                if (!provider.IsExternalAgent) history = await Compact(run, history, system, definitions, secret, ct);
                 var wire = Wire(system, ConversationModes.History(history, run.Chat));
                 wire = await VisionFor(run).PrepareAsync(wire, ct);
                 int input = ContextWindow.Estimate(wire) + ContextWindow.Estimate(definitions);
@@ -132,12 +134,12 @@ public sealed partial class HarnessService
                 var completion = provider.IsOpenCode
                     ? await OpenCode(run, secret, history, system, Update, ct)
                     : await engine.StreamAsync(provider, secret, wire, definitions, Update, ct, options.ThinkingLevel, FeatureSettings.Read(options.FeaturesJson), progress =>
-                        emit(new { @event = "status", chatId = chat.Id, text = progress.Caption(options.Language, 0), contextPreload = progress }).GetAwaiter().GetResult(), requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode));
+                        emit(new { @event = "status", chatId = chat.Id, text = progress.Caption(options.Language, 0), contextPreload = progress }).GetAwaiter().GetResult(), requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode) && options.ThinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase), acp: provider.IsAcp ? AcpOptions(run) : null);
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 lastUpdate = DateTime.MinValue;
                 Update(new GenerationUpdate(active.Content, completion.Message["reasoning_content"]?.GetValue<string>() ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens });
                 active.WireJson = completion.Message.ToJsonString(); active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
-                if (provider.IsOpenCode) active.State = "complete";
+                if (provider.IsExternalAgent) active.State = "complete";
                 await emit(new { @event = "message", chatId = chat.Id, message = MessageView(active) });
                 var results = new List<Message>();
                 if (completion.Message["tool_calls"] is JsonArray calls)
@@ -185,8 +187,8 @@ public sealed partial class HarnessService
                 history = await History(run, ct);
                 var steered=await ApplySteering(run,ct);
                 if(steered.Count>0){history=await History(run,ct);round=0;}
-                if (!provider.IsOpenCode) history = await Compact(run, history, system, definitions, secret, ct);
-                else if (FeatureSettings.Read(options.FeaturesJson).Compaction.ShouldCompact((completion.InputTokens ?? input) + (completion.OutputTokens ?? ContextWindow.EstimateText(active.Content)), provider.ContextLimit))
+                if (!provider.IsExternalAgent) history = await Compact(run, history, system, definitions, secret, ct);
+                else if (provider.IsOpenCode && FeatureSettings.Read(options.FeaturesJson).Compaction.ShouldCompact((completion.InputTokens ?? input) + (completion.OutputTokens ?? ContextWindow.EstimateText(active.Content)), provider.ContextLimit))
                 {
                     await Compact(run, history, system, definitions, secret, ct, true);
                 }
@@ -330,6 +332,6 @@ public sealed partial class HarnessService
         return await engine.PromptAsync(p, password, directory, link.SessionId, prompt, system,
             attachments.Select(x => new OpenCodeAttachment(x.Name, x.Mime, x.Data)).ToList(), update, ct,
             async (permission, token) => await Approve($"opencode|{p.Id}|{directory}|{permission.Action}|{string.Join('|', permission.Resources)}",
-                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode, run.Chat.ChatWebEnabled), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
+                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode, run.Chat.ChatWebEnabled, run.Options.ThinkingLevel), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
     }
 }

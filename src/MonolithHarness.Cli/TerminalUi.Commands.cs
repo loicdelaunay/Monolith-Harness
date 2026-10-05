@@ -207,7 +207,8 @@ public sealed partial class TerminalUi
         var selected = await Prompt("Fournisseurs / Providers", choices: snapshot.Providers.Select(p => new Choice(p.Id.ToString(), p.Name, p.Model)).Append(new("new", "+ Ajouter / Add")).ToList());
         if (selected == "new") { await Connect(); return; } if (selected == null) return;
         int id = int.Parse(selected); var provider = snapshot.Providers.Single(p => p.Id == id);
-        var action = await Prompt(provider.Name, provider.BaseUrl, [new("models", "Modèles / Models"), new("context", "Contexte par modèle / Context per model"), new("key", "Modifier la clé / Change key"), new("delete", "Supprimer / Delete")]);
+        var action = await Prompt(provider.Name, provider.BaseUrl, [new("models", "Modèles / Models"), new("context", "Contexte par modèle / Context per model"), new(provider.IsAcp ? "account" : "key", provider.IsAcp ? "Connecter le compte / Sign in" : "Modifier la clé / Change key"), new("delete", "Supprimer / Delete")]);
+        if (action == "account") { await client.Call("provider.authenticate", new { id }, lifetime.Token); await Refresh(); return; }
         if (action == "models") { await Models(snapshot, id); return; }
         if (action == "context")
         {

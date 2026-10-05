@@ -104,6 +104,9 @@ public sealed class Provider
     public bool AutoStart { get; set; }
     public bool OpenCodeTools { get; set; }
     public bool BypassFreeLimitation { get; set; }
+    public string AcpArgumentsJson { get; set; } = "[]";
+    public bool IsAcp => AcpProviders.Find(Kind) != null;
+    public bool IsExternalAgent => IsOpenCode || IsAcp;
     public bool IsOpenCode => Kind.Equals("opencode", StringComparison.OrdinalIgnoreCase);
     public override string ToString() => Id > 0 ? $"{Name} · #{Id}" : Name;
 }
@@ -125,6 +128,7 @@ public sealed class AppState
     public string Language { get; set; } = "fr";
     public string EnabledSkills { get; set; } = "sources,web";
     public string ThinkingLevel { get; set; } = "auto";
+    public string ChatThinkingLevel { get; set; } = "none";
     public string PermissionMode { get; set; } = PermissionModes.Ask;
     public bool AutoContinue { get; set; }
     public bool ShowReasoningDetails { get; set; } = true;

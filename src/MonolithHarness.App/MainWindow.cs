@@ -383,7 +383,7 @@ public sealed partial class MainWindow : Window
 
         thinkingSelector.SelectionChanged += async (_, _) =>
         {
-            if (loading || updatingThinkingSelector || ChatInteraction) return;
+            if (loading || updatingThinkingSelector || ActiveRun != null) return;
             var level = thinkingSelector.SelectedIndex switch
             {
                 1 => "low",
@@ -392,7 +392,7 @@ public sealed partial class MainWindow : Window
                 4 => "none",
                 _ => "auto"
             };
-            state.ThinkingLevel = level;
+            if (ChatInteraction) state.ChatThinkingLevel = level; else state.ThinkingLevel = level;
             RefreshModelOptions();
             await Guard(() => db.SaveChangesAsync());
             ShowStatus(T("Niveau de thinking : ") + (thinkingSelector.SelectedItem?.ToString() ?? level));
@@ -406,7 +406,7 @@ public sealed partial class MainWindow : Window
             {
                 var selectedProvider = provider;
                 var secret = KeyVault.Decrypt(selectedProvider.ProtectedKey);
-                if (string.IsNullOrEmpty(secret) && !selectedProvider.IsOpenCode && !selectedProvider.IsLocal)
+                if (string.IsNullOrEmpty(secret) && !selectedProvider.IsExternalAgent && !selectedProvider.IsLocal)
                 {
                     ShowStatus(T("Renseignez votre clé API dans les Réglages pour charger la liste."), StatusKind.Error);
                     return;
@@ -675,7 +675,7 @@ public sealed partial class MainWindow : Window
                 $"🧠 {T("Élevé")}",
                 $"🧠 {T("Désactivé")}"
             };
-            thinkingSelector.SelectedIndex = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel).ToLowerInvariant() switch
+            thinkingSelector.SelectedIndex = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel).ToLowerInvariant() switch
             {
                 "low" => 1,
                 "medium" => 2,
@@ -683,7 +683,7 @@ public sealed partial class MainWindow : Window
                 "none" => 4,
                 _ => 0
             };
-            thinkingSelector.IsEnabled = !ChatInteraction && ActiveRun == null;
+            thinkingSelector.IsEnabled = ActiveRun == null;
             ToolTipService.SetToolTip(thinkingSelector, T("Niveau de réflexion / thinking du modèle (reasoning effort)"));
         }
         finally
@@ -722,6 +722,7 @@ public sealed partial class MainWindow : Window
                 }
                 var text = item.Content + (item.State == "interrupted" ? T("\n[Réponse interrompue]") : "");
                 var rendered = AddAssistantMessage(text, reasoning, target: messages, sourceProject: sourceProject);
+                if (IntermediateMessage(history, i)) MoveToActivity(rendered);
                 rendered.SetDuration(item.Seconds, item.CompletedUtc);
                 rendered.SetCachedInputTokens(item.CachedInputTokens); actionCard = rendered.Container;
             }
@@ -770,6 +771,7 @@ public sealed partial class MainWindow : Window
     readonly List<WeakReference<AssistantMessageUi>> reasoningViews = [];
     sealed class AssistantMessageUi
     {
+        public ReasoningGroupUi? Group { get; set; }
         public Border? Container { get; set; }
         public StackPanel BodyContainer { get; init; } = null!;
         public Border ThinkingCard { get; init; } = null!;
@@ -791,6 +793,11 @@ public sealed partial class MainWindow : Window
         public void RefreshReasoningPreference()
         {
             var preference = ShowReasoningDetails();
+            if (Group is { } group)
+            {
+                group.Refresh(preference); IsThinkingExpanded = group.Expanded;
+                ThinkingScroll.Visibility = Visibility.Visible; return;
+            }
             if (lastReasoningPreference == preference) return;
             lastReasoningPreference = preference;
             IsThinkingExpanded = preference;
@@ -870,6 +877,7 @@ public sealed partial class MainWindow : Window
             }
             ThinkingCard.Visibility = Visibility.Visible;
             ThinkingBody.Text = reasoning;
+            Group?.Update(reasoning);
             reasoningComplete = isComplete;
             RefreshReasoningPreference();
             RefreshThinkingHeader();
@@ -971,7 +979,10 @@ public sealed partial class MainWindow : Window
         thinkingStack.Children.Add(thinkingScroll);
         thinkingCard.Child = thinkingStack;
 
-        stack.Children.Add(thinkingCard);
+        ui.Group = ActivityGroup(target ?? messages);
+        thinkingHeaderBtn.Visibility = Visibility.Collapsed;
+        thinkingScroll.Visibility = Visibility.Visible;
+        ui.Group.Details.Children.Add(thinkingCard);
         stack.Children.Add(bodyContainer);
         stack.Children.Add(duration);
 
@@ -1293,11 +1304,13 @@ public sealed partial class MainWindow : Window
         };
 
         card.Child = stack;
-        (target ?? messages).Children.Add(card);
+        var group = ActivityGroup(target ?? messages);
+        group.Details.Children.Add(card);
         var ui = new ToolMessageUi((elapsed, phase) =>
         {
             var caption = phase ?? WorkflowText("En cours", "Running");
             statusBadge.Text = caption + " · " + ToolActivity.Duration(elapsed);
+            group.Update(T("Outil") + " : " + toolName + " · " + summary + " · " + statusBadge.Text);
             ToolTipService.SetToolTip(statusBadge, caption + " · " + ToolActivity.Duration(elapsed));
         }, (output, elapsed, image, mime, cancelled) =>
         {
@@ -1307,6 +1320,7 @@ public sealed partial class MainWindow : Window
                 (elapsed > 0 ? WorkflowText(" en ", " in ") + ToolActivity.Duration(elapsed) : "");
             statusBadge.Foreground = cancelled ? FluentDesign.Secondary : failed ? Brush(255, 110, 110) : Brush(100, 220, 140);
             ToolTipService.SetToolTip(statusBadge, statusBadge.Text);
+            group.Update(T("Outil") + " : " + toolName + " · " + statusBadge.Text + " · " + summary);
             card.BorderBrush = FluentDesign.Resource(failed ? "ToolMessageErrorStrokeBrush" : "ToolMessageStrokeBrush");
             spinner.IsActive = false; spinner.Visibility = Visibility.Collapsed;
             progressBar.IsIndeterminate = false; progressBar.Visibility = Visibility.Collapsed;
@@ -1319,6 +1333,7 @@ public sealed partial class MainWindow : Window
                 imageHost.Visibility = Visibility.Visible;
             }
         });
+        group.Update(T("Outil") + " : " + toolName + " · " + summary);
         if (result != null) ui.Complete(result, seconds, imageBytes, imageMime);
         else ui.UpdateProgress(0);
         return ui;
@@ -1326,6 +1341,7 @@ public sealed partial class MainWindow : Window
 
     Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null, Project? sourceProject = null)
     {
+        if (role == "user") activityGroups.Remove(target ?? messages);
         var bodyContainer = ChatDensity.Track(new StackPanel(), "body");
         AppTypography.SetScope(bodyContainer, role == "user" ? FontArea.User : role == "assistant" ? FontArea.Assistant : FontArea.Interface);
         if (!string.IsNullOrWhiteSpace(text))
@@ -1507,7 +1523,7 @@ public sealed partial class MainWindow : Window
         var showReasoning = new CheckBox { Content = T("Afficher les détails du raisonnement"), IsChecked = state.ShowReasoningDetails };
         showReasoning.Content = null;
         general.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
-            WorkflowText("Déplie le raisonnement pendant la génération.", "Expand reasoning during generation."), showReasoning));
+            WorkflowText("Déplie par défaut le groupe des réflexions et outils, dans l’historique et pendant la génération.", "Expand the reasoning and tools group by default, in history and during generation."), showReasoning));
         var autoFocusTool = new CheckBox { IsChecked = FeatureSettings.Read(state.FeaturesJson).AutoFocusTool };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Ouvrir et sélectionner le dernier outil utilisé par l’IA", "Open and focus the latest AI tool"), WorkflowText("Dans la conversation affichée uniquement.", "Only in the visible conversation."), autoFocusTool));
         general.Children.Add(retrySettings.Panel);
@@ -1686,6 +1702,8 @@ public sealed partial class MainWindow : Window
         state.Language = language.SelectedItem is ComboBoxItem { Tag: string languageCode } ? languageCode : "fr";
         state.AutoContinue = autoContinue.IsOn;
         state.ShowReasoningDetails = showReasoning.IsChecked == true;
+        foreach (var reference in activityGroupViews)
+            if (reference.TryGetTarget(out var group)) group.Refresh(state.ShowReasoningDetails);
         foreach (var reference in reasoningViews)
             if (reference.TryGetTarget(out var view)) view.RefreshReasoningPreference();
         state.EnabledSkills = string.Join(',', skillToggles.Where(x => x.Value.IsOn).Select(x => x.Key));
@@ -2316,14 +2334,15 @@ public sealed partial class MainWindow : Window
         var hasBrowser = BrowserSkillAccess.Enabled(run.Options.EnabledSkills) && Skills.Enabled(run.Options.EnabledSkills, "web")
             && FeatureSettings.Read(run.Options.FeaturesJson).BrowserMode == "embedded";
         var chatOnly = ConversationModes.IsChat(run.Chat.InteractionMode);
-        var systemPrompt = chatOnly ? ConversationModes.ChatPrompt(run.Options.Language, run.Chat) : Skills.Prompt(run.Options.EnabledSkills, run.Options.Language, hasSources, hasBrowser, canWriteSources) +
+        var systemPrompt = chatOnly ? ConversationModes.ChatPrompt(run.Options.Language, run.Chat, thinkingLevel: run.Options.ThinkingLevel) : Skills.Prompt(run.Options.EnabledSkills, run.Options.Language, hasSources, hasBrowser, canWriteSources) +
             "\nAdditional tools may request one-time user approval for local previews, files outside the project and terminal commands. Never claim approval before the tool returns success. A denial is final for that action; explain it and do not retry to bypass it.";
         run.Workflow = chatOnly ? null : CreateWorkflow(run);
         await using var mcp = CreateMcpSession(run.Chat.Id);
         var agent = CreateAgentRuntime(run, secret, mcp);
-        systemPrompt += await agent.InitializeAsync(ct);
+        if (provider.IsAcp) systemPrompt = AcpSystemPrompt(run);
+        else systemPrompt += await agent.InitializeAsync(ct);
         if (!chatOnly) systemPrompt += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
-        if (run.Chat.OrchestrationMode != "disabled")
+        if (!provider.IsAcp && run.Chat.OrchestrationMode != "disabled")
         {
             var report = await agent.StartAsync(ct);
             if (report.Length > 0)
@@ -2339,7 +2358,8 @@ public sealed partial class MainWindow : Window
         FeatureSettings.Read(state.FeaturesJson).FilterBrowser(definitions);
         agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
         SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
-        history = await AutoCompactHistoryAsync(run, history, systemPrompt, definitions, secret, ct);
+        if (provider.IsAcp) definitions.Clear();
+        if (!provider.IsAcp) history = await AutoCompactHistoryAsync(run, history, systemPrompt, definitions, secret, ct);
         var wire = ComposeWire(systemPrompt, ConversationModes.History(history, run.Chat));
         var source = new SourceAccess(sourceFolders);
         Message? active = null; AssistantMessageUi? activeAssistantUi = null;
@@ -2357,7 +2377,7 @@ public sealed partial class MainWindow : Window
                 }
                 for (int i = definitions.Count - 1; i >= 0; i--)
                     if (definitions[i]?["function"]?["name"]?.GetValue<string>().StartsWith("mcp_", StringComparison.Ordinal) == true) definitions.RemoveAt(i);
-                if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                if (!provider.IsAcp && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 var definitionsTokens = ContextWindow.Estimate(definitions);
                 var inputEstimate = ContextWindow.Estimate(wire) + definitionsTokens;
@@ -2401,7 +2421,7 @@ public sealed partial class MainWindow : Window
                 {
                     ContextRequestProgressed(run, progress);
                     assistantUi.UpdateContent(progress.Label(run.Options.Language));
-                }, requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode));
+                }, requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode) && run.Options.ThinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase), acp: provider.IsAcp ? AcpOptions(run) : null);
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 CancelModelRetryFeedback(run); run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
                 active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
@@ -2422,6 +2442,7 @@ public sealed partial class MainWindow : Window
                     assistantUi.UpdateThinking(finalReasoning, isComplete: true);
                 }
                 var toolResults = new List<Message>();
+                if (completion.Message["tool_calls"] is JsonArray { Count: > 0 }) MoveToActivity(assistantUi);
                 if (completion.Message["tool_calls"] is JsonArray calls)
                     foreach (var call in calls)
                     {
@@ -2495,7 +2516,7 @@ public sealed partial class MainWindow : Window
                 var steered=await ApplySteeringAsync(run,ct);
                 if(steered.Count>0)round=0;
                 var persistedHistory = await LoadContextHistoryAsync(run, ct);
-                persistedHistory = await AutoCompactHistoryAsync(run, persistedHistory, systemPrompt, definitions, secret, ct);
+                if (!provider.IsAcp) persistedHistory = await AutoCompactHistoryAsync(run, persistedHistory, systemPrompt, definitions, secret, ct);
                 wire = ComposeWire(systemPrompt, ConversationModes.History(persistedHistory, run.Chat));
                 if (toolResults.Count == 0 && steered.Count==0) { SetRunStatus(run, T("Réponse terminée · historique enregistré."), StatusKind.Notice); active = null; break; }
                 if (string.IsNullOrEmpty(assistantUi.CurrentText)) assistantUi.UpdateContent(T("Consultation des outils…"));

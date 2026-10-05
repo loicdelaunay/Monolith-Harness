@@ -24,7 +24,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
     static JsonObject Obj(object value) => (JsonSerializer.SerializeToNode(value, Json) as JsonObject)!;
     HarnessDb Db() => new(database);
     public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); }
-    static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, hasKey = p.ProtectedKey.Length > 0 };
+    static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, p.AcpArgumentsJson, hasKey = p.ProtectedKey.Length > 0 };
     static string Html(string text)
     {
         var document = Markdig.Markdown.Parse(text, Markdown);
@@ -46,6 +46,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
             case "chat.autoname":
                 return await ConversationNaming.RenameAsync(database, I(p, "id"), http, Decrypt, false, ct);
             case "inbox.list":return await Inbox(p,ct);
+            case "inbox.move":return await MoveInbox(p,ct);
             case "inbox.add":return await AddInbox(p,ct);
             case "inbox.update":return await UpdateInbox(p,ct);
             case "inbox.resume":return await SendNext(I(p,"chatId"),ct);
@@ -145,7 +146,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                     provider.ContextLimit=orchestrator.ContextLimit;provider.SupportsImages=orchestrator.SupportsImages;
                     if(provider.Id==0)db.Providers.Add(provider);await db.SaveChangesAsync(ct);return ProviderView(provider);
                 }
-                provider.BaseUrl = S(p, "baseUrl").TrimEnd('/'); _ = ChatEngine.Endpoint(provider.BaseUrl, "models");
+                provider.BaseUrl = S(p, "baseUrl").TrimEnd('/'); if (!provider.IsAcp) _ = ChatEngine.Endpoint(provider.BaseUrl, "models");
                 ModelContexts.Select(provider, S(p, "model"));
                 if (p["modelContextsJson"] != null) provider.ModelContextsJson = S(p, "modelContextsJson", "{}");
                 if (B(p, "contextAutomatic")) ModelContexts.SetOverride(provider, null);
@@ -157,21 +158,33 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 ModelContexts.MergeLocal(provider); ModelContexts.Sync(provider);
                 provider.SupportsImages = B(p, "supportsImages", true); provider.Username = S(p, "username", "opencode");
                 provider.AutoStart = B(p, "autoStart"); provider.OpenCodeTools = B(p, "openCodeTools"); provider.ExecutablePath = S(p, "executablePath");
+                provider.AcpArgumentsJson = S(p, "acpArgumentsJson", provider.AcpArgumentsJson);
+                if (provider.IsAcp) { AcpProviders.Validate(provider); provider.ProtectedKey = []; }
                 if (B(p, "deleteKey")) provider.ProtectedKey = [];
-                if (!string.IsNullOrEmpty(S(p, "key"))) provider.ProtectedKey = await Encrypt(S(p, "key"), ct);
+                if (!provider.IsAcp && !string.IsNullOrEmpty(S(p, "key"))) provider.ProtectedKey = await Encrypt(S(p, "key"), ct);
                 if (provider.Id == 0) db.Providers.Add(provider);
                 await db.SaveChangesAsync(ct); return ProviderView(provider);
             case "provider.delete":
                 if((await db.Providers.Where(x=>x.Kind=="composite").ToListAsync(ct)).Any(x=>{var c=CompositeModel.Read(x.CompositeJson);return c.Agents.Prepend(c.Orchestrator).Any(a=>a.ProviderId==I(p,"id"));}) || await db.PendingInputs.AnyAsync(x=>x.ProviderId==I(p,"id"),ct))throw new InvalidOperationException("Fournisseur utilisé par un modèle composé ou un message en attente.");
                 if (runs.Values.Any(x => x.SelectedProviderId == I(p, "id") || x.Provider.Id == I(p,"id") || x.AgentProviders.Values.Any(a=>a.Id==I(p,"id")))) throw new InvalidOperationException("Provider is in use by a conversation.");
                 db.Providers.Remove(await db.Providers.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); return true;
+            case "provider.authenticate":
+                var accountProvider = await db.Providers.SingleAsync(x => x.Id == I(p, "id"), ct);
+                if (!accountProvider.IsAcp) throw new ArgumentException("Fournisseur ACP requis.");
+                using (var accountTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    accountTimeout.CancelAfter(TimeSpan.FromMinutes(5));
+                    var accountModels = await new AcpEngine().ModelsAsync(accountProvider, accountTimeout.Token, authenticate: true);
+                    ProviderModels.Refresh(accountProvider, accountModels); ProviderModels.Select(accountProvider, accountModels);
+                    await db.SaveChangesAsync(ct); return accountModels;
+                }
             case "provider.models":
                 var selected = await db.Providers.SingleAsync(x => x.Id == I(p, "id"), ct);
                 if(selected.IsComposite)return new[]{selected.Model};
                 var secret = await Decrypt(selected.ProtectedKey, ct);
                 using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
-                    timeout.CancelAfter(TimeSpan.FromSeconds(30));
+                    timeout.CancelAfter(selected.IsAcp ? TimeSpan.FromMinutes(2) : TimeSpan.FromSeconds(30));
                     List<string> models;
                     if (!selected.IsOpenCode) models = await new ChatEngine(http).ModelsAsync(selected, secret, timeout.Token);
                     else
@@ -179,6 +192,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                         await EnsureOpenCode(selected, secret, Path.GetDirectoryName(database)!, timeout.Token);
                         models = (await new OpenCodeEngine(http).ModelsAsync(selected, secret, null, timeout.Token)).Select(x => x.Reference).ToList();
                     }
+                    if (selected.IsAcp) ProviderModels.Refresh(selected, models);
                     await db.SaveChangesAsync(ct);
                     return models;
                 }
@@ -191,6 +205,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 state.ShowReasoningDetails = B(p, "showReasoningDetails", state.ShowReasoningDetails);
                 state.EnabledSkills = string.Join(',', S(p, "enabledSkills", state.EnabledSkills).Split(',').Where(id => Skills.Available().Any(x => x.Id == id)));
                 state.ThinkingLevel = S(p, "thinkingLevel", state.ThinkingLevel);
+                state.ChatThinkingLevel = S(p, "chatThinkingLevel", state.ChatThinkingLevel);
                 state.ProviderId = I(p, "providerId", state.ProviderId);
                 state.ProjectId = p["projectId"]?.GetValue<int>() ?? state.ProjectId; state.ChatId = p["chatId"]?.GetValue<int>() ?? state.ChatId;
                 await db.SaveChangesAsync(ct); AppLog.Configure(FeatureSettings.Read(state.FeaturesJson)); return true;

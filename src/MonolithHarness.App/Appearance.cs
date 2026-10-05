@@ -31,6 +31,7 @@ public sealed partial class MainWindow
     {
         var theme = AppearanceThemes.Get(themeId, customThemes ?? FeatureSettings.Read(state.FeaturesJson).CustomThemes);
         FluentDesign.SetTheme(theme);
+        MarkdownRenderer.RefreshDensity();
         RefreshVersionChip(theme);
         root.RequestedTheme = theme.Dark ? ElementTheme.Dark : ElementTheme.Light;
         root.Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");

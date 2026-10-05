@@ -6,7 +6,7 @@ namespace MonolithHarness.Core;
 public static class ChatReasoning
 {
     public static InvalidOperationException Unsupported(string model, string detail = "") => new(
-        "Mode Chat : le raisonnement ne peut pas être désactivé pour « " + model + " ». Choisissez un modèle sans raisonnement ou utilisez le mode Agent. / Chat mode: reasoning cannot be disabled for this model. Choose a non-reasoning model or use Agent mode." +
+        "Mode Chat : le raisonnement ne peut pas être désactivé pour « " + model + " ». Choisissez un autre niveau de réflexion ou un modèle sans raisonnement. / Chat mode: reasoning cannot be disabled for this model. Choose another thinking level or a non-reasoning model." +
         (detail.Length == 0 ? "" : "\n" + detail));
 
     public static void CheckModel(Provider provider)
