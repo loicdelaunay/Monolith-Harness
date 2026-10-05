@@ -66,7 +66,7 @@ static class ConversationEnhancementChecks
             var handler = new NamingHandler(); using var http = new HttpClient(handler);
             var none = await ConversationNaming.RenameAsync(database, chat.Id, http, (_, _) => Task.FromResult("private-key"), true, default);
             check(none == null && handler.Calls == 0, "Nommage : désactivé par défaut, aucun appel API");
-            features.AutoNameConversations = true; state.FeaturesJson = features.Json(); await db.SaveChangesAsync();
+            features.AutoNameConversations = true; features.AutoNamingTiming = "first-message"; state.FeaturesJson = features.Json(); await db.SaveChangesAsync();
             var title = await ConversationNaming.RenameAsync(database, chat.Id, http, (_, _) => Task.FromResult("private-key"), true, default);
             check(title == "Jeu de cartes tactique" && handler.Payload?["model"]?.GetValue<string>() == "naming-small" && handler.Payload?["tools"] == null, "Nommage : fournisseur dédié, titre nettoyé, sans outils");
             await db.Entry(chat).ReloadAsync();

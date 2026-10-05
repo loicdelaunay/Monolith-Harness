@@ -640,13 +640,18 @@ try
             Check(!tools.Any(x => x?["function"]?["name"]?.GetValue<string>() == "write_source"), "Sous-agent Plan sans écriture, avec délégation swarm autorisée");
             if (wire.Count == 2) return Task.FromResult(new Completion(new JsonObject { ["role"] = "assistant", ["tool_calls"] = new JsonArray(new JsonObject {
                 ["id"] = "bad-child", ["type"] = "function", ["function"] = new JsonObject { ["name"] = "write_source", ["arguments"] = "{\"path\":\"forbidden.md\",\"content\":\"bad\"}" } }) }, 1, 1, 1));
-            if (wire.Last()?["content"]?.GetValue<string>().Contains("Mode Plan") == true) Interlocked.Increment(ref policyDenials);
+            if (wire.Last()?["content"]?.GetValue<string>().Contains("Mode Plan") == true)
+            {
+                Interlocked.Increment(ref policyDenials);
+                return Task.FromResult(new Completion(new JsonObject { ["role"] = "assistant", ["tool_calls"] = new JsonArray(new JsonObject {
+                    ["id"] = "child-plan", ["type"] = "function", ["function"] = new JsonObject { ["name"] = "todowrite", ["arguments"] = "{\"todos\":[{\"id\":\"review\",\"content\":\"Review constraints without edits\",\"status\":\"completed\",\"priority\":\"medium\"}]}" } }) }, 1, 1, 1));
+            }
             return Task.FromResult(new Completion(new JsonObject { ["role"] = "assistant", ["content"] = "Analysis complete" }, 1, 1, 1));
         }, (_, _, _) => throw new Exception("No permission dialog should be needed."), _ => Task.CompletedTask);
         Check((await runtime.InitializeAsync(default)).Contains("ROOT-CONVENTION"), "Instructions transmises à l’orchestrateur");
         var report = await runtime.ForcedAsync(default);
         Check(await session.Db.Subagents.CountAsync(x=>x.ChatId==runtimeChat.Id && x.Status=="completed")==2, "Sous-agents conservent leurs échanges et leur statut final");
-        Check(childRequests == 4 && policyDenials == 2 && !File.Exists(Path.Combine(featureRoot, "forbidden.md")) && report.Contains("Exploration") && report.Contains("Validation"), "Forced lance deux sous-agents et bloque leurs écritures malgré un appel forgé");
+        Check(childRequests == 6 && policyDenials == 2 && !File.Exists(Path.Combine(featureRoot, "forbidden.md")) && report.Contains("Exploration") && report.Contains("Validation"), "Forced lance deux sous-agents et bloque leurs écritures malgré un appel forgé");
     }
 
     var authoredRoot = Path.Combine(workspace, "authored-skills");

@@ -42,8 +42,8 @@ static class CompleteDesignChecks
                     var childDefinitions = new JsonArray();
                     runtime.AddDefinitions(childDefinitions, child: true);
                     var childNames = childDefinitions.Select(x => x!["function"]!["name"]!.GetValue<string>()).ToArray();
-                    check(childNames.SequenceEqual(orchestration == "disabled" ? Array.Empty<string>() : new[] { "delegate_tasks" }),
-                        "Design preserves configured swarm delegation without granting other tools");
+                    check(childNames.SequenceEqual(orchestration == "disabled" ? new[] { "todowrite" } : new[] { "todowrite", "delegate_tasks" }),
+                        "Design preserves scoped child progress and configured delegation without granting other tools");
                 }
         }
         finally { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(root, true); }

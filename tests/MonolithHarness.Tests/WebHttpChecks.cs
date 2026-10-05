@@ -11,7 +11,7 @@ static class WebHttpChecks
     {
         using var server = new Server();
         using var second = new Server();
-        using var web = new WebHttpTools();
+        using var web = new WebHttpTools("legacy");
         string selection = "web";
         int approvals = 0;
         bool allow = true;
@@ -22,7 +22,7 @@ static class WebHttpChecks
         async Task Throws<T>(Func<Task> action, string label) where T : Exception
         { try { await action(); } catch (T) { check(true, label); return; } throw new Exception("Expected " + typeof(T).Name + ": " + label); }
         var definitions = new JsonArray(); WebHttpTools.AddDefinitions(definitions, "web");
-        check(definitions.Count == 2, "HTTP tools available with Web research alone");
+        check(definitions.Select(x => x?["function"]?["name"]?.ToString()).ToHashSet().SetEquals(new[] { "web_http_request", "web_http_configure", "web_http_search", "web_http_read" }), "HTTP request, settings and targeted reads available with Web research alone");
         var disabled = new JsonArray(); WebHttpTools.AddDefinitions(disabled, "browser_access");
         check(disabled.Count == 0, "Browser access alone does not enable direct HTTP");
         var result = JsonNode.Parse(await Request("/hello"))!;

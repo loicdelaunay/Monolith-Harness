@@ -144,7 +144,7 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap
         };
 
-        sealed class StatsCard : Border
+        sealed class StatsCard : UserControl
         {
             readonly TextBlock title = Text(13, bold: true);
             readonly Grid metrics = new() { ColumnSpacing = 12, RowSpacing = 8 };
@@ -156,8 +156,8 @@ public sealed partial class MainWindow
             {
                 var content = new StackPanel { Spacing = 12 };
                 content.Children.Add(title); content.Children.Add(metrics);
-                Child = content; Padding = new(12); CornerRadius = new(8); BorderThickness = new(1);
-                Background = FluentDesign.Card; BorderBrush = FluentDesign.Stroke;
+                Content = new Border { Child = content, Padding = new(12), CornerRadius = new(8), BorderThickness = new(1),
+                    Background = FluentDesign.Card, BorderBrush = FluentDesign.Stroke };
                 for (var i = 0; i < 3; i++)
                 {
                     metrics.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });

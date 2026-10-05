@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.57.1 - 2026-10-06
+
+- Fixes the Windows WinUI target by composing the speed statistics card inside a Border instead of inheriting the sealed native control.
+- Updates HTTP regression coverage to select Legacy for inline response assertions and validate the complete Smart request, settings, search and read tool catalog. Subagent coverage also recognizes its scoped task-reporting tool; naming coverage explicitly selects first-message timing.
+
 ## 1.57.0 - 2026-10-05
 
 - Adds Antigravity ACP and ChatGPT Plus / Pro through Codex to the provider settings, welcome flow and CLI connection wizard. ChatGPT uses account sign-in and the plan’s Codex allowance, without an API key or fallback to API billing.
