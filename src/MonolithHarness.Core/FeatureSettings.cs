@@ -24,6 +24,7 @@ public sealed class FeatureSettings
     public int CliFontSize { get; set; } = 14;
     public bool GuiCheckUpdates { get; set; } = true;
     public AutomaticUpdateMode? GuiUpdateMode { get; set; }
+    public string GuiUpdateVersion { get; set; } = GitHubUpdates.Latest;
     [System.Text.Json.Serialization.JsonIgnore]
     public AutomaticUpdateMode EffectiveGuiUpdateMode => GuiUpdateMode is { } mode && Enum.IsDefined(mode)
         ? mode : GuiCheckUpdates ? AutomaticUpdateMode.Notify : AutomaticUpdateMode.Disabled;
@@ -43,6 +44,8 @@ public sealed class FeatureSettings
     public string ChatMessageDensity { get; set; } = "normal";
     public string RenderingGpuPreference { get; set; } = "auto";
     public bool ShowAttentionSection { get; set; } = true;
+    public bool RenderMermaid { get; set; } = true;
+    public bool RenderMath { get; set; } = true;
     public bool AutoArchiveConversations { get; set; }
     public int AutoArchiveDays { get; set; } = 30;
     public bool AutoDeleteConversations { get; set; }
@@ -112,6 +115,7 @@ public sealed class FeatureSettings
                 "legacy" or "full" => "legacy", _ => "smart" };
             if (settings.ArtifactRetentionDays is < 1 or > 3650) settings.ArtifactRetentionDays = 7;
             if (settings.GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) settings.GuiUpdateMode = null;
+            settings.GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(settings.GuiUpdateVersion);
             return settings;
         }
         catch { return new(); }
@@ -124,6 +128,7 @@ public sealed class FeatureSettings
         if (GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) throw new ArgumentException("Invalid automatic update mode.");
         // Keep older versions aware of the user's choice when reading the same portable profile.
         GuiCheckUpdates = EffectiveGuiUpdateMode != AutomaticUpdateMode.Disabled;
+        GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(GuiUpdateVersion);
         if (ImageGenerationProviderId < 0 || ImageGenerationModel == null || ImageGenerationModel.Length > 300 ||
             ImageGenerationWidth is < 256 or > 2048 || ImageGenerationHeight is < 256 or > 2048 || ImageGenerationWidth % 64 != 0 || ImageGenerationHeight % 64 != 0 || ImageGenerationSteps is < 1 or > 100)
             throw new ArgumentException("Réglages de génération d’image invalides : dimensions multiples de 64 entre 256 et 2048, de 1 à 100 étapes.");

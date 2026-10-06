@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.60.0 - 2026-10-06
+
+- Adds a target-version dropdown above automatic updates in Settings / About: Latest follows new GUI releases; a fixed version keeps update checks and automatic installation on the selected release.
+- Loads available stable Windows releases from GitHub without blocking the settings window, sorted newest first and filtered by architecture and verified download metadata. Preserves a selected version when the list cannot be loaded or the release becomes unavailable.
+- Refreshes pending updates when the saved target changes, cancels obsolete checks and downloads, and rechecks the selected version before installation. Manual installation requires saving the version choice first; selecting an older release allows returning to that version.
+
+## 1.59.0 - 2026-10-06
+
+- Caches Mermaid SVGs by diagram source and theme in bounded memory, shared between recycled GUI Markdown views. Reuses in-flight renders, isolates SVG IDs, and coalesces streamed diagram updates.
+- Preserves unchanged Markdown DOM and diagrams on size changes, suppresses duplicate paint requests, and batches height notifications to prevent repeated Mermaid redraws.
+- Virtualizes historical conversation turns: only the viewport and a nearby reading margin retain rich bubbles, decoded attachments and WebViews. Keeps measured placeholder heights, anchors scrolling when earlier content changes size, and recreates offscreen content on demand.
+- Preserves live replies, focused content, text selections and activity expansion while recycling history; conversation search explicitly realizes and reveals matching messages. The legacy Electron interface also skips layout and painting for distant bubbles.
+
+## 1.58.0 - 2026-10-06
+
+- Adds enabled-by-default general settings for Mermaid diagrams and mathematical notation, applied independently to Markdown messages and file previews. Disabling rendering keeps source text readable.
+- Adds the conversation-level Git worktree switch, enabled by default and included in agent presets. Coding subagents in detected repositories receive independent branches and folders; all project-aware source, terminal and native OpenCode calls follow the isolated scope.
+- Automatically commits and integrates successful subagent work through a private integration checkout, then a conflict-free fast-forward into the original branch. Dirty or changed parents and merge conflicts retain the child branch/worktree for review, without altering the parent index or discarding local edits. Worktrees start from committed HEAD; sandbox and Plan sessions retain their existing behavior.
+
 ## 1.57.1 - 2026-10-06
 
 - Fixes the Windows WinUI target by composing the speed statistics card inside a Border instead of inheriting the sealed native control.

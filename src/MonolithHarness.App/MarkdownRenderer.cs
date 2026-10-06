@@ -41,6 +41,23 @@ public sealed class MarkdownRenderer
     }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TextBlock, TextFlowState> textFlows = new();
     static readonly List<WeakReference<Panel>> renderedPanels = [];
+    static readonly List<WeakReference<AdvancedMarkdownView>> visualViews = [];
+    internal static void RegisterVisual(AdvancedMarkdownView view)
+    {
+        if (visualViews.Count % 64 == 0) visualViews.RemoveAll(x => !x.TryGetTarget(out _));
+        visualViews.Add(new(view));
+    }
+    internal static bool RenderMermaid { get; private set; } = true;
+    internal static bool RenderMath { get; private set; } = true;
+    internal static void ConfigureVisuals(FeatureSettings settings)
+    {
+        if (RenderMermaid == settings.RenderMermaid && RenderMath == settings.RenderMath) return;
+        RenderMermaid = settings.RenderMermaid; RenderMath = settings.RenderMath;
+        RefreshDensity();
+        visualViews.RemoveAll(x => !x.TryGetTarget(out _));
+        foreach (var reference in visualViews.ToArray())
+            if (reference.TryGetTarget(out var view)) view.RefreshVisuals();
+    }
     public static void RefreshDensity()
     {
         renderedPanels.RemoveAll(x => !x.TryGetTarget(out _));
@@ -56,8 +73,8 @@ public sealed class MarkdownRenderer
         if (!states.TryGetValue(container, out var state))
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;
-        var blocks = MarkdownPipelineHelper.Parse(markdown);
-        if (MarkdownDisplay.HasVisuals(blocks))
+        var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath);
+        if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
         {
             var view = container.Children.Count == 1 ? container.Children[0] as AdvancedMarkdownView : null;
             if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile); container.Children.Add(view); }
@@ -144,9 +161,9 @@ public sealed class MarkdownRenderer
     public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,
         Func<string, MenuFlyout> fileMenu, Func<string, Task<FrameworkElement?>> imagePreview, CancellationToken ct)
     {
-        var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown), ct);
+        var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown, RenderMath), ct);
         ct.ThrowIfCancellationRequested();
-        if (MarkdownDisplay.HasVisuals(blocks))
+        if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
         {
             var visual = new AdvancedMarkdownView(openFile); target.Children.Add(visual); visual.Update(markdown); return;
         }
@@ -229,7 +246,7 @@ public sealed class MarkdownRenderer
             return;
         }
 
-        var doc = MarkdownPipelineHelper.Parse(markdown);
+        var doc = MarkdownPipelineHelper.Parse(markdown, RenderMath);
         if (doc.Count == 0)
         {
             var fallback = new TextBlock

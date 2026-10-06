@@ -26,7 +26,7 @@ static class ChatDensity
         bool compact = Id == "compact", spacious = Id == "spacious";
         if (item is Border surface && kind == "surface") surface.Padding = compact ? new(12, 8, 12, 8) : spacious ? new(20) : new(16, 12, 16, 12);
         if (item is not StackPanel panel) return;
-        panel.Spacing = kind switch { "messages" => compact ? 8 : spacious ? 20 : 12, "body" => BlockGap, _ => compact ? 5 : spacious ? 14 : 8 };
+        panel.Spacing = kind switch { "messages" or "virtual-turn" => compact ? 8 : spacious ? 20 : 12, "body" => BlockGap, _ => compact ? 5 : spacious ? 14 : 8 };
         if (kind == "messages") panel.Padding = compact ? new(4, 12, 12, 12) : spacious ? new(4, 24, 12, 24) : new(4, 16, 12, 16);
     }
 }

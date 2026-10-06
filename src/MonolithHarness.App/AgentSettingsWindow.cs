@@ -30,6 +30,11 @@ public sealed partial class MainWindow
         body.Children.Add(presets); body.Children.Add(presetActions);
         var mode = new ComboBox { Header = WorkflowText("Mode sous-agents", "Subagent mode"), ItemsSource = new[] { WorkflowText("Désactivés", "Disabled"), "Auto", WorkflowText("Forcés", "Forced") }, SelectedIndex = owner.OrchestrationMode == "forced" ? 2 : owner.OrchestrationMode == "auto" ? 1 : 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         body.Children.Add(mode);
+        var gitWorktree = new ToggleSwitch { Header = WorkflowText("Travailler en worktree Git", "Work in a Git worktree"), IsOn = true,
+            OnContent = UiText.T("Activé"), OffContent = UiText.T("Désactivé") };
+        body.Children.Add(gitWorktree);
+        body.Children.Add(Label(WorkflowText("Pour les travaux de code, chaque sous-agent utilise une branche et un dossier isolés. Fusion automatique après réussite si le projet principal est propre et sans conflit ; sinon le worktree est conservé pour revue. Les worktrees partent du dernier commit, sans copier les modifications locales non commitées.",
+            "For code work, each subagent uses an isolated branch and folder. Merge automatically after success when the parent is clean and conflict-free; otherwise retain the worktree for review. Worktrees start from the latest commit and do not copy uncommitted local changes."), 12));
         var autoCount = new ToggleSwitch { Header = WorkflowText("Nombre automatique", "Automatic count") };
         var count = new NumberBox { Header = WorkflowText("Nombre d’agents par équipe", "Agents per team"), Minimum = 1, Maximum = ConversationAgents.MaximumTeamSize, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
         var autoRoles = new ToggleSwitch { Header = WorkflowText("Rôles automatiques", "Automatic roles") };
@@ -57,6 +62,7 @@ public sealed partial class MainWindow
         }
         void Populate(ConversationAgents options)
         {
+            gitWorktree.IsOn = options.UseGitWorktree;
             autoCount.IsOn = options.AutomaticCount; autoRoles.IsOn = options.AutomaticRoles; count.Value = options.Count;
             roles.Children.Clear(); roleFields.Clear();
             foreach (var role in options.Roles) AddRole(role);
@@ -69,7 +75,7 @@ public sealed partial class MainWindow
         }
         ConversationAgents Read()
         {
-            var options = new ConversationAgents { AutomaticCount = autoCount.IsOn, AutomaticRoles = autoRoles.IsOn, Count = double.IsFinite(count.Value) ? (int)Math.Clamp(count.Value, 1, ConversationAgents.MaximumTeamSize) : 2,
+            var options = new ConversationAgents { UseGitWorktree = gitWorktree.IsOn, AutomaticCount = autoCount.IsOn, AutomaticRoles = autoRoles.IsOn, Count = double.IsFinite(count.Value) ? (int)Math.Clamp(count.Value, 1, ConversationAgents.MaximumTeamSize) : 2,
                 Roles = roleFields.Select(x => new AgentRole { Name = x.Name.Text.Trim(), Instruction = x.Instruction.Text.Trim() }).ToList() };
             options.Validate(); return options;
         }

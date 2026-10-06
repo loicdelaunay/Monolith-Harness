@@ -979,7 +979,8 @@ public sealed partial class MainWindow : Window
         thinkingStack.Children.Add(thinkingScroll);
         thinkingCard.Child = thinkingStack;
 
-        ui.Group = ActivityGroup(target ?? messages);
+        var actualHost = MessageHost(target ?? messages);
+        ui.Group = ActivityGroup(actualHost);
         thinkingHeaderBtn.Visibility = Visibility.Collapsed;
         thinkingScroll.Visibility = Visibility.Visible;
         ui.Group.Details.Children.Add(thinkingCard);
@@ -996,7 +997,7 @@ public sealed partial class MainWindow : Window
             if (point.X >= 0 && point.Y >= 0 && point.X <= container.ActualWidth && point.Y <= container.ActualHeight) return;
             ui.SetHovered(false);
         };
-        (target ?? messages).Children.Add(container);
+        actualHost.Children.Add(container);
 
         ui.UpdateContent(initialText);
 
@@ -1341,7 +1342,10 @@ public sealed partial class MainWindow : Window
 
     Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null, Project? sourceProject = null)
     {
-        if (role == "user") activityGroups.Remove(target ?? messages);
+        var originalHost = target ?? messages;
+        if (role == "user") BeginVirtualTurn(originalHost);
+        target = MessageHost(originalHost);
+        if (role == "user") activityGroups.Remove(target);
         var bodyContainer = ChatDensity.Track(new StackPanel(), "body");
         AppTypography.SetScope(bodyContainer, role == "user" ? FontArea.User : role == "assistant" ? FontArea.Assistant : FontArea.Interface);
         if (!string.IsNullOrWhiteSpace(text))
@@ -1524,6 +1528,13 @@ public sealed partial class MainWindow : Window
         showReasoning.Content = null;
         general.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
             WorkflowText("Déplie par défaut le groupe des réflexions et outils, dans l’historique et pendant la génération.", "Expand the reasoning and tools group by default, in history and during generation."), showReasoning));
+        var markdownFeatures = FeatureSettings.Read(state.FeaturesJson);
+        var renderMermaid = new ToggleSwitch { IsOn = markdownFeatures.RenderMermaid };
+        var renderMath = new ToggleSwitch { IsOn = markdownFeatures.RenderMath };
+        general.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des diagrammes Mermaid", "Mermaid diagram compatibility"),
+            WorkflowText("Rend les blocs Mermaid en diagrammes dans le chat et les aperçus. Désactivé : affiche le code source.", "Render Mermaid blocks as diagrams in chat and previews. When disabled, show their source."), renderMermaid));
+        general.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des symboles mathématiques", "Mathematical notation compatibility"),
+            WorkflowText("Rend les formules LaTeX dans le Markdown. Désactivé : conserve le texte des formules.", "Render LaTeX formulas in Markdown. When disabled, keep formula text."), renderMath));
         var autoFocusTool = new CheckBox { IsChecked = FeatureSettings.Read(state.FeaturesJson).AutoFocusTool };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Ouvrir et sélectionner le dernier outil utilisé par l’IA", "Open and focus the latest AI tool"), WorkflowText("Dans la conversation affichée uniquement.", "Only in the visible conversation."), autoFocusTool));
         general.Children.Add(retrySettings.Panel);
@@ -1683,6 +1694,7 @@ public sealed partial class MainWindow : Window
         savedFeatures.FontZoomPercent = FeatureSettings.Read(state.FeaturesJson).FontZoomPercent;
         savedFeatures.AgentPresets = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         savedFeatures.ChatGoals = FeatureSettings.Read(state.FeaturesJson).ChatGoals;
+        savedFeatures.RenderMermaid = renderMermaid.IsOn; savedFeatures.RenderMath = renderMath.IsOn;
         savedFeatures.AutoFocusTool = autoFocusTool.IsChecked == true;
         savedFeatures.ResponseStyle = ResponseStyles.All[Math.Clamp(responseStyle.SelectedIndex, 0, ResponseStyles.All.Count - 1)].Id;
         updates.Save(savedFeatures);
@@ -1695,6 +1707,7 @@ public sealed partial class MainWindow : Window
         webHttpSettings.Save(savedFeatures);
         await branding.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
+        MarkdownRenderer.ConfigureVisuals(savedFeatures);
         AppLog.Configure(savedFeatures);
         AppLog.Write(AppLogLevel.Information, "settings.saved");
         if(FeatureSettings.Read(state.FeaturesJson).BrowserMode != previousBrowserMode)
@@ -2325,7 +2338,7 @@ public sealed partial class MainWindow : Window
         await ConversationInbox.SubmitAsync(run,user,ct); history.Add(user);
         MarkRunSubmitted(run);
         await RefreshInboxAsync();
-        if (history.Count == 1) run.Messages.Children.Clear();
+        if (history.Count == 1) ClearMessagePanel(run.Messages);
         AddHistoryActions(user, AddMessage("user", user.Content, user.Attachments, run.Messages, run.Project));
         ScrollRunToBottom(run);
         var sourceFolders = project.GetSourceFolders();
@@ -2386,7 +2399,7 @@ public sealed partial class MainWindow : Window
                 db.Messages.Add(active); await db.SaveChangesAsync();
                 var assistantUi = AddAssistantMessage("…", target: run.Messages, sourceProject: run.Project);
                 var compatibilityLabel = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary, FontSize = 12, Visibility = Visibility.Collapsed };
-                run.Messages.Children.Add(compatibilityLabel);
+                MessageHost(run.Messages).Children.Add(compatibilityLabel);
                 activeAssistantUi = assistantUi;
                 ScrollRunToBottom(run);
                 run.Tracker = new GenerationSpeedTracker();

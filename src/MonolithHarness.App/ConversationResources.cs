@@ -120,7 +120,13 @@ public sealed partial class MainWindow
     IEnumerable<string> CurrentResourcePaths() => chat != null && project != null ? ProjectResources.For(chat, project) : [];
     void AddHistoryActions(Message message, Border? card)
     {
-        if (card != null) chatSearchAnchors[message.Id] = new(card);
+        if (card != null)
+        {
+            chatSearchAnchors[message.Id] = new(card);
+            if (message.Role == "user")
+                foreach (var panel in conversationRuns.Values.Select(x => x.Messages).Append(messages).Distinct())
+                    if (virtualConversations.TryGetValue(panel, out var view)) view.TrackUser(message, card);
+        }
         if (card?.Child is not StackPanel || message.Role is not ("user" or "assistant")) return;
         var actions = EnsureMessageActionMenu(card);
         if (message.Role == "user") AddMessageCopyAction(actions, () => message.Content);

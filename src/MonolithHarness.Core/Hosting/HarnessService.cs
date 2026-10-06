@@ -134,6 +134,11 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 modeChat.ExecutionMode = S(p, "executionMode", modeChat.ExecutionMode) == "plan" ? "plan" : "execute";
                 modeChat.SandboxEnabled = B(p, "sandboxEnabled", modeChat.SandboxEnabled);
                 modeChat.OrchestrationMode = AgentPolicy.Orchestration(S(p, "orchestrationMode", modeChat.OrchestrationMode));
+                if (p["agentOptionsJson"] is { } agentJson)
+                {
+                    var options = JsonSerializer.Deserialize<ConversationAgents>(agentJson.GetValue<string>()) ?? throw new ArgumentException("Agent options required.");
+                    modeChat.AgentOptionsJson = options.Json();
+                }
                 await db.SaveChangesAsync(ct); return true;
             case "provider.save":
                 var provider = I(p, "id") == 0 ? new Provider() : await db.Providers.SingleAsync(x => x.Id == I(p, "id"), ct);

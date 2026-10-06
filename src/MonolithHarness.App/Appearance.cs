@@ -18,6 +18,7 @@ public sealed partial class MainWindow
     void ApplyAppearance()
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
+        MarkdownRenderer.ConfigureVisuals(config);
         ChatDensity.Configure(config.ChatMessageDensity);
         AppTypography.Configure(config);
         AppTypography.SetScope(composer, FontArea.User);

@@ -15,7 +15,7 @@ public sealed record GitHubUpdate(string Version, string Tag, string Page, strin
 
 public sealed class GitHubUpdates(HttpClient http)
 {
-    public const string CurrentVersion = "1.57.1";
+    public const string CurrentVersion = "1.60.0";
     public const string Repository = "https://github.com/loicdelaunay/Monolith-Harness";
     public const string Api = "https://api.github.com/repos/loicdelaunay/Monolith-Harness/releases";
     const long MaxBytes = 1024L * 1024 * 1024;
@@ -25,25 +25,50 @@ public sealed class GitHubUpdates(HttpClient http)
     public static bool IsStandalone(System.Reflection.Assembly assembly) => assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
         .Cast<System.Reflection.AssemblyMetadataAttribute>().Any(a => a.Key == "MonolithHarness.SingleFile" && a.Value == "true");
 
-    public async Task<GitHubUpdate?> CheckAsync(UpdateChannel channel, CancellationToken ct = default)
+    public const string Latest = "latest";
+
+    public static string NormalizeTargetVersion(string? value)
+    {
+        var text = value?.Trim();
+        return text != null && Regex.IsMatch(text, @"^\d+\.\d+\.\d+$") && Version.TryParse(text, out var version)
+            ? version.ToString() : Latest;
+    }
+
+    public Task<GitHubUpdate?> CheckAsync(UpdateChannel channel, CancellationToken ct = default) => CheckAsync(channel, Latest, ct);
+
+    public async Task<GitHubUpdate?> CheckAsync(UpdateChannel channel, string targetVersion, CancellationToken ct = default) =>
+        SelectTarget(await ListAsync(channel, ct), targetVersion, CurrentVersion);
+
+    public async Task<IReadOnlyList<GitHubUpdate>> ListAsync(UpdateChannel channel, CancellationToken ct = default)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        GitHubUpdate? best = null;
+        var candidates = new List<GitHubUpdate>();
         for (int page = 1; page <= 5; page++)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, Api + "?per_page=100&page=" + page);
             request.Headers.UserAgent.ParseAdd("MonolithHarness/" + CurrentVersion);
             using var response = await http.SendAsync(request, timeout.Token); response.EnsureSuccessStatusCode();
             var releases = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeout.Token))!.AsArray();
-            var candidate = Select(releases, channel, CurrentVersion, Runtime);
-            if (candidate != null && (best == null || Version.Parse(candidate.Version) > Version.Parse(best.Version))) best = candidate;
+            candidates.AddRange(Available(releases, channel, Runtime));
             if (releases.Count < 100) break;
         }
-        return best;
+        return candidates.OrderByDescending(c => Version.Parse(c.Version)).DistinctBy(c => c.Version).ToArray();
+    }
+
+    public static GitHubUpdate? SelectTarget(IEnumerable<GitHubUpdate> releases, string targetVersion, string currentVersion)
+    {
+        var target = NormalizeTargetVersion(targetVersion);
+        var current = Version.Parse(currentVersion);
+        return releases.Where(c => target == Latest ? Version.Parse(c.Version) > current
+                : c.Version == target && Version.Parse(c.Version) != current)
+            .OrderByDescending(c => Version.Parse(c.Version)).FirstOrDefault();
     }
 
     // Match channel, version and architecture instead of relying on GitHub's global "latest" flag.
-    public static GitHubUpdate? Select(JsonArray releases, UpdateChannel channel, string currentVersion, string runtime)
+    public static GitHubUpdate? Select(JsonArray releases, UpdateChannel channel, string currentVersion, string runtime) =>
+        SelectTarget(Available(releases, channel, runtime), Latest, currentVersion);
+
+    static IReadOnlyList<GitHubUpdate> Available(JsonArray releases, UpdateChannel channel, string runtime)
     {
         var candidates = new List<GitHubUpdate>();
         foreach (var release in releases)
@@ -51,7 +76,7 @@ public sealed class GitHubUpdates(HttpClient http)
             if (release?["draft"]?.GetValue<bool>() == true || release?["prerelease"]?.GetValue<bool>() == true) continue;
             string tag = release?["tag_name"]?.ToString() ?? "";
             var match = Regex.Match(tag, channel == UpdateChannel.Cli ? @"^cli-v(\d+\.\d+\.\d+)$" : @"^(?:gui-)?v(\d+\.\d+\.\d+)$");
-            if (!match.Success || !Version.TryParse(match.Groups[1].Value, out var version) || version <= Version.Parse(currentVersion)) continue;
+            if (!match.Success || !Version.TryParse(match.Groups[1].Value, out var version)) continue;
             foreach (var asset in release?["assets"]?.AsArray() ?? [])
             {
                 string name = asset?["name"]?.ToString() ?? "", url = asset?["browser_download_url"]?.ToString() ?? "";
@@ -66,7 +91,8 @@ public sealed class GitHubUpdates(HttpClient http)
             }
         }
         return candidates.OrderByDescending(c => Version.Parse(c.Version))
-            .ThenByDescending(c => c.AssetName.StartsWith("MonolithHarness-", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            .ThenByDescending(c => c.AssetName.StartsWith("MonolithHarness-", StringComparison.OrdinalIgnoreCase))
+            .DistinctBy(c => c.Version).ToArray();
     }
     static bool MatchesChannel(string name, string product, UpdateChannel channel) =>
         name.StartsWith(product + (channel == UpdateChannel.Cli ? "-CLI-" : "-"), StringComparison.OrdinalIgnoreCase)

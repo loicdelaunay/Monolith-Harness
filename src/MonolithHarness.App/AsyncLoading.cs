@@ -226,6 +226,7 @@ public sealed partial class MainWindow
                 conversationLoading = false;
                 conversationLoad = null;
                 RefreshGenerationControls();
+                QueueMessageVirtualization();
             }
         }
         if (revision == conversationLoadRevision && browserVisible && toolTabs.SelectedIndex is 2 or 3 or 4)
@@ -234,55 +235,8 @@ public sealed partial class MainWindow
 
     async Task RenderRecentHistoryAsync(List<Message> history, StackPanel panel, Project? sourceProject, CancellationToken ct)
     {
-        var start = Math.Max(0, history.Count - HistoryPageSize);
-        if (start > 0)
-        {
-            var indicator = new ProgressBar { IsIndeterminate = true, Height = 3, Visibility = Visibility.Collapsed };
-            panel.Children.Insert(0, indicator);
-            var pagination = new HistoryPagination();
-            historyPagination.Add(panel, pagination);
-            bool IsCurrentPage() => ReferenceEquals(messages, panel) && ReferenceEquals(scroll.Content, panel);
-            pagination.Load = async () =>
-            {
-                indicator.Visibility = Visibility.Visible;
-                try
-                {
-                    var next = Math.Max(0, start - HistoryPageSize);
-                    await LoadHistoryImagesAsync(history, next, start - next);
-                    if (!IsCurrentPage()) return;
-                    var batch = new StackPanel();
-                    for (var i = next; i < start; i++)
-                    {
-                        await Task.Delay(1);
-                        if (!IsCurrentPage()) return;
-                        RenderHistory(history, batch, sourceProject, i, 1);
-                    }
-                    scroll.UpdateLayout();
-                    var offset = scroll.VerticalOffset;
-                    var height = scroll.ExtentHeight;
-                    var children = batch.Children.ToArray();
-                    batch.Children.Clear();
-                    for (var i = 0; i < children.Length; i++) panel.Children.Insert(i + 1, children[i]);
-                    start = next;
-                    indicator.Visibility = Visibility.Collapsed;
-                    if (start == 0)
-                    {
-                        panel.Children.Remove(indicator);
-                        historyPagination.Remove(panel);
-                    }
-                    scroll.UpdateLayout();
-                    scroll.ChangeView(null, offset + scroll.ExtentHeight - height, null, true);
-                }
-                finally { indicator.Visibility = Visibility.Collapsed; }
-            };
-        }
-        await LoadHistoryImagesAsync(history, start, history.Count - start, ct);
-        for (var i = start; i < history.Count; i++)
-        {
-            await Task.Delay(1, ct); // Give input, layout and running agents a turn between messages.
-            ct.ThrowIfCancellationRequested();
-            RenderHistory(history, panel, sourceProject, i, 1);
-        }
+        if (history.LastOrDefault(x => x.Role == "tasks") is { } tasks) RenderTasks(tasks.Content, panel);
+        await Virtualize(panel).InitializeAsync(history, sourceProject, ct);
     }
 
     static async Task LoadHistoryImagesAsync(List<Message> history, int start, int count, CancellationToken ct = default)

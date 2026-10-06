@@ -38,6 +38,7 @@ public sealed partial class MainWindow
     readonly List<WeakReference<ReasoningGroupUi>> activityGroupViews = [];
     ReasoningGroupUi ActivityGroup(StackPanel host)
     {
+        host = MessageHost(host);
         if (activityGroups.TryGetValue(host, out var existing) && host.Children.Contains(existing.Card)) return existing;
         activityGroups.Remove(host);
         var details = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };

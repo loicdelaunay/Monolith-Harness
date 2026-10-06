@@ -135,7 +135,7 @@ function renderMessage(message){
   if(message.state==='interrupted'&&!running.has(chatId))node.append(el('p',L('Réponse interrompue','Interrupted response'),'interrupted'));
   if(message.compatibilityNotice)node.append(el('p',message.compatibilityNotice,'compatibility-notice'));
   messageBranchActions(node,message);
-  if(message.html)markdownVisuals.render(body,!document.documentElement.classList.contains('theme-light')).catch(()=>{});
+  if(message.html)markdownVisuals.render(body,!document.documentElement.classList.contains('theme-light'),{mermaid:featureConfig().RenderMermaid!==false,math:featureConfig().RenderMath!==false}).catch(()=>{});
   return node;
 }
 function renderMessages(bottom=false){
@@ -224,6 +224,9 @@ $('plus').onclick=()=>{
   const selectedChat=snapshot.chats.find(x=>x.id===chatId);
   if(selectedChat&&chatOnly)addChatSkills(menu,selectedChat);
   if(selectedChat&&!chatOnly){
+    const agentConfig=JSON.parse(selectedChat.agentOptionsJson||'{}');
+    const worktree=field(menu,L('Travailler en worktree Git','Work in a Git worktree'),'checkbox',agentConfig.UseGitWorktree!==false);
+    worktree.onchange=()=>guard(async()=>{await call('chat.modes',{id:selectedChat.id,agentOptionsJson:JSON.stringify({...agentConfig,UseGitWorktree:worktree.checked})});await refresh();});
     addSandboxMenu(menu, selectedChat);
     const mode=field(menu,L('Mode (prochain envoi)','Mode (next message)'),'select');mode.append(option('execute',L('Exécution','Execution')),option('plan','Plan'));mode.value=selectedChat.executionMode||'execute';
     const orchestration=field(menu,L('Orchestration sous-agents','Subagent orchestration'),'select');for(const [value,label] of [['disabled','Disable'],['auto','Auto'],['forced','Forced']])orchestration.append(option(value,label));orchestration.value=selectedChat.orchestrationMode||'disabled';if(snapshot.providers.find(x=>x.id===providerId)?.kind==='composite'){orchestration.value='forced';orchestration.disabled=true;}
@@ -346,12 +349,14 @@ function renderSettings(){
     const language=field(area,L('Langue','Language'),'select');language.append(option('fr','Français'),option('en','English'));language.value=snapshot.state.language;
     const showReasoning=field(area,L('Afficher les détails du raisonnement','Show reasoning details'),'checkbox',snapshot.state.showReasoningDetails!==false);
     showReasoning.id='show-reasoning';
-    const autoFocus=field(area,L('Ouvrir et sélectionner le dernier outil utilisé par l’IA','Open and focus the latest AI tool'),'checkbox',featureConfig().AutoFocusTool===true);
+    const renderMermaid=field(area,L('Compatibilité des diagrammes Mermaid','Mermaid diagram compatibility'),'checkbox',featureConfig().RenderMermaid!==false);
+    const renderMath=field(area,L('Compatibilité des symboles mathématiques','Mathematical notation compatibility'),'checkbox',featureConfig().RenderMath!==false);
+    const autoFocus=field(area,L('Ouvrir et sélectionner le dernier outil utilisé par l’IA' ,'Open and focus the latest AI tool'),'checkbox',featureConfig().AutoFocusTool===true);
     autoFocus.id='auto-focus-tool';
     const auto=field(area,L('Continuer automatiquement après 12 étapes','Automatically continue after 12 steps'),'checkbox',snapshot.state.autoContinue);
     auto.id='auto-continue';
     area.append(el('p',L('Poursuit les outils jusqu’à la réponse finale ou Arrêter. Des tokens supplémentaires peuvent être consommés ; les autorisations restent applicables.','Continue tools until the final answer or Stop. May consume additional tokens; permissions still apply.'),'muted'));
-    button(area,L('Enregistrer','Save'),async()=>{await call('state.save',{language:language.value,autoContinue:auto.checked,showReasoningDetails:showReasoning.checked,featuresJson:JSON.stringify({...featureConfig(),Theme:theme.value,AutoFocusTool:autoFocus.checked})});await refresh();renderSettings();renderMessages();});
+    button(area,L('Enregistrer','Save'),async()=>{await call('state.save',{language:language.value,autoContinue:auto.checked,showReasoningDetails:showReasoning.checked,featuresJson:JSON.stringify({...featureConfig(),Theme:theme.value,RenderMermaid:renderMermaid.checked,RenderMath:renderMath.checked,AutoFocusTool:autoFocus.checked})});await refresh();renderSettings();renderMessages();});
     area.append(el('p',snapshot.database,'muted'));button(area,L('Vérifier les autorisations système','Check system permissions'),async()=>{const result=await api.host('system.permissions');area.append(el('pre',JSON.stringify(result,null,2)));});
   }else if(settingsTab==='skills'){
     area.append(el('p',L('Skills personnalisés : copiez un dossier contenant SKILL.md ici, puis rouvrez les réglages. Le modèle exemple-revue est fourni.','Custom skills: copy a folder containing SKILL.md here, then reopen settings. The exemple-revue template is included.')+' '+snapshot.skillsDirectory,'muted'));

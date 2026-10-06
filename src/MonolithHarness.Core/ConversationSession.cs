@@ -27,7 +27,8 @@ public class ConversationSession : IDisposable
         Cancellation.CancelAfter(TimeSpan.FromMinutes(30));
     }
     public Chat Chat { get; }
-    public Project Project { get; }
+    readonly Project capturedProject;
+    public Project Project => SubagentWorkspace.ProjectFor(this) ?? capturedProject;
     // OpenCode sessions remain bound to their original directory when the interaction mode changes.
     // This routing context is never used as model tool access in Chat mode.
     public Project OpenCodeProject { get; }
@@ -47,7 +48,7 @@ public class ConversationSession : IDisposable
             SandboxEnabled = !ConversationModes.IsChat(chat.InteractionMode) && chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, TodoDismissed = chat.TodoDismissed,
             ExecutionMode = ConversationModes.IsChat(chat.InteractionMode) ? "chat" : AgentPolicy.Mode(chat.ExecutionMode),
             OrchestrationMode = ConversationModes.IsChat(chat.InteractionMode) ? "disabled" : AgentPolicy.Orchestration(chat.OrchestrationMode) };
-        Project = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
+        capturedProject = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
         Project.SetSourceFolders(ConversationModes.IsChat(Chat.InteractionMode) ? [] : ProjectResources.For(chat, project, databasePath));
         Provider = JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(provider))!;
         SelectedProviderId=provider.Id;

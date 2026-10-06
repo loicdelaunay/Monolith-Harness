@@ -437,7 +437,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
         await RefreshInboxAsync();
 
-        if (history.Count == 0) run.Messages.Children.Clear();
+        if (history.Count == 0) ClearMessagePanel(run.Messages);
 
         AddHistoryActions(user, AddMessage("user", prompt, user.Attachments, run.Messages));
 

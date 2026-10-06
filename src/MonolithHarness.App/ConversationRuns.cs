@@ -275,6 +275,7 @@ public sealed partial class MainWindow
             if (success && run.StatusMode == StatusKind.Activity)
                 SetRunStatus(run, T("Réponse terminée · historique enregistré."), StatusKind.Notice);
             if (run.Submitted) conversationHistory[run.Chat.Id] = run.Db.Messages.Local.ToList();
+            SealVirtualTurn(run);
             if (run.Sandbox != null) await terminals.StopChatAsync(run.Chat.Id, true);
             conversationRuns.Remove(run.Chat.Id);
             MarkProjectChatEnded(run, success);

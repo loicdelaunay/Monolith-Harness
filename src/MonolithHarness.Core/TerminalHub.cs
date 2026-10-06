@@ -181,6 +181,10 @@ public sealed class TerminalHub : IDisposable
         Check();
         int chat = run.Chat.Id; bool sandbox = run.Chat.SandboxEnabled;
         string id = args["terminal_id"]?.GetValue<string>() ?? "";
+        bool InWorkspace(View terminal) => SubagentWorkspace.ProjectFor(run) == null || run.Project.GetSourceFolders()
+            .Any(root => PlatformSupport.PathComparer.Equals(Path.GetFullPath(root), terminal.Directory));
+        if (id.Length > 0 && !InWorkspace(Read(chat, sandbox, id)))
+            throw new UnauthorizedAccessException("Terminal hors du worktree de ce sous-agent / Terminal outside this subagent's worktree.");
         switch (name)
         {
             case "run_terminal":
@@ -192,7 +196,7 @@ public sealed class TerminalHub : IDisposable
                 var current = Read(chat, sandbox, legacy.Id);
                 while (current.Status == "running") current = await WaitAsync(chat, sandbox, legacy.Id, current.JobId, 30000, ct);
                 return current.Output;
-            case "list_terminals": return Serialize(List(chat, sandbox).Select(t => new { t.Id, t.Name, t.Shell, t.Directory, t.Status, t.JobId, t.Sandbox, t.TimeoutSeconds }));
+            case "list_terminals": return Serialize(List(chat, sandbox).Where(InWorkspace).Select(t => new { t.Id, t.Name, t.Shell, t.Directory, t.Status, t.JobId, t.Sandbox, t.TimeoutSeconds }));
             case "create_terminal":
                 var created = Create(chat, sandbox, args["name"]?.GetValue<string>() ?? "", run.Project.GetSourceFolders().FirstOrDefault(Directory.Exists) ?? throw new InvalidOperationException("Associez un dossier source."));
                 terminalReady?.Invoke(created);

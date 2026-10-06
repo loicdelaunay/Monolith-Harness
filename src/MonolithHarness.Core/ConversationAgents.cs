@@ -12,6 +12,7 @@ public sealed class ConversationAgents
 {
     public bool AutomaticCount { get; set; } = true;
     public bool AutomaticRoles { get; set; } = true;
+    public bool UseGitWorktree { get; set; } = true;
     public int Count { get; set; } = 2;
     public List<AgentRole> Roles { get; set; } = [];
     public const int MaximumTeamSize = 512;

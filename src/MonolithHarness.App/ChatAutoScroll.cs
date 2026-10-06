@@ -55,6 +55,7 @@ public sealed partial class MainWindow
         {
             if (!IsChatScrollInput(e.OriginalSource)) return;
             chatScrollMayResume = false;
+            selectingChatText = e.Pointer.PointerDeviceType == PointerDeviceType.Mouse;
             draggingChatScroll = e.Pointer.PointerDeviceType is PointerDeviceType.Touch or PointerDeviceType.Pen;
             for (var node = e.OriginalSource as DependencyObject; node != null && node != scroll; node = VisualTreeHelper.GetParent(node))
                 if (node is ScrollBar) draggingChatScroll = true;
@@ -63,6 +64,7 @@ public sealed partial class MainWindow
         {
             if (draggingChatScroll) chatScrollInputUntil = Environment.TickCount64 + 750;
             draggingChatScroll = false;
+            selectingChatText = false; QueueMessageVirtualization();
         }
         scroll.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(EndDrag), true);
         scroll.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(EndDrag), true);
@@ -90,12 +92,14 @@ public sealed partial class MainWindow
         {
             if (chatScrollMayResume && (draggingChatScroll || manipulatingChatScroll || Environment.TickCount64 < chatScrollInputUntil)
                 && scroll.ScrollableHeight - scroll.VerticalOffset <= 8) SetChatFollow(true);
+            QueueMessageVirtualization();
             await LoadHistoryAtTopAsync();
         };
         scroll.LayoutUpdated += (_, _) =>
         {
             // Content can grow or shrink without any user gesture (streaming, images, resize).
             if (followChatTail && scroll.ScrollableHeight - scroll.VerticalOffset > 1) QueueChatTail();
+            QueueMessageVirtualization();
         };
     }
 

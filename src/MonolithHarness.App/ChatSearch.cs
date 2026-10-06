@@ -87,14 +87,8 @@ public sealed partial class MainWindow
         var target = chatFindMatches[chatFindIndex];
         chatFindCount.Text = $"{chatFindIndex + 1} / {chatFindMatches.Count}";
         SetChatFollow(false);
-        Border? Anchor() => chatSearchAnchors.TryGetValue(target.Id, out var reference) && reference.TryGetTarget(out var element) && panel.Children.Contains(element) ? element : null;
-        while (Anchor() == null && historyPagination.TryGetValue(panel, out var page))
-        {
-            if (revision != chatFindRevision || !ReferenceEquals(panel, messages)) return;
-            if (page.Loading) { await Task.Delay(30); continue; }
-            page.Loading = true;
-            try { await page.Load(); } finally { page.Loading = false; }
-        }
+        Border? Anchor() => chatSearchAnchors.TryGetValue(target.Id, out var reference) && reference.TryGetTarget(out var element) && ContainsVisual(panel, element) ? element : null;
+        if (virtualConversations.TryGetValue(panel, out var view)) await view.RevealAsync(target.Id);
         if (revision != chatFindRevision || !ReferenceEquals(panel, messages)) return;
         if (Anchor() is { } card)
         {

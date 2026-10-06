@@ -211,8 +211,27 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         int input = 0, output = 0;
         var loop = new ToolLoopGuard();
         bool planReminderSent = false, finalReminderSent = false;
+        SubagentWorktrees? worktrees = null;
+        IDisposable? projectBinding = null;
         try
         {
+            if (agentOptions.UseGitWorktree && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(mode) &&
+                (Skills.Enabled(enabled, "write_sources") || Skills.Enabled(enabled, "patch_sources") || Skills.Enabled(enabled, "terminal") || Skills.Enabled(enabled, "python") || GitTools.WriteEnabled(enabled) || provider.IsOpenCode && provider.OpenCodeTools))
+            {
+                await Report("Préparation du worktree Git / Preparing Git worktree");
+                worktrees = await SubagentWorktrees.CreateAsync(run, path, ct);
+                if (worktrees != null)
+                {
+                    projectBinding = SubagentWorkspace.Enter(run, worktrees.Project);
+                    source = new SourceAccess(run.Project.GetSourceFolders());
+                    child.Task += "\n\n" + worktrees.Description;
+                    system += "\nISOLATED GIT WORKTREE: work only in these attached worktree folders: " + string.Join(", ", source.Roots) +
+                        "\n" + worktrees.Description + "\nThe branch starts from the parent's last commit. Uncommitted parent edits are not copied. Never edit or commit in the original checkout, and keep the assigned worktree branch. Close terminals you created once their commands/tests finish; do not stop another agent's terminals. Report all validation and remaining issues. After successful completion, Monolith commits this worktree's changes and integrates them automatically only when the parent is clean and the merge has no conflicts. Do not run git merge, switch, checkout, reset or clean on the parent repository.";
+                    wire[0]!["content"] = system;
+                    transcript.Add(new JsonObject { ["role"] = "system", ["content"] = worktrees.Description });
+                    await Report("Worktree Git prêt / Git worktree ready");
+                }
+            }
             for (int step = 0; step < MaxSteps; step++)
             {
                 ct.ThrowIfCancellationRequested();
@@ -271,7 +290,14 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                         wire.Add(new JsonObject { ["role"] = "user", ["content"] = "Your announced task list still contains unfinished tasks. Update todowrite to reflect the actual completed, pending or cancelled work, then give your final report. Never mark unperformed work completed." });
                         continue;
                     }
-                    return $"[{path}] ({input} tokens entrée / {output} sortie déclarés)\n{response.Message["content"]?.GetValue<string>() ?? "Réponse vide."}";
+                    var integration = worktrees == null ? "" : await worktrees.IntegrateAsync(ct);
+                    if (integration.Length > 0)
+                    {
+                        child.Task += "\n" + integration;
+                        transcript.Add(new JsonObject { ["role"] = "system", ["content"] = integration });
+                    }
+                    return $"[{path}] ({input} tokens entrée / {output} sortie déclarés)\n{response.Message["content"]?.GetValue<string>() ?? "Réponse vide."}" +
+                        (worktrees == null ? "" : "\n\n" + worktrees.Description + "\n" + integration);
                 }
                 var images = new List<Attachment>();
                 foreach (var call in calls)
@@ -345,9 +371,10 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { child.Status="cancelled"; return $"[{name}] Travail arrêté après détection de boucle / Stopped after repeated calls."; }
         catch (OperationCanceledException) { child.Status="cancelled"; throw; }
-        catch (Exception ex) { child.Status="failed"; return $"[{name}] Échec : {ex.Message}"; }
+        catch (Exception ex) { child.Status="failed"; return $"[{name}] Échec : {ex.Message}" + (worktrees == null ? "" : "\nWorktree conservé / Worktree retained:\n" + worktrees.Description); }
         finally
         {
+            projectBinding?.Dispose();
             childWorkflow.Value = previousWorkflow;
             if(child.Status=="running")child.Status="completed";
             await Report(child.Status); await progress($"Sous-agent / Subagent · {path} · terminé / finished");

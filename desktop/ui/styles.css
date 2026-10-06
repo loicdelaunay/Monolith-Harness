@@ -20,3 +20,11 @@
 
 .code-dce6f5{color:#dce6f5}.code-7fa77b{color:#7fa77b}.code-ce9178{color:#ce9178}.code-b5cea8{color:#b5cea8}.code-c586c0{color:#c586c0}.code-9cdcfe{color:#9cdcfe}
 #settings{width:min(1040px,96vw);overflow:hidden}.settings-layout{display:grid;grid-template-columns:180px minmax(0,1fr);height:min(660px,68vh);min-height:0;gap:20px}#setting-tabs{display:flex;flex-direction:column;align-items:stretch;overflow:auto;border-right:1px solid var(--line);padding:0 12px 0 0}#setting-tabs button{text-align:left;white-space:normal;flex-shrink:0}#settings-content{overflow:auto;min-height:0;padding-right:8px}.form-actions{flex-wrap:wrap}.inbox-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border:1px solid var(--line);border-radius:8px}.inbox-row span{flex:1;overflow-wrap:anywhere}#inbox{max-height:140px;overflow:auto}#delivery-mode{font-size:12px;margin-bottom:5px}@media(max-width:650px){.settings-layout{grid-template-columns:125px minmax(0,1fr);gap:10px}#settings{padding:12px}}
+
+/* Chromium skips layout/painting for distant bubbles while retaining text selection and find-in-page. */
+@supports (content-visibility: auto) {
+  #messages .message, #messages .activity-group {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 180px;
+  }
+}

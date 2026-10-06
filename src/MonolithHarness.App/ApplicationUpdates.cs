@@ -18,6 +18,8 @@ public sealed partial class MainWindow
     Task? guiUpdateCheck, automaticInstallAttempt;
     CancellationTokenSource? guiUpdateRequest, automaticUpdateInstall;
     AutomaticUpdateMode automaticUpdateMode;
+    string automaticUpdateVersion = GitHubUpdates.Latest;
+    long guiUpdateGeneration;
     DateTimeOffset nextAutomaticInstallAttempt;
     bool updateChecksStarted, updatingApplication;
 
@@ -72,7 +74,17 @@ public sealed partial class MainWindow
     {
         if (!updateChecksStarted || updateLifetime.IsCancellationRequested) return;
         var previous = automaticUpdateMode;
-        automaticUpdateMode = FeatureSettings.Read(state.FeaturesJson).EffectiveGuiUpdateMode;
+        var features = FeatureSettings.Read(state.FeaturesJson);
+        var targetChanged = automaticUpdateVersion != features.GuiUpdateVersion;
+        automaticUpdateMode = features.EffectiveGuiUpdateMode;
+        automaticUpdateVersion = features.GuiUpdateVersion;
+        if (targetChanged)
+        {
+            guiUpdateGeneration++;
+            guiUpdateRequest?.Cancel(); automaticUpdateInstall?.Cancel();
+            guiUpdateCheck = null; guiUpdate = null;
+            RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer();
+        }
         if (automaticUpdateMode != AutomaticUpdateMode.Install) automaticUpdateInstall?.Cancel();
         if (automaticUpdateMode == AutomaticUpdateMode.Disabled
             || Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE") != null && smokeGuiUpdateCheck == null)
@@ -83,7 +95,7 @@ public sealed partial class MainWindow
         }
         guiUpdateTimer.Start();
         UpdateAutomaticInstallTimer();
-        if (previous != automaticUpdateMode)
+        if (previous != automaticUpdateMode || targetChanged)
         {
             nextAutomaticInstallAttempt = DateTimeOffset.MinValue;
             _ = CheckAutomaticGuiUpdateAsync();
@@ -107,10 +119,11 @@ public sealed partial class MainWindow
     async Task CheckGuiUpdateAsync(bool quiet)
     {
         if (updatingApplication || updateLifetime.IsCancellationRequested) return;
+        var generation = guiUpdateGeneration;
         var request = guiUpdateCheck ??= FetchGuiUpdateAsync();
         try { await request; }
         catch (OperationCanceledException) when (updateLifetime.IsCancellationRequested
-            || quiet && automaticUpdateMode == AutomaticUpdateMode.Disabled) { }
+            || quiet && (automaticUpdateMode == AutomaticUpdateMode.Disabled || generation != guiUpdateGeneration)) { }
         catch (Exception ex)
         {
             if (!quiet) throw;
@@ -123,12 +136,15 @@ public sealed partial class MainWindow
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(updateLifetime.Token);
         guiUpdateRequest = cancellation;
+        var generation = guiUpdateGeneration;
+        var target = FeatureSettings.Read(state.FeaturesJson).GuiUpdateVersion;
         try
         {
             using var client = new HttpClient();
             var update = smokeGuiUpdateCheck != null ? await smokeGuiUpdateCheck(cancellation.Token)
-                : await new GitHubUpdates(client).CheckAsync(UpdateChannel.Gui, cancellation.Token);
+                : await new GitHubUpdates(client).CheckAsync(UpdateChannel.Gui, target, cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested();
+            if (generation != guiUpdateGeneration || target != FeatureSettings.Read(state.FeaturesJson).GuiUpdateVersion) return;
             var previous = guiUpdate?.Version;
             guiUpdate = update;
             RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer();
@@ -174,10 +190,16 @@ public sealed partial class MainWindow
         }
     }
 
-    async Task InstallGuiUpdateAsync(Action<string> report, bool automatic = false, Func<bool>? ownerIsOpen = null)
+    bool GuiUpdateMatchesTarget(GitHubUpdate update)
     {
-        var update = guiUpdate;
-        if (update == null || updatingApplication || !CanInstallGuiUpdate || updateLifetime.IsCancellationRequested) return;
+        var target = FeatureSettings.Read(state.FeaturesJson).GuiUpdateVersion;
+        return GitHubUpdates.SelectTarget([update], target, GitHubUpdates.CurrentVersion) != null;
+    }
+
+    async Task InstallGuiUpdateAsync(Action<string> report, bool automatic = false, Func<bool>? ownerIsOpen = null, GitHubUpdate? selectedUpdate = null)
+    {
+        var update = selectedUpdate ?? guiUpdate;
+        if (update == null || updatingApplication || !CanInstallGuiUpdate || updateLifetime.IsCancellationRequested || !GuiUpdateMatchesTarget(update)) return;
         if (GuiUpdateHasActiveWork()) throw new InvalidOperationException(WorkflowText(
             "Terminez les agents et envoyez ou effacez les brouillons avant l’installation.", "Finish agents and send or clear drafts before installing."));
         if (automatic && (automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasOpenEditors())) return;
@@ -205,6 +227,7 @@ public sealed partial class MainWindow
                 if (automatic && await ReadStoreAsync(store => store.PendingInputs.Any())) return;
                 cancellation.Token.ThrowIfCancellationRequested();
                 if (ownerIsOpen != null && !ownerIsOpen()) return;
+                if (!GuiUpdateMatchesTarget(update)) return;
                 if (GuiUpdateHasActiveWork())
                 {
                     if (automatic) return;
@@ -232,43 +255,113 @@ public sealed partial class MainWindow
 
     (StackPanel Panel, Action<FeatureSettings> Save) BuildUpdateSettings()
     {
+        var features = FeatureSettings.Read(state.FeaturesJson);
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(Label(WorkflowText("Mises à jour GitHub", "GitHub updates") + " · " + GitHubUpdates.CurrentVersion, 18));
+        var target = new ComboBox { Header = WorkflowText("Version à utiliser", "Target version"),
+            HorizontalAlignment = HorizontalAlignment.Stretch, MaxDropDownHeight = 300 };
+        var choices = new List<ComboBoxItem> { new() { Content = "Latest", Tag = GitHubUpdates.Latest } };
+        if (features.GuiUpdateVersion != GitHubUpdates.Latest)
+            choices.Add(new() { Content = features.GuiUpdateVersion, Tag = features.GuiUpdateVersion });
+        target.ItemsSource = choices;
+        target.SelectedItem = choices.First(c => (string)c.Tag == features.GuiUpdateVersion);
+        panel.Children.Add(target);
+        var targetInfo = Label("", 12); panel.Children.Add(targetInfo);
         var mode = new ComboBox { Header = WorkflowText("Mises à jour automatiques", "Automatic updates"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             ItemsSource = new[] { WorkflowText("Désactivées", "Disabled"), WorkflowText("Informer seulement", "Notify only"),
                 WorkflowText("Installer automatiquement", "Install automatically") },
-            SelectedIndex = (int)FeatureSettings.Read(state.FeaturesJson).EffectiveGuiUpdateMode };
+            SelectedIndex = (int)features.EffectiveGuiUpdateMode };
         panel.Children.Add(mode);
         panel.Children.Add(Label(WorkflowText(
             "Désactivées : aucune vérification automatique. Sinon, recherche au démarrage puis toutes les 2 heures. L’installation automatique attend la fin des agents, des brouillons et la fermeture des fenêtres d’édition.",
             "Disabled: no automatic checks. Otherwise, check at startup and every 2 hours. Automatic installation waits for agents, drafts and editing windows to finish."), 12));
-        var info = Label(guiUpdate == null ? WorkflowText("Rechercher une version GUI plus récente.", "Check for a newer GUI release.") : "GUI " + guiUpdate.Version, 13);
-        panel.Children.Add(info);
+        var info = Label("", 13); panel.Children.Add(info);
         var check = new Button { Content = WorkflowText("Rechercher", "Check") };
-        var install = new Button { Content = WorkflowText("Télécharger et redémarrer", "Download and restart"), IsEnabled = guiUpdate != null && CanInstallGuiUpdate && !updatingApplication };
+        var install = new Button { Content = WorkflowText("Télécharger et redémarrer", "Download and restart") };
         panel.Children.Add(Row(check, install));
         panel.Children.Add(Label(WorkflowText("Les données sont conservées. Enregistrez vos réglages avant l’installation ; les changements non enregistrés seront annulés. Les outils seront fermés. L’ancien EXE est conservé dans .updates.", "Data is preserved. Save settings before installing; unsaved changes will be discarded. Tools will close. The previous EXE is kept in .updates."), 12));
         if (!CanInstallGuiUpdate) panel.Children.Add(Label(WorkflowText(
             "L’installation nécessite une version Windows autonome.", "Installation requires a standalone Windows release."), 12));
-        check.Click += async (_, _) => await Guard(async () =>
+
+        IReadOnlyList<GitHubUpdate> releases = [];
+        GitHubUpdate? selectedUpdate = null;
+        CancellationTokenSource? catalogRequest = null;
+        bool catalogLoaded = false, catalogLoading = false, changingChoices = false;
+        string SelectedVersion() => target.SelectedItem is ComboBoxItem { Tag: string version } ? version : features.GuiUpdateVersion;
+        void RefreshSelection()
         {
-            check.IsEnabled = false; install.IsEnabled = false; info.Text = WorkflowText("Recherche sur GitHub…", "Checking GitHub…");
+            var version = SelectedVersion();
+            var saved = version == FeatureSettings.Read(state.FeaturesJson).GuiUpdateVersion;
+            targetInfo.Text = version == GitHubUpdates.Latest
+                ? WorkflowText("Latest suit la dernière version disponible.", "Latest follows the newest available release.")
+                : WorkflowText("Version fixe : ", "Fixed version: ") + version;
+            if (!saved) targetInfo.Text += " " + WorkflowText("Enregistrez les réglages pour appliquer ce choix.", "Save settings to apply this choice.");
+            selectedUpdate = GitHubUpdates.SelectTarget(catalogLoaded ? releases : guiUpdate == null ? [] : [guiUpdate], version, GitHubUpdates.CurrentVersion);
+            info.Text = selectedUpdate != null ? "GUI " + selectedUpdate.Version + " · " + selectedUpdate.Page
+                : version == GitHubUpdates.CurrentVersion ? WorkflowText("Cette version est déjà installée.", "This version is already installed.")
+                : !catalogLoaded ? WorkflowText("Rechercher les versions disponibles sur GitHub.", "Check available versions on GitHub.")
+                : version == GitHubUpdates.Latest ? WorkflowText("Aucune version GUI compatible plus récente.", "No newer compatible GUI release.")
+                : WorkflowText("Cette version n’est pas disponible pour cet appareil.", "This version is not available for this device.");
+            target.IsEnabled = check.IsEnabled = !catalogLoading && !updatingApplication;
+            install.IsEnabled = selectedUpdate != null && saved && CanInstallGuiUpdate && !catalogLoading && !updatingApplication;
+        }
+        async Task LoadVersionsAsync()
+        {
+            if (catalogLoading || updatingApplication || updateLifetime.IsCancellationRequested) return;
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(updateLifetime.Token);
+            catalogRequest = cancellation; catalogLoading = true;
+            RefreshSelection(); info.Text = WorkflowText("Chargement des versions…", "Loading releases…");
+            var failure = "";
             try
             {
-                await CheckGuiUpdateAsync(false);
-                info.Text = guiUpdate == null ? WorkflowText("Aucune release GUI compatible plus récente avec empreinte SHA-256.", "No newer compatible GUI release with a SHA-256 digest.") : "GUI " + guiUpdate.Version + " · " + guiUpdate.Page;
+                using var client = new HttpClient();
+                var available = await new GitHubUpdates(client).ListAsync(UpdateChannel.Gui, cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                var selected = SelectedVersion();
+                releases = available; catalogLoaded = true;
+                choices = [new() { Content = "Latest", Tag = GitHubUpdates.Latest }];
+                choices.AddRange(releases.Select(r => new ComboBoxItem { Content = r.Version, Tag = r.Version }));
+                // Preserve a saved pin even when its release disappears or cannot be downloaded on this machine.
+                if (selected != GitHubUpdates.Latest && !choices.Any(c => (string)c.Tag == selected))
+                    choices.Add(new() { Content = selected, Tag = selected });
+                changingChoices = true;
+                target.ItemsSource = choices;
+                target.SelectedItem = choices.First(c => (string)c.Tag == selected);
             }
-            catch { info.Text = WorkflowText("Recherche impossible. Réessayez plus tard.", "Unable to check. Try again later."); throw; }
-            finally { check.IsEnabled = !updatingApplication; install.IsEnabled = guiUpdate != null && CanInstallGuiUpdate && !updatingApplication; }
-        });
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                AppLog.Write(AppLogLevel.Warning, "gui.release_list_failed", ex);
+                failure = WorkflowText("Liste des versions indisponible. Votre choix est conservé ; réessayez avec Rechercher.", "Release list unavailable. Your choice is preserved; retry with Check.");
+            }
+            finally
+            {
+                changingChoices = false; catalogLoading = false;
+                if (ReferenceEquals(catalogRequest, cancellation)) catalogRequest = null;
+                RefreshSelection();
+                if (failure.Length > 0) info.Text = failure;
+            }
+        }
+        target.SelectionChanged += (_, _) => { if (!changingChoices) RefreshSelection(); };
+        panel.Loaded += async (_, _) => { if (!catalogLoaded) await LoadVersionsAsync(); };
+        panel.Unloaded += (_, _) => catalogRequest?.Cancel();
+        check.Click += async (_, _) => await LoadVersionsAsync();
         var owner = settingsWindow;
         install.Click += async (_, _) => await Guard(async () =>
         {
-            check.IsEnabled = install.IsEnabled = false;
-            try { await InstallGuiUpdateAsync(text => info.Text = text, ownerIsOpen: () => owner != null && ReferenceEquals(owner, settingsWindow)); }
-            finally { check.IsEnabled = !updatingApplication; install.IsEnabled = guiUpdate != null && CanInstallGuiUpdate && !updatingApplication; }
+            var candidate = selectedUpdate;
+            if (SelectedVersion() != FeatureSettings.Read(state.FeaturesJson).GuiUpdateVersion) return;
+            target.IsEnabled = check.IsEnabled = install.IsEnabled = false;
+            try { await InstallGuiUpdateAsync(text => info.Text = text,
+                ownerIsOpen: () => owner != null && ReferenceEquals(owner, settingsWindow), selectedUpdate: candidate); }
+            finally { RefreshSelection(); }
         });
-        return (panel, config => config.GuiUpdateMode = (AutomaticUpdateMode)Math.Clamp(mode.SelectedIndex, 0, 2));
+        RefreshSelection();
+        return (panel, config =>
+        {
+            config.GuiUpdateMode = (AutomaticUpdateMode)Math.Clamp(mode.SelectedIndex, 0, 2);
+            config.GuiUpdateVersion = SelectedVersion();
+        });
     }
 }
