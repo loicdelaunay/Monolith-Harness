@@ -50,7 +50,7 @@ public sealed partial class MainWindow
         updatingConversationMode = true;
         try { conversationModeSwitch.IsOn = !ChatInteraction; }
         finally { updatingConversationMode = false; }
-        conversationModeSwitch.IsEnabled = chat != null && selectedSubagent == null && ActiveRun == null && conversationReady && !conversationLoading && !databaseMaintenanceBusy && !conversationRetentionBusy;
+        conversationModeSwitch.IsEnabled = chat != null && selectedSubagent == null && ActiveRun == null && conversationReady && !conversationLoading && !databaseMaintenanceBusy && !conversationRetentionBusy && !applyingQuickLevel;
         ToolTipService.SetToolTip(conversationModeSwitch, ChatInteraction
             ? WorkflowText("Chat · discussion, recherche web et Python dans les réglages du chat", "Chat · conversation, web research and Python in chat settings")
             : WorkflowText("Agent · outils, plan et sous-agents selon vos réglages", "Agent · tools, planning and subagents according to your settings"));
@@ -60,8 +60,9 @@ public sealed partial class MainWindow
             var index = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel).ToLowerInvariant() switch
             { "low" => 1, "medium" => 2, "high" => 3, "none" => 4, _ => 0 };
             if (thinkingSelector.SelectedIndex != index) PopulateThinkingSelector();
-            else thinkingSelector.IsEnabled = ActiveRun == null;
+            else thinkingSelector.IsEnabled = ActiveRun == null && !applyingQuickLevel;
         }
+        RefreshQuickModelUi();
     }
     bool NativeChatProvider => provider?.IsExternalAgent == true || provider?.IsComposite == true &&
         db.Providers.Local.Any(x => x.Id == CompositeModel.Read(provider.CompositeJson).Orchestrator.ProviderId && x.IsExternalAgent);
@@ -90,7 +91,7 @@ public sealed partial class MainWindow
     }
     async Task ChangeConversationModeAsync(string value)
     {
-        if (chat == null || selectedSubagent != null) return;
+        if (chat == null || selectedSubagent != null || applyingQuickLevel) return;
         if (ActiveRun != null) { RefreshConversationMode(); throw new InvalidOperationException(WorkflowText("Arrêtez la réponse avant de changer de mode.", "Stop the response before changing mode.")); }
         var owner = chat; var previous = owner.InteractionMode;
         owner.InteractionMode = ConversationModes.Normalize(value);

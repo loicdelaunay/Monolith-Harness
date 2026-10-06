@@ -21,7 +21,7 @@ public sealed partial class MainWindow
     Flyout? modelOptionsFlyout;
     bool chooseModelOnOpen;
 
-    DropDownButton BuildModelOptions()
+    Grid BuildModelOptions()
     {
         var selection = new Grid { ColumnSpacing = 8, RowSpacing = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
         selection.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
@@ -31,7 +31,7 @@ public sealed partial class MainWindow
         selection.Children.Add(selectedModelName);
         modelProviderSubtitle.FontSize = 10; modelProviderSubtitle.TextTrimming = TextTrimming.CharacterEllipsis;
         Grid.SetRow(modelProviderSubtitle, 1); selection.Children.Add(modelProviderSubtitle);
-        var badge = new Border { Child = selectedThinking, CornerRadius = new(8), Padding = new(7, 3, 7, 3),
+        var badge = combinedThinkingBadge = new Border { Child = selectedThinking, CornerRadius = new(8), Padding = new(7, 3, 7, 3),
             Background = FluentDesign.Resource("ControlSelectedBrush"), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(badge, 1); Grid.SetRowSpan(badge, 2); selection.Children.Add(badge);
         selection.SizeChanged += (_, e) =>
@@ -47,12 +47,13 @@ public sealed partial class MainWindow
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var heading = new TextBlock { FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap };
-        panel.Children.Add(heading);
+        panel.Children.Add(BuildQuickModelHeader(heading));
         var sections = new StackPanel { Spacing = 10 };
         var body = new ScrollViewer { Content = sections, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(body, 1); panel.Children.Add(body);
-        var modelSection = new StackPanel { Spacing = 4 };
+        sections.Children.Add(BuildQuickLevelPicker());
+        var modelSection = modelAdvancedSection = new StackPanel { Spacing = 4 };
         var modelHeader = new Grid { ColumnSpacing = 10 };
         modelHeader.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         modelHeader.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -89,7 +90,7 @@ public sealed partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(modelPickerProvider, 1); providerRow.Children.Add(modelPickerProvider);
         modelSection.Children.Add(providerRow); sections.Children.Add(modelSection);
-        var thinkingSection = new Grid { ColumnSpacing = 10 };
+        var thinkingSection = thinkingAdvancedSection = new Grid { ColumnSpacing = 10 };
         thinkingSection.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         thinkingSection.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         var thinkingHeading = new TextBlock { FontSize = 13, Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
@@ -99,7 +100,9 @@ public sealed partial class MainWindow
         sections.Children.Add(modelContextEditor);
         var done = new Button { HorizontalAlignment = HorizontalAlignment.Right, MinHeight = 32, Padding = new(12, 4, 12, 4), FontSize = 13,
             Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
-        Grid.SetRow(done, 2); panel.Children.Add(done);
+        modelDoneButton = done;
+        var footer = Row(quickApplyLevel, done); footer.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetRow(footer, 2); panel.Children.Add(footer);
         TextZoom.Observe(panel);
         modelOptionsFlyout = new Flyout { Content = panel };
         modelOptionsFlyout.FlyoutPresenterStyle = new Style { TargetType = typeof(FlyoutPresenter) };
@@ -108,6 +111,7 @@ public sealed partial class MainWindow
         modelOptionsButton.Flyout = modelOptionsFlyout;
         modelOptionsFlyout.Opening += (_, _) =>
         {
+            modelOptionsIsOpen = true; previewQuickLevelId = null;
             var scale = TextZoom.ForWindow(root) / 100d;
             panel.Width = Math.Max(120, Math.Min(350 * scale, root.ActualWidth - 48));
             panel.MaxHeight = Math.Max(180, root.ActualHeight - 96);
@@ -131,15 +135,29 @@ public sealed partial class MainWindow
             chooseModelOnOpen = false;
             modelSelector.OpenSuggestions();
         };
-        modelOptionsFlyout.Closed += (_, _) => { chooseModelOnOpen = false; modelSelector.ResetSearch(); };
+        modelOptionsFlyout.Closed += (_, _) => { modelOptionsIsOpen = false; chooseModelOnOpen = false; modelSelector.ResetSearch(); };
         done.Click += (_, _) => modelOptionsFlyout.Hide();
-        return modelOptionsButton;
+        modelOptionsHost.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        modelOptionsHost.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        modelOptionsHost.Children.Add(modelOptionsButton);
+        Grid.SetColumn(inlineThinkingSelector, 1); modelOptionsHost.Children.Add(inlineThinkingSelector);
+        inlineThinkingSelector.SelectionChanged += (_, _) =>
+        {
+            if (!syncingQuickControls && !loading && ActiveRun == null && !applyingQuickLevel && inlineThinkingSelector.SelectedIndex >= 0)
+                thinkingSelector.SelectedIndex = inlineThinkingSelector.SelectedIndex;
+        };
+        modelOptionsHost.SizeChanged += (_, _) => RefreshQuickModelUi();
+        return modelOptionsHost;
     }
 
-    void OpenModelOptions(bool chooseModel = false)
+    async void OpenModelOptions(bool chooseModel = false)
     {
-        chooseModelOnOpen = chooseModel;
-        modelOptionsFlyout?.ShowAt(modelOptionsButton);
+        await Guard(async () =>
+        {
+            if (chooseModel) await SetQuickSelectionModeAsync("advanced");
+            chooseModelOnOpen = chooseModel;
+            modelOptionsFlyout?.ShowAt(modelOptionsButton);
+        });
     }
 
     void RefreshModelOptions()
@@ -170,6 +188,7 @@ public sealed partial class MainWindow
         ToolTipService.SetToolTip(modelOptionsButton, details);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(modelOptionsButton,
             WorkflowText("Choisir le modèle et sa réflexion", "Choose model and thinking") + " · " + details);
+        RefreshQuickModelUi();
     }
 
     void SetModelRefreshBusy(bool busy)

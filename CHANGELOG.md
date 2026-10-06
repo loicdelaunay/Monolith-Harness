@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.61.0 - 2026-10-06
+
+- Adds Settings / Shortcuts with quick model and thinking levels, disabled by default. Configure up to 10 ordered, optionally named combinations of provider/model, thinking effort and Chat or Agent mode, including adding, deleting and reordering levels.
+- Adds Simple and Advanced selection when shortcuts are enabled. Simple previews levels with a stepped slider and applies the whole combination together; manual combinations show Custom, and unavailable models are identified without silently switching providers.
+- Preserves the existing model search, autocomplete and context controls in Advanced mode. Separates model and thinking into two dropdowns when the composer has enough width, and keeps a combined menu on narrower windows.
+- Persists levels and the selected presentation in the portable profile, preserves independent Chat and Agent thinking preferences, and blocks conflicting edits and sends while a level is being applied.
+
 ## 1.60.0 - 2026-10-06
 
 - Adds a target-version dropdown above automatic updates in Settings / About: Latest follows new GUI releases; a fixed version keeps update checks and automatic installation on the selected release.

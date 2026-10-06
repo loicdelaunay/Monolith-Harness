@@ -70,7 +70,7 @@ public sealed partial class MainWindow
     {
         RefreshConversationMode();
         // Keep navigation, settings and drafts usable; only sending to this running chat is blocked.
-        send.IsEnabled = selectedSubagent == null && chat != null && conversationReady && !conversationLoading && !conversationRetentionBusy && !databaseMaintenanceBusy;
+        send.IsEnabled = selectedSubagent == null && chat != null && conversationReady && !conversationLoading && !conversationRetentionBusy && !databaseMaintenanceBusy && !applyingQuickLevel;
         stop.IsEnabled = ActiveRun != null;
         composer.IsEnabled = selectedSubagent == null;
         RefreshConversationProgress();
@@ -212,7 +212,7 @@ public sealed partial class MainWindow
 
     async Task SendAsync()
     {
-        if (databaseMaintenanceBusy || conversationRetentionBusy) return;
+        if (databaseMaintenanceBusy || conversationRetentionBusy || applyingQuickLevel) return;
         if (await ExecuteSlashCommandAsync()) return;
         if (!conversationReady || conversationLoading || chat == null || provider == null || project == null) return;
         if(!ProviderModels.Visible(provider).Contains(provider.Model)) { ShowStatus(WorkflowText("Cochez un modèle dans les réglages des fournisseurs.","Select a model in provider settings."), StatusKind.Error); return; }

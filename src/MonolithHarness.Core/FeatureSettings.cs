@@ -75,6 +75,9 @@ public sealed class FeatureSettings
     public int AgentMaxDepth { get; set; } = 3;
     public int AgentMaxSteps { get; set; } = 200;
     public bool ComposerInfoExpanded { get; set; } = true;
+    public bool QuickModelLevelsEnabled { get; set; }
+    public List<QuickModelLevel> QuickModelLevels { get; set; } = [];
+    public string QuickModelSelectionMode { get; set; } = "simple";
     public bool AutoFocusTool { get; set; }
     public string BrowserMode { get; set; } = "embedded";
     public string ChromePath { get; set; } = "";
@@ -116,6 +119,7 @@ public sealed class FeatureSettings
             if (settings.ArtifactRetentionDays is < 1 or > 3650) settings.ArtifactRetentionDays = 7;
             if (settings.GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) settings.GuiUpdateMode = null;
             settings.GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(settings.GuiUpdateVersion);
+            QuickModelShortcuts.Normalize(settings);
             return settings;
         }
         catch { return new(); }
@@ -142,6 +146,8 @@ public sealed class FeatureSettings
             throw new ArgumentException("Densité, GPU ou moment du nommage invalide / Invalid density, GPU or naming timing.");
         if (AutoArchiveDays is < 1 or > 3650 || AutoDeleteDays is < 1 or > 3650 || AutoArchiveConversations && AutoDeleteConversations && AutoDeleteDays <= AutoArchiveDays)
             throw new ArgumentException("La suppression doit survenir après l’archivage, avec des délais de 1 à 3650 jours / Deletion must follow archiving, with delays from 1 to 3650 days.");
+        QuickModelShortcuts.Validate(QuickModelLevels, QuickModelLevelsEnabled);
+        if (QuickModelSelectionMode is not ("simple" or "advanced")) throw new ArgumentException("Invalid model selection mode.");
         ResponseStyle = ResponseStyles.Get(ResponseStyle).Id;
         if (new[] { InterfaceFont, UserMessageFont, AssistantMessageFont }.Any(font => font == null || font.Length > 100 || font.Any(char.IsControl)))
             throw new ArgumentException("Police d’interface invalide / Invalid interface font.");

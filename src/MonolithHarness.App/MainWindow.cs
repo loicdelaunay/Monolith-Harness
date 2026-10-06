@@ -191,7 +191,7 @@ public sealed partial class MainWindow : Window
         foot.Children.Add(settingsButton);
         Grid.SetRow(foot, 3); panel.Children.Add(foot);
         shell.Pane = panel;
-        idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector]);
+        idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector, inlineThinkingSelector]);
         projects.SelectionChanged += async (_, _) => { if (!loading) await Guard(SelectProject); };
         chatSearch.TextChanged += (_, _) => { if (!loading) ApplyChatSearch(chat?.Id, scrollToFirst: true); };
         chats.SelectionChanged += async (_, _) => await Guard(() => ConversationSelectionChangedAsync(chats));
@@ -351,7 +351,7 @@ public sealed partial class MainWindow : Window
             grid.ColumnDefinitions[0].Width = compact && !narrow ? GridLength.Auto : new(1, GridUnitType.Star);
             grid.ColumnDefinitions[1].Width = compact && !narrow ? new(1, GridUnitType.Star) : GridLength.Auto;
             grid.RowSpacing = compact ? 8 : 0;
-            Grid.SetColumnSpan(modelOptionsButton, compact ? 3 : 1);
+            Grid.SetColumnSpan(modelOptionsHost, compact ? 3 : 1);
             Grid.SetRow(speedStack, compact ? 1 : 0); Grid.SetColumn(speedStack, compact ? 0 : 1);
             Grid.SetColumnSpan(speedStack, narrow ? 3 : 1);
             Grid.SetRow(contextStack, narrow ? 2 : compact ? 1 : 0); Grid.SetColumn(contextStack, narrow ? 0 : 2);
@@ -369,7 +369,7 @@ public sealed partial class MainWindow : Window
 
         modelSelector.SelectionChanged += async (_, _) =>
         {
-            if (loading || updatingModelSelector || modelSelector.SelectedItem is not ModelChoice choice) return;
+            if (loading || updatingModelSelector || applyingQuickLevel || modelSelector.SelectedItem is not ModelChoice choice) return;
             await Guard(async () =>
             {
                 var selected=db.Providers.Local.First(x=>x.Id==choice.ProviderId);
@@ -383,7 +383,7 @@ public sealed partial class MainWindow : Window
 
         thinkingSelector.SelectionChanged += async (_, _) =>
         {
-            if (loading || updatingThinkingSelector || ActiveRun != null) return;
+            if (loading || updatingThinkingSelector || applyingQuickLevel || ActiveRun != null) return;
             var level = thinkingSelector.SelectedIndex switch
             {
                 1 => "low",
@@ -683,7 +683,7 @@ public sealed partial class MainWindow : Window
                 "none" => 4,
                 _ => 0
             };
-            thinkingSelector.IsEnabled = ActiveRun == null;
+            thinkingSelector.IsEnabled = ActiveRun == null && !applyingQuickLevel;
             ToolTipService.SetToolTip(thinkingSelector, T("Niveau de réflexion / thinking du modèle (reasoning effort)"));
         }
         finally
@@ -1495,6 +1495,7 @@ public sealed partial class MainWindow : Window
         var features = BuildFeatureSettings();
         await YieldSettingsAsync(loadingWindow);
         var providerEditor = BuildProviderEditor(provider?.Id ?? state.ProviderId);
+        var quickModelSettings = BuildQuickModelSettings(providerEditor);
         await YieldSettingsAsync(loadingWindow);
         var language = BuildLanguagePicker();
         var appearance = BuildAppearanceSettings(loadingWindow);
@@ -1638,6 +1639,7 @@ public sealed partial class MainWindow : Window
         var tabs = new SettingsNavigation();
         tabs.Add(T("Général"),general);
         tabs.Add(WorkflowText("Apparence", "Appearance"), appearance.Panel, "\uE790");
+        var shortcutsTab = tabs.Add(WorkflowText("Raccourcis", "Shortcuts"), quickModelSettings.Panel, "\uE765");
         var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968", fixedHeader: providerEditor.Header);
         providerEditor.ViewChanged = tabs.ScrollToTop;
         tabs.Add("Skills",skillPanel, "\uE945");
@@ -1659,6 +1661,7 @@ public sealed partial class MainWindow : Window
             if (!compactionSettings.Validate()) { tabs.SelectedIndex = compactionTab; return false; }
             var valid = true;
             var providerError = ValidateProviderDrafts(providerEditor);
+            if (!quickModelSettings.Validate()) { tabs.SelectedIndex = shortcutsTab; return false; }
             if (conversationRuns.Values.Any(run => run.AgentProviders.Values.Select(x=>x.Id).Append(run.Provider.Id).Append(run.SelectedProviderId).Any(id=>!providerEditor.Drafts.Any(draft=>draft.Id==id))))
                 providerError = T("Ce fournisseur est utilisé par une conversation en cours.");
             if (providerError != null)
@@ -1732,6 +1735,7 @@ public sealed partial class MainWindow : Window
         await mcpEditor.Save();
         foreach (var item in revoke.Where(x => x.Value.IsChecked == true).Select(x => x.Key)) db.PermissionGrants.Remove(item);
         var selectedProvider = await SaveProviderDraftsAsync(providerEditor);
+        quickModelSettings.Save(savedFeatures);
         imageGenerationSettings.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
         state.ProviderId = selectedProvider?.Id ?? 0;
