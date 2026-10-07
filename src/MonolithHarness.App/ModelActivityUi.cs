@@ -24,6 +24,7 @@ public sealed partial class MainWindow
     }
     void ModelProgress(ConversationRun run, GenerationUpdate update)
     {
+        ObserveComposerSpeed(run, update);
         var retrying = run.RetryFeedbackActive;
         CancelModelRetryFeedback(run);
         if (retrying) SetRunStatus(run, T("Le modèle réfléchit…"));
@@ -38,6 +39,7 @@ public sealed partial class MainWindow
     }
     void RefreshModelActivity()
     {
+        RefreshCommandVerification();
         foreach (var conversation in conversationRuns.Values)
             if (conversation.CurrentTool is { } running)
                 running.Message.UpdateProgress(running.Timer.Elapsed.TotalSeconds, running.Phase);

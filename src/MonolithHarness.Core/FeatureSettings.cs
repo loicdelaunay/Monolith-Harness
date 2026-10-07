@@ -44,6 +44,7 @@ public sealed class FeatureSettings
     public string ChatMessageDensity { get; set; } = "normal";
     public string RenderingGpuPreference { get; set; } = "auto";
     public bool ShowAttentionSection { get; set; } = true;
+    public bool VirtualizeChat { get; set; } = true;
     public bool RenderMermaid { get; set; } = true;
     public bool RenderMath { get; set; } = true;
     public bool AutoArchiveConversations { get; set; }

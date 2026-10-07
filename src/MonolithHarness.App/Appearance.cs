@@ -27,6 +27,7 @@ public sealed partial class MainWindow
         ApplyTheme(config.Theme);
         ApplyBranding();
         RefreshComposerModelSummary();
+        QueueMessageVirtualization(); RefreshChatTextHighlights();
     }
     void ApplyTheme(string themeId, IEnumerable<AppearanceTheme>? customThemes = null)
     {
@@ -79,10 +80,10 @@ public sealed partial class MainWindow
     {
         composerContextRing.Update(contextBar.Value / 100d);
         composerContextText.Text = contextPercentText.Text;
-        composerSpeedText.Text = speedValueText.Text;
+        RefreshRecentComposerSpeed();
         composerContextText.Foreground = FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
         composerSpeedText.Foreground = FluentDesign.Secondary;
-        var description = WorkflowText("Contexte", "Context") + " : " + contextPercentText.Text + " · " + contextValueText.Text + " · " + speedValueText.Text;
+        var description = WorkflowText("Contexte", "Context") + " : " + contextPercentText.Text + " · " + contextValueText.Text + " · " + composerSpeedText.Text;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerMetrics, description);
     }
     Grid BuildComposerModelSummary()
@@ -112,8 +113,7 @@ public sealed partial class MainWindow
         InitializeComposerModelSelection();
         assetsScroll.Content = assetsBar;
         var panel = new StackPanel { Spacing = 0 };
-        assetsScroll.Margin = new(8, 4, 8, 4);
-        panel.Children.Add(assetsScroll);
+        panel.Children.Add(BuildComposerAttachments());
         panel.Children.Add(BuildComposer());
         return FluentDesign.Surface(panel, 0);
     }

@@ -144,7 +144,7 @@ public static class LocalCommandGuard
             finally { Gate.Release(); }
         }
     }
-    public static async Task<CommandGuardResult> CheckAsync(CommandApproval? request, CancellationToken ct)
+    public static async Task<CommandGuardResult> CheckAsync(CommandApproval? request, CancellationToken ct, IProgress<CommandValidationProgress>? progress = null)
     {
         if (request == null) return CommandGuardResult.Review("missing-command");
         if (request.Shell is not ("bash" or "powershell" or "cmd")) return CommandGuardResult.Review("unsupported-shell");
@@ -154,13 +154,16 @@ public static class LocalCommandGuard
         try
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct); deadline.CancelAfter(TimeSpan.FromSeconds(45));
+            progress?.Report(new("preparing"));
             await EnsureWorkerAsync(Folder, deadline.Token);
             var requestId = Guid.NewGuid().ToString("N");
             var payload = JsonSerializer.Serialize(new { request_id = requestId, command = request.Command, shell = request.Shell });
+            progress?.Report(new("analyzing"));
             await worker!.StandardInput.WriteLineAsync(payload.AsMemory(), deadline.Token);
             await worker.StandardInput.FlushAsync(deadline.Token);
             var line = await worker.StandardOutput.ReadLineAsync(deadline.Token);
             if (line == null || line.Length > 8192) throw new IOException("No valid command guard response.");
+            progress?.Report(new("checking"));
             using var response = JsonDocument.Parse(line);
             var value = response.RootElement;
             if (value.GetProperty("request_id").GetString() != requestId) throw new IOException("Mismatched command guard response.");

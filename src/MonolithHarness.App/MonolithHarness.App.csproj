@@ -11,8 +11,8 @@
     <Product>Monolith Harness</Product>
     <ApplicationId>com.monolithharness.app</ApplicationId>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <ApplicationDisplayVersion>1.67.0</ApplicationDisplayVersion>
-    <ApplicationVersion>96</ApplicationVersion>
+    <ApplicationDisplayVersion>1.68.0</ApplicationDisplayVersion>
+    <ApplicationVersion>97</ApplicationVersion>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

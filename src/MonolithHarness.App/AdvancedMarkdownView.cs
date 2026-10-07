@@ -9,7 +9,7 @@ internal sealed class AdvancedMarkdownView : UserControl
 {
     Microsoft.UI.Xaml.Controls.WebView2 view = new();
     readonly Func<string, Task>? openFile;
-    string markdown = "";
+    string markdown = "", searchQuery = "";
     bool starting, ready, painting, again;
     int revision;
     string diagnostic = "";
@@ -38,6 +38,13 @@ internal sealed class AdvancedMarkdownView : UserControl
     }
     internal void Update(string text) { markdown = text; Paint(); }
     internal void RefreshVisuals() => Paint();
+    internal async void SetSearchQuery(string query)
+    {
+        if (searchQuery == query) return; searchQuery = query;
+        if (!ready) return;
+        try { await view.ExecuteScriptAsync($"markdownVisuals.search({JsonSerializer.Serialize(query)})"); }
+        catch (Exception ex) { AppLog.Write(AppLogLevel.Warning, "markdown.search", ex); }
+    }
     async void Begin()
     {
         if (starting || ActualWidth <= 0) return;
@@ -121,7 +128,7 @@ internal sealed class AdvancedMarkdownView : UserControl
                 if (paintedMarkdown == text && paintedOptions == options) continue;
                 var colors = new { text = options.Foreground, background = "transparent", dark = options.Dark };
                 await view.ExecuteScriptAsync($"document.documentElement.lang={JsonSerializer.Serialize(options.Language)};markdownVisuals.set({JsonSerializer.Serialize(MarkdownDisplay.Html(text, options.Math))},{JsonSerializer.Serialize(colors)},{options.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)},{options.LineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture)},{JsonSerializer.Serialize(new { mermaid = options.Mermaid, math = options.Math })})");
-                if (version == revision) { paintedMarkdown = text; paintedOptions = options; }
+                if (version == revision) { paintedMarkdown = text; paintedOptions = options; await view.ExecuteScriptAsync($"markdownVisuals.search({JsonSerializer.Serialize(searchQuery)})"); }
             } while (again && version == revision);
         }
         catch (Exception ex) { AppLog.Write(AppLogLevel.Warning, "markdown.render", ex); }

@@ -105,7 +105,9 @@ public sealed partial class MainWindow
                     if (turns.Count % 64 == 0) await Task.Delay(1, ct);
                 }
             // Measure the recent edge before jumping to the bottom. Older slots load on demand.
-            foreach (var turn in turns.TakeLast(2)) { turn.Wanted = true; await turn.MountAsync(ct); }
+            var initial = FeatureSettings.Read(owner.state.FeaturesJson).VirtualizeChat ? turns.TakeLast(2) : turns;
+            var mounted = 0;
+            foreach (var turn in initial) { turn.Wanted = true; await turn.MountAsync(ct); if (++mounted % 4 == 0) await Task.Delay(1, ct); }
         }
         VirtualTurn Add(List<Message> records, Project? project, bool live = false)
         {
@@ -163,12 +165,13 @@ public sealed partial class MainWindow
             {
                 var viewport = Math.Max(240, owner.scroll.ViewportHeight);
                 var margin = Math.Max(800, viewport * 2);
+                var enabled = FeatureSettings.Read(owner.state.FeaturesJson).VirtualizeChat;
                 var wanted = new List<VirtualTurn>();
                 foreach (var turn in turns)
                 {
                     if (!ReferenceEquals(turn.Frame.Parent, host)) continue;
                     var y = turn.Frame.TransformToVisual(owner.scroll).TransformPoint(new Point()).Y;
-                    turn.Wanted = turn.IsLive || turn.KeepUntil > Environment.TickCount64 || y <= viewport + margin && y + turn.Frame.ActualHeight >= -margin;
+                    turn.Wanted = !enabled || turn.IsLive || turn.KeepUntil > Environment.TickCount64 || y <= viewport + margin && y + turn.Frame.ActualHeight >= -margin;
                     if (turn.Wanted) { if (turn.Content == null) wanted.Add(turn); }
                     else turn.Release();
                 }
@@ -233,6 +236,7 @@ public sealed partial class MainWindow
                         activity.SetExpanded(activityExpanded.Value);
                     var i = 0; foreach (var expander in Expanders(body)) { if (i < expanderState.Length) expander.IsExpanded = expanderState[i]; i++; }
                     Frame.Child = body; Frame.Height = double.NaN;
+                    view.owner.ApplyChatTextHighlights(body);
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -248,6 +252,7 @@ public sealed partial class MainWindow
                             var card = new Border { Child = text }; body.Children.Add(card); view.owner.chatSearchAnchors[record.Id] = new(card);
                         }
                         Frame.Child = body; Frame.Height = double.NaN;
+                        view.owner.ApplyChatTextHighlights(body);
                     }
                 }
                 finally { cancellation = null; if (Content == null) { ReleaseImages(); if (Wanted) view.owner.QueueMessageVirtualization(); } }

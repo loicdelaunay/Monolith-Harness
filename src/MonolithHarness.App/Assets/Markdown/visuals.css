@@ -11,3 +11,6 @@ code { font-family: Consolas, monospace; } table { border-collapse: collapse; ma
 img { max-width: 100%; } .katex-display { overflow-x: auto; overflow-y: hidden; padding: .6em 0; }
 .mermaid-diagram { overflow: auto; margin: 1em 0; } .mermaid-diagram svg { max-width: 100%; height: auto; }
 .visual-error { font-size: .85em; color: #c88032; } .katex-error { white-space: pre-wrap; }
+
+::highlight(monolith-search){background:#fbbf24;color:#181818}
+mark.monolith-search{background:#fbbf24;color:#181818;border-radius:2px}

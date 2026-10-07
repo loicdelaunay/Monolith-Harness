@@ -59,16 +59,17 @@ public sealed partial class MainWindow
     void CloseChatFind()
     {
         chatFindRevision++; chatFindBar.Visibility = Visibility.Collapsed; RestoreSearchHighlight();
-        chatFindMatches.Clear(); chatFindIndex = -1; composer.Focus(FocusState.Programmatic);
+        chatFindMatches.Clear(); chatFindIndex = -1; RefreshChatTextHighlights(); composer.Focus(FocusState.Programmatic);
     }
     async Task RefreshChatFindAsync()
     {
         var revision = ++chatFindRevision;
         var selected = chat; var query = chatFindInput.Text;
         RestoreSearchHighlight(); chatFindMatches = []; chatFindIndex = -1;
-        if (selected == null || query.Length == 0 || chatFindBar.Visibility != Visibility.Visible) { chatFindCount.Text = "0 / 0"; return; }
+        if (selected == null || query.Length == 0 || chatFindBar.Visibility != Visibility.Visible) { RefreshChatTextHighlights(); chatFindCount.Text = "0 / 0"; return; }
         await Task.Delay(180);
         if (revision != chatFindRevision) return;
+        RefreshChatTextHighlights();
         var history = await ReadStoreAsync(store => store.Messages.AsNoTracking().Where(x => x.ChatId == selected.Id && (x.Role == "user" || x.Role == "assistant")).OrderBy(x => x.Id).ToList());
         if (revision != chatFindRevision || chat?.Id != selected.Id) return;
         if (conversationRuns.TryGetValue(selected.Id, out var run))
@@ -76,7 +77,7 @@ public sealed partial class MainWindow
             var live = run.Db.Messages.Local.Where(x => x.ChatId == selected.Id && x.Role is "user" or "assistant").ToDictionary(x => x.Id);
             history = history.Where(x => !live.ContainsKey(x.Id)).Concat(live.Values).OrderBy(x => x.Id).ToList();
         }
-        chatFindMatches = history.Where(x => x.Content.Contains(query, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        chatFindMatches = history.Where(x => x.Content.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
         if (chatFindMatches.Count > 0) await NavigateChatFindAsync(1); else chatFindCount.Text = "0 / 0";
     }
     async Task NavigateChatFindAsync(int direction)
@@ -94,6 +95,7 @@ public sealed partial class MainWindow
         {
             RestoreSearchHighlight(); highlightedSearchCard = card; originalSearchBrush = card.BorderBrush;
             card.BorderBrush = FluentDesign.Resource("AccentFillColorDefaultBrush");
+            RefreshChatTextHighlights();
             scroll.UpdateLayout(); card.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = .4, AnimationDesired = true });
         }
     }

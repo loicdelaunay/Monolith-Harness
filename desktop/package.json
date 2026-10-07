@@ -1,6 +1,6 @@
 {
   "name": "monolith-harness-desktop",
-  "version": "1.67.0",
+  "version": "1.68.0",
   "private": true,
   "description": "Monolith Harness desktop host for macOS and Windows",
   "author": "Monolith Harness",

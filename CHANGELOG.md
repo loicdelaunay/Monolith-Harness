@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.68.0 - 2026-10-07
+
+- Places the exact copyable command first in the additional permission dialog, followed by a categorical risk bar: green for a valid low-risk decision, orange for review or missing analysis, and red for a risky classification. Removes the warning sentence, keeps validator identity and unavailable-analysis details, and preserves the human approval actions.
+- Adds an enabled-by-default Virtualize chat display toggle in Settings / General. Disabling it realizes and retains all visible conversation turns; enabling it resumes viewport-based rendering. Changes apply to the current chat, with selection and search preservation.
+- Shows composer token speed using only the last two seconds of received generation output, scoped to each chat and reset per model call/retry. Idle time contributes zero throughput; provider counters and text estimates retain their distinction. Existing response and conversation statistics in the speed tooltip remain unchanged.
+- Adds a shield, Checking label and animated circular indicator beside the activity chip while Automatic reviews a command. Tracks queued, preparation, analysis and decision-check stages and elapsed time; no completion percentage is invented when the validator does not supply one. Background chat checks remain scoped to their chat.
+- Keeps the activity glow continuous across streamed status updates and uses smoothly eased keyframes instead of restarting its pulse per token. Uses continuous spinner rotation with correct visibility and lifetime cleanup.
+- Adds a compact attachment/resource header with a count and per-chat collapse state. Collapsing previews preserves attached content and releases composer space.
+- Highlights Ctrl+F matches inside native Markdown text and embedded diagram/math views, preserving formatting, links and diagram DOM. Applies highlights to newly realized turns and streamed answers; closing or clearing search removes them.
+
 ## 1.67.0 - 2026-10-07
 
 - Moves LANCET setup into a dedicated Command validation section in Settings / Permissions. Download and prepare the pinned local model explicitly, or import a complete verified 0.4.3 bundle. A local wheels directory supports offline CPU dependency installation; selecting Automatic no longer opens an installation dialog.

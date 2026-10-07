@@ -566,9 +566,7 @@ public sealed partial class MainWindow
         CommandGuardResult? risk = null;
         if (execution && PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow)
         {
-            risk = await CommandGuard.CheckAsync(command, FeatureSettings.Read(state.FeaturesJson),
-                (id, _) => ReadStoreAsync(store => store.Providers.AsNoTracking().SingleOrDefault(p => p.Id == id)),
-                (selected, _) => Task.FromResult(KeyVault.Decrypt(selected.ProtectedKey)), http, ct);
+            risk = await CheckCommandWithFeedbackAsync(command, ct);
             automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
             if (automatic == false) return false;
             if (automatic == true && (PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Full || PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow && risk.AllowsAutomatic)) return true;

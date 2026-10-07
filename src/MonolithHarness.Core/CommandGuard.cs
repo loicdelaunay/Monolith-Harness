@@ -9,9 +9,10 @@ public static class CommandGuard
 {
     public static async Task<CommandGuardResult> CheckAsync(CommandApproval? request, FeatureSettings settings,
         Func<int, CancellationToken, Task<Provider?>> load, Func<Provider, CancellationToken, Task<string>> key,
-        HttpClient http, CancellationToken ct)
+        HttpClient http, CancellationToken ct, IProgress<CommandValidationProgress>? progress = null)
     {
-        if (settings.CommandGuardMode != "model") return await LocalCommandGuard.CheckAsync(request, ct);
+        progress?.Report(new("queued"));
+        if (settings.CommandGuardMode != "model") return await LocalCommandGuard.CheckAsync(request, ct, progress);
         var label = string.IsNullOrWhiteSpace(settings.CommandGuardModel) ? "Modèle / Model" : settings.CommandGuardModel;
         CommandGuardResult Review(string why) => new("review", null, why, label);
         if (request == null) return Review("missing-command");
@@ -21,6 +22,7 @@ public static class CommandGuard
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(90));
         try
         {
+            progress?.Report(new("preparing"));
             var provider = await load(settings.CommandGuardProviderId, timeout.Token);
             if (provider == null) return Review("validator-not-configured");
             provider = JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(provider))!;
@@ -53,6 +55,7 @@ public static class CommandGuard
             bool oversized = false;
             void Update(GenerationUpdate value) { if (value.Text.Length > 8000) { oversized = true; timeout.Cancel(); } }
             var password = await key(provider, timeout.Token);
+            progress?.Report(new("analyzing"));
             Completion answer;
             if (provider.IsOpenCode)
             {
@@ -68,6 +71,7 @@ public static class CommandGuard
                 answer = await new ChatEngine(http).StreamAsync(provider, password, wire, [], Update, timeout.Token,
                     reasoningEffort: "none", retrySettings: new() { RetryEnabled = false }, acp: acp);
             }
+            progress?.Report(new("checking"));
             if (oversized || answer.Message["tool_calls"] is JsonArray calls && calls.Count > 0) return Review("invalid-response");
             var raw = answer.Message["content"]?.GetValue<string>()?.Trim() ?? "";
             if (raw.Length > 8000) return Review("invalid-response");
@@ -86,3 +90,5 @@ public static class CommandGuard
         catch (Exception) { return Review("unavailable"); }
     }
 }
+
+public sealed record CommandValidationProgress(string Stage);

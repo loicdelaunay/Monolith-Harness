@@ -89,6 +89,42 @@
       }
     }
   }
+  let searchQuery = '';
+  function search(query) {
+    searchQuery = String(query || '');
+    const root = document.getElementById('markdown'); if (!root) return;
+    const modern = typeof Highlight !== 'undefined' && typeof CSS !== 'undefined' && CSS.highlights;
+    if (modern) CSS.highlights.delete('monolith-search');
+    for (const mark of root.querySelectorAll('mark.monolith-search')) mark.replaceWith(...mark.childNodes);
+    if (!searchQuery) return;
+    const nodes = [], offsets = [], walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) { return node.parentElement?.closest('script,style,.katex-mathml,defs,title,desc') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; }
+    });
+    let text = '', node;
+    while ((node = walker.nextNode())) { offsets.push(text.length); nodes.push(node); text += node.textContent; }
+    const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const matches = [...text.matchAll(new RegExp(escaped, 'giu'))], ranges = [];
+    for (const match of matches) {
+      const start = match.index, end = start + match[0].length;
+      let first = 0, last = 0;
+      while (first + 1 < nodes.length && offsets[first + 1] <= start) first++;
+      last = first; while (last + 1 < nodes.length && offsets[last + 1] < end) last++;
+      if (!nodes[first] || !nodes[last]) continue;
+      const range = document.createRange(); range.setStart(nodes[first], start - offsets[first]); range.setEnd(nodes[last], end - offsets[last]); ranges.push(range);
+    }
+    if (modern) CSS.highlights.set('monolith-search', new Highlight(...ranges));
+    else {
+      // Preserve links, emphasis and diagram DOM even on WebKit versions without CSS highlights.
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const node = nodes[i], beginning = offsets[i], finish = beginning + node.textContent.length;
+        const pieces = matches.map(m => [Math.max(0, m.index - beginning), Math.min(finish, m.index + m[0].length) - beginning]).filter(([a,b]) => b > a);
+        for (let j = pieces.length - 1; j >= 0; j--) {
+          const [a,b] = pieces[j], tail = node.splitText(b), target = node.splitText(a);
+          const mark = document.createElement('mark'); mark.className = 'monolith-search'; target.replaceWith(mark); mark.append(target);
+        }
+      }
+    }
+  }
   let reportedHeight = -1, sizeQueued = false;
   function reportSize() {
     if (sizeQueued) return; sizeQueued = true;
@@ -99,7 +135,7 @@
     });
   }
   mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
-  window.markdownVisuals = { render, resolveCache(id, svg) { const resolve = requests.get(id); if (resolve) { requests.delete(id); resolve(svg); } },
+  window.markdownVisuals = { render, search, resolveCache(id, svg) { const resolve = requests.get(id); if (resolve) { requests.delete(id); resolve(svg); } },
     async set(html, colors, fontSize, lineHeight, enabled = {}) {
       const root = document.getElementById('markdown');
       const signature = JSON.stringify([colors, fontSize, lineHeight, enabled, document.documentElement.lang]);
@@ -108,7 +144,7 @@
       documents.set(root, { html, signature });
       document.body.style.color = colors.text; document.body.style.background = colors.background;
       document.body.style.fontSize = fontSize + 'px'; document.body.style.lineHeight = lineHeight + 'px';
-      root.innerHTML = html; await render(root, colors.dark, enabled); reportSize();
+      root.innerHTML = html; await render(root, colors.dark, enabled); search(searchQuery); reportSize();
     }
   };
   document.addEventListener('selectionchange', () => { const selection = window.getSelection(); window.chrome?.webview?.postMessage({ kind: 'selection', selected: !!selection && !selection.isCollapsed }); });

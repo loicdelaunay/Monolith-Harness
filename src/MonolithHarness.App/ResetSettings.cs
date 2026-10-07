@@ -48,7 +48,7 @@ public sealed partial class MainWindow
                     foreach (var id in conversationBrowsers.Keys.Select(x => x.ChatId).Distinct().ToArray()) CloseConversationBrowser(id);
                     foreach (var id in resetChatIds) await terminals.RemoveChatAsync(id);
                     await Maintain(() => Task.Run(() => DatabaseMaintenance.ResetProjectDataAsync(HarnessDb.DatabasePath)));
-                    chatNotices.Clear(); conversationDrafts.Clear(); conversationHistory.Clear(); conversationStatuses.Clear(); chatSearchAnchors.Clear();
+                    chatNotices.Clear(); conversationDrafts.Clear(); conversationHistory.Clear(); conversationStatuses.Clear(); chatSearchAnchors.Clear(); recentComposerSpeeds.Clear(); collapsedAttachments.Clear();
                     activityProjects.Clear(); pendingChatAttention.Clear(); completedUnreadChats.Clear(); failedUnreadChats.Clear();
                     expandedSidebarProjects.Clear(); expandedSidebarArchives.Clear(); subagentViews.Clear();
                     project = null; chat = null; db.ChangeTracker.Clear();

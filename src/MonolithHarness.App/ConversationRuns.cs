@@ -15,7 +15,9 @@ public sealed partial class MainWindow
         string prompt, IEnumerable<Attachment> images, IEnumerable<Provider>? availableProviders=null) : ConversationSession(chat, project, provider, options, prompt, images, availableProviders:availableProviders)
     {
         public required StackPanel Messages { get; init; }
-        public GenerationSpeedTracker? Tracker { get; set; }
+        GenerationSpeedTracker? tracker;
+        public GenerationSpeedTracker? Tracker { get => tracker; set { tracker = value; if (value != null) RecentSpeed.Begin(value); } }
+        public RecentTokenSpeed RecentSpeed { get; } = new();
         public GenerationUpdate? Update { get; set; }
         public int? InputEstimate { get; set; }
         public (double Tokens, bool Estimated)? Context { get; set; }
@@ -277,6 +279,7 @@ public sealed partial class MainWindow
             if (run.Submitted) conversationHistory[run.Chat.Id] = run.Db.Messages.Local.ToList();
             SealVirtualTurn(run);
             if (run.Sandbox != null) await terminals.StopChatAsync(run.Chat.Id, true);
+            run.RecentSpeed.Freeze(); SaveRecentComposerSpeed(run);
             conversationRuns.Remove(run.Chat.Id);
             MarkProjectChatEnded(run, success);
             run.Dispose();

@@ -250,7 +250,8 @@ public sealed partial class MainWindow : Window
         status.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) =>
             statusChip.Visibility = string.IsNullOrWhiteSpace(status.Text) ? Visibility.Collapsed : Visibility.Visible);
         var glowingStatus = StatusGlow(statusChip);
-        Grid.SetRow(glowingStatus, 2); conversationPanel.Children.Add(glowingStatus);
+        var activityRow = BuildCommandVerificationRow(glowingStatus);
+        Grid.SetRow(activityRow, 2); conversationPanel.Children.Add(activityRow);
         Grid.SetRow(conversationPanel, 1); main.Children.Add(conversationPanel);
         var composePanel = new StackPanel { Spacing = 4 };
         composePanel.Children.Add(pinnedTasks);
@@ -397,7 +398,7 @@ public sealed partial class MainWindow : Window
             assetsBar.Children.Add(tile);
         }
 
-        assetsScroll.Visibility = assetsBar.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RefreshComposerAttachments();
     }
     void UpdateSourceLabel()
     {
@@ -658,6 +659,7 @@ public sealed partial class MainWindow : Window
         public Func<string, MenuFlyout>? FileMenu { get; init; }
         public TextBlock Duration { get; init; } = null!;
         public Func<bool> CanPaint { get; init; } = () => true;
+        public Action<Panel>? ContentRendered { get; init; }
         bool isHovered;
         string durationText = "";
         string completedTimeTip = "";
@@ -718,6 +720,7 @@ public sealed partial class MainWindow : Window
         {
             if (Container is { } card) card.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
             MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu);
+            ContentRendered?.Invoke(BodyContainer);
         }
 
         public void UpdateThinking(string reasoning, bool isComplete = false, bool streaming = false)
@@ -807,6 +810,7 @@ public sealed partial class MainWindow : Window
         var ui = new AssistantMessageUi
         {
             BodyContainer = bodyContainer,
+            ContentRendered = ApplyChatTextHighlights,
             Duration = duration,
             CanPaint = () => followChatTail || !ReferenceEquals(target ?? messages, scroll.Content),
             ShowReasoningDetails = () => state.ShowReasoningDetails,
@@ -1387,6 +1391,9 @@ public sealed partial class MainWindow : Window
         general.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
             WorkflowText("Déplie par défaut le groupe des réflexions et outils, dans l’historique et pendant la génération.", "Expand the reasoning and tools group by default, in history and during generation."), showReasoning));
         var markdownFeatures = FeatureSettings.Read(state.FeaturesJson);
+        var virtualizeChat = new ToggleSwitch { IsOn = markdownFeatures.VirtualizeChat };
+        general.Children.Add(FluentDesign.Setting(WorkflowText("Virtualiser l’affichage du chat", "Virtualize chat display"),
+            WorkflowText("Activé : conserve les bulles enrichies proches de l’écran. Désactivé : garde toutes les bulles affichées, avec davantage de mémoire utilisée.", "When enabled, keep rich bubbles near the viewport. When disabled, keep all bubbles rendered, using more memory."), virtualizeChat));
         var renderMermaid = new ToggleSwitch { IsOn = markdownFeatures.RenderMermaid };
         var renderMath = new ToggleSwitch { IsOn = markdownFeatures.RenderMath };
         var showComposerSpeed = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerSpeed };
@@ -1567,6 +1574,7 @@ public sealed partial class MainWindow : Window
         savedFeatures.FontZoomPercent = FeatureSettings.Read(state.FeaturesJson).FontZoomPercent;
         savedFeatures.AgentPresets = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         savedFeatures.ChatGoals = FeatureSettings.Read(state.FeaturesJson).ChatGoals;
+        savedFeatures.VirtualizeChat = virtualizeChat.IsOn;
         savedFeatures.RenderMermaid = renderMermaid.IsOn; savedFeatures.RenderMath = renderMath.IsOn;
         savedFeatures.ShowComposerSpeed = showComposerSpeed.IsOn;
         savedFeatures.ShowComposerContext = showComposerContext.IsOn;

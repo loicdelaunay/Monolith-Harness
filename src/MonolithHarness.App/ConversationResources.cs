@@ -135,6 +135,7 @@ public sealed partial class MainWindow
         if (card != null)
         {
             chatSearchAnchors[message.Id] = new(card);
+            ApplyChatTextHighlights(card);
             if (message.Role == "user")
                 foreach (var panel in conversationRuns.Values.Select(x => x.Messages).Append(messages).Distinct())
                     if (virtualConversations.TryGetValue(panel, out var view)) view.TrackUser(message, card);

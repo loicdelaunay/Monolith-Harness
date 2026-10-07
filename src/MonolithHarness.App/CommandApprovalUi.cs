@@ -12,7 +12,7 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     bool installingCommandGuard;
-    string CommandGuardLabel(CommandGuardResult result) => result.Reason switch
+    string CommandReviewDetail(CommandGuardResult result) => result.Reason switch
     {
         "validator-not-configured" => WorkflowText("Choisissez un fournisseur et un modèle dans Paramètres / Autorisations.", "Choose a provider and model in Settings / Permissions."),
         "unsupported-validator" => WorkflowText("Ce fournisseur ne permet pas cette validation sans outils.", "This provider cannot validate without tools."),
@@ -21,39 +21,13 @@ public sealed partial class MainWindow
         "missing-command" => WorkflowText("L’outil ne fournit pas la commande exacte à analyser.", "The tool does not provide the exact command to analyze."),
         "invalid-command" => WorkflowText("La commande est vide, invalide ou dépasse la limite du validateur.", "The command is empty, invalid or exceeds the validator limit."),
         "timeout" or "unavailable" or "invalid-response" => WorkflowText("Le validateur n’a pas fourni de décision valide. Votre accord est nécessaire.", "The validator did not provide a valid decision. Your approval is required."),
-        _ => result.Classification == "risky" ? WorkflowText("Le validateur a signalé cette commande comme risquée : ", "The validator flagged this command as risky: ") + result.Validator
-            : WorkflowText("Le validateur demande une vérification : ", "The validator requests a review: ") + result.Validator
+        _ => result.Explanation ?? ""
     };
     UIElement CommandApprovalContent(string action, string details, CommandApproval? request, CommandGuardResult? risk, CancellationToken ct)
     {
         var content = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Stretch };
-        if (risk != null)
-        {
-            var banner = new Grid { ColumnSpacing = 10 };
-            banner.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-            banner.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-            var icon = FluentDesign.Icon("\uE7BA", 18); icon.VerticalAlignment = VerticalAlignment.Center;
-            banner.Children.Add(icon);
-            var message = Label(CommandGuardLabel(risk), 13);
-            message.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-            Grid.SetColumn(message, 1); banner.Children.Add(message);
-            content.Children.Add(FluentDesign.Surface(banner, 12));
-            if (!string.IsNullOrWhiteSpace(risk.Explanation)) content.Children.Add(new TextBlock { Text = risk.Explanation, FontSize = 13, Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
-        }
-        var title = Label(action, 13); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-        content.Children.Add(title);
         if (request != null)
         {
-            var environment = new StackPanel { Spacing = 4 };
-            var directoryLabel = Label(WorkflowText("Dossier de travail", "Working directory"), 12);
-            directoryLabel.Foreground = FluentDesign.Secondary; environment.Children.Add(directoryLabel);
-            var directory = new TextBlock { Text = request.Directory, FontSize = 12, Foreground = FluentDesign.Primary,
-                TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-            ToolTipService.SetToolTip(directory, request.Directory); environment.Children.Add(directory);
-            var shell = Label("Shell : " + request.Shell + " · " + WorkflowText("Délai : ", "Timeout: ") + request.TimeoutSeconds + " s", 12);
-            shell.Foreground = FluentDesign.Secondary; environment.Children.Add(shell);
-            content.Children.Add(environment);
-
             var commandPanel = new StackPanel { Spacing = 8 };
             var commandHeader = new Grid { ColumnSpacing = 8 };
             commandHeader.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
@@ -74,6 +48,24 @@ public sealed partial class MainWindow
             commandPanel.Children.Add(new TextBlock { Text = request.Command, FontFamily = new FontFamily("Cascadia Code, Consolas"),
                 FontSize = 12.5, Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
             content.Children.Add(FluentDesign.Surface(commandPanel, 12));
+            content.Children.Add(CommandRiskBar(risk));
+
+            var title = Label(action, 13); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; content.Children.Add(title);
+            var environment = new StackPanel { Spacing = 4 };
+            var directoryLabel = Label(WorkflowText("Dossier de travail", "Working directory"), 12);
+            directoryLabel.Foreground = FluentDesign.Secondary; environment.Children.Add(directoryLabel);
+            var directory = new TextBlock { Text = request.Directory, FontSize = 12, Foreground = FluentDesign.Primary,
+                TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+            ToolTipService.SetToolTip(directory, request.Directory); environment.Children.Add(directory);
+            var shell = Label("Shell : " + request.Shell + " · " + WorkflowText("Délai : ", "Timeout: ") + request.TimeoutSeconds + " s", 12);
+            shell.Foreground = FluentDesign.Secondary; environment.Children.Add(shell);
+            content.Children.Add(environment);
+            var reviewDetail = risk == null ? "" : CommandReviewDetail(risk);
+            if (!string.IsNullOrWhiteSpace(reviewDetail))
+            {
+                var detail = Label(reviewDetail, 12); detail.Foreground = FluentDesign.Secondary;
+                content.Children.Add(detail);
+            }
 
             var selected = automaticToolRun.Value?.Provider ?? provider;
             var impactProvider = selected == null ? null : JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(selected));
@@ -105,14 +97,45 @@ public sealed partial class MainWindow
             };
             content.Children.Add(info); content.Children.Add(note); content.Children.Add(analysis);
         }
-        else content.Children.Add(new TextBlock { Text = details, FontSize = 13, Foreground = FluentDesign.Primary,
-            TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+        else
+        {
+            var title = Label(action, 13); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; content.Children.Add(title);
+            content.Children.Add(new TextBlock { Text = details, FontSize = 13, Foreground = FluentDesign.Primary,
+                TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+            if (risk != null)
+            {
+                content.Children.Add(CommandRiskBar(risk));
+                var detail = Label(CommandReviewDetail(risk), 12); detail.Foreground = FluentDesign.Secondary; content.Children.Add(detail);
+            }
+        }
         var viewer = new ScrollViewer { Width = Math.Max(240, Math.Min(560, root.ActualWidth - 110)), MaxHeight = 460,
             Content = content, Padding = new(0, 0, 6, 0), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Disabled };
         ObserveTextZoom(viewer);
         return viewer;
     }
+    FrameworkElement CommandRiskBar(CommandGuardResult? risk)
+    {
+        // Classification is categorical. LANCET's confidence score is not a risk percentage.
+        var high = risk?.Classification == "risky";
+        var low = !high && risk?.AllowsAutomatic == true;
+        var color = high ? FluentDesign.Adapt(232, 91, 91) : low ? FluentDesign.Adapt(56, 168, 116) : FluentDesign.Adapt(238, 165, 54);
+        var label = high ? WorkflowText("Risque élevé", "High risk") : low ? WorkflowText("Risque faible", "Low risk")
+            : WorkflowText("Risque à vérifier", "Risk needs review");
+        var panel = new StackPanel { Spacing = 6 };
+        var header = new Grid { ColumnSpacing = 8 };
+        header.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var level = Label(label, 12); level.Foreground = color; level.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; header.Children.Add(level);
+        var source = Label(risk?.Validator ?? WorkflowText("Non analysée", "Not analyzed"), 11); source.Foreground = FluentDesign.Secondary;
+        source.TextTrimming = TextTrimming.CharacterEllipsis; source.MaxWidth = 220; Grid.SetColumn(source, 1); header.Children.Add(source);
+        panel.Children.Add(header);
+        panel.Children.Add(new Border { Height = 6, CornerRadius = new(3), Background = color, HorizontalAlignment = HorizontalAlignment.Stretch });
+        var details = risk == null ? WorkflowText("Aucune analyse automatique disponible pour cette commande.", "No automatic analysis is available for this command.")
+            : risk.Validator + " · " + label + (string.IsNullOrWhiteSpace(CommandReviewDetail(risk)) ? "" : "\n" + CommandReviewDetail(risk));
+        ToolTipService.SetToolTip(panel, details); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(panel, label + " · " + source.Text);
+        return panel;
+    }
+
     async Task ExplainCommandImpactAsync(CommandApproval request, Panel output, Provider? selected, CancellationToken ct)
     {
         if (selected == null) throw new InvalidOperationException(T("Aucun fournisseur"));
