@@ -115,6 +115,20 @@ public sealed partial class TerminalUi
             finally { await client.Call("sandbox.close", new { token }); }
         }
     }
+    async Task<bool> EnsureCommandGuardInstalled()
+    {
+        if (LocalCommandGuard.Installed) return true;
+        var answer = await Prompt(L("Installer la validation locale", "Install local validation"),
+            L("Automatique utilise LANCET Nano sur votre ordinateur. Le modèle (environ 116 Mo) et ses composants CPU seront téléchargés et vérifiés. Les commandes risquées, incertaines, trop longues ou les shells non pris en charge demandent votre accord. Le modèle peut se tromper ; les règles du projet restent appliquées. Les autres autorisations restent automatiques.",
+              "Automatic mode uses LANCET Nano on your computer. The model (about 116 MB) and its CPU components will be downloaded and verified. Risky, uncertain, oversized commands and unsupported shells require your approval. The model can be wrong; project rules still apply. Other permission types remain automatic."),
+            [new("install", L("Télécharger et activer", "Download and enable")), new("cancel", L("Annuler", "Cancel"))], ct: lifetime.Token);
+        if (answer != "install") return false;
+        var progress = new Progress<CommandGuardProgress>(value => Post(() => notice = L("Installation de la validation locale : ", "Installing local validation: ") +
+            (value.Phase == "download" ? $"{value.Downloaded / 1_000_000d:0.0} / {value.Total / 1_000_000d:0.0} Mo" : value.Phase)));
+        await LocalCommandGuard.InstallAsync(progress, lifetime.Token);
+        Post(() => notice = L("Validation locale prête.", "Local validation ready."));
+        return true;
+    }
     async Task Settings(WorkspaceSnapshot snapshot)
     {
         var action = await Prompt("RÃ©glages / Settings", client.Database, [new("language", "Langue / Language"), new("theme", "ThÃ¨me / Theme"), new("font", "Police et CRT / Font and CRT"), new("thinking", "RÃ©flexion / Thinking"), new("style", "Style de rÃ©ponse / Response style"), new("compaction", "Compactage / Compaction"), new("web", "Recherche web Â· HTTP / Web research Â· HTTP"), new("artifacts", "Entretien Â· Artefacts / Maintenance Â· Artifacts"), new("permissions", "Autorisations / Permissions"), new("continue", "Auto-continue : " + snapshot.State.AutoContinue), new("naming", "Nommage des conversations / Conversation naming"), new("vision", "Bypass image AI"), new("logs", "Logs"), new("updates", "Mises Ã  jour GitHub / GitHub updates")]);
@@ -139,8 +153,8 @@ public sealed partial class TerminalUi
         if (action == "theme") await ChooseCliTheme(snapshot);
         if (action == "permissions")
         {
-            var value = await Prompt("Permissions", "Ce rÃ©glage sâ€™applique au workspace partagÃ© / Applies to the shared workspace.", [new("ask", "Demander / Ask"), new("deny", "Tout refuser / Deny all"), new("allow", "Tout accepter / Allow all")]);
-            if (value != null) await client.State(s => s.PermissionMode = value);
+            var value = await Prompt("Permissions", "Ce rÃ©glage sâ€™applique au workspace partagÃ© / Applies to the shared workspace.", [new("ask", "Demander / Ask"), new("deny", "Tout refuser / Deny all"), new("allow", "Automatique · validation locale / Automatic · local validation")]);
+            if (value != null && (value != "allow" || await EnsureCommandGuardInstalled())) await client.State(s => s.PermissionMode = value);
         }
         await Refresh();
     }

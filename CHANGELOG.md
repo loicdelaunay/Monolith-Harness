@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.66.0 - 2026-10-07
+
+- Automatic permissions now analyze each supported terminal command locally with LANCET Nano. First selection opens an installation dialog with an explanation, download progress, verified pinned files and CPU runtime preparation; the mode is enabled only after successful setup. The prepared model stays loaded for subsequent commands.
+- Risky, uncertain, oversized or unsupported commands and unavailable analysis request one-time human approval. Saved directory grants cannot bypass this validation; explicit project Ask and Deny rules remain authoritative. External engines without exact command metadata and Python scripts require human review rather than an inferred approval.
+- Command confirmation adds More info using the current conversation model to explain impact without execution tools, with an explicit notice about sending the command to its provider. The shared engine and CLI enforce the same command validation; the CLI also offers first-use installation. Windows, Linux and macOS use the bundled Python CPU runtime; unsupported shells remain subject to manual confirmation.
+
+- Improves the additional permission dialog with a separate copyable command, working directory and shell/timeout metadata, plus incrementally rendered Markdown impact explanations. Centers composer model, thinking and token/context indicators vertically.
+
+## 1.65.0 - 2026-10-07
+
+- Adds a compact shield and current approval mode beside the composer settings button in Chat and Agent. Choose Ask (default), Automatic or Deny all, with descriptions and a selected-mode marker, or open Settings / Permissions directly. Shares the existing global setting and preserves saved grants and project rules. Adapts the footer to the extra control on narrow windows.
+
 ## 1.64.0 - 2026-10-07
 
 - Splits the composer display preference into independent Show token speed and Show context usage toggles in Settings / General, both enabled by default. Migrates the former combined preference and releases only the space used by the hidden indicator.

@@ -41,7 +41,7 @@ public sealed partial class MainWindow
             await Guard(() => ChangeConversationModeAsync(conversationModeSwitch.IsOn ? "agent" : "chat"));
         };
         RefreshConversationMode();
-        var controls = Row(conversationModeSwitch, configureButton); controls.Spacing = 4; controls.VerticalAlignment = VerticalAlignment.Center;
+        var controls = Row(conversationModeSwitch, configureButton, BuildComposerPermissions()); controls.Spacing = 4; controls.VerticalAlignment = VerticalAlignment.Center;
         return new Border { Child = controls, CornerRadius = new(17), BorderThickness = new(1),
             BorderBrush = FluentDesign.Stroke, Background = FluentDesign.Card, Padding = new(8, 1, 3, 1), MinHeight = 32 };
     }
@@ -62,6 +62,7 @@ public sealed partial class MainWindow
             if (thinkingSelector.SelectedIndex != index) PopulateThinkingSelector();
             else thinkingSelector.IsEnabled = ActiveRun == null && !applyingQuickLevel;
         }
+        RefreshComposerPermissions();
         RefreshQuickModelUi();
     }
     bool NativeChatProvider => provider?.IsExternalAgent == true || provider?.IsComposite == true &&

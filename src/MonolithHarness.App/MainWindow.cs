@@ -478,6 +478,7 @@ public sealed partial class MainWindow : Window
         PopulateThinkingSelector();
         RefreshContextInfo();
         RefreshConversationProgress();
+        RefreshComposerPermissions();
     }
     async Task InitializeAsync()
     {
@@ -1469,15 +1470,33 @@ public sealed partial class MainWindow : Window
         {
             Header = T("Comportement des demandes d’autorisation"),
             ItemsSource = new[] { T("Refuser tout"), T("Demander (par défaut)"), T("Acceptation automatique") },
-            SelectedIndex = PermissionModes.Normalize(state.PermissionMode) switch
-            {
-                PermissionModes.Deny => 0,
-                PermissionModes.Allow => 2,
-                _ => 1
-            },
+            SelectedIndex = PermissionModeIndex(state.PermissionMode),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        var acceptedPermissionIndex = permissionMode.SelectedIndex;
+        bool syncingPermissionMode = false;
+        permissionMode.SelectionChanged += async (_, _) =>
+        {
+            if (syncingPermissionMode) return;
+            var selected = permissionMode.SelectedIndex;
+            if (selected == 2 && !LocalCommandGuard.Installed)
+            {
+                syncingPermissionMode = true; permissionMode.SelectedIndex = acceptedPermissionIndex; permissionMode.IsEnabled = false;
+                try
+                {
+                    if (await EnsureCommandGuardInstalledAsync((loadingWindow.Content as FrameworkElement)?.XamlRoot))
+                    { permissionMode.SelectedIndex = 2; acceptedPermissionIndex = 2; }
+                }
+                finally { permissionMode.IsEnabled = true; syncingPermissionMode = false; }
+            }
+            else acceptedPermissionIndex = selected;
+        };
         permissionPanel.Children.Add(permissionMode);
+        if (!LocalCommandGuard.Installed)
+            permissionPanel.Children.Add(Action(WorkflowText("Installer la validation locale des commandes", "Install local command validation"),
+                async () => await EnsureCommandGuardInstalledAsync((loadingWindow.Content as FrameworkElement)?.XamlRoot)));
+        permissionPanel.Children.Add(Label(WorkflowText("En mode Automatique, LANCET analyse les commandes localement. Une commande signalée, un shell non pris en charge ou une analyse indisponible demande votre accord pour cette exécution. Les autres autorisations restent automatiques.",
+            "In Automatic mode, LANCET analyzes commands locally. Flagged commands, unsupported shells or unavailable analysis require approval for that execution. Other permissions remain automatic."), 12));
         permissionPanel.Children.Add(Label(T("Cette règle globale est appliquée avant les fenêtres de confirmation pour les fichiers, le terminal, le navigateur, la souris, le clavier, les captures et les outils OpenCode."), 12));
         var grants = await ReadStoreAsync(store => store.PermissionGrants.AsNoTracking().OrderByDescending(x => x.GrantedAtUtc).ToList());
         var revoke = new Dictionary<PermissionGrant, CheckBox>();
@@ -1512,15 +1531,17 @@ public sealed partial class MainWindow : Window
         var compactionTab = tabs.Add(WorkflowText("Compactage", "Compaction"), compactionSettings.Panel, "\uE8A3");
         var mcpTab = tabs.Add("MCP",mcpEditor.Panel, "\uE8D4");
         var templateTab = tabs.Add("Templates",templateEditor.Panel, "\uE8A5");
-        tabs.Add(T("Autorisations"),permissionPanel, "\uE72E");
+        var permissionTab = tabs.Add(T("Autorisations"),permissionPanel, "\uE72E");
         tabs.Add(WorkflowText("Navigateur", "Browser"),features.Browser, "\uE774");
         tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
-        settingsNavigation = tabs; settingsProviderTab = providerTab;
+        settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab;
         if (providersRequested) { tabs.SelectedIndex = providerTab; providersRequested = false; }
+        if (permissionsRequested) { tabs.SelectedIndex = permissionTab; permissionsRequested = false; }
         if (!await ShowSettingsWindowAsync(loadingWindow, tabs, () =>
         {
+            if (installingCommandGuard) return false;
             if (!conversationPreferences.Validate() || !retentionSettings.Validate()) { tabs.SelectedIndex = 0; return false; }
             if (!compactionSettings.Validate()) { tabs.SelectedIndex = compactionTab; return false; }
             var valid = true;

@@ -8,7 +8,7 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     readonly DropDownButton modelOptionsButton = new() { HorizontalAlignment = HorizontalAlignment.Right,
-        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0, MinHeight = 32,
+        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0, MinHeight = 32,
         MaxWidth = 240, Padding = new(8, 4, 8, 4), CornerRadius = new(8), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new(0) };
     readonly TextBlock selectedModelName = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
         Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };

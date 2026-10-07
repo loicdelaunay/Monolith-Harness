@@ -49,7 +49,7 @@ async function host(method, p) {
   if (method === 'permission') {
     const show = async () => {
       const answer = await dialog.showMessageBox(win, { type: 'question', title: 'Monolith Harness · Autorisation / Permission', message: p.title,
-        detail: String(p.details).slice(0, 20000), buttons: ['Refuser / Deny', 'Autoriser / Allow once', 'Toujours autoriser / Always allow'], defaultId: 0, cancelId: 0, noLink: true });
+        detail: String(p.details).slice(0, 20000), buttons: p.oneTimeOnly ? ['Refuser / Deny', 'Autoriser / Allow once'] : ['Refuser / Deny', 'Autoriser / Allow once', 'Toujours autoriser / Always allow'], defaultId: 0, cancelId: 0, noLink: true });
       return ['deny','allow','always'][answer.response];
     };
     const answer = dialogs.then(show, show); dialogs = answer.catch(() => {}); return answer;

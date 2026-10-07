@@ -90,6 +90,12 @@ public sealed partial class MainWindow
         composerModelSummary.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         composerModelSummary.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         composerModelSummary.Children.Add(modelOptionsButton);
+        // Center each inline text independently; stretched text boxes otherwise sit above the controls' center.
+        foreach (var text in new[] { composerThinkingIcon, composerThinkingMarker, composerContextText, composerSpeedText })
+        {
+            text.VerticalAlignment = VerticalAlignment.Center;
+            text.TextWrapping = TextWrapping.NoWrap;
+        }
         composerContextIndicator.Children.Add(composerContextRing); composerContextIndicator.Children.Add(composerContextText);
         composerSpeedIndicator.Children.Add(composerSpeedText);
         composerMetrics.Children.Add(composerContextIndicator); composerMetrics.Children.Add(composerSpeedIndicator);

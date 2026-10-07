@@ -1,0 +1,81 @@
+{
+  "Revision": "2450cfbea514baef810f4087d6d31854783f3d2e",
+  "Version": "0.4.3",
+  "Files": [
+    {
+      "Path": "model/encoder-int8.onnx",
+      "Size": 110550587,
+      "Sha256": "4e7d6a53d27a7321a2638a4bf446301e8e343c51000963331469e3ab20aae2a4"
+    },
+    {
+      "Path": "model/head.npz",
+      "Size": 4732426,
+      "Sha256": "0dfbd5aa5a6891d05cd7bc364fa69bc662de77b11d93fa526ae863af1bac256e"
+    },
+    {
+      "Path": "model/vocab.json",
+      "Size": 703051,
+      "Sha256": "43bb485f4de0f2fd49b370bef4efab23ea3ab6d0019e72bdd9cec1436a6eaa2b"
+    },
+    {
+      "Path": "model/merges.txt",
+      "Size": 294364,
+      "Sha256": "5d346f84939a98df0cde902df7d60154b461cde1b90dc653ab9b81d74e752a4d"
+    },
+    {
+      "Path": "model/model.json",
+      "Size": 1996,
+      "Sha256": "85f6682e709a3dcfb59f2a9b3d79e83184a9deef0ef5f85f8912d369ae091b89"
+    },
+    {
+      "Path": "model/export.json",
+      "Size": 1231,
+      "Sha256": "2276cd2d2644024bb73db7a3e56636cc12a7226b049287a1d80f27f9641293ea"
+    },
+    {
+      "Path": "classify.py",
+      "Size": 7414,
+      "Sha256": "ccff76b3842a56b06a0abba75ea432aaea8c278b8f900a0b9d5889ec14c00320"
+    },
+    {
+      "Path": "LICENSE.md",
+      "Size": 2403,
+      "Sha256": "04f6d7fe560287cfa8ddf07a4f4c762953f519d5a751f8d91bb0dd78ea787df0"
+    },
+    {
+      "Path": "MODEL-LICENSE.md",
+      "Size": 2378,
+      "Sha256": "58dead362837a67162c78729d5c2f4614ee0399bbbe5b109fe8b92d8256e0817"
+    },
+    {
+      "Path": "NOTICE.txt",
+      "Size": 4872,
+      "Sha256": "1b631b00a85f322591d801ba4e74f948228002c7120e88fae8a4ee6426048451"
+    },
+    {
+      "Path": "THIRD-PARTY-NOTICES.md",
+      "Size": 6408,
+      "Sha256": "b492884a055bf4e61e94d9241e0cf3fa6c491e80d753728d7c7470cf6070c4b5"
+    },
+    {
+      "Path": "licenses/Apache-2.0.txt",
+      "Size": 11358,
+      "Sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "Path": "licenses/CodeT5-BSD-3-Clause.txt",
+      "Size": 1481,
+      "Sha256": "d9d01e877963904b9c62f38bacb7237191a8ce069d3a0be4f2418a5f6153a577"
+    },
+    {
+      "Path": "licenses/MIT.txt",
+      "Size": 1036,
+      "Sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "Path": "licenses/pi-jev-guard-MIT.txt",
+      "Size": 1073,
+      "Sha256": "41384dc5cf15ef69653ce54c918e0e90e6771eec108ab080ab02021f56b07ebe"
+    }
+  ]
+}

@@ -211,7 +211,7 @@ public sealed class TerminalHub : IDisposable
                 var command = args["command"]?.GetValue<string>() ?? "";
                 // A terminal created on a previously linked root cannot silently retain access after it is detached.
                 if (!run.Project.GetSourceFolders().Any(root => PlatformSupport.PathComparer.Equals(Path.GetFullPath(root), terminal.Directory))) throw new UnauthorizedAccessException("Le dossier de ce terminal n'est plus associé au projet.");
-                if (!await approve((sandbox ? "sandbox-terminal|" : "terminal|") + terminal.Directory, run.Chat.Title + " · " + terminal.Name, terminal.Directory + "\nTimeout: " + timeoutSeconds + " s\n\n" + command, ct)) return "Accès refusé / Access denied.";
+                if (!await approve((sandbox ? "sandbox-terminal|" : "terminal|") + terminal.Directory, run.Chat.Title + " · " + terminal.Name, CommandApproval.ForTerminal(command, terminal.Directory, sandbox, timeoutSeconds).Json(), ct)) return "Accès refusé / Access denied.";
                 Check(); ct.ThrowIfCancellationRequested();
                 var startedView = Start(chat, sandbox, id, command, (cmd, output, token) => sandbox
                     ? SandboxContainer.ExecuteIsolatedAsync(run.Sandbox ?? throw new InvalidOperationException("Sandbox inactive."), run.SandboxEngine!, cmd, token, timeoutSeconds)

@@ -218,10 +218,11 @@ public sealed class OpenCodeEngine(HttpClient http)
         }
         // Use explicit session rules so the loop guard remains "ask", even with automatic tool permissions.
         // prompt_async.tools would overwrite these rules with boolean allow/deny entries.
-        if (provider.OpenCodeTools && (workflow != null || policy != null && AgentPolicy.Mode(policy.Mode) == "chat"))
+        if (provider.OpenCodeTools && (authorize != null || workflow != null || policy != null && AgentPolicy.Mode(policy.Mode) == "chat"))
         {
             var rules = new JsonArray();
-            foreach (var rule in (JsonObject)payload["tools"]!) rules.Add(new JsonObject { ["permission"] = rule.Key, ["pattern"] = "*", ["action"] = rule.Value!.GetValue<bool>() ? policy?.Mode == "chat" ? "ask" : "allow" : "deny" });
+            if (authorize != null) rules.Add(new JsonObject { ["permission"] = "*", ["pattern"] = "*", ["action"] = "ask" });
+            foreach (var rule in (JsonObject)payload["tools"]!) rules.Add(new JsonObject { ["permission"] = rule.Key, ["pattern"] = "*", ["action"] = rule.Value!.GetValue<bool>() ? authorize != null || policy?.Mode == "chat" ? "ask" : "allow" : "deny" });
             if (workflow != null && policy?.Mode != "chat") rules.Add(new JsonObject { ["permission"] = "doom_loop", ["pattern"] = "*", ["action"] = "ask" });
             await JsonAsync(provider, password, HttpMethod.Patch, $"session/{Uri.EscapeDataString(sessionId)}", directory, new JsonObject { ["permission"] = rules }, ct);
             payload.Remove("tools");

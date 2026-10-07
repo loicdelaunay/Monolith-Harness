@@ -80,9 +80,11 @@ public sealed partial class MainWindow
             var contextVisible = composerContextIndicator.Visibility == Visibility.Visible;
             var speedVisible = composerSpeedIndicator.Visibility == Visibility.Visible;
             var metricsWidth = ((contextVisible ? 70 : 0) + (speedVisible ? 92 : 0) + (contextVisible && speedVisible ? 8 : 0)) * scale;
-            var compact = width < (hasLevels ? 590 : 440) * scale + metricsWidth;
+            var modeWidth = Math.Max(185 * scale, left.ActualWidth);
+            var modeExtra = modeWidth - 185 * scale;
+            var compact = width < (hasLevels ? 590 : 440) * scale + metricsWidth + modeExtra;
             var small = width < (hasLevels ? 350 : 250) * scale + metricsWidth;
-            var tiny = width < 340 * scale;
+            var tiny = width < Math.Max(340 * scale, modeWidth + (hasLevels ? quickLevels.Width + 8 * scale : 0) + 20 * scale);
             var rows = tiny ? 3 : compact ? 2 : 1;
             while (footer.RowDefinitions.Count < rows) footer.RowDefinitions.Add(new() { Height = GridLength.Auto });
             while (footer.RowDefinitions.Count > rows) footer.RowDefinitions.RemoveAt(footer.RowDefinitions.Count - 1);
@@ -94,7 +96,7 @@ public sealed partial class MainWindow
             Place(buttons, tiny ? 2 : compact ? 1 : 0, 3);
             var reserved = tiny ? metricsWidth + 8 * scale
                 : small ? metricsWidth + Math.Max(hasLevels ? quickLevels.Width : 0, 84 * scale) + 16 * scale
-                : metricsWidth + (hasLevels ? quickLevels.Width : 0) + 84 * scale + 24 * scale + (compact ? 0 : 185 * scale);
+                : metricsWidth + (hasLevels ? quickLevels.Width : 0) + 84 * scale + 24 * scale + (compact ? 0 : modeWidth);
             modelOptionsButton.MaxWidth = Math.Max(60 * scale, Math.Min(240 * scale, width - reserved));
             var bottom = Math.Max(58 * scale, footer.ActualHeight + 20);
             composer.Padding = new(14 * scale, 12 * scale, 14 * scale, bottom);
@@ -102,6 +104,7 @@ public sealed partial class MainWindow
         }
         resizeComposerFooter = LayoutFooter;
         footer.SizeChanged += (_, _) => LayoutFooter();
+        left.SizeChanged += (_, _) => LayoutFooter();
         quickLevels.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
         composerMetrics.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
         composerContextIndicator.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
@@ -556,29 +559,47 @@ public sealed partial class MainWindow
     {
         ct.ThrowIfCancellationRequested();
         var profile = permissionProject.Value?.PermissionProfileJson ?? "";
-        if (ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope) is bool automaticDecision) return automaticDecision;
+        var command = CommandApproval.Read(scope, details);
+        var execution = CommandApproval.IsExecution(scope);
+        var automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
+        if (automatic == false) return false;
+        CommandGuardResult? risk = null;
+        if (execution && PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow)
+        {
+            risk = await LocalCommandGuard.CheckAsync(command, ct);
+            automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
+            if (automatic == false) return false;
+            if (PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow && automatic == true && risk.AllowsAutomatic) return true;
+        }
+        else if (automatic == true) return true;
         await approvalQueue.WaitAsync(ct);
         try
         {
             ct.ThrowIfCancellationRequested();
-            if (ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope) is bool queuedDecision) return queuedDecision;
-            // Settings and navigation can query their context while an agent asks for permission.
+            automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
+            if (automatic == false) return false;
+            var guarded = execution && PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow;
+            if (!guarded && automatic == true) return true;
             await using var permissionDb = new HarnessDb();
-            if (ProjectResources.Decision(profile, scope) != "ask" && await permissionDb.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return true;
+            if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await permissionDb.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return true;
+            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var dialog = new ContentDialog { XamlRoot = root.XamlRoot, Title = T("Autorisation supplémentaire"),
-                Content = new ScrollViewer { MaxHeight = 400, Content = new TextBlock { Text = action + "\n\n" + details, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true } },
-                PrimaryButtonText = T("Autoriser une fois"), SecondaryButtonText = T("Toujours autoriser"), CloseButtonText = T("Refuser"), DefaultButton = ContentDialogButton.Close };
+                Content = CommandApprovalContent(action, command?.Display ?? details, command, guarded ? risk ?? CommandGuardResult.Review("unavailable") : null, lifetime.Token),
+                PrimaryButtonText = T("Autoriser une fois"), SecondaryButtonText = guarded ? "" : T("Toujours autoriser"), CloseButtonText = T("Refuser"), DefaultButton = ContentDialogButton.Close };
+            if (dialog.Content is FrameworkElement approvalContent && double.IsFinite(approvalContent.Width))
+                dialog.Resources["ContentDialogMaxWidth"] = approvalContent.Width + 64;
+            dialog.Closed += (_, _) => lifetime.Cancel();
             using var registration = ct.Register(() => DispatcherQueue.TryEnqueue(dialog.Hide));
             if (automaticToolRun.Value is { } pendingRun) NotifyChat(pendingRun, true);
             var response = await dialog.ShowAsync();
             if (automaticToolRun.Value is { } answeredRun) AcknowledgeChatNotice(answeredRun.Chat.Id, actionResolved: true);
             ct.ThrowIfCancellationRequested();
-            if (response == ContentDialogResult.Secondary)
+            if (!guarded && response == ContentDialogResult.Secondary)
             {
                 permissionDb.PermissionGrants.Add(new PermissionGrant { Scope = scope, Name = action, Details = scopeDescription, GrantedAtUtc = DateTime.UtcNow });
                 await permissionDb.SaveChangesAsync(ct);
             }
-            return response is ContentDialogResult.Primary or ContentDialogResult.Secondary;
+            return response == ContentDialogResult.Primary || !guarded && response == ContentDialogResult.Secondary;
         }
         finally { approvalQueue.Release(); }
     }

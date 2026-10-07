@@ -80,7 +80,7 @@ public static class PythonTools
         SandboxWorkspace.AssertNoLinks(directory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);
         if (!await approve("python|execute|" + scripts + "|" + directory, "Exécuter un script Python / Run Python script",
-            path + "\nDossier : " + directory + "\nArguments : " + JsonSerializer.Serialize(arguments) + "\nDélai : " + timeout + " s\nExécution locale avec vos droits.\n\n" + content, ct)) return "Accès refusé / Access denied.";
+            new CommandApproval("Script: " + path + "\nArguments: " + JsonSerializer.Serialize(arguments) + "\n\n" + content, "python", directory, timeout).Json(), ct)) return "Accès refusé / Access denied.";
         Check();
         var executable = await PythonRuntime.EnsureAsync(ct);
         // Execute exactly the code shown in the permission dialog, even if the file changes meanwhile.

@@ -816,6 +816,9 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
         if (!string.IsNullOrWhiteSpace(permission.Details)) details += "\n\n" + permission.Details[..Math.Min(permission.Details.Length, 2000)];
 
+        var command = CommandApproval.FromOpenCode(permission.Action, permission.Details, directory);
+        if (command != null) details = command.Json();
+
         var allowed = await RequestAccessAsync(scope, T("Autorisation d’outil OpenCode"), details,
 
             T("OpenCode · ") + permission.Action + " · " + resource, ct);
@@ -824,7 +827,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
         var permanent = existing || await db.PermissionGrants.AnyAsync(x => x.Scope == scope, ct);
 
-        return permanent ? "always" : "once";
+        return CommandApproval.IsExecution(scope) ? "once" : permanent ? "always" : "once";
 
     }
 

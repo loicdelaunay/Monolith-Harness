@@ -332,6 +332,6 @@ public sealed partial class HarnessService
         return await engine.PromptAsync(p, password, directory, link.SessionId, prompt, system,
             attachments.Select(x => new OpenCodeAttachment(x.Name, x.Mime, x.Data)).ToList(), update, ct,
             async (permission, token) => await Approve($"opencode|{p.Id}|{directory}|{permission.Action}|{string.Join('|', permission.Resources)}",
-                run.Chat.Title + " · OpenCode · " + permission.Action, string.Join('\n', permission.Resources) + "\n" + permission.Details, token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode, run.Chat.ChatWebEnabled, run.Options.ThinkingLevel), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
+                run.Chat.Title + " · OpenCode · " + permission.Action, CommandApproval.OpenCodeDetails(permission.Action, permission.Details, directory, permission.Resources), token) ? "once" : "reject", new(run.Chat.ExecutionMode, run.Chat.OrchestrationMode, run.Chat.ChatWebEnabled, run.Options.ThinkingLevel), run.Workflow, FeatureSettings.Read(run.Options.FeaturesJson));
     }
 }

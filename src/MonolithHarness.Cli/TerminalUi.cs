@@ -154,8 +154,9 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     {
         if (name == "permission")
         {
-            var result = await Prompt(S(p, "title"), S(p, "details"),
-                [new("deny", L("Refuser", "Deny")), new("allow", L("Autoriser une fois", "Allow once")), new("always", L("Toujours autoriser cet accès", "Always allow this access"))], ct: ct);
+            var choices = new List<Choice> { new("deny", L("Refuser", "Deny")), new("allow", L("Autoriser une fois", "Allow once")) };
+            if (p["oneTimeOnly"]?.GetValue<bool>() != true) choices.Add(new("always", L("Toujours autoriser cet accès", "Always allow this access")));
+            var result = await Prompt(S(p, "title"), S(p, "details"), choices, ct: ct);
             return JsonValue.Create(result ?? "deny");
         }
         throw new NotSupportedException(name + L(" : utilisez l’application graphique ou un serveur MCP configuré avec /mcp.", ": use the desktop app or an MCP server configured with /mcp."));

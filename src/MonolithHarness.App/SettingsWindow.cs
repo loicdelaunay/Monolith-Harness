@@ -8,21 +8,30 @@ public sealed partial class MainWindow
 {
     Window? settingsWindow;
     SettingsNavigation? settingsNavigation;
-    int settingsProviderTab = -1;
-    bool providersRequested;
+    int settingsProviderTab = -1, settingsPermissionTab = -1;
+    bool providersRequested, permissionsRequested;
     bool editingSettings;
 
     Task Settings() => Settings(showProviders: false);
 
-    async Task Settings(bool showProviders)
+    async Task Settings(bool showProviders, bool showPermissions = false)
     {
         if (showProviders)
         {
-            providersRequested = true;
+            providersRequested = true; permissionsRequested = false;
             if (settingsNavigation != null)
             {
                 settingsNavigation.SelectedIndex = settingsProviderTab;
                 providersRequested = false;
+            }
+        }
+        if (showPermissions)
+        {
+            permissionsRequested = true; providersRequested = false;
+            if (settingsNavigation != null)
+            {
+                settingsNavigation.SelectedIndex = settingsPermissionTab;
+                permissionsRequested = false;
             }
         }
         if (editingSettings)
@@ -43,7 +52,7 @@ public sealed partial class MainWindow
         window.Closed += (_, _) =>
         {
             if (!ReferenceEquals(settingsWindow, window)) return;
-            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; providersRequested = false;
+            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; settingsPermissionTab = -1; providersRequested = false; permissionsRequested = false;
         };
         window.Content = new Border
         {

@@ -28,7 +28,7 @@ public sealed partial class HarnessService
             var directory=OpenCodeDirectory(run.Project);await EnsureOpenCode(target,key,directory,ct);
             var engine=new OpenCodeEngine(http);var id=await engine.CreateSessionAsync(target,key,directory,"Sous-agent · "+run.Chat.Title,ct);
             return await engine.PromptAsync(target,key,directory,id,wire.Last()?["content"]?.GetValue<string>()??"",wire[0]?["content"]?.GetValue<string>()??"",[],update,ct,
-                authorize: async (permission,token) => await Approve($"opencode|{target.Id}|{directory}|{permission.Action}|{string.Join('|',permission.Resources)}",run.Chat.Title + " · Sous-agent · " + permission.Action,string.Join('\n',permission.Resources) + "\n" + permission.Details,token) ? "once" : "reject",
+                authorize: async (permission,token) => await Approve($"opencode|{target.Id}|{directory}|{permission.Action}|{string.Join('|',permission.Resources)}",run.Chat.Title + " · Sous-agent · " + permission.Action,CommandApproval.OpenCodeDetails(permission.Action,permission.Details,directory,permission.Resources),token) ? "once" : "reject",
                 policy:new(definitions.Count == 0 ? "plan" : run.Chat.ExecutionMode,"disabled"),workflow:AgentRuntime.CurrentChildWorkflow ?? run.Workflow?.ForChild(),retrySettings:FeatureSettings.Read(run.Options.FeaturesJson));
         }, async (id, ct) => {
             await using var db = Db();
