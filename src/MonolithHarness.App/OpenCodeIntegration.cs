@@ -551,7 +551,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             db.Messages.Add(active); await db.SaveChangesAsync(ct);
 
-            assistantUi = AddAssistantMessage("…", target: run.Messages); ScrollRunToBottom(run);
+            assistantUi = AddAssistantMessage("", target: run.Messages); ScrollRunToBottom(run);
 
             SetRunStatus(run, T("OpenCode réfléchit…"));
 
@@ -591,7 +591,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                         if (update.Reasoning.Length > 0) assistantUi.UpdateThinking(update.Reasoning, update.Text.Length > 0, streaming: true);
 
-                        assistantUi.UpdateContent(update.Text.Length > 0 ? update.Text : update.Reasoning.Length > 0 ? T("Raisonnement en cours…") : "…", streaming: true);
+                        assistantUi.UpdateContent(update.Text, streaming: true);
 
                         UpdateMetrics(run, update, inputEstimate);
 
@@ -666,7 +666,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                     active.Content = "";
 
-                    assistantUi.UpdateContent("…", streaming: true);
+                    assistantUi.UpdateContent("", streaming: true);
 
                     await Task.Delay(500, ct);
 

@@ -17,12 +17,12 @@ public sealed partial class MainWindow
     {
         run.ContextRequest = null; run.ContextRequestTimer.Stop();
         SetRunStatus(run, T("Le modèle réfléchit…"));
-        message?.UpdateContent(T("Le modèle réfléchit…"));
+        message?.UpdateContent("");
         run.RetryFeedbackActive = true;
-        _ = RevealModelRetryAsync(run, retry, message, run.RetryRevision, DateTimeOffset.UtcNow, ct);
+        _ = RevealModelRetryAsync(run, retry, run.RetryRevision, DateTimeOffset.UtcNow, ct);
     }
 
-    async Task RevealModelRetryAsync(ConversationRun run, RetryProgress retry, AssistantMessageUi? message,
+    async Task RevealModelRetryAsync(ConversationRun run, RetryProgress retry,
         int revision, DateTimeOffset started, CancellationToken ct)
     {
         try { await Task.Delay(ModelRetryGrace, ct); }
@@ -36,7 +36,6 @@ public sealed partial class MainWindow
             var text = remaining > 0 ? (retry with { DelaySeconds = remaining }).Describe(run.Options.Language)
                 : run.Options.Language == "en" ? $"Retry {retry.Attempt}/{retry.Maximum}…" : $"Nouvelle tentative {retry.Attempt}/{retry.Maximum}…";
             SetRunStatus(run, text); run.RetryFeedbackActive = true;
-            message?.UpdateContent(text);
         });
     }
 }

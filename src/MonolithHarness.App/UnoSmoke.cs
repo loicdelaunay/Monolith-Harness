@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_COMPOSER_PRESENTATION_SMOKE") == "1") { await SmokeComposerPresentation(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_ACP_SMOKE") == "1") { await SmokeAcpProviders(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_DISPLAY_SMOKE") == "1") { await SmokeMessageDisplay(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_CONVERSATION_FILES_SMOKE") == "1") { await SmokeConversationFileWorkspace(output); return; }

@@ -76,8 +76,6 @@ public sealed partial class MainWindow
         if (pendingImages.Count >= 4) throw new InvalidOperationException(WorkflowText("Quatre images maximum par message.", "Maximum four images per message."));
         if (bytes.Length is 0 or > 8 * 1024 * 1024) throw new InvalidOperationException(WorkflowText("Image trop volumineuse (8 Mo maximum).", "Image too large (8 MB maximum)."));
         pendingImages.Add(new Attachment { Name = name, Mime = mime, Data = bytes });
-        composerInfoExpanded = true;
-        UpdateInfoPanel();
         UpdateAttachments();
     }
 }

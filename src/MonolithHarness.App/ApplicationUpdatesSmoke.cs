@@ -27,7 +27,7 @@ public sealed partial class MainWindow
         smokeGuiUpdateCheck = _ => { calls++; return Task.FromResult<GitHubUpdate?>(fixture); };
         var staged = Path.Combine(output, "fixture-update.exe");
         await File.WriteAllTextAsync(staged, "offline fixture");
-        smokeGuiUpdateDownload = _ => { downloads++; return Task.FromResult(staged); };
+        smokeGuiUpdateDownload = (_, _) => { downloads++; return Task.FromResult(staged); };
         smokeGuiUpdateInstall = _ => { installs++; guiUpdate = null; };
         Check(guiUpdateTimer.Interval == TimeSpan.FromHours(2), "Automatic checks use the two-hour interval.");
         guiUpdateTimer.Interval = TimeSpan.FromMilliseconds(80);
@@ -38,8 +38,8 @@ public sealed partial class MainWindow
         Check(calls == 0 && !guiUpdateTimer.IsEnabled && !guiUpdateInstallTimer.IsEnabled, "Disabled mode makes no automatic requests.");
         await CheckGuiUpdateAsync(false);
         Check(calls == 1 && guiUpdateButton.Visibility == Visibility.Visible, "Manual checking still works when automatic updates are disabled.");
-        var foot = VisualTreeHelper.GetParent(guiUpdateButton) as StackPanel;
-        var buttonIndex = foot?.Children.IndexOf(guiUpdateButton) ?? -1;
+        var foot = VisualTreeHelper.GetParent(guiUpdatePanel) as StackPanel;
+        var buttonIndex = foot?.Children.IndexOf(guiUpdatePanel) ?? -1;
         Check(buttonIndex >= 0 && foot!.Children[buttonIndex + 1] is Grid, "The update button sits immediately above Scheduled tasks.");
         state.Language = UiText.Language = "en"; ApplyLanguage();
         Check(guiUpdateButton.Content?.ToString() == "Update", "The persistent button follows language changes.");
@@ -49,7 +49,7 @@ public sealed partial class MainWindow
         await Capture(root, Path.Combine(output, "update-button.png"));
 
         var options = BuildUpdateSettings();
-        var picker = options.Panel.Children.OfType<ComboBox>().Single();
+        var picker = options.Panel.Children.OfType<ComboBox>().Single(box => box.Items.Count == 3 && box.Items.OfType<string>().Any());
         Check(picker.Items.Count == 3 && picker.SelectedIndex == 0, "About exposes all three update levels and restores the saved selection.");
         foreach (var mode in Enum.GetValues<AutomaticUpdateMode>())
         {
@@ -101,7 +101,7 @@ public sealed partial class MainWindow
         await TryInstallAutomaticGuiUpdateAsync();
         Check(downloads == 0, "Automatic installation waits for settings edits.");
         editingSettings = false;
-        smokeGuiUpdateDownload = _ => { downloads++; composer.Text = "draft started during download"; return Task.FromResult(staged); };
+        smokeGuiUpdateDownload = (_, _) => { downloads++; composer.Text = "draft started during download"; return Task.FromResult(staged); };
         await TryInstallAutomaticGuiUpdateAsync();
         Check(downloads == 1 && installs == 0 && guiUpdate == fixture, "Work started during download prevents restart.");
         composer.Text = "";
@@ -110,7 +110,7 @@ public sealed partial class MainWindow
 
         guiUpdate = fixture;
         await File.WriteAllTextAsync(staged, "changed staged file");
-        smokeGuiUpdateDownload = async ct => { downloads++; await File.WriteAllTextAsync(staged, "offline fixture", ct); return staged; };
+        smokeGuiUpdateDownload = async (ct, _) => { downloads++; await File.WriteAllTextAsync(staged, "offline fixture", ct); return staged; };
         await TryInstallAutomaticGuiUpdateAsync();
         Check(downloads == 2 && installs == 2, "A modified staged file is downloaded again instead of being reused.");
         guiUpdate = fixture;
@@ -122,7 +122,7 @@ public sealed partial class MainWindow
 
         guiUpdate = fixture;
         var entered = new TaskCompletionSource();
-        smokeGuiUpdateDownload = async ct =>
+        smokeGuiUpdateDownload = async (ct, _) =>
         {
             entered.SetResult(); await Task.Delay(Timeout.Infinite, ct); return staged;
         };
@@ -142,7 +142,7 @@ public sealed partial class MainWindow
         Check(pending.IsCanceled && !guiUpdateTimer.IsEnabled, "Disabling checks cancels the pending background request.");
 
         smokeGuiUpdateCheck = _ => Task.FromResult<GitHubUpdate?>(fixture);
-        smokeGuiUpdateDownload = _ => { downloads++; return Task.FromException<string>(new IOException("download fixture")); };
+        smokeGuiUpdateDownload = (_, _) => { downloads++; return Task.FromException<string>(new IOException("download fixture")); };
         Mode(AutomaticUpdateMode.Install); guiUpdateTimer.Stop();
         await TryInstallAutomaticGuiUpdateAsync();
         var failedDownloads = downloads;

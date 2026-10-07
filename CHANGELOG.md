@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.64.0 - 2026-10-07
+
+- Splits the composer display preference into independent Show token speed and Show context usage toggles in Settings / General, both enabled by default. Migrates the former combined preference and releases only the space used by the hidden indicator.
+- Coordinates context and speed hover popups so moving directly between their indicators immediately replaces the popup, including when its surface intercepts pointer events. Hides a popup when its indicator is disabled.
+- Keeps the assistant answer bubble hidden during model preparation, sending, reasoning-only output and retries. Shows streamed answer text when it arrives, while reasoning and tools remain in their activity group; preserves errors and interrupted responses. Applies to the native model path and OpenCode.
+
+## 1.63.0 - 2026-10-07
+
+- Replaces the More information panel above the composer with a compact model button in the bottom-right action bar. Shows the actual model name and a thinking indicator; clicking opens the existing Simple/Advanced picker, including model search, thinking and per-model context settings.
+- Moves live token speed and the context usage ring into the same action bar. Adds an enabled-by-default Show token speed and context toggle in Settings / General; hiding the indicators preserves generation statistics.
+- Preserves quick AI levels and resource thumbnails, and adapts the composer footer to narrower windows without overlapping typing, mode controls or Stop/Send.
+
+## 1.62.0 - 2026-10-07
+
+- Shows update preparation, download progress and installation status in a progress bar and label directly below the sidebar update button, leaving conversation status available for chat activity.
+- Sizes user message bubbles to their content and aligns them to the right, with responsive width limits for longer messages. Message actions appear without shifting the bubble.
+- Keeps conversation resources and pending attachments visible above the composer as square previews, including image thumbnails, fullscreen viewing with zoom, and removal on hover. Removing a reference preserves its file; the automatic workspace preview can be hidden.
+- Adds a compact quick AI level selector immediately to the left of Stop and Send when multiple shortcut levels are configured. Applies the saved model, thinking and Chat/Agent combination while information is collapsed, with a responsive footer on narrow windows.
+
 ## 1.61.0 - 2026-10-06
 
 - Adds Settings / Shortcuts with quick model and thinking levels, disabled by default. Configure up to 10 ordered, optionally named combinations of provider/model, thinking effort and Chat or Agent mode, including adding, deleting and reordering levels.

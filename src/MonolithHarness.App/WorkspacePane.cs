@@ -58,16 +58,59 @@ public sealed partial class MainWindow
         menu.Opening += (_, _) => BuildComposerMenu(menu);
         plus.Margin = new(0);
         var left = BuildConversationModeSelector(plus);
-        left.HorizontalAlignment = HorizontalAlignment.Left; left.VerticalAlignment = VerticalAlignment.Bottom; left.Margin = new(10, 0, 0, 10);
-        overlay.Children.Add(left);
+        left.HorizontalAlignment = HorizontalAlignment.Left; left.VerticalAlignment = VerticalAlignment.Center; left.Margin = new(10, 0, 0, 10);
         send.Content = "↑"; send.Width = 38; send.Height = 38; send.Padding = new(0); send.FontSize = 22;
         stop.Content = "■"; stop.Width = 38; stop.Height = 38; stop.Padding = new(0);
-        var right = Row(stop, send); right.HorizontalAlignment = HorizontalAlignment.Right; right.VerticalAlignment = VerticalAlignment.Bottom; right.Margin = new(0, 0, 10, 10);
+        left.Margin = new(0);
+        var quickLevels = BuildComposerQuickLevels();
+        var summary = BuildComposerModelSummary(); summary.HorizontalAlignment = HorizontalAlignment.Right;
+        var buttons = Row(stop, send); buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
+        var footer = new Grid { ColumnSpacing = 8, RowSpacing = 6, VerticalAlignment = VerticalAlignment.Bottom, Margin = new(10) };
+        footer.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        for (int i = 0; i < 3; i++) footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        for (int i = 0; i < 3; i++) footer.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        footer.Children.Add(left); footer.Children.Add(quickLevels); footer.Children.Add(summary); footer.Children.Add(buttons);
+        void Place(FrameworkElement element, int row, int column, int span = 1)
+        { Grid.SetRow(element, row); Grid.SetColumn(element, column); Grid.SetColumnSpan(element, span); }
+        void LayoutFooter()
+        {
+            var scale = TextZoom.ForWindow(root) / 100d;
+            var width = footer.ActualWidth;
+            var hasLevels = quickLevels.Visibility == Visibility.Visible;
+            var contextVisible = composerContextIndicator.Visibility == Visibility.Visible;
+            var speedVisible = composerSpeedIndicator.Visibility == Visibility.Visible;
+            var metricsWidth = ((contextVisible ? 70 : 0) + (speedVisible ? 92 : 0) + (contextVisible && speedVisible ? 8 : 0)) * scale;
+            var compact = width < (hasLevels ? 590 : 440) * scale + metricsWidth;
+            var small = width < (hasLevels ? 350 : 250) * scale + metricsWidth;
+            var tiny = width < 340 * scale;
+            var rows = tiny ? 3 : compact ? 2 : 1;
+            while (footer.RowDefinitions.Count < rows) footer.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            while (footer.RowDefinitions.Count > rows) footer.RowDefinitions.RemoveAt(footer.RowDefinitions.Count - 1);
+            footer.RowSpacing = compact ? 6 : 0;
+            quickLevels.Width = (small ? 110 : 130) * scale;
+            Place(left, 0, 0, compact ? tiny ? 4 : small && hasLevels ? 3 : 4 : 1);
+            Place(quickLevels, tiny ? 2 : small ? 0 : compact ? 1 : 0, tiny ? 0 : small ? 3 : 1, tiny ? 3 : 1);
+            Place(summary, compact ? 1 : 0, small ? 0 : 2, small ? tiny ? 4 : 3 : 1);
+            Place(buttons, tiny ? 2 : compact ? 1 : 0, 3);
+            var reserved = tiny ? metricsWidth + 8 * scale
+                : small ? metricsWidth + Math.Max(hasLevels ? quickLevels.Width : 0, 84 * scale) + 16 * scale
+                : metricsWidth + (hasLevels ? quickLevels.Width : 0) + 84 * scale + 24 * scale + (compact ? 0 : 185 * scale);
+            modelOptionsButton.MaxWidth = Math.Max(60 * scale, Math.Min(240 * scale, width - reserved));
+            var bottom = Math.Max(58 * scale, footer.ActualHeight + 20);
+            composer.Padding = new(14 * scale, 12 * scale, 14 * scale, bottom);
+            composer.MinHeight = Math.Max(124 * scale, bottom + 60 * scale);
+        }
+        resizeComposerFooter = LayoutFooter;
+        footer.SizeChanged += (_, _) => LayoutFooter();
+        quickLevels.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
+        composerMetrics.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
+        composerContextIndicator.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
+        composerSpeedIndicator.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => LayoutFooter());
         FluentDesign.IconButton(plus, "\uE713", WorkflowText("Configurer le chat et joindre des fichiers", "Configure chat and attach files"), false);
         plus.Content = FluentDesign.Icon("\uE713", 14);
         FluentDesign.IconButton(send, "\uE724", T("Envoyer"), false);
         FluentDesign.IconButton(stop, "\uE71A", T("Arrêter"), false);
-        overlay.Children.Add(right);
+        overlay.Children.Add(footer);
         return overlay;
     }
     void BuildComposerMenu(Flyout menu)

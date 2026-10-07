@@ -2,7 +2,7 @@ namespace MonolithHarness.Cli;
 
 public sealed class CliOptions
 {
-    public const string CurrentVersion = MonolithHarness.Core.GitHubUpdates.CurrentVersion;
+    public static string CurrentVersion => MonolithHarness.Core.GitHubUpdates.CurrentVersion;
     public string? Directory { get; set; }
     public string? Database { get; set; }
     public string Prompt { get; set; } = "";

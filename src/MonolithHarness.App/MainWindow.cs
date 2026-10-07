@@ -43,30 +43,15 @@ public sealed partial class MainWindow : Window
     readonly TextBlock title = new() { Text = T("Nouvelle conversation"), Tag = "Nouvelle conversation", FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Brush(230, 235, 245), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     readonly TextBlock sourceLabel = Label(T("Aucun dossier source"), 12);
     readonly TextBlock metrics = Label(T("Débit : —   •   Contexte : —"), 12);
-    readonly Border floatingInfoBar = new()
-    {
-        MinHeight = 50,
-        Background = FluentDesign.Card,
-        BorderBrush = FluentDesign.Stroke,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10),
-        Padding = new Thickness(12, 4, 12, 4),
-        Margin = new Thickness(0, 0, 0, 0),
-        HorizontalAlignment = HorizontalAlignment.Stretch
-    };
     readonly StackPanel assetsBar = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
     readonly ScrollViewer assetsScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Visibility = Visibility.Collapsed, Padding = new Thickness(0, 2, 0, 2) };
     readonly ModelPicker modelSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
-    readonly TextBlock modelProviderSubtitle = Label("", 9);
     readonly Button refreshModelsBtn = new() { Content = "↻", Width = 32, Height = 32, Padding = new Thickness(0) };
     readonly ComboBox thinkingSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 36 };
-    readonly TextBlock speedHeaderLabel = Label("DÉBIT", 9);
     readonly TextBlock speedValueText = Label("⚡ — tok/s", 12);
     readonly TextBlock speedOutputText = Label("Sortie : —", 10);
-    readonly StackPanel speedStack = new() { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
     GenerationSpeedTracker? currentSpeedTracker => ActiveRun?.Tracker;
     readonly Dictionary<int, GenerationSpeedTracker> messageTrackers = [];
-    readonly TextBlock contextHeaderLabel = Label("CONTEXTE", 9);
     readonly TextBlock contextPercentText = Label("0 %", 10);
     readonly ProgressBar contextBar = new() { Minimum = 0, Maximum = 100, Height = 2, Value = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
     readonly TextBlock contextValueText = Label($"— / {ModelContexts.DefaultContextLimit:N0} tokens", 10);
@@ -191,7 +176,7 @@ public sealed partial class MainWindow : Window
         foot.Children.Add(settingsButton);
         Grid.SetRow(foot, 3); panel.Children.Add(foot);
         shell.Pane = panel;
-        idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector, inlineThinkingSelector]);
+        idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector]);
         projects.SelectionChanged += async (_, _) => { if (!loading) await Guard(SelectProject); };
         chatSearch.TextChanged += (_, _) => { if (!loading) ApplyChatSearch(chat?.Id, scrollToFirst: true); };
         chats.SelectionChanged += async (_, _) => await Guard(() => ConversationSelectionChangedAsync(chats));
@@ -294,78 +279,9 @@ public sealed partial class MainWindow : Window
     {
         if (send.IsEnabled) await Guard(SendAsync);
     }
-    Border BuildFloatingInfoBar()
+    void InitializeComposerModelSelection()
     {
-        modelProviderSubtitle.Foreground = FluentDesign.Secondary;
-
-        speedHeaderLabel.Foreground = FluentDesign.Secondary;
-        speedHeaderLabel.Tag = "DÉBIT";
-        speedValueText.Foreground = Brush(240, 245, 255);
-        speedOutputText.Foreground = FluentDesign.Secondary;
-
-        contextHeaderLabel.Foreground = FluentDesign.Secondary;
-        contextHeaderLabel.Tag = "CONTEXTE";
-        contextPercentText.Foreground = Brush(130, 180, 255);
-        contextValueText.Foreground = FluentDesign.Secondary;
-
-        ToolTipService.SetToolTip(refreshModelsBtn, T("Recharger les modèles de l’API"));
-
-        var grid = new Grid { ColumnSpacing = 16, VerticalAlignment = VerticalAlignment.Center };
-        grid.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        grid.Children.Add(BuildModelOptions());
-
-        speedStack.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        var speedTop = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        speedTop.Children.Add(speedHeaderLabel);
-        speedTop.Children.Add(speedValueText);
-        speedStack.Children.Add(speedTop);
-        speedStack.Children.Add(speedOutputText);
-        Grid.SetColumn(speedStack, 1);
-        grid.Children.Add(speedStack);
-        AttachSpeedPopover();
-        RefreshSpeedPopover();
-
-        var contextStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        var contextTop = new Grid { ColumnSpacing = 8 };
-        contextTop.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        contextTop.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        contextTop.Children.Add(contextHeaderLabel);
-        Grid.SetColumn(contextPercentText, 1);
-        contextTop.Children.Add(contextPercentText);
-        contextStack.Children.Add(contextTop);
-        contextStack.Children.Add(contextBar);
-        contextStack.Children.Add(contextValueText);
-        Grid.SetColumn(contextStack, 2);
-        grid.Children.Add(contextStack);
-        AttachContextPopover(contextStack);
-        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        grid.SizeChanged += (_, e) =>
-        {
-            var scale = TextZoom.ForWindow(root) / 100d;
-            bool compact = e.NewSize.Width < 760 * scale;
-            bool narrow = e.NewSize.Width < 320 * scale;
-            grid.ColumnDefinitions[0].Width = compact && !narrow ? GridLength.Auto : new(1, GridUnitType.Star);
-            grid.ColumnDefinitions[1].Width = compact && !narrow ? new(1, GridUnitType.Star) : GridLength.Auto;
-            grid.RowSpacing = compact ? 8 : 0;
-            Grid.SetColumnSpan(modelOptionsHost, compact ? 3 : 1);
-            Grid.SetRow(speedStack, compact ? 1 : 0); Grid.SetColumn(speedStack, compact ? 0 : 1);
-            Grid.SetColumnSpan(speedStack, narrow ? 3 : 1);
-            Grid.SetRow(contextStack, narrow ? 2 : compact ? 1 : 0); Grid.SetColumn(contextStack, narrow ? 0 : 2);
-            Grid.SetColumnSpan(contextStack, narrow ? 3 : 1);
-            contextStack.Width = Math.Min(Math.Max(0, e.NewSize.Width), (compact ? 148 : 184) * scale);
-            contextStack.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-            contextValueText.Visibility = speedHeaderLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        };
-
-        assetsScroll.Content = assetsBar;
-        var infoBarStack = new StackPanel { Spacing = 2 };
-        infoBarStack.Children.Add(grid);
-        infoBarStack.Children.Add(assetsScroll);
-        floatingInfoBar.Child = infoBarStack;
+        BuildModelOptions();
 
         modelSelector.SelectionChanged += async (_, _) =>
         {
@@ -377,7 +293,7 @@ public sealed partial class MainWindow : Window
                 provider=selected;state.ProviderId=selected.Id;
                 var priorLoading=loading;loading=true;providers.SelectedItem=selected;loading=priorLoading;
                 await OnModelSelectedAsync(choice.Model);
-                UpdateProvider();modelProviderSubtitle.Text=selected.Name; RefreshModelOptions(); await db.SaveChangesAsync();
+                UpdateProvider(); RefreshModelOptions(); await db.SaveChangesAsync();
             });
         };
 
@@ -436,79 +352,6 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        return floatingInfoBar;
-    }
-    Border CreateChip(string text, string tooltip, Func<Task>? onRemove, bool isSource)
-    {
-        var chip = new Border
-        {
-            Background = isSource ? Brush(32, 44, 68) : Brush(34, 40, 56),
-            BorderBrush = isSource ? Brush(55, 80, 120) : Brush(55, 66, 92),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(8, 2, 4, 2),
-            Margin = new Thickness(0, 2, 4, 2)
-        };
-        ToolTipService.SetToolTip(chip, tooltip);
-
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        var label = new TextBlock
-        {
-            Text = text,
-            FontSize = 11.5,
-            Foreground = isSource ? Brush(140, 190, 255) : Brush(220, 230, 245),
-            VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = 180,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        panel.Children.Add(label);
-
-        var closeBtn = new Button
-        {
-            Content = "✕",
-            FontSize = 9.5,
-            Width = 18,
-            Height = 18,
-            Padding = new Thickness(0),
-            CornerRadius = new CornerRadius(9),
-            Background = Brush(48, 58, 80),
-            Foreground = Brush(190, 205, 225),
-            BorderThickness = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        ToolTipService.SetToolTip(closeBtn, isSource ? T("Détacher la source") : T("Retirer l'image"));
-        if (onRemove != null)
-        {
-            closeBtn.Click += async (_, _) => await Guard(onRemove);
-            panel.Children.Add(closeBtn);
-        }
-
-        chip.Child = panel;
-        return chip;
-    }
-    ToolTip CreatePendingImagePreview(Attachment attachment)
-    {
-        var bitmap = new BitmapImage();
-        using (var stream = new MemoryStream(attachment.Data))
-        using (var randomAccess = stream.AsRandomAccessStream()) bitmap.SetSource(randomAccess);
-
-        var preview = new StackPanel { Spacing = 8, MaxWidth = 440 };
-        var name = Label(attachment.Name, 12);
-        name.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-        name.MaxWidth = 400;
-        name.TextTrimming = TextTrimming.CharacterEllipsis;
-        preview.Children.Add(name);
-        preview.Children.Add(new Border
-        {
-            Child = new Image { Source = bitmap, MaxWidth = 420, MaxHeight = 320, Stretch = Stretch.Uniform },
-            Background = FluentDesign.Card,
-            BorderBrush = FluentDesign.Stroke,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(6)
-        });
-        preview.Children.Add(Label($"{attachment.Data.Length / 1024.0:F1} Ko", 11));
-        return new ToolTip { Content = preview, Placement = Microsoft.UI.Xaml.Controls.Primitives.PlacementMode.Top };
     }
     void UpdateFloatingAssets()
     {
@@ -530,22 +373,28 @@ public sealed partial class MainWindow : Window
                     UpdateFloatingAssets();
                     ShowStatus(T("Dossier source détaché."));
                 };
-                var sourceChip = CreateChip((File.Exists(folder) ? "📄 " : "📁 ") + folderName, folder, detach, isSource: true);
-                assetsBar.Children.Add(sourceChip);
+                if (managed && chat != null && hiddenWorkspacePreviews.Contains(chat.Id)) continue;
+                if (managed && chat != null)
+                {
+                    var chatId = chat.Id;
+                    detach = () => { hiddenWorkspacePreviews.Add(chatId); UpdateFloatingAssets(); return Task.CompletedTask; };
+                }
+                var tile = CreateResourceTile(folderName, folder, Directory.Exists(folder),
+                    () => IsImagePreviewPath(folder) ? OpenImageFileFullscreenAsync(folder) : OpenChatItemAsync(folder, project), detach);
+                if (IsImagePreviewPath(folder)) tile.LoadPreview(async ct => await ReadPreviewImageAsync(folder, ct));
+                if (managed) ToolTipService.SetToolTip(tile.RemoveButton, WorkflowText("Masquer l’espace de travail", "Hide workspace preview"));
+                assetsBar.Children.Add(tile);
             }
         }
 
         foreach (var img in pendingImages.ToList())
         {
-            var imgChip = CreateChip("🖼️ " + img.Name, img.Name, () =>
+            var tile = CreateResourceTile(img.Name, img.Name, false, () => OpenImageFullscreenAsync(img.Data, img.Name), () =>
             {
-                pendingImages.Remove(img);
-                UpdateAttachments();
-                return Task.CompletedTask;
-            }, isSource: false);
-            try { ToolTipService.SetToolTip(imgChip, CreatePendingImagePreview(img)); }
-            catch (Exception ex) { ToolTipService.SetToolTip(imgChip, img.Name + " · " + ex.Message); }
-            assetsBar.Children.Add(imgChip);
+                pendingImages.Remove(img); UpdateAttachments(); return Task.CompletedTask;
+            });
+            tile.LoadPreview(_ => Task.FromResult(img.Data));
+            assetsBar.Children.Add(tile);
         }
 
         assetsScroll.Visibility = assetsBar.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -695,7 +544,6 @@ public sealed partial class MainWindow : Window
     void UpdateProvider()
     {
         modelLabel.Text = provider == null ? T("Aucun fournisseur") : $"{provider.Model} · {provider.Name}";
-        if (provider != null) modelProviderSubtitle.Text = provider.Name;
     }
     void RenderHistory(List<Message> history, StackPanel messages, Project? sourceProject, int start = 0, int count = int.MaxValue)
     {
@@ -853,7 +701,7 @@ public sealed partial class MainWindow : Window
         }
         public void Flush()
         {
-            if (pendingText is { } text) { pendingText = null; MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu); }
+            if (pendingText is { } text) { pendingText = null; RenderContent(text); }
             if (pendingThinking is { } thinking) { pendingThinking = null; UpdateThinking(thinking.Text, thinking.Complete); }
         }
 
@@ -863,6 +711,11 @@ public sealed partial class MainWindow : Window
             CurrentText = text;
             if ((streaming || pendingText != null) && !CanPaint()) { pendingText = text; return; }
             pendingText = null;
+            RenderContent(text);
+        }
+        void RenderContent(string text)
+        {
+            if (Container is { } card) card.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
             MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu);
         }
 
@@ -891,7 +744,7 @@ public sealed partial class MainWindow : Window
             }
         }
     }
-    AssistantMessageUi AddAssistantMessage(string initialText = "…", string? initialReasoning = null, StackPanel? target = null, Project? sourceProject = null)
+    AssistantMessageUi AddAssistantMessage(string initialText = "", string? initialReasoning = null, StackPanel? target = null, Project? sourceProject = null)
     {
         var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
         var bodyContainer = ChatDensity.Track(new StackPanel(), "body");
@@ -988,6 +841,7 @@ public sealed partial class MainWindow : Window
         stack.Children.Add(duration);
 
         var container = FluentDesign.MessageSurface(stack, "assistant");
+        container.Visibility = string.IsNullOrWhiteSpace(initialText) ? Visibility.Collapsed : Visibility.Visible;
         ui.Container = container;
         AddMessageCopyAction(EnsureMessageActionMenu(container), () => ui.CurrentText);
         container.PointerEntered += (_, _) => ui.SetHovered(true);
@@ -1365,9 +1219,11 @@ public sealed partial class MainWindow : Window
         var stack = ChatDensity.Track(new StackPanel(), "stack");
         var roleLabel = Label(role switch { "user" => T("VOUS"), "tool" => T("OUTIL"), _ => T("ASSISTANT") }, 11);
         roleLabel.VerticalAlignment = VerticalAlignment.Center;
-        stack.Children.Add(new Border { MinHeight = 30, Child = roleLabel });
+        if (role == "user") stack.Tag = "user-bubble";
+        else stack.Children.Add(new Border { MinHeight = 30, Child = roleLabel });
         stack.Children.Add(bodyContainer);
         var card = FluentDesign.MessageSurface(stack, role);
+        if (role == "user") ConfigureUserBubble(card, target);
         (target ?? messages).Children.Add(card);
         return card;
     }
@@ -1532,6 +1388,14 @@ public sealed partial class MainWindow : Window
         var markdownFeatures = FeatureSettings.Read(state.FeaturesJson);
         var renderMermaid = new ToggleSwitch { IsOn = markdownFeatures.RenderMermaid };
         var renderMath = new ToggleSwitch { IsOn = markdownFeatures.RenderMath };
+        var showComposerSpeed = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerSpeed };
+        var showComposerContext = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerContext };
+        general.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le débit", "Show token speed"),
+            WorkflowText("Affiche les tokens par seconde à côté du modèle, dans la zone de saisie.",
+                "Show tokens per second beside the model in the composer."), showComposerSpeed));
+        general.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le contexte", "Show context usage"),
+            WorkflowText("Affiche l’utilisation du contexte à côté du modèle, dans la zone de saisie.",
+                "Show context usage beside the model in the composer."), showComposerContext));
         general.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des diagrammes Mermaid", "Mermaid diagram compatibility"),
             WorkflowText("Rend les blocs Mermaid en diagrammes dans le chat et les aperçus. Désactivé : affiche le code source.", "Render Mermaid blocks as diagrams in chat and previews. When disabled, show their source."), renderMermaid));
         general.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des symboles mathématiques", "Mathematical notation compatibility"),
@@ -1693,11 +1557,12 @@ public sealed partial class MainWindow : Window
         var previousBrowserMode = FeatureSettings.Read(state.FeaturesJson).BrowserMode;
         var savedFeatures = FeatureSettings.Read(features.Save());
         appearance.Save(savedFeatures);
-        savedFeatures.ComposerInfoExpanded = FeatureSettings.Read(state.FeaturesJson).ComposerInfoExpanded;
         savedFeatures.FontZoomPercent = FeatureSettings.Read(state.FeaturesJson).FontZoomPercent;
         savedFeatures.AgentPresets = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         savedFeatures.ChatGoals = FeatureSettings.Read(state.FeaturesJson).ChatGoals;
         savedFeatures.RenderMermaid = renderMermaid.IsOn; savedFeatures.RenderMath = renderMath.IsOn;
+        savedFeatures.ShowComposerSpeed = showComposerSpeed.IsOn;
+        savedFeatures.ShowComposerContext = showComposerContext.IsOn;
         savedFeatures.AutoFocusTool = autoFocusTool.IsChecked == true;
         savedFeatures.ResponseStyle = ResponseStyles.All[Math.Clamp(responseStyle.SelectedIndex, 0, ResponseStyles.All.Count - 1)].Id;
         updates.Save(savedFeatures);
@@ -2234,7 +2099,6 @@ public sealed partial class MainWindow : Window
                 provider=available.Single(x=>x.Id==choice.ProviderId);ModelContexts.Select(provider,choice.Model);state.ProviderId=provider.Id;
                 var previousLoading=loading;loading=true;providers.SelectedItem=provider;loading=previousLoading;
             }
-            modelProviderSubtitle.Text=choice==null?WorkflowText("Aucun modèle coché", "No models selected"):provider!.Name;
             refreshModelsBtn.IsEnabled=!refreshingModels && provider!=null && !provider.IsComposite && ActiveRun==null;
             RefreshContextInfo();
             RefreshModelOptions();
@@ -2401,7 +2265,7 @@ public sealed partial class MainWindow : Window
                 ShowContextUsage(run, inputEstimate, estimated: true);
                 active = new Message { ChatId = chat.Id, Role = "assistant", State = "interrupted" };
                 db.Messages.Add(active); await db.SaveChangesAsync();
-                var assistantUi = AddAssistantMessage("…", target: run.Messages, sourceProject: run.Project);
+                var assistantUi = AddAssistantMessage("", target: run.Messages, sourceProject: run.Project);
                 var compatibilityLabel = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary, FontSize = 12, Visibility = Visibility.Collapsed };
                 MessageHost(run.Messages).Children.Add(compatibilityLabel);
                 activeAssistantUi = assistantUi;
@@ -2430,14 +2294,12 @@ public sealed partial class MainWindow : Window
                     {
                         assistantUi.UpdateThinking(update.Reasoning, isComplete: update.Text.Length > 0, streaming: true);
                     }
-                    var displayText = update.Text.Length > 0 ? update.Text : update.Reasoning.Length > 0 ? T("Raisonnement en cours…") : run.ContextRequest?.Label(run.Options.Language) ?? "…";
-                    assistantUi.UpdateContent(displayText, streaming: true);
+                    assistantUi.UpdateContent(update.Text, streaming: true);
                     UpdateMetrics(run, update, inputEstimate); lastPaint = DateTime.UtcNow;
                     if (IsVisible(run)) ScrollToBottom();
                 }, ct, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson), progress =>
                 {
                     ContextRequestProgressed(run, progress);
-                    assistantUi.UpdateContent(progress.Label(run.Options.Language));
                 }, requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode) && run.Options.ThinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase), acp: provider.IsAcp ? AcpOptions(run) : null);
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
                 CancelModelRetryFeedback(run); run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
@@ -2446,8 +2308,7 @@ public sealed partial class MainWindow : Window
                 run.Tracker?.Complete(completion.Seconds, finalTokens);
                 if (run.Tracker != null) messageTrackers[active.Id] = run.Tracker;
                 run.Tracker = null;
-                assistantUi.UpdateContent(active.Content.Length == 0 && completion.Message["tool_calls"] is JsonArray { Count: > 0 }
-                    ? T("Consultation des outils…") : active.Content);
+                assistantUi.UpdateContent(active.Content);
                 UpdateMetrics(run, new(active.Content, "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens }, inputEstimate);
                 assistantUi.SetDuration(completion.Seconds, active.CompletedUtc);
                 assistantUi.SetCachedInputTokens(completion.CachedInputTokens);
@@ -2536,7 +2397,6 @@ public sealed partial class MainWindow : Window
                 if (!provider.IsAcp) persistedHistory = await AutoCompactHistoryAsync(run, persistedHistory, systemPrompt, definitions, secret, ct);
                 wire = ComposeWire(systemPrompt, ConversationModes.History(persistedHistory, run.Chat));
                 if (toolResults.Count == 0 && steered.Count==0) { SetRunStatus(run, T("Réponse terminée · historique enregistré."), StatusKind.Notice); active = null; break; }
-                if (string.IsNullOrEmpty(assistantUi.CurrentText)) assistantUi.UpdateContent(T("Consultation des outils…"));
                 active = null;
             }
         }

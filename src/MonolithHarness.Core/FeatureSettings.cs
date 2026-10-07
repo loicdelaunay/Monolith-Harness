@@ -74,7 +74,8 @@ public sealed class FeatureSettings
     public int AgentParallelism { get; set; } = 8;
     public int AgentMaxDepth { get; set; } = 3;
     public int AgentMaxSteps { get; set; } = 200;
-    public bool ComposerInfoExpanded { get; set; } = true;
+    public bool ShowComposerSpeed { get; set; } = true;
+    public bool ShowComposerContext { get; set; } = true;
     public bool QuickModelLevelsEnabled { get; set; }
     public List<QuickModelLevel> QuickModelLevels { get; set; } = [];
     public string QuickModelSelectionMode { get; set; } = "simple";
@@ -111,6 +112,17 @@ public sealed class FeatureSettings
         try
         {
             var settings = JsonSerializer.Deserialize<FeatureSettings>(json) ?? new();
+            // Carry the former combined switch into each missing independent preference.
+            if (json.Contains("\"ShowComposerMetrics\"", StringComparison.Ordinal))
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("ShowComposerMetrics", out var previous)
+                    && previous.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    if (!document.RootElement.TryGetProperty("ShowComposerSpeed", out _)) settings.ShowComposerSpeed = previous.GetBoolean();
+                    if (!document.RootElement.TryGetProperty("ShowComposerContext", out _)) settings.ShowComposerContext = previous.GetBoolean();
+                }
+            }
             settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
             settings.Compaction ??= new();
             settings.Compaction.Normalize();

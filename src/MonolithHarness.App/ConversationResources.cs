@@ -22,27 +22,39 @@ public sealed partial class MainWindow
     {
         if (card.Tag is MessageActionMenu existing) return existing;
         var stack = card.Child as StackPanel ?? throw new InvalidOperationException("Message card has no content.");
-        var button = new Button { Width = 30, Height = 30, Padding = new(0), Visibility = Visibility.Collapsed,
+        var button = new Button { Width = 30, Height = 30, Padding = new(0), Opacity = 0, IsHitTestVisible = false,
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new(0) };
         FluentDesign.IconButton(button, "\uE712", WorkflowText("Actions du message", "Message actions"), false);
         var menu = new MenuFlyout();
         bool menuOpen = false, pointerInside = false;
         button.Click += (_, _) => { menuOpen = true; menu.ShowAt(button); };
-        menu.Closed += (_, _) => { menuOpen = false; button.Visibility = pointerInside ? Visibility.Visible : Visibility.Collapsed; };
-        var header = (FrameworkElement)stack.Children[0]; stack.Children.RemoveAt(0);
-        var heading = new Grid { MinHeight = 30 };
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(header, 0); Grid.SetColumn(button, 1);
-        heading.Children.Add(header); heading.Children.Add(button); stack.Children.Insert(0, heading);
-        card.PointerEntered += (_, _) => { pointerInside = true; button.Visibility = Visibility.Visible; };
+        void ShowActions(bool show) { button.Opacity = show ? 1 : 0; button.IsHitTestVisible = show; }
+        menu.Closed += (_, _) => { menuOpen = false; ShowActions(pointerInside); };
+        if (Equals(stack.Tag, "user-bubble"))
+        {
+            var content = new Grid { ColumnSpacing = 6 };
+            content.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); content.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+            card.Child = null; content.Children.Add(stack); Grid.SetColumn(button, 1); content.Children.Add(button); card.Child = content;
+            button.Width = button.Height = 24; button.MinWidth = button.MinHeight = 0; button.VerticalAlignment = VerticalAlignment.Top;
+        }
+        else
+        {
+            var header = (FrameworkElement)stack.Children[0]; stack.Children.RemoveAt(0);
+            var heading = new Grid { MinHeight = 30 };
+            heading.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+            Grid.SetColumn(header, 0); Grid.SetColumn(button, 1);
+            heading.Children.Add(header); heading.Children.Add(button); stack.Children.Insert(0, heading);
+        }
+        card.PointerEntered += (_, _) => { pointerInside = true; ShowActions(true); };
         card.PointerExited += (_, e) =>
         {
             var point = e.GetCurrentPoint(card).Position;
             if (point.X >= 0 && point.Y >= 0 && point.X <= card.ActualWidth && point.Y <= card.ActualHeight) return;
             pointerInside = false;
-            if (!menuOpen) button.Visibility = Visibility.Collapsed;
+            if (!menuOpen) ShowActions(false);
         };
+        card.GotFocus += (_, _) => ShowActions(true);
+        card.LostFocus += (_, _) => { if (!menuOpen && !pointerInside) ShowActions(false); };
         var actions = new MessageActionMenu(button, menu);
         card.Tag = actions;
         return actions;

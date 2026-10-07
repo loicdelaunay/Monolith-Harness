@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -15,7 +16,9 @@ public sealed record GitHubUpdate(string Version, string Tag, string Page, strin
 
 public sealed class GitHubUpdates(HttpClient http)
 {
-    public const string CurrentVersion = "1.60.0";
+    // Read the installed GUI or CLI version instead of maintaining a second release number.
+    public static string CurrentVersion { get; } = (Assembly.GetEntryAssembly() ?? typeof(GitHubUpdates).Assembly)
+        .GetName().Version?.ToString(3) ?? "0.0.0";
     public const string Repository = "https://github.com/loicdelaunay/Monolith-Harness";
     public const string Api = "https://api.github.com/repos/loicdelaunay/Monolith-Harness/releases";
     const long MaxBytes = 1024L * 1024 * 1024;

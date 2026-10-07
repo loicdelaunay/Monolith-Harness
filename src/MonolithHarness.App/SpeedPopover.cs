@@ -9,10 +9,10 @@ public sealed partial class MainWindow
 {
     readonly SpeedPopover speedPopover = new();
 
-    void AttachSpeedPopover()
+    void AttachSpeedPopover(StackPanel anchor)
     {
-        speedStack.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        AttachHoverPopover(speedStack, speedPopover, new Flyout(), () => RefreshSpeedPopover(currentSpeedTracker));
+        anchor.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        AttachHoverPopover(anchor, speedPopover, new Flyout(), () => RefreshSpeedPopover(currentSpeedTracker));
     }
 
     void RefreshSpeedPopover(GenerationSpeedTracker? activeTracker = null)

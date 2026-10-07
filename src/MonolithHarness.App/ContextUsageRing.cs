@@ -6,7 +6,7 @@ using Windows.Foundation;
 
 namespace MonolithHarness.App;
 
-// A determinate ring fits inside the existing collapsed header without increasing its height.
+// A compact determinate ring keeps context usage visible beside the composer model.
 sealed class ContextUsageRing : Grid
 {
     readonly ArcSegment arc = new() { Size = new Size(7, 7), SweepDirection = SweepDirection.Clockwise };

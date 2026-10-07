@@ -7,9 +7,10 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly DropDownButton modelOptionsButton = new() { HorizontalAlignment = HorizontalAlignment.Stretch,
-        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, MinHeight = 44, Padding = new(10, 5, 10, 5) };
-    readonly TextBlock selectedModelName = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None,
+    readonly DropDownButton modelOptionsButton = new() { HorizontalAlignment = HorizontalAlignment.Right,
+        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0, MinHeight = 32,
+        MaxWidth = 240, Padding = new(8, 4, 8, 4), CornerRadius = new(8), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new(0) };
+    readonly TextBlock selectedModelName = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
         Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock selectedThinking = new() { FontSize = 11, Foreground = FluentDesign.Primary };
     readonly TextBlock modelPickerProvider = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary };
@@ -21,25 +22,16 @@ public sealed partial class MainWindow
     Flyout? modelOptionsFlyout;
     bool chooseModelOnOpen;
 
-    Grid BuildModelOptions()
+    void BuildModelOptions()
     {
-        var selection = new Grid { ColumnSpacing = 8, RowSpacing = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var selection = new Grid { ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
         selection.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         selection.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        selection.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        selection.RowDefinitions.Add(new() { Height = GridLength.Auto });
         selection.Children.Add(selectedModelName);
-        modelProviderSubtitle.FontSize = 10; modelProviderSubtitle.TextTrimming = TextTrimming.CharacterEllipsis;
-        Grid.SetRow(modelProviderSubtitle, 1); selection.Children.Add(modelProviderSubtitle);
-        var badge = combinedThinkingBadge = new Border { Child = selectedThinking, CornerRadius = new(8), Padding = new(7, 3, 7, 3),
+        var thinkingSummary = Row(composerThinkingIcon, composerThinkingMarker); thinkingSummary.Spacing = 2;
+        var badge = new Border { Child = thinkingSummary, CornerRadius = new(6), Padding = new(4, 2, 4, 2),
             Background = FluentDesign.Resource("ControlSelectedBrush"), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(badge, 1); Grid.SetRowSpan(badge, 2); selection.Children.Add(badge);
-        selection.SizeChanged += (_, e) =>
-        {
-            bool narrow = e.NewSize.Width < 280 * TextZoom.ForWindow(root) / 100d;
-            Grid.SetColumnSpan(selectedModelName, narrow ? 2 : 1);
-            Grid.SetRow(badge, narrow ? 1 : 0); Grid.SetRowSpan(badge, narrow ? 1 : 2);
-        };
+        Grid.SetColumn(badge, 1); selection.Children.Add(badge);
         modelOptionsButton.Content = selection;
         var panel = new Grid { RowSpacing = 10 };
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -104,7 +96,7 @@ public sealed partial class MainWindow
         var footer = Row(quickApplyLevel, done); footer.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetRow(footer, 2); panel.Children.Add(footer);
         TextZoom.Observe(panel);
-        modelOptionsFlyout = new Flyout { Content = panel };
+        modelOptionsFlyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.TopEdgeAlignedRight };
         modelOptionsFlyout.FlyoutPresenterStyle = new Style { TargetType = typeof(FlyoutPresenter) };
         modelOptionsFlyout.FlyoutPresenterStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(12)));
         modelOptionsFlyout.FlyoutPresenterStyle.Setters.Add(new Setter(FrameworkElement.MaxWidthProperty, double.PositiveInfinity));
@@ -137,17 +129,6 @@ public sealed partial class MainWindow
         };
         modelOptionsFlyout.Closed += (_, _) => { modelOptionsIsOpen = false; chooseModelOnOpen = false; modelSelector.ResetSearch(); };
         done.Click += (_, _) => modelOptionsFlyout.Hide();
-        modelOptionsHost.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        modelOptionsHost.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        modelOptionsHost.Children.Add(modelOptionsButton);
-        Grid.SetColumn(inlineThinkingSelector, 1); modelOptionsHost.Children.Add(inlineThinkingSelector);
-        inlineThinkingSelector.SelectionChanged += (_, _) =>
-        {
-            if (!syncingQuickControls && !loading && ActiveRun == null && !applyingQuickLevel && inlineThinkingSelector.SelectedIndex >= 0)
-                thinkingSelector.SelectedIndex = inlineThinkingSelector.SelectedIndex;
-        };
-        modelOptionsHost.SizeChanged += (_, _) => RefreshQuickModelUi();
-        return modelOptionsHost;
     }
 
     async void OpenModelOptions(bool chooseModel = false)
@@ -168,7 +149,6 @@ public sealed partial class MainWindow
         selectedThinking.Text = thinkingSelector.SelectedItem?.ToString() ?? "🧠 Auto";
         modelPickerProvider.Text = choice?.ProviderName ?? WorkflowText("Aucun modèle sélectionné", "No model selected");
         ToolTipService.SetToolTip(modelPickerProvider, modelPickerProvider.Text);
-        RefreshInfoHeading();
         thinkingDescription.Text = thinkingSelector.SelectedIndex switch
         {
             1 => WorkflowText("Demande une réflexion courte pour privilégier la rapidité.", "Requests brief thinking to favor speed."),

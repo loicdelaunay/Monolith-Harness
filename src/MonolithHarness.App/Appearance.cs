@@ -8,13 +8,14 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    bool composerInfoExpanded = true;
-    readonly Button infoToggle = new() { HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, MinHeight = 28, Padding = new(12,4,12,4), Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
-    readonly TextBlock infoHeading = Label("", 12);
-    readonly ContextUsageRing collapsedContextRing = new();
-    readonly TextBlock collapsedContextText = Label("0 %", 10);
-    readonly TextBlock collapsedSpeedText = Label("⚡ — tok/s", 10);
-    readonly StackPanel collapsedMetrics = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+    readonly Grid composerModelSummary = new() { ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock composerThinkingIcon = Label("🧠", 11), composerThinkingMarker = Label("A", 10);
+    readonly ContextUsageRing composerContextRing = new();
+    readonly TextBlock composerContextText = Label("0 %", 10), composerSpeedText = Label("⚡ — tok/s", 10);
+    readonly StackPanel composerMetrics = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+    readonly StackPanel composerContextIndicator = new() { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+    readonly StackPanel composerSpeedIndicator = new() { VerticalAlignment = VerticalAlignment.Center };
+    Action? resizeComposerFooter;
     void ApplyAppearance()
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
@@ -25,8 +26,7 @@ public sealed partial class MainWindow
         TextZoom.Set(config.FontZoomPercent);
         ApplyTheme(config.Theme);
         ApplyBranding();
-        composerInfoExpanded = config.ComposerInfoExpanded;
-        UpdateInfoPanel();
+        RefreshComposerModelSummary();
     }
     void ApplyTheme(string themeId, IEnumerable<AppearanceTheme>? customThemes = null)
     {
@@ -46,66 +46,69 @@ public sealed partial class MainWindow
         if (localModelsWindow != null)
         { localModelsWindow.Panel.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(localModelsWindow); }
     }
-    void UpdateInfoPanel()
+    void RefreshComposerModelSummary()
     {
-        bool expanded = composerInfoExpanded;
-        floatingInfoBar.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        RefreshInfoHeading();
-        collapsedMetrics.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
-        RefreshCollapsedMetrics();
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(infoToggle, WorkflowText("Afficher les informations du modèle", "Show model information"));
+        var current = ActiveRun;
+        var name = current?.Provider.Model ?? provider?.Model ?? (modelSelector.SelectedItem as ModelChoice)?.Model;
+        selectedModelName.Text = string.IsNullOrWhiteSpace(name) ? WorkflowText("Choisir un modèle", "Choose a model") : name;
+        var thinking = (current?.Options.ThinkingLevel ?? ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel)).ToLowerInvariant();
+        var index = thinking switch { "low" => 1, "medium" => 2, "high" => 3, "none" => 4, _ => 0 };
+        selectedThinking.Text = ThinkingLevelLabels()[index];
+        composerThinkingMarker.Text = index switch { 1 => "1", 2 => "2", 3 => "3", 4 => "—", _ => "A" };
+        composerThinkingMarker.Foreground = index == 4 ? FluentDesign.Secondary : FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
+        var thinkingLabel = WorkflowText("Réflexion : ", "Thinking: ") + selectedThinking.Text;
+        ToolTipService.SetToolTip(composerThinkingIcon, thinkingLabel);
+        ToolTipService.SetToolTip(composerThinkingMarker, thinkingLabel);
+        var source = current?.Provider.Name ?? provider?.Name ?? "";
+        var description = selectedModelName.Text + (source.Length == 0 ? "" : "\n" + source) + "\n" + thinkingLabel;
+        var config = FeatureSettings.Read(state.FeaturesJson);
+        if (config.QuickModelLevelsEnabled)
+        {
+            var match = config.QuickModelLevels.FindIndex(level => QuickModelShortcuts.Matches(level, provider, state, chat));
+            if (match >= 0) description += "\n" + QuickLevelCaption(config.QuickModelLevels[match], match);
+        }
+        ToolTipService.SetToolTip(modelOptionsButton, description);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(modelOptionsButton,
+            WorkflowText("Choisir le modèle et sa réflexion", "Choose model and thinking") + " · " + description);
+        composerContextIndicator.Visibility = config.ShowComposerContext ? Visibility.Visible : Visibility.Collapsed;
+        composerSpeedIndicator.Visibility = config.ShowComposerSpeed ? Visibility.Visible : Visibility.Collapsed;
+        composerMetrics.Visibility = config.ShowComposerContext || config.ShowComposerSpeed ? Visibility.Visible : Visibility.Collapsed;
+        RefreshComposerMetrics(); resizeComposerFooter?.Invoke();
     }
-    void RefreshInfoHeading()
+    void RefreshComposerMetrics()
     {
-        infoHeading.Text = (composerInfoExpanded ? "⌄  " : "›  ") + WorkflowText("Plus d’information", "More information");
-        ToolTipService.SetToolTip(infoHeading, ActiveRun?.Provider.Model ?? provider?.Model ?? "");
-    }
-    void RefreshCollapsedMetrics()
-    {
-        RefreshInfoHeading();
-        collapsedContextRing.Update(contextBar.Value / 100d);
-        collapsedContextText.Text = contextPercentText.Text;
-        collapsedSpeedText.Text = speedValueText.Text;
-        collapsedContextText.Foreground = FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
-        collapsedSpeedText.Foreground = FluentDesign.Secondary;
+        composerContextRing.Update(contextBar.Value / 100d);
+        composerContextText.Text = contextPercentText.Text;
+        composerSpeedText.Text = speedValueText.Text;
+        composerContextText.Foreground = FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
+        composerSpeedText.Foreground = FluentDesign.Secondary;
         var description = WorkflowText("Contexte", "Context") + " : " + contextPercentText.Text + " · " + contextValueText.Text + " · " + speedValueText.Text;
-        ToolTipService.SetToolTip(infoToggle, description);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(collapsedMetrics, description);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerMetrics, description);
+    }
+    Grid BuildComposerModelSummary()
+    {
+        composerModelSummary.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        composerModelSummary.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        composerModelSummary.Children.Add(modelOptionsButton);
+        composerContextIndicator.Children.Add(composerContextRing); composerContextIndicator.Children.Add(composerContextText);
+        composerSpeedIndicator.Children.Add(composerSpeedText);
+        composerMetrics.Children.Add(composerContextIndicator); composerMetrics.Children.Add(composerSpeedIndicator);
+        Grid.SetColumn(composerMetrics, 1); composerModelSummary.Children.Add(composerMetrics);
+        AttachContextPopover(composerContextIndicator); AttachSpeedPopover(composerSpeedIndicator); RefreshSpeedPopover();
+        contextBar.RegisterPropertyChangedCallback(RangeBase.ValueProperty, (_, _) => RefreshComposerMetrics());
+        foreach (var text in new[] { contextPercentText, contextValueText, speedValueText })
+            text.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => RefreshComposerMetrics());
+        RefreshComposerModelSummary();
+        return composerModelSummary;
     }
     UIElement BuildComposerSurface()
     {
+        InitializeComposerModelSelection();
+        assetsScroll.Content = assetsBar;
         var panel = new StackPanel { Spacing = 0 };
-        var header = new Grid { ColumnSpacing = 10 };
-        header.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        infoHeading.TextWrapping = TextWrapping.NoWrap;
-        infoHeading.TextTrimming = TextTrimming.CharacterEllipsis;
-        infoHeading.VerticalAlignment = VerticalAlignment.Center;
-        header.Children.Add(infoHeading);
-        collapsedMetrics.Children.Add(collapsedContextRing);
-        collapsedMetrics.Children.Add(collapsedContextText);
-        collapsedMetrics.Children.Add(collapsedSpeedText);
-        Grid.SetColumn(collapsedMetrics, 1); header.Children.Add(collapsedMetrics);
-        infoToggle.Content = header;
-        contextBar.RegisterPropertyChangedCallback(RangeBase.ValueProperty, (_, _) => RefreshCollapsedMetrics());
-        foreach (var text in new[] { contextPercentText, contextValueText, speedValueText })
-            text.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => RefreshCollapsedMetrics());
-        var information = new StackPanel { Spacing = 0, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
-        information.Children.Add(infoToggle);
-        information.Children.Add(BuildFloatingInfoBar());
-        floatingInfoBar.Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
-        panel.Children.Add(information);
-        floatingInfoBar.CornerRadius = new(0); floatingInfoBar.BorderThickness = new(0);
+        assetsScroll.Margin = new(8, 4, 8, 4);
+        panel.Children.Add(assetsScroll);
         panel.Children.Add(BuildComposer());
-        infoToggle.Click += async (_, _) => await Guard(async () =>
-        {
-            composerInfoExpanded = !composerInfoExpanded;
-            UpdateInfoPanel();
-            var config = FeatureSettings.Read(state.FeaturesJson); config.ComposerInfoExpanded = composerInfoExpanded;
-            state.FeaturesJson = config.Json(); await db.SaveChangesAsync();
-        });
-        var surface = FluentDesign.Surface(panel, 0);
-        UpdateInfoPanel();
-        return surface;
+        return FluentDesign.Surface(panel, 0);
     }
 }

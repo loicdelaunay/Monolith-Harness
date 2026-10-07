@@ -15,6 +15,9 @@ public sealed partial class MainWindow
     readonly DispatcherTimer guiUpdateInstallTimer = new() { Interval = TimeSpan.FromMinutes(1) };
     readonly Button guiUpdateButton = new() { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch,
         FontSize = 12, Padding = new(8), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
+    readonly StackPanel guiUpdatePanel = new() { Spacing = 4, Visibility = Visibility.Collapsed };
+    readonly ProgressBar guiUpdateProgress = new() { Height = 4, Maximum = 100, IsIndeterminate = true, Visibility = Visibility.Collapsed };
+    readonly TextBlock guiUpdateProgressText = new() { FontSize = 11, Foreground = FluentDesign.Secondary, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
     Task? guiUpdateCheck, automaticInstallAttempt;
     CancellationTokenSource? guiUpdateRequest, automaticUpdateInstall;
     AutomaticUpdateMode automaticUpdateMode;
@@ -25,29 +28,40 @@ public sealed partial class MainWindow
 
     // Offline UI smoke fixtures never contact GitHub or replace a running executable.
     Func<CancellationToken, Task<GitHubUpdate?>>? smokeGuiUpdateCheck;
-    Func<CancellationToken, Task<string>>? smokeGuiUpdateDownload;
+    Func<CancellationToken, IProgress<int>, Task<string>>? smokeGuiUpdateDownload;
     Action<string>? smokeGuiUpdateInstall;
 
     bool CanInstallGuiUpdate => smokeGuiUpdateInstall != null
         || GitHubUpdates.CanInstall && GitHubUpdates.IsStandalone(typeof(App).Assembly);
 
-    Button BuildGuiUpdateButton()
+    StackPanel BuildGuiUpdateButton()
     {
         guiUpdateButton.Click += async (_, _) => await Guard(async () =>
         {
             if (editingSettings) throw new InvalidOperationException(WorkflowText(
                 "Enregistrez ou fermez les réglages avant l’installation.", "Save or close settings before installing."));
-            await InstallGuiUpdateAsync(text => ShowStatus(text, StatusKind.Activity));
+            await InstallGuiUpdateAsync(ReportGuiUpdateProgress);
         });
+        guiUpdatePanel.Children.Add(guiUpdateButton);
+        guiUpdatePanel.Children.Add(guiUpdateProgress);
+        guiUpdatePanel.Children.Add(guiUpdateProgressText);
         RefreshGuiUpdateButton();
-        return guiUpdateButton;
+        return guiUpdatePanel;
+    }
+
+    void ReportGuiUpdateProgress(string text)
+    {
+        guiUpdateProgressText.Text = text;
+        guiUpdateProgressText.Visibility = updatingApplication ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void RefreshGuiUpdateButton()
     {
         var text = updatingApplication ? WorkflowText("Mise à jour…", "Updating…") : WorkflowText("Mettre à jour", "Update");
         guiUpdateButton.Content = text;
-        guiUpdateButton.Visibility = guiUpdate == null ? Visibility.Collapsed : Visibility.Visible;
+        guiUpdatePanel.Visibility = guiUpdate == null && !updatingApplication ? Visibility.Collapsed : Visibility.Visible;
+        guiUpdateButton.Visibility = guiUpdatePanel.Visibility;
+        guiUpdateProgress.Visibility = guiUpdateProgressText.Visibility = updatingApplication ? Visibility.Visible : Visibility.Collapsed;
         guiUpdateButton.IsEnabled = guiUpdate != null && CanInstallGuiUpdate && !updatingApplication;
         var tip = CanInstallGuiUpdate
             ? WorkflowText("Télécharger et redémarrer", "Download and restart") + " · " + guiUpdate?.Version
@@ -177,7 +191,7 @@ public sealed partial class MainWindow
         try
         {
             if (await ReadStoreAsync(store => store.PendingInputs.Any())) return;
-            await InstallGuiUpdateAsync(text => ShowStatus(text, StatusKind.Activity), automatic: true);
+            await InstallGuiUpdateAsync(ReportGuiUpdateProgress, automatic: true);
         }
         catch (OperationCanceledException) when (updateLifetime.IsCancellationRequested || automaticUpdateMode != AutomaticUpdateMode.Install) { }
         catch (Exception ex)
@@ -205,11 +219,19 @@ public sealed partial class MainWindow
         if (automatic && (automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasOpenEditors())) return;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(updateLifetime.Token);
         if (automatic) automaticUpdateInstall = cancellation;
-        updatingApplication = true; RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer();
+        updatingApplication = true; guiUpdateProgress.IsIndeterminate = true; guiUpdateProgress.Value = 0;
+        ReportGuiUpdateProgress(WorkflowText("Préparation du téléchargement…", "Preparing download…"));
+        RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer();
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(11) };
-            var progress = new Progress<int>(value => report(WorkflowText("Téléchargement : ", "Downloading: ") + value + "%"));
+            void Report(string text) { ReportGuiUpdateProgress(text); report(text); }
+            var progress = new Progress<int>(value =>
+            {
+                if (!updatingApplication || cancellation.IsCancellationRequested) return;
+                guiUpdateProgress.IsIndeterminate = false; guiUpdateProgress.Value = Math.Clamp(value, 0, 100);
+                Report(WorkflowText("Téléchargement : ", "Downloading: ") + value + "%");
+            });
             async Task<string> Hash(string path)
             {
                 await using var file = File.OpenRead(path);
@@ -218,8 +240,11 @@ public sealed partial class MainWindow
             var reuse = stagedGuiUpdate == update && File.Exists(stagedGuiUpdatePath)
                 && await Hash(stagedGuiUpdatePath!) == stagedGuiUpdateHash;
             var staged = reuse ? stagedGuiUpdatePath!
-                : smokeGuiUpdateDownload != null ? await smokeGuiUpdateDownload(cancellation.Token)
+                : smokeGuiUpdateDownload != null ? await smokeGuiUpdateDownload(cancellation.Token, progress)
                 : await new GitHubUpdates(client).DownloadAsync(update, UpdateChannel.Gui, Environment.ProcessPath!, progress, cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            guiUpdateProgress.IsIndeterminate = true;
+            Report(WorkflowText("Vérification du téléchargement…", "Verifying download…"));
             stagedGuiUpdate = update; stagedGuiUpdatePath = staged;
             if (!reuse) stagedGuiUpdateHash = await Hash(staged);
             async Task Restart()
@@ -235,6 +260,7 @@ public sealed partial class MainWindow
                         "Un agent ou brouillon est actif ; relancez l’installation après sa fin.", "An agent or draft is active; retry installation when finished."));
                 }
                 if (automatic && (automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasOpenEditors())) return;
+                Report(WorkflowText("Installation et redémarrage…", "Installing and restarting…"));
                 if (smokeGuiUpdateInstall != null) { smokeGuiUpdateInstall(staged); return; }
                 scheduleTimer.Stop();
                 try { GitHubUpdates.InstallAfterExit(staged, Environment.ProcessPath!, [], GitHubUpdates.IsStandalone(typeof(App).Assembly)); }
