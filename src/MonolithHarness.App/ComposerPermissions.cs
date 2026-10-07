@@ -24,18 +24,20 @@ public sealed partial class MainWindow
     bool changingComposerPermission;
 
     static int PermissionModeIndex(string? mode) => PermissionModes.Normalize(mode) switch
-    { PermissionModes.Deny => 0, PermissionModes.Allow => 2, _ => 1 };
+    { PermissionModes.Deny => 0, PermissionModes.Allow => 2, PermissionModes.Full => 3, _ => 1 };
 
     string PermissionCaption(string mode) => mode switch
     {
         PermissionModes.Deny => WorkflowText("Refuser tout", "Deny all"),
         PermissionModes.Allow => WorkflowText("Automatique", "Automatic"),
+        PermissionModes.Full => WorkflowText("Tout autoriser", "Allow all"),
         _ => WorkflowText("Demander", "Ask")
     };
     string PermissionDescription(string mode) => mode switch
     {
         PermissionModes.Deny => WorkflowText("Refuse les actions qui nécessitent une autorisation.", "Denies actions that require permission."),
-        PermissionModes.Allow => WorkflowText("Analyse les commandes avec LANCET localement. Les commandes signalées demandent votre accord ; les autres autorisations sont automatiques. Les règles du projet restent appliquées.", "Analyzes commands locally with LANCET. Flagged commands require your approval; other permissions are automatic. Project rules still apply."),
+        PermissionModes.Allow => WorkflowText("Analyse les commandes avec le validateur choisi dans Paramètres / Autorisations. Une analyse incertaine demande votre accord. Les règles du projet restent appliquées.", "Analyzes commands with the validator chosen in Settings / Permissions. Uncertain analysis requires your approval. Project rules still apply."),
+        PermissionModes.Full => WorkflowText("Accepte les demandes sans validation par un modèle. Les règles explicites du projet restent appliquées.", "Accepts requests without model validation. Explicit project rules still apply."),
         _ => WorkflowText("Demande une approbation pour les accès sans autorisation mémorisée. Les règles du projet restent appliquées.", "Asks for approval for access without a saved grant. Project rules still apply.")
     };
     FrameworkElement BuildComposerPermissions()
@@ -53,7 +55,8 @@ public sealed partial class MainWindow
     {
         var mode = PermissionModes.Normalize(state.PermissionMode);
         composerPermissionLabel.Text = PermissionCaption(mode);
-        var brush = mode == PermissionModes.Allow ? FluentDesign.Adapt(230, 157, 57)
+        composerPermissionShield.Glyph = mode == PermissionModes.Full ? "\uE7BA" : "\uE72E";
+        var brush = mode == PermissionModes.Full ? FluentDesign.Adapt(230, 157, 57)
             : mode == PermissionModes.Deny ? FluentDesign.Secondary : FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
         composerPermissionShield.Foreground = brush; composerPermissionLabel.Foreground = brush;
         var description = WorkflowText("Autorisations · ", "Permissions · ") + PermissionCaption(mode) + "\n" + PermissionDescription(mode)
@@ -69,7 +72,7 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 4, Width = 340, MaxWidth = Math.Max(220, Math.Min(340, root.ActualWidth - 48)) };
         panel.Children.Add(Label(WorkflowText("Autorisations", "Permissions"), 16));
         var current = PermissionModes.Normalize(state.PermissionMode);
-        foreach (var mode in new[] { PermissionModes.Ask, PermissionModes.Allow, PermissionModes.Deny })
+        foreach (var mode in new[] { PermissionModes.Ask, PermissionModes.Allow, PermissionModes.Full, PermissionModes.Deny })
         {
             var label = mode == PermissionModes.Ask ? WorkflowText("Demander l’approbation (par défaut)", "Ask for approval (default)") : PermissionCaption(mode);
             var title = Label(label, 13); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
@@ -79,8 +82,8 @@ public sealed partial class MainWindow
             row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-            var icon = FluentDesign.Icon("\uE72E", 15); icon.VerticalAlignment = VerticalAlignment.Center;
-            if (mode == PermissionModes.Allow) { icon.Foreground = FluentDesign.Adapt(230, 157, 57); title.Foreground = icon.Foreground; }
+            var icon = FluentDesign.Icon(mode == PermissionModes.Full ? "\uE7BA" : "\uE72E", 15); icon.VerticalAlignment = VerticalAlignment.Center;
+            if (mode == PermissionModes.Full) { icon.Foreground = FluentDesign.Adapt(230, 157, 57); title.Foreground = icon.Foreground; }
             row.Children.Add(icon); Grid.SetColumn(text, 1); row.Children.Add(text);
             var check = FluentDesign.Icon("\uE73E", 13); check.VerticalAlignment = VerticalAlignment.Center;
             check.Visibility = current == mode ? Visibility.Visible : Visibility.Collapsed;
@@ -105,7 +108,6 @@ public sealed partial class MainWindow
     {
         if (changingComposerPermission || editingSettings || databaseMaintenanceBusy || conversationRetentionBusy) return;
         var mode = PermissionModes.Normalize(value);
-        if (mode == PermissionModes.Allow && !await EnsureCommandGuardInstalledAsync()) return;
         if (mode == PermissionModes.Normalize(state.PermissionMode)) return;
         changingComposerPermission = true; RefreshComposerPermissions();
         try

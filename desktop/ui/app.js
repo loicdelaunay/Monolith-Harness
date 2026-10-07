@@ -372,7 +372,9 @@ function renderSettings(){
       button(card,L('Modifier','Edit'),()=>mcpForm(server));button(card,L('Tester la connexion','Test connection'),async()=>{const result=await call('mcp.test',{id:server.id});card.append(el('pre',result.error||result.tools.length+' tools\n'+result.tools.join('\n')));});
       button(card,L('Supprimer','Delete'),async()=>{if(!confirm(L('Supprimer ce serveur MCP ?','Delete this MCP server?')))return;await call('mcp.delete',{id:server.id});await refresh();renderSettings();});area.append(card);}
   }else if(settingsTab==='permissions'){
-    const mode=field(area,L('Comportement des autorisations','Permission behavior'),'select');mode.append(option('deny',L('Refuser tout','Deny all')),option('ask',L('Demander (défaut)','Ask (default)')),option('allow',L('Acceptation automatique','Automatically allow')));mode.value=snapshot.state.permissionMode;
+    const mode=field(area,L('Comportement des autorisations','Permission behavior'),'select');mode.append(option('deny',L('Refuser tout','Deny all')),option('ask',L('Demander (défaut)','Ask (default)')),option('allow',L('Automatique · validateur configuré','Automatic · configured validator')),option('full',L('⚠ Tout autoriser','⚠ Allow all')));mode.value=snapshot.state.permissionMode;
+    mode.querySelector('[value=full]').style.color='#e69d39';const tint=()=>mode.style.color=mode.value==='full'?'#e69d39':'';mode.addEventListener('change',tint);tint();
+    area.append(el('p',L('Tout autoriser accepte sans analyse par un modèle. Les règles explicites du projet restent appliquées.','Allow all accepts without model analysis. Explicit project rules still apply.')));
     button(area,L('Enregistrer','Save'),async()=>{await call('state.save',{permissionMode:mode.value});await refresh();renderSettings();});
     for(const grant of snapshot.permissions){const card=el('div',null,'card');card.append(el('strong',grant.name),el('p',grant.details));button(card,L('Révoquer','Revoke'),async()=>{await call('permission.revoke',{id:grant.id});await refresh();renderSettings();});area.append(card);}
   }else if(settingsTab==='providers'){

@@ -31,16 +31,19 @@ public sealed partial class HarnessService
             CommandGuardResult? risk = null;
             if (guarded)
             {
-                risk = await LocalCommandGuard.CheckAsync(request, ct);
+                risk = await CommandGuard.CheckAsync(request, FeatureSettings.Read(await db.States.Select(x => x.FeaturesJson).SingleAsync(ct)),
+                    (id, token) => db.Providers.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, token),
+                    (selected, token) => Decrypt(selected.ProtectedKey, token), http, ct);
                 mode = hostOptions?.PermissionModeOverride ?? await db.States.Select(x => x.PermissionMode).SingleAsync(ct);
                 automatic = ProjectResources.AutomaticDecision(mode, profile, scope);
                 if (automatic == false) return false;
-                if (PermissionModes.Normalize(mode) == PermissionModes.Allow && automatic == true && risk.AllowsAutomatic) return true;
+                guarded = PermissionModes.Normalize(mode) == PermissionModes.Allow;
+                if (automatic == true && (PermissionModes.Normalize(mode) == PermissionModes.Full || guarded && risk.AllowsAutomatic)) return true;
             }
             else if (automatic == true) return true;
             if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await db.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return true;
             if (request != null) details = request.Display;
-            if (risk != null) details = "LANCET · " + risk.Classification + " · " + risk.Reason + "\n\n" + details;
+            if (risk != null) details = risk.Validator + " · " + risk.Classification + " · " + risk.Reason + (risk.Explanation == null ? "" : "\n" + risk.Explanation) + "\n\n" + details;
             var reply = await host("permission", Obj(new { title, details, oneTimeOnly = guarded }), ct);
             ct.ThrowIfCancellationRequested();
             var choice = reply?.GetValue<string>();

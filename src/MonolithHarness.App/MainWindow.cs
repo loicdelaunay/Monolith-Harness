@@ -1469,34 +1469,17 @@ public sealed partial class MainWindow : Window
         var permissionMode = new ComboBox
         {
             Header = T("Comportement des demandes d’autorisation"),
-            ItemsSource = new[] { T("Refuser tout"), T("Demander (par défaut)"), T("Acceptation automatique") },
+            ItemsSource = PermissionModeItems(),
             SelectedIndex = PermissionModeIndex(state.PermissionMode),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        var acceptedPermissionIndex = permissionMode.SelectedIndex;
-        bool syncingPermissionMode = false;
-        permissionMode.SelectionChanged += async (_, _) =>
-        {
-            if (syncingPermissionMode) return;
-            var selected = permissionMode.SelectedIndex;
-            if (selected == 2 && !LocalCommandGuard.Installed)
-            {
-                syncingPermissionMode = true; permissionMode.SelectedIndex = acceptedPermissionIndex; permissionMode.IsEnabled = false;
-                try
-                {
-                    if (await EnsureCommandGuardInstalledAsync((loadingWindow.Content as FrameworkElement)?.XamlRoot))
-                    { permissionMode.SelectedIndex = 2; acceptedPermissionIndex = 2; }
-                }
-                finally { permissionMode.IsEnabled = true; syncingPermissionMode = false; }
-            }
-            else acceptedPermissionIndex = selected;
-        };
         permissionPanel.Children.Add(permissionMode);
-        if (!LocalCommandGuard.Installed)
-            permissionPanel.Children.Add(Action(WorkflowText("Installer la validation locale des commandes", "Install local command validation"),
-                async () => await EnsureCommandGuardInstalledAsync((loadingWindow.Content as FrameworkElement)?.XamlRoot)));
-        permissionPanel.Children.Add(Label(WorkflowText("En mode Automatique, LANCET analyse les commandes localement. Une commande signalée, un shell non pris en charge ou une analyse indisponible demande votre accord pour cette exécution. Les autres autorisations restent automatiques.",
-            "In Automatic mode, LANCET analyzes commands locally. Flagged commands, unsupported shells or unavailable analysis require approval for that execution. Other permissions remain automatic."), 12));
+        var permissionDescription = Label(PermissionDescription(PermissionModes.Normalize(state.PermissionMode)), 12);
+        permissionMode.SelectionChanged += (_, _) => permissionDescription.Text = PermissionDescription((permissionMode.SelectedItem as ComboBoxItem)?.Tag as string ?? PermissionModes.Ask);
+        permissionPanel.Children.Add(permissionDescription);
+        var guardProviders = await ReadStoreAsync(store => store.Providers.AsNoTracking().OrderBy(p => p.Id).ToList());
+        var commandGuardSettings = BuildCommandGuardSettings(loadingWindow, guardProviders);
+        permissionPanel.Children.Add(commandGuardSettings.Panel);
         permissionPanel.Children.Add(Label(T("Cette règle globale est appliquée avant les fenêtres de confirmation pour les fichiers, le terminal, le navigateur, la souris, le clavier, les captures et les outils OpenCode."), 12));
         var grants = await ReadStoreAsync(store => store.PermissionGrants.AsNoTracking().OrderByDescending(x => x.GrantedAtUtc).ToList());
         var revoke = new Dictionary<PermissionGrant, CheckBox>();
@@ -1541,11 +1524,14 @@ public sealed partial class MainWindow : Window
         if (permissionsRequested) { tabs.SelectedIndex = permissionTab; permissionsRequested = false; }
         if (!await ShowSettingsWindowAsync(loadingWindow, tabs, () =>
         {
-            if (installingCommandGuard) return false;
+            if (!commandGuardSettings.Validate()) { tabs.SelectedIndex = permissionTab; return false; }
             if (!conversationPreferences.Validate() || !retentionSettings.Validate()) { tabs.SelectedIndex = 0; return false; }
             if (!compactionSettings.Validate()) { tabs.SelectedIndex = compactionTab; return false; }
             var valid = true;
             var providerError = ValidateProviderDrafts(providerEditor);
+            var guardDraft = FeatureSettings.Read(state.FeaturesJson); commandGuardSettings.Save(guardDraft);
+            if (guardDraft.CommandGuardMode == "model" && !providerEditor.Drafts.Any(draft => draft.Id == guardDraft.CommandGuardProviderId))
+                providerError = WorkflowText("Le fournisseur du validateur a été supprimé. Choisissez un autre validateur dans Autorisations.", "The validator provider was removed. Choose another validator in Permissions.");
             if (!quickModelSettings.Validate()) { tabs.SelectedIndex = shortcutsTab; return false; }
             if (conversationRuns.Values.Any(run => run.AgentProviders.Values.Select(x=>x.Id).Append(run.Provider.Id).Append(run.SelectedProviderId).Any(id=>!providerEditor.Drafts.Any(draft=>draft.Id==id))))
                 providerError = T("Ce fournisseur est utilisé par une conversation en cours.");
@@ -1594,6 +1580,7 @@ public sealed partial class MainWindow : Window
         agentAutomationSettings.Save(savedFeatures);
         compactionSettings.Save(savedFeatures);
         webHttpSettings.Save(savedFeatures);
+        commandGuardSettings.Save(savedFeatures);
         await branding.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
         MarkdownRenderer.ConfigureVisuals(savedFeatures);
@@ -1615,6 +1602,7 @@ public sealed partial class MainWindow : Window
         {
             0 => PermissionModes.Deny,
             2 => PermissionModes.Allow,
+            3 => PermissionModes.Full,
             _ => PermissionModes.Ask
         };
         SaveTemplateDrafts(templateEditor.Drafts);

@@ -54,9 +54,9 @@ public sealed record CommandApproval(string Command, string Shell, string Direct
     }
 }
 
-public sealed record CommandGuardResult(string Classification, double? Score, string? Reason)
+public sealed record CommandGuardResult(string Classification, double? Score, string? Reason, string Validator = "LANCET", string? Explanation = null, bool ExplicitApproval = false)
 {
-    public bool AllowsAutomatic => Classification == "not_flagged" && Score is double score && double.IsFinite(score) && score >= 0 && score <= 1 && Reason == null;
+    public bool AllowsAutomatic => Classification == "not_flagged" && Reason == null && (ExplicitApproval || Score is double score && double.IsFinite(score) && score >= 0 && score <= 1);
     public static CommandGuardResult Review(string reason) => new("review", null, reason);
 }
 public sealed record CommandGuardProgress(string Phase, long Downloaded = 0, long Total = 0);

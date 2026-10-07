@@ -12,69 +12,17 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     bool installingCommandGuard;
-    async Task<bool> EnsureCommandGuardInstalledAsync(XamlRoot? owner = null)
-    {
-        if (LocalCommandGuard.Installed) return true;
-        if (installingCommandGuard) return false;
-        installingCommandGuard = true;
-        using var cancellation = new CancellationTokenSource();
-        var installed = false;
-        var text = Label(WorkflowText(
-            "Le mode Automatique utilise LANCET Nano pour analyser les commandes localement, avant leur exécution.\n\nLe premier démarrage télécharge environ 116 Mo de modèle et les composants CPU nécessaires. Une connexion Internet et de l’espace disque sont requis. Les fichiers sont vérifiés puis le modèle est préparé.\n\nLes commandes ne sont pas envoyées à un service pour cette analyse. Une commande risquée, incertaine ou non reconnue demande votre accord. Cette analyse peut se tromper ; les règles du projet restent appliquées. Les autres types d’autorisations conservent leur comportement automatique.\n\nLe bouton « Plus d’infos » pourra utiliser votre modèle de conversation pour expliquer l’impact ; cet appel peut transmettre la commande à son fournisseur.",
-            "Automatic mode uses LANCET Nano to analyze commands locally before execution.\n\nFirst setup downloads about 116 MB of model weights and the required CPU components. Internet access and free disk space are required. Files are verified and the model is prepared.\n\nCommands are not sent to a service for this analysis. Risky, uncertain or unsupported commands require your approval. Analysis can be wrong; project rules still apply. Other permission types keep their automatic behavior.\n\nMore info can use your conversation model to explain the impact; that request may send the command to its provider."), 13);
-        var status = Label("", 12);
-        var progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 4, Visibility = Visibility.Collapsed };
-        var content = new StackPanel { Spacing = 12, MaxWidth = 550 }; content.Children.Add(text); content.Children.Add(progress); content.Children.Add(status);
-        var dialog = new ContentDialog { XamlRoot = owner ?? root.XamlRoot,
-            Title = WorkflowText("Installer la validation locale des commandes", "Install local command validation"),
-            Content = new ScrollViewer { Content = content, MaxHeight = 490 },
-            PrimaryButtonText = WorkflowText("Télécharger et activer", "Download and enable"), CloseButtonText = T("Annuler"), DefaultButton = ContentDialogButton.Primary };
-        dialog.Closed += (_, _) => cancellation.Cancel();
-        dialog.CloseButtonClick += (_, _) => cancellation.Cancel();
-        dialog.PrimaryButtonClick += async (_, args) =>
-        {
-            args.Cancel = true; if (!dialog.IsPrimaryButtonEnabled) return;
-            var deferral = args.GetDeferral(); dialog.IsPrimaryButtonEnabled = false;
-            progress.Visibility = Visibility.Visible; progress.IsIndeterminate = true;
-            try
-            {
-                var reporter = new Progress<CommandGuardProgress>(value =>
-                {
-                    progress.IsIndeterminate = value.Phase != "download";
-                    if (value.Total > 0) progress.Value = value.Downloaded * 100d / value.Total;
-                    status.Text = value.Phase switch
-                    {
-                        "download" => WorkflowText("Téléchargement : ", "Downloading: ") + $"{value.Downloaded / 1_000_000d:0.0} / {value.Total / 1_000_000d:0.0} Mo",
-                        "verify" => WorkflowText("Vérification des fichiers…", "Verifying files…"),
-                        "dependencies" => WorkflowText("Installation des composants CPU…", "Installing CPU components…"),
-                        "prepare" => WorkflowText("Préparation du modèle local…", "Preparing local model…"),
-                        "ready" => WorkflowText("Validation locale prête.", "Local validation ready."),
-                        _ => WorkflowText("Préparation de l’installation…", "Preparing installation…")
-                    };
-                });
-                await LocalCommandGuard.InstallAsync(reporter, cancellation.Token);
-                installed = true; dialog.Hide();
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                status.Text = WorkflowText("Installation impossible : ", "Installation failed: ") + ex.Message;
-                progress.IsIndeterminate = false; dialog.PrimaryButtonText = WorkflowText("Réessayer", "Retry");
-            }
-            finally { dialog.IsPrimaryButtonEnabled = true; deferral.Complete(); }
-        };
-        try { await ShowDialogAsync(dialog, cancellation.Token); return installed; }
-        finally { installingCommandGuard = false; }
-    }
     string CommandGuardLabel(CommandGuardResult result) => result.Reason switch
     {
+        "validator-not-configured" => WorkflowText("Choisissez un fournisseur et un modèle dans Paramètres / Autorisations.", "Choose a provider and model in Settings / Permissions."),
+        "unsupported-validator" => WorkflowText("Ce fournisseur ne permet pas cette validation sans outils.", "This provider cannot validate without tools."),
         "not-installed" => WorkflowText("Le modèle de validation locale n’est pas installé.", "The local validation model is not installed."),
-        "unsupported-shell" => WorkflowText("Ce shell n’est pas pris en charge par la validation locale.", "This shell is not supported by local validation."),
+        "unsupported-shell" => WorkflowText("Ce shell n’est pas pris en charge par le validateur.", "This shell is not supported by the validator."),
         "missing-command" => WorkflowText("L’outil ne fournit pas la commande exacte à analyser.", "The tool does not provide the exact command to analyze."),
-        "invalid-command" => WorkflowText("La commande est vide, invalide ou dépasse la limite de l’analyse locale.", "The command is empty, invalid or exceeds the local analysis limit."),
-        "timeout" or "unavailable" or "invalid-response" => WorkflowText("La validation locale est indisponible. Votre accord est nécessaire.", "Local validation is unavailable. Your approval is required."),
-        _ => result.Classification == "risky" ? WorkflowText("LANCET a signalé cette commande comme risquée.", "LANCET flagged this command as risky.")
-            : WorkflowText("LANCET demande une vérification de cette commande.", "LANCET requests a review of this command.")
+        "invalid-command" => WorkflowText("La commande est vide, invalide ou dépasse la limite du validateur.", "The command is empty, invalid or exceeds the validator limit."),
+        "timeout" or "unavailable" or "invalid-response" => WorkflowText("Le validateur n’a pas fourni de décision valide. Votre accord est nécessaire.", "The validator did not provide a valid decision. Your approval is required."),
+        _ => result.Classification == "risky" ? WorkflowText("Le validateur a signalé cette commande comme risquée : ", "The validator flagged this command as risky: ") + result.Validator
+            : WorkflowText("Le validateur demande une vérification : ", "The validator requests a review: ") + result.Validator
     };
     UIElement CommandApprovalContent(string action, string details, CommandApproval? request, CommandGuardResult? risk, CancellationToken ct)
     {
@@ -90,6 +38,7 @@ public sealed partial class MainWindow
             message.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
             Grid.SetColumn(message, 1); banner.Children.Add(message);
             content.Children.Add(FluentDesign.Surface(banner, 12));
+            if (!string.IsNullOrWhiteSpace(risk.Explanation)) content.Children.Add(new TextBlock { Text = risk.Explanation, FontSize = 13, Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
         }
         var title = Label(action, 13); title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         content.Children.Add(title);

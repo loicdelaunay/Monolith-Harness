@@ -566,10 +566,12 @@ public sealed partial class MainWindow
         CommandGuardResult? risk = null;
         if (execution && PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow)
         {
-            risk = await LocalCommandGuard.CheckAsync(command, ct);
+            risk = await CommandGuard.CheckAsync(command, FeatureSettings.Read(state.FeaturesJson),
+                (id, _) => ReadStoreAsync(store => store.Providers.AsNoTracking().SingleOrDefault(p => p.Id == id)),
+                (selected, _) => Task.FromResult(KeyVault.Decrypt(selected.ProtectedKey)), http, ct);
             automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
             if (automatic == false) return false;
-            if (PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow && automatic == true && risk.AllowsAutomatic) return true;
+            if (automatic == true && (PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Full || PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow && risk.AllowsAutomatic)) return true;
         }
         else if (automatic == true) return true;
         await approvalQueue.WaitAsync(ct);

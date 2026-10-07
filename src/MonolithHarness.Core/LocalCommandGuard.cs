@@ -64,13 +64,15 @@ public static class LocalCommandGuard
             if (!hash.Equals(file.Sha256, StringComparison.OrdinalIgnoreCase)) throw new IOException("Command guard checksum mismatch: " + file.Path);
         }
     }
-    public static async Task InstallAsync(IProgress<CommandGuardProgress>? progress, CancellationToken ct)
+    public static Task InstallAsync(IProgress<CommandGuardProgress>? progress, CancellationToken ct) => PrepareAsync(null, progress, ct);
+    public static Task ImportAsync(string directory, IProgress<CommandGuardProgress>? progress, CancellationToken ct) => PrepareAsync(directory, progress, ct);
+    static async Task PrepareAsync(string? sourceFolder, IProgress<CommandGuardProgress>? progress, CancellationToken ct)
     {
         await Gate.WaitAsync(ct);
         string? staging = null;
         try
         {
-            if (Installed)
+            if (sourceFolder == null && Installed)
             {
                 try { await EnsureWorkerAsync(Folder, ct); return; }
                 catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -78,6 +80,13 @@ public static class LocalCommandGuard
             }
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct); deadline.CancelAfter(TimeSpan.FromMinutes(15));
             var token = deadline.Token;
+            if (sourceFolder != null)
+            {
+                sourceFolder = Path.GetFullPath(sourceFolder); SandboxWorkspace.AssertNoLinks(sourceFolder);
+                if (!File.Exists(Path.Combine(sourceFolder, "classify.py")) && Directory.Exists(Path.Combine(sourceFolder, "bundle")))
+                    sourceFolder = Inside(sourceFolder, "bundle");
+                progress?.Report(new("verify")); await VerifyAsync(sourceFolder, token);
+            }
             progress?.Report(new("runtime"));
             var python = await PythonRuntime.EnsureAsync(token);
             var folder = Folder; SandboxWorkspace.AssertNoLinks(folder); Directory.CreateDirectory(Path.GetDirectoryName(folder)!);
@@ -87,16 +96,17 @@ public static class LocalCommandGuard
             {
                 var path = Inside(staging, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 var url = "https://huggingface.co/fingerthief/lancet-nano/resolve/" + Manifest.Revision + "/bundle/" + file.Path;
-                using var response = await DownloadClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
-                response.EnsureSuccessStatusCode();
-                await using var source = await response.Content.ReadAsStreamAsync(token);
+                using var response = sourceFolder == null ? await DownloadClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token) : null;
+                response?.EnsureSuccessStatusCode();
+                await using var source = sourceFolder == null ? await response!.Content.ReadAsStreamAsync(token)
+                    : File.OpenRead(Inside(sourceFolder, file.Path));
                 await using var target = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
                 var buffer = new byte[65536]; long received = 0; int count;
                 while ((count = await source.ReadAsync(buffer, token)) > 0)
                 {
                     received += count; if (received > file.Size) throw new IOException("Unexpected command guard file size.");
                     await target.WriteAsync(buffer.AsMemory(0, count), token);
-                    progress?.Report(new("download", done + received, ModelBytes));
+                    progress?.Report(new(sourceFolder == null ? "download" : "import", done + received, ModelBytes));
                 }
                 if (received != file.Size) throw new IOException("Incomplete download: " + file.Path);
                 done += received;
@@ -104,9 +114,14 @@ public static class LocalCommandGuard
             progress?.Report(new("verify", done, ModelBytes)); await VerifyAsync(staging, token);
             progress?.Report(new("dependencies", done, ModelBytes));
             var dependencies = Inside(staging, "dependencies"); Directory.CreateDirectory(dependencies);
-            await RunPythonAsync(python, ["-I", "-m", "pip", "--isolated", "install", "--index-url", "https://pypi.org/simple", "--only-binary=:all:",
-                "--disable-pip-version-check", "--no-warn-script-location", "--target", dependencies,
-                "numpy==2.2.6", "tokenizers==0.22.2", "onnxruntime==1.23.2"], token);
+            var wheels = sourceFolder == null ? null : Inside(sourceFolder, "wheels");
+            var pip = new List<string> { "-I", "-m", "pip", "--isolated", "install", "--only-binary=:all:",
+                "--disable-pip-version-check", "--no-warn-script-location", "--target", dependencies };
+            if (wheels != null && Directory.Exists(wheels)) pip.AddRange(["--no-index", "--find-links", wheels]);
+            else pip.AddRange(["--index-url", "https://pypi.org/simple"]);
+            pip.AddRange(["numpy==2.2.6", "tokenizers==0.22.2", "onnxruntime==1.23.2"]);
+            await RunPythonAsync(python, pip, token);
+            StopWorker();
             // Preserve an incomplete previous installation instead of recursively deleting unknown contents.
             if (Directory.Exists(folder)) Directory.Move(folder, folder + ".incomplete-" + Guid.NewGuid().ToString("N"));
             Directory.Move(staging, folder); staging = null;

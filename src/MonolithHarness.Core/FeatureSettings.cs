@@ -82,6 +82,9 @@ public sealed class FeatureSettings
     public bool AutoFocusTool { get; set; }
     public string BrowserMode { get; set; } = "embedded";
     public string ChromePath { get; set; } = "";
+    public string CommandGuardMode { get; set; } = "lancet";
+    public int CommandGuardProviderId { get; set; }
+    public string CommandGuardModel { get; set; } = "";
     public string RagMode { get; set; } = "local";
     public int RagProviderId { get; set; }
     public string RagModel { get; set; } = "text-embedding-3-small";
@@ -131,6 +134,8 @@ public sealed class FeatureSettings
             if (settings.ArtifactRetentionDays is < 1 or > 3650) settings.ArtifactRetentionDays = 7;
             if (settings.GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) settings.GuiUpdateMode = null;
             settings.GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(settings.GuiUpdateVersion);
+            settings.CommandGuardMode = settings.CommandGuardMode == "model" ? "model" : "lancet";
+            settings.CommandGuardModel ??= "";
             QuickModelShortcuts.Normalize(settings);
             return settings;
         }
@@ -138,6 +143,8 @@ public sealed class FeatureSettings
     }
     public string Json()
     {
+        if (CommandGuardMode is not ("lancet" or "model") || CommandGuardProviderId < 0 || CommandGuardModel == null || CommandGuardModel.Length > 300)
+            throw new ArgumentException("Réglages du validateur de commandes invalides / Invalid command validator settings.");
         WebHttpResponseMode = WebHttpTools.NormalizeResponseMode(WebHttpResponseMode);
         if (ArtifactRetentionDays is < 1 or > 3650)
             throw new ArgumentException("Réglages HTTP ou de nettoyage des artefacts invalides / Invalid HTTP or artifact cleanup settings.");

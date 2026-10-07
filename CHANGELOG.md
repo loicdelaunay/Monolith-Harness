@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.67.0 - 2026-10-07
+
+- Moves LANCET setup into a dedicated Command validation section in Settings / Permissions. Download and prepare the pinned local model explicitly, or import a complete verified 0.4.3 bundle. A local wheels directory supports offline CPU dependency installation; selecting Automatic no longer opens an installation dialog.
+- Allows any configured local or API chat model to validate commands instead of LANCET. Shows provider transmission and billing information; supplies no execution tools and requires a bounded structured decision tied to the exact command. Uncertain, invalid or unavailable analysis requires human approval. GUI and CLI share the validator settings.
+- Restores Allow all as an explicit permission choice, displayed with an orange warning icon in the GUI. Accepts permission requests without model validation while preserving explicit project Ask and Deny rules; Automatic remains a separate validated mode.
+
 ## 1.66.0 - 2026-10-07
 
 - Automatic permissions now analyze each supported terminal command locally with LANCET Nano. First selection opens an installation dialog with an explanation, download progress, verified pinned files and CPU runtime preparation; the mode is enabled only after successful setup. The prepared model stays loaded for subsequent commands.

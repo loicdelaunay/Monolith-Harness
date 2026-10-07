@@ -138,11 +138,13 @@ public static class PermissionModes
     public const string Deny = "deny";
     public const string Ask = "ask";
     public const string Allow = "allow";
+    public const string Full = "full";
 
     public static string Normalize(string? value) => value?.Trim().ToLowerInvariant() switch
     {
         Deny => Deny,
         Allow => Allow,
+        Full => Full,
         _ => Ask
     };
 
@@ -150,7 +152,7 @@ public static class PermissionModes
     public static bool? AutomaticDecision(string? value) => Normalize(value) switch
     {
         Deny => false,
-        Allow => true,
+        Allow or Full => true,
         _ => null
     };
 }
