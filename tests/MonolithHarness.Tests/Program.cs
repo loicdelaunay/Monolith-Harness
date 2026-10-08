@@ -17,7 +17,8 @@ if (args.Contains("--acp")) { await AcpChecks.Run(Check); Console.WriteLine($"{p
 if (args.Contains("--message-display")) { await MessageDisplayChecks.Run(Check); await InboxChecks.Run(Check); await VisionChecks.Run(Check); Console.WriteLine($"{passed} message display and vision checks passed."); return; }
 if (args.Contains("--local-models")) { await LocalModelChecks.Run(Check); Console.WriteLine($"{passed} local model checks passed."); return; }
 if (args.Contains("--conversation-files")) { await ConversationFileWorkspaceChecks.Run(Check); Console.WriteLine($"{passed} conversation file workspace checks passed."); return; }
-if (args.Contains("--portable-storage")) { await PortableStorageChecks.Run(Check); Console.WriteLine($"{passed} portable storage checks passed."); return; }
+if (args.Contains("--file-proposals")) { await FileProposalStorageChecks.Run(Check); Console.WriteLine($"{passed} file proposal storage checks passed."); return; }
+if (args.Contains("--portable-storage")) { await PortableStorageChecks.Run(Check); await FileProposalStorageChecks.Run(Check); Console.WriteLine($"{passed} portable storage checks passed."); return; }
 if (args.Contains("--sandbox-workspace")) { await SandboxChecks.Run(Check); Console.WriteLine($"{passed} sandbox workspace checks passed."); return; }
 if (args.Contains("--appearance-mcp")) { await AppearanceMcpChecks.Run(Check); Console.WriteLine($"{passed} appearance and MCP checks passed."); return; }
 if (args.Contains("--text-tools")) { await TextToolRegressionChecks.Run(Check); Console.WriteLine($"{passed} text tool regression checks passed."); return; }
@@ -88,6 +89,7 @@ Check(PermissionModes.AutomaticDecision("deny") == false && PermissionModes.Auto
 Check(PermissionModes.Normalize("inconnu") == PermissionModes.Ask, "Politique d’autorisation invalide ramenée au mode Demander");
 Check(HarnessDb.DatabasePath == Path.Combine(Path.GetDirectoryName(Environment.ProcessPath!)!, "database.sqlite"), "Base SQLite par défaut placée à côté du processus exécutable");
 await PortableStorageChecks.Run(Check);
+await FileProposalStorageChecks.Run(Check);
 ConversationExportChecks.Run(Check);
 var saveChord = KeyboardInput.ParseChord("ctrl+s");
 Check(saveChord.Modifiers.SequenceEqual(["CTRL"]) && saveChord.Key == "S", "Raccourci clavier CTRL+S normalisé");

@@ -22,8 +22,8 @@ public sealed partial class MainWindow
         {
             visibleProjectChats.Clear();
             visibleArchivedChats.Clear();
-            foreach (var item in matches.Where(c => !c.IsArchived).OrderByDescending(c => c.IsFavorite).ThenByDescending(c => c.UpdatedUtc).ThenByDescending(c => c.Id)) visibleProjectChats.Add(item);
-            foreach (var item in matches.Where(c => c.IsArchived)) visibleArchivedChats.Add(item);
+            foreach (var item in SidebarOrder(matches.Where(c => !c.IsArchived).OrderByDescending(c => c.IsFavorite).ThenByDescending(c => c.UpdatedUtc).ThenByDescending(c => c.Id), false, c => c.Id)) visibleProjectChats.Add(item);
+            foreach (var item in SidebarOrder(matches.Where(c => c.IsArchived), false, c => c.Id)) visibleArchivedChats.Add(item);
             var activeMatch = visibleProjectChats.FirstOrDefault(item => item.Id == selectedId);
             var archivedMatch = visibleArchivedChats.FirstOrDefault(item => item.Id == selectedId);
             chats.SelectedItem = activeMatch ?? (archivedMatch == null && selectFirst ? visibleProjectChats.FirstOrDefault() : null);

@@ -140,6 +140,7 @@ public sealed partial class MainWindow : Window
                 if (!e.InRecycleQueue && container.Tag is not true)
                 {
                     container.Tag = true;
+                    EnableSidebarDrag(container, false, () => (container.Content as Chat)?.Id);
                     container.PointerEntered += (sender, _) =>
                     {
                         var previous = hoveredConversationContainer;
@@ -1247,8 +1248,12 @@ public sealed partial class MainWindow : Window
     }
     async Task NewChat()
     {
-        if (project == null) return;
-        var item = new Chat { ProjectId = project.Id, Title = T("Nouvelle conversation") }; db.Chats.Add(item); await db.SaveChangesAsync(); state.ChatId = item.Id; await SelectProject();
+        var owner = projects.SelectedItem as Project ?? project ?? await db.Projects.FirstOrDefaultAsync(p => p.IsInbox);
+        if (owner == null) return;
+        loading = true;
+        try { projects.SelectedItem = (projects.ItemsSource as IEnumerable<Project>)?.FirstOrDefault(p => p.Id == owner.Id) ?? owner; }
+        finally { loading = false; }
+        var item = new Chat { ProjectId = owner.Id, Title = T("Nouvelle conversation") }; db.Chats.Add(item); await db.SaveChangesAsync(); state.ProjectId = owner.Id; state.ChatId = item.Id; await SelectProject();
     }
     async Task ManageProject()
     {
@@ -1391,6 +1396,9 @@ public sealed partial class MainWindow : Window
         general.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
             WorkflowText("Déplie par défaut le groupe des réflexions et outils, dans l’historique et pendant la génération.", "Expand the reasoning and tools group by default, in history and during generation."), showReasoning));
         var markdownFeatures = FeatureSettings.Read(state.FeaturesJson);
+        var toolWebViews = new ToggleSwitch { IsOn = markdownFeatures.AllowWebViewInTools };
+        general.Children.Add(FluentDesign.Setting(WorkflowText("Autoriser les aperçus WebView dans les outils", "Allow WebView previews in tools"),
+            WorkflowText("Désactivé par défaut pour les postes qui bloquent WebView. Le correcteur et le traducteur restent natifs. Les benchmarks d’applications interactives nécessitent cette option ; leur code peut être consulté sans exécution.", "Disabled by default for devices that block WebView. Proofreader and translator always use native controls. Interactive application benchmarks require this option; their source can be viewed without execution."), toolWebViews));
         var virtualizeChat = new ToggleSwitch { IsOn = markdownFeatures.VirtualizeChat };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Virtualiser l’affichage du chat", "Virtualize chat display"),
             WorkflowText("Activé : conserve les bulles enrichies proches de l’écran. Désactivé : garde toutes les bulles affichées, avec davantage de mémoire utilisée.", "When enabled, keep rich bubbles near the viewport. When disabled, keep all bubbles rendered, using more memory."), virtualizeChat));
@@ -1511,6 +1519,7 @@ public sealed partial class MainWindow : Window
         await YieldSettingsAsync(loadingWindow);
         var tabs = new SettingsNavigation();
         tabs.Add(T("Général"),general);
+        tabs.Add(WorkflowText("Test", "Test"), BuildModelTestSettings(loadingWindow), "\uE9D9");
         tabs.Add(WorkflowText("Apparence", "Appearance"), appearance.Panel, "\uE790");
         var shortcutsTab = tabs.Add(WorkflowText("Raccourcis", "Shortcuts"), quickModelSettings.Panel, "\uE765");
         var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968", fixedHeader: providerEditor.Header);
@@ -1574,6 +1583,7 @@ public sealed partial class MainWindow : Window
         savedFeatures.FontZoomPercent = FeatureSettings.Read(state.FeaturesJson).FontZoomPercent;
         savedFeatures.AgentPresets = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         savedFeatures.ChatGoals = FeatureSettings.Read(state.FeaturesJson).ChatGoals;
+        savedFeatures.AllowWebViewInTools = toolWebViews.IsOn;
         savedFeatures.VirtualizeChat = virtualizeChat.IsOn;
         savedFeatures.RenderMermaid = renderMermaid.IsOn; savedFeatures.RenderMath = renderMath.IsOn;
         savedFeatures.ShowComposerSpeed = showComposerSpeed.IsOn;
@@ -1850,6 +1860,13 @@ public sealed partial class MainWindow : Window
         if (run.CurrentTool == null) SetRunStatus(run, T("Outil : ") + name + (ToolActivity.Detail(name, argsObj.ToJsonString()) is { Length: > 0 } detail ? " · " + detail : ""));
         permissionProject.Value = run.Project;
         await FocusLatestToolAsync(run, name, argsObj);
+        if (name == FileProposals.Tool)
+        {
+            if (run.Chat.ExecutionMode != "propose" || !SourceTools.CanRead(RunSkills(run))) throw new UnauthorizedAccessException("Proposition indisponible / Proposal unavailable.");
+            var result = await FileProposals.PrepareAsync(run.Db.FilePath, run.Chat.Id, new SourceAccess(run.Project.GetSourceFolders()), argsObj, ct);
+            DispatcherQueue.TryEnqueue(() => { if (IsVisible(run)) AddProposalReviewButton(run.Messages); });
+            return result;
+        }
         if (VisionBridge.Handles(name)) return await VisionFor(run).CallAsync(name, argsObj, ct);
         if (ImageGenerationTools.Handles(name))
         {
@@ -1922,7 +1939,7 @@ public sealed partial class MainWindow : Window
                 if (string.IsNullOrWhiteSpace(readPath))
                     return T("Erreur : le chemin relatif du fichier à lire est obligatoire.");
                 try { return await source.ReadAsync(readPath, ct, argsObj["start_line"]?.GetValue<int>(), argsObj["end_line"]?.GetValue<int>()); }
-                catch (UnauthorizedAccessException) when (!run.Chat.SandboxEnabled) { return await ReadWithApprovalAsync(readPath, ct, project, argsObj["start_line"]?.GetValue<int>(), argsObj["end_line"]?.GetValue<int>()); }
+                catch (UnauthorizedAccessException) when (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled) { return await ReadWithApprovalAsync(readPath, ct, project, argsObj["start_line"]?.GetValue<int>(), argsObj["end_line"]?.GetValue<int>()); }
 
             case "write_source":
                 if (!Skills.Enabled(state.EnabledSkills, "write_sources") || project?.GetSourceFolders().Count is not > 0)
@@ -1932,7 +1949,7 @@ public sealed partial class MainWindow : Window
                     return T("Erreur : le chemin relatif du fichier à écrire est obligatoire.");
                 var writeContent = argsObj["content"]?.GetValue<string>() ?? "";
                 try { return await source.WriteAsync(writePath, writeContent, ct); }
-                catch (UnauthorizedAccessException) when (!run.Chat.SandboxEnabled) { return await WriteWithApprovalAsync(writePath, writeContent, null, ct, project); }
+                catch (UnauthorizedAccessException) when (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled) { return await WriteWithApprovalAsync(writePath, writeContent, null, ct, project); }
 
             case "edit_source":
                 if (!Skills.Enabled(state.EnabledSkills, "write_sources") || project?.GetSourceFolders().Count is not > 0)
@@ -1945,7 +1962,7 @@ public sealed partial class MainWindow : Window
                     return T("Erreur : le paramètre 'old_text' (texte à remplacer) est obligatoire.");
                 var newText = argsObj["new_text"]?.GetValue<string>() ?? "";
                 try { return await source.ModifyAsync(editPath, oldText, newText, ct); }
-                catch (UnauthorizedAccessException) when (!run.Chat.SandboxEnabled) { return await WriteWithApprovalAsync(editPath, newText, oldText, ct, project); }
+                catch (UnauthorizedAccessException) when (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled) { return await WriteWithApprovalAsync(editPath, newText, oldText, ct, project); }
 
             case "browse":
                 if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills))
@@ -2239,6 +2256,9 @@ public sealed partial class MainWindow : Window
         var agent = CreateAgentRuntime(run, secret, mcp);
         if (provider.IsAcp) systemPrompt = AcpSystemPrompt(run);
         else systemPrompt += await agent.InitializeAsync(ct);
+        if (provider.IsAcp && run.Chat.ExecutionMode == "propose") systemPrompt += AgentPolicy.Prompt("propose", "disabled");
+        systemPrompt += ResourceAccessPolicy.Prompt(run.Chat);
+        systemPrompt += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, sourceFolders, run.Project.Id);
         if (!chatOnly) systemPrompt += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
         if (!provider.IsAcp && run.Chat.OrchestrationMode != "disabled")
         {
@@ -2252,6 +2272,7 @@ public sealed partial class MainWindow : Window
         }
         var definitions = ChatEngine.ToolDefinitions(hasSources, hasBrowser, canWriteSources);
         SourceTools.AddDefinitions(definitions, sourceFolders.Count > 0, run.Options.EnabledSkills);
+        if (run.Chat.ExecutionMode == "propose" && hasSources && !run.Chat.SandboxEnabled) FileProposals.AddDefinition(definitions);
         AddWorkspaceToolDefinitions(definitions, run);
         FeatureSettings.Read(state.FeaturesJson).FilterBrowser(definitions);
         agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
@@ -2275,7 +2296,7 @@ public sealed partial class MainWindow : Window
                 }
                 for (int i = definitions.Count - 1; i >= 0; i--)
                     if (definitions[i]?["function"]?["name"]?.GetValue<string>().StartsWith("mcp_", StringComparison.Ordinal) == true) definitions.RemoveAt(i);
-                if (!provider.IsAcp && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                if (!provider.IsAcp && run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 var definitionsTokens = ContextWindow.Estimate(definitions);
                 var inputEstimate = ContextWindow.Estimate(wire) + definitionsTokens;

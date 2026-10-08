@@ -15,7 +15,7 @@ internal sealed class AdvancedMarkdownView : UserControl
     string diagnostic = "";
     string? paintedMarkdown;
     PaintOptions? paintedOptions;
-    sealed record PaintOptions(string Foreground, bool Dark, double FontSize, double LineHeight, bool Mermaid, bool Math, string Language);
+    sealed record PaintOptions(string Foreground, bool Dark, double FontSize, double LineHeight, bool Mermaid, bool Math, string Language, string Palette);
     internal bool HasSelection { get; private set; }
     static readonly Lazy<string> document = new(BuildDocument);
     static readonly Lazy<string[]> libraries = new(() => new[] { "katex.min.js", "auto-render.min.js", "mermaid.min.js", "visuals.js" }.Select(Resource).ToArray());
@@ -65,11 +65,11 @@ internal sealed class AdvancedMarkdownView : UserControl
                     var kind = data.GetProperty("kind").GetString();
                     if (kind == "diagram-cache-get")
                     {
-                        var svg = MermaidDiagramCache.Read(data.GetProperty("source").GetString() ?? "", data.GetProperty("dark").GetBoolean());
+                        var svg = MermaidDiagramCache.Read(data.GetProperty("source").GetString() ?? "", data.GetProperty("dark").GetBoolean(), data.TryGetProperty("palette", out var palette) ? palette.GetString() ?? "" : "");
                         await current.ExecuteScriptAsync($"markdownVisuals.resolveCache({data.GetProperty("id").GetInt32()},{JsonSerializer.Serialize(svg)})");
                     }
                     else if (kind == "diagram-cache-put")
-                        MermaidDiagramCache.Write(data.GetProperty("source").GetString() ?? "", data.GetProperty("dark").GetBoolean(), data.GetProperty("svg").GetString() ?? "");
+                        MermaidDiagramCache.Write(data.GetProperty("source").GetString() ?? "", data.GetProperty("dark").GetBoolean(), data.GetProperty("svg").GetString() ?? "", data.TryGetProperty("palette", out var palette) ? palette.GetString() ?? "" : "");
                     else if (kind == "selection") HasSelection = data.GetProperty("selected").GetBoolean();
                     else if (kind == "size")
                     {
@@ -122,11 +122,11 @@ internal sealed class AdvancedMarkdownView : UserControl
             {
                 again = false;
                 var foreground = FluentDesign.Primary is Microsoft.UI.Xaml.Media.SolidColorBrush brush ? brush.Color : Microsoft.UI.Colors.White;
-                var options = new PaintOptions($"#{foreground.R:X2}{foreground.G:X2}{foreground.B:X2}", foreground.R + foreground.G + foreground.B > 400,
-                    ChatDensity.FontSize, ChatDensity.LineHeight, MarkdownRenderer.RenderMermaid, MarkdownRenderer.RenderMath, UiText.Language);
+                var options = new PaintOptions($"#{foreground.R:X2}{foreground.G:X2}{foreground.B:X2}", FluentDesign.CurrentTheme.Dark,
+                    ChatDensity.FontSize, ChatDensity.LineHeight, MarkdownRenderer.RenderMermaid, MarkdownRenderer.RenderMath, UiText.Language, JsonSerializer.Serialize(new { primaryColor = FluentDesign.CurrentTheme.Surface, primaryTextColor = FluentDesign.CurrentTheme.Text, primaryBorderColor = FluentDesign.CurrentTheme.Accent, lineColor = FluentDesign.CurrentTheme.Muted, secondaryColor = FluentDesign.CurrentTheme.Background, tertiaryColor = FluentDesign.CurrentTheme.Surface, darkMode = FluentDesign.CurrentTheme.Dark }));
                 var text = markdown;
                 if (paintedMarkdown == text && paintedOptions == options) continue;
-                var colors = new { text = options.Foreground, background = "transparent", dark = options.Dark };
+                var colors = new { text = options.Foreground, background = "transparent", dark = options.Dark, palette = JsonSerializer.Deserialize<JsonElement>(options.Palette) };
                 await view.ExecuteScriptAsync($"document.documentElement.lang={JsonSerializer.Serialize(options.Language)};markdownVisuals.set({JsonSerializer.Serialize(MarkdownDisplay.Html(text, options.Math))},{JsonSerializer.Serialize(colors)},{options.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)},{options.LineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture)},{JsonSerializer.Serialize(new { mermaid = options.Mermaid, math = options.Math })})");
                 if (version == revision) { paintedMarkdown = text; paintedOptions = options; await view.ExecuteScriptAsync($"markdownVisuals.search({JsonSerializer.Serialize(searchQuery)})"); }
             } while (again && version == revision);

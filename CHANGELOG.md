@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.73.1 - 2026-10-08
+
+- Fixes slash-skill completion inside sentences and at the caret: suggestions no longer require a slash at the start of the draft. Clicking a skill, Tab or Enter completes only its token, preserves surrounding text and never submits the message. The explicit skill instruction is added only when the complete draft is sent.
+- Restores skill suggestions in Chat mode with Agent-mode/disabled indications. Coalesces text and selection updates so a newly typed slash or a paste uses the final caret location. Skill requests are also recognized before sentence punctuation.
+- Replaces the quick-level slider's thin track and round knob with native, Material 3-inspired split rounded tracks, a narrow vertical handle, discrete level indicators and hover/pressed/focus states. Keeps keyboard/range accessibility, application theme colors, direct level selection and the existing compact popup; fixes contrast of the three-dot view toggle in its selected state.
+
+## 1.73.0 - 2026-10-08
+
+- Adds a per-conversation permission-menu toggle for working outside attached files/folders, enabled by default to preserve existing behavior. Turning it off blocks outside file approval fallbacks and tools that cannot enforce this boundary (local commands/Python, GIT, browser, desktop, MCP and external agents); isolated sandbox commands remain available. Subagents inherit the boundary, use attached sources directly and cannot create external Git worktrees. Saved approval grants and Allow all do not override the resource boundary. Manual user tools remain available.
+- Saves the boundary in SQLite, carries it into captured runs and conversation branches, exports it and exposes it through the shared hosting API. The boundary can be changed while the conversation is idle.
+- Replaces the Simple/Advanced model-picker flag with a three-dot icon while keeping the existing view toggle and accessibility labels.
+
+## 1.72.1 - 2026-10-08
+
+- Fixes Unknown portable resource folder when loading conversations or preparing file-change proposals: registers proposals in the portable workspace layout and scopes storage to the explicitly selected database instead of the global host directory.
+- Adds 31 isolated regression checks for empty reads, path validation, database/chat isolation, persisted proposals, selective review, changed-file protection and lossless/idempotent migration, including directory collisions. Runs them in the portable-storage group and default test suite; updates an obsolete composer-settings assertion so the test project compiles with current settings.
+
+## 1.72.0 - 2026-10-08
+
+- Restores a single compact composer row: removes the permanently visible quick-level slider and centers model, thinking, metrics, mode and Send/Stop controls together, without reserving an extra line under the model.
+- Adds a compact quick-level popup inspired by effort pickers, showing the level name, model and a stepped slider. A mode icon in the popup switches between quick levels and detailed model/thinking selection, remembering the selected view. Quick choices apply directly while keeping the popup open; no separate Apply action is required.
+
+## 1.71.0 - 2026-10-08
+
+- Merges quick AI levels into the composer model selector: a compact slider below the model name applies the configured model, thinking effort and Chat/Agent mode directly. The model-name popup retains Simple/Advanced selection. Changes commit after dragging ends or a short keyboard debounce, and unavailable levels are rejected without altering the current configuration.
+- Removes the attachment section heading and places its collapse arrow before the first square preview in the same row, reducing composer height while preserving per-conversation folding, attachment previews and accessible descriptions.
+
+## 1.70.0 - 2026-10-08
+
+- Replaces the proofreader and translator WebView editors with native text controls and an optional native formatting preview. HTML clipboard import, transformed text runs and formatted copy remain local and preserve document formatting. Manual edits that change rich document structure revert to plain text with an explicit notice.
+- Adds Settings / General / Allow WebView previews in tools, disabled by default. Text tools always use native controls. Interactive application benchmarks require explicit opt-in; saved HTML can be inspected as native source without executing it. This setting does not change the conversation's Web browser or Mermaid/math rendering preferences.
+- Adds AngleSharp 1.8.4 solely for bounded local HTML parsing; the text tools do not execute JavaScript, load resources or navigate documents. Removes browser-script synchronization from the native editors.
+- Adds a dated NuGet dependency inventory and available-version report, with explicit notes on coordinated graphics updates and the ONNX macOS x64 compatibility pin.
+
+## 1.69.0 - 2026-10-08
+
+- Adds persistent drag-and-drop ordering of sidebar projects and conversations, with conversation moves between projects and a start-discussion button in the empty chat view. Running conversations cannot be moved to another project.
+- Adds Settings / Test with cancellable simple checks for naming, RAG embeddings and command approval, and complete checks covering configured provider models. Checks report individual results and never execute the sample command or project tools.
+- Autocompletes built-in and project skills from slash names and adds an explicit skill request to the model instructions, including CLI messages. Disabled skills still require enabling and permission rules remain enforced.
+- Uses the application theme and palette for Mermaid and includes them in diagram cache keys, including live theme changes.
+- Preserves terminal preview scrolling while output updates and keeps the composer footer on one row with compact controls for narrow windows.
+- Adds detailed CLI command approval with the command, risk category, validator explanation, working directory, shell and timeout. More information can request an impact explanation from the current model before returning to approval.
+- Adds Plan / Proposition / Execution modes. Proposition stores text-file drafts for explicit per-file human review before applying selected files; it rejects stale reviews and changed source files. External agent engines remain in their read-only planning mode and can return textual diffs.
+- Documents possible Windows focus freezes involving secondary WebView2 editors and the current limits of error notifications, without claiming a confirmed root cause.
+
 ## 1.68.0 - 2026-10-07
 
 - Places the exact copyable command first in the additional permission dialog, followed by a categorical risk bar: green for a valid low-risk decision, orange for review or missing analysis, and red for a risky classification. Removes the warning sentence, keeps validator identity and unavailable-analysis details, and preserves the human approval actions.

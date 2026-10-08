@@ -1,58 +1,119 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using MonolithHarness.Core;
 
 namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly ComboBox composerQuickLevels = new() { Width = 150, Height = 38, MinWidth = 0, MinHeight = 0,
-        FontSize = 11, Padding = new(8, 3, 8, 3), Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
-    bool syncingComposerLevels;
-    string composerLevelsKey = "";
-    readonly List<ComboBoxItem> composerLevelChoices = [];
+    readonly MaterialLevelSlider composerLevelSlider = new() { Minimum = 1, Maximum = 1, StepFrequency = 1, TickFrequency = 1,
+        IsThumbToolTipEnabled = false, MinWidth = 0, MinHeight = 48, Height = 48,
+        Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
+    readonly DispatcherTimer composerLevelDelay = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    bool syncingComposerLevels, draggingComposerLevel;
+    string? pendingComposerLevel;
+    int pendingComposerChat;
+    string pendingComposerFeatures = "";
 
-    ComboBox BuildComposerQuickLevels()
+    Slider BuildComposerQuickLevels()
     {
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerQuickLevels, WorkflowText("Niveau d’IA", "AI level"));
-        composerQuickLevels.SelectionChanged += async (_, _) =>
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerLevelSlider, WorkflowText("Niveau d’IA", "AI level"));
+        composerLevelSlider.ValueChanged += (_, _) =>
         {
-            if (syncingComposerLevels || composerQuickLevels.SelectedItem is not ComboBoxItem { Tag: string id } || id.Length == 0) return;
-            try { await Guard(() => ApplyQuickLevelAsync(id)); } finally { RefreshComposerQuickLevels(); }
+            if (syncingComposerLevels) return;
+            PreviewComposerLevel();
+            if (!draggingComposerLevel) QueueComposerLevel();
         };
-        RefreshComposerQuickLevels(); return composerQuickLevels;
+        composerLevelSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
+        { draggingComposerLevel = true; composerLevelDelay.Stop(); }), true);
+        void ReleaseLevel()
+        {
+            if (!draggingComposerLevel) return;
+            draggingComposerLevel = false; QueueComposerLevel();
+        }
+        composerLevelSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => ReleaseLevel()), true);
+        composerLevelSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) => ReleaseLevel()), true);
+        composerLevelSlider.KeyDown += (_, e) =>
+        {
+            if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space) { QueueComposerLevel(); e.Handled = true; }
+        };
+        composerLevelSlider.Unloaded += (_, _) => draggingComposerLevel = false;
+        Closed += (_, _) => { composerLevelDelay.Stop(); pendingComposerLevel = null; draggingComposerLevel = false; };
+        composerLevelDelay.Tick += async (_, _) =>
+        {
+            composerLevelDelay.Stop(); var id = pendingComposerLevel; pendingComposerLevel = null;
+            if (id == null || chat?.Id != pendingComposerChat || state.FeaturesJson != pendingComposerFeatures) { previewQuickLevelId = null; RefreshComposerQuickLevels(); return; }
+            try { await Guard(() => ApplyQuickLevelAsync(id, keepPickerOpen: true)); }
+            finally { RefreshComposerQuickLevels(); }
+        };
+        RefreshComposerQuickLevels(); return composerLevelSlider;
+    }
+    bool ComposerLevelAvailable(QuickModelLevel level) => db.Providers.Local.Any(p =>
+        db.Entry(p).State != Microsoft.EntityFrameworkCore.EntityState.Deleted && QuickModelShortcuts.Available(level, p));
+    QuickModelLevel? PreviewComposerLevel()
+    {
+        var levels = FeatureSettings.Read(state.FeaturesJson).QuickModelLevels;
+        var index = (int)Math.Round(composerLevelSlider.Value) - 1;
+        if (index < 0 || index >= levels.Count) return null;
+        var level = levels[index]; previewQuickLevelId = level.Id;
+        RefreshQuickLevelPreview();
+        var description = QuickLevelCaption(level, index) + "\n" + level.Model + " · "
+            + (level.InteractionMode == "chat" ? "Chat" : "Agent") + " · " + level.ThinkingLevel;
+        if (!ComposerLevelAvailable(level)) description += "\n" + WorkflowText("Modèle indisponible", "Model unavailable");
+        ToolTipService.SetToolTip(composerLevelSlider, description);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerLevelSlider, description);
+        return level;
+    }
+    void QueueComposerLevel()
+    {
+        if (!quickLevelSelect.IsEnabled || PreviewComposerLevel() is not { } level) return;
+        if (!ComposerLevelAvailable(level))
+        {
+            composerLevelDelay.Stop(); pendingComposerLevel = null; previewQuickLevelId = null;
+            ShowStatus(WorkflowText("Ce niveau utilise un modèle indisponible. Modifiez-le dans Réglages / Raccourcis.",
+                "This level uses an unavailable model. Update it in Settings / Shortcuts."), StatusKind.Notice);
+            RefreshComposerQuickLevels(); return;
+        }
+        if (QuickModelShortcuts.Matches(level, provider, state, chat))
+        { composerLevelDelay.Stop(); pendingComposerLevel = null; RefreshComposerQuickLevels(); return; }
+        pendingComposerLevel = level.Id; pendingComposerChat = chat?.Id ?? 0; pendingComposerFeatures = state.FeaturesJson;
+        composerLevelDelay.Stop(); composerLevelDelay.Start();
     }
     void RefreshComposerQuickLevels()
     {
         var settings = FeatureSettings.Read(state.FeaturesJson); var levels = settings.QuickModelLevels;
-        composerQuickLevels.Visibility = settings.QuickModelLevelsEnabled && levels.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
-        var matching = levels.FirstOrDefault(l => QuickModelShortcuts.Matches(l, provider, state, chat));
-        bool Available(QuickModelLevel level) => db.Providers.Local.Any(p => db.Entry(p).State != Microsoft.EntityFrameworkCore.EntityState.Deleted && QuickModelShortcuts.Available(level, p));
-        var key = UiText.Language + "|" + state.FeaturesJson + "|" + (matching == null) + "|" + string.Join(',', levels.Select(Available));
+        var visible = settings.QuickModelLevelsEnabled && levels.Count > 0;
+        composerLevelSlider.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        var enabled = visible && chat != null && selectedSubagent == null && ActiveRun == null && conversationReady && !conversationLoading
+            && !databaseMaintenanceBusy && !conversationRetentionBusy && !applyingQuickLevel && levels.Any(ComposerLevelAvailable);
+        composerLevelSlider.IsEnabled = enabled && levels.Count > 1; quickLevelSelect.IsEnabled = enabled;
+        if (pendingComposerLevel != null && (chat?.Id != pendingComposerChat || state.FeaturesJson != pendingComposerFeatures))
+        { composerLevelDelay.Stop(); pendingComposerLevel = null; previewQuickLevelId = null; }
+        if (!enabled)
+        { composerLevelDelay.Stop(); pendingComposerLevel = null; if (!applyingQuickLevel) previewQuickLevelId = null; }
+        var index = modelOptionsIsOpen ? levels.FindIndex(level => level.Id == previewQuickLevelId) : -1;
+        if (index < 0) index = levels.FindIndex(level => QuickModelShortcuts.Matches(level, provider, state, chat));
         syncingComposerLevels = true;
         try
         {
-            if (composerLevelsKey != key)
-            {
-                composerLevelsKey = key; composerLevelChoices.Clear();
-                if (matching == null) composerLevelChoices.Add(new() { Content = WorkflowText("Personnalisé", "Custom"), Tag = "", IsEnabled = false });
-                for (int i = 0; i < levels.Count; i++)
-                {
-                    var level = levels[i];
-                    var item = new ComboBoxItem { Content = QuickLevelCaption(level, i), Tag = level.Id, IsEnabled = Available(level) };
-                    ToolTipService.SetToolTip(item, level.Model + " · " + (level.InteractionMode == "chat" ? "Chat" : "Agent") + " · " + level.ThinkingLevel
-                        + (item.IsEnabled ? "" : " · " + WorkflowText("Modèle indisponible", "Model unavailable")));
-                    composerLevelChoices.Add(item);
-                }
-                composerQuickLevels.ItemsSource = composerLevelChoices.ToList();
-            }
-            composerQuickLevels.SelectedItem = composerLevelChoices.FirstOrDefault(item => (string)item.Tag == (matching?.Id ?? ""));
+            composerLevelSlider.Maximum = Math.Max(1, levels.Count);
+            if (!draggingComposerLevel && pendingComposerLevel == null) composerLevelSlider.Value = Math.Max(1, index + 1);
         }
         finally { syncingComposerLevels = false; }
-        composerQuickLevels.IsEnabled = chat != null && selectedSubagent == null && ActiveRun == null && conversationReady && !conversationLoading
-            && !databaseMaintenanceBusy && !conversationRetentionBusy && !applyingQuickLevel && levels.Any(Available);
-        var tooltip = matching == null ? WorkflowText("Choisir rapidement un niveau d’IA", "Quickly choose an AI level")
-            : matching.Model + " · " + (matching.InteractionMode == "chat" ? "Chat" : "Agent") + " · " + matching.ThinkingLevel;
-        ToolTipService.SetToolTip(composerQuickLevels, tooltip);
+        if (!draggingComposerLevel && pendingComposerLevel == null && index < 0)
+        {
+            var label = WorkflowText("Réglage personnalisé · Choisir rapidement un niveau d’IA", "Custom settings · Quickly choose an AI level");
+            ToolTipService.SetToolTip(composerLevelSlider, label);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerLevelSlider, label);
+        }
+        else
+        {
+            if (index >= 0) previewQuickLevelId = levels[index].Id;
+            var label = index >= 0 ? QuickLevelCaption(levels[index], index) + "\n" + levels[index].Model : WorkflowText("Niveau d’IA", "AI level");
+            ToolTipService.SetToolTip(composerLevelSlider, label);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerLevelSlider, label);
+        }
+        RefreshQuickLevelPreview();
     }
 }

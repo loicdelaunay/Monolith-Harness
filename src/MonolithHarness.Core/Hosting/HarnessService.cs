@@ -65,7 +65,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                         .Where(skill => skill.Id.StartsWith("project:", StringComparison.Ordinal)))).ToList();
                 return new { platform = OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "Windows", shell = PlatformSupport.ShellName, database, mcpConfigError, appearanceThemes = AppearanceThemes.WithCustom(FeatureSettings.Read(snapshotState.FeaturesJson).CustomThemes),
                     projects = snapshotProjects.Select(x => new { x.Id, x.Name, x.SourceFolder, x.PermissionProfileJson }),
-                    chats = await db.Chats.AsNoTracking().Select(x => new { x.Id, x.ProjectId, x.Title, x.InteractionMode, x.ChatWebEnabled, x.ChatPythonEnabled, x.ExecutionMode, x.OrchestrationMode, x.SandboxEnabled, x.ResourcePathsJson, x.TodoDismissed }).ToListAsync(ct),
+                    chats = await db.Chats.AsNoTracking().Select(x => new { x.Id, x.ProjectId, x.Title, x.InteractionMode, x.ChatWebEnabled, x.ChatPythonEnabled, x.ExecutionMode, x.OrchestrationMode, x.SandboxEnabled, x.AllowOutsideResources, x.ResourcePathsJson, x.TodoDismissed }).ToListAsync(ct),
                     providers = (await db.Providers.AsNoTracking().ToListAsync(ct)).Select(ProviderView),
                     mcpServers = (await db.McpServers.AsNoTracking().ToListAsync(ct)).Select(McpView),
                     state = snapshotState, templates = await db.Templates.ToListAsync(ct),
@@ -128,10 +128,14 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 var interactionMode = ConversationModes.Normalize(S(p, "interactionMode", modeChat.InteractionMode));
                 var chatWeb = B(p, "chatWebEnabled", modeChat.ChatWebEnabled);
                 var chatPython = B(p, "chatPythonEnabled", modeChat.ChatPythonEnabled);
+                var outsideResources = B(p, "allowOutsideResources", modeChat.AllowOutsideResources);
+                if (outsideResources != modeChat.AllowOutsideResources && runs.ContainsKey(modeChat.Id))
+                    throw new InvalidOperationException("Arrêtez la réponse pour changer le périmètre des pièces jointes / Stop the response before changing the resource boundary.");
+                modeChat.AllowOutsideResources = outsideResources;
                 if ((interactionMode != modeChat.InteractionMode || chatWeb != modeChat.ChatWebEnabled || chatPython != modeChat.ChatPythonEnabled) && runs.ContainsKey(modeChat.Id)) throw new InvalidOperationException("Arrêtez la réponse avant de changer de mode ou de skill / Stop the response before changing mode or skill.");
                 modeChat.ChatWebEnabled = chatWeb; modeChat.ChatPythonEnabled = chatPython;
                 modeChat.InteractionMode = interactionMode;
-                modeChat.ExecutionMode = S(p, "executionMode", modeChat.ExecutionMode) == "plan" ? "plan" : "execute";
+                modeChat.ExecutionMode = AgentPolicy.Mode(S(p, "executionMode", modeChat.ExecutionMode));
                 modeChat.SandboxEnabled = B(p, "sandboxEnabled", modeChat.SandboxEnabled);
                 modeChat.OrchestrationMode = AgentPolicy.Orchestration(S(p, "orchestrationMode", modeChat.OrchestrationMode));
                 if (p["agentOptionsJson"] is { } agentJson)

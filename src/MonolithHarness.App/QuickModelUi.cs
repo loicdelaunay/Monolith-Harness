@@ -1,23 +1,27 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using MonolithHarness.Core;
 
 namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly Button quickSimpleMode = new() { Content = "SIMPLE", FontSize = 11, MinHeight = 28, Padding = new(10, 4, 10, 4) };
-    readonly Button quickAdvancedMode = new() { Content = "AVANCÉ", FontSize = 11, MinHeight = 28, Padding = new(10, 4, 10, 4) };
-    readonly Border quickModeTabs = new() { CornerRadius = new(8), Padding = new(2), Background = FluentDesign.Card, Visibility = Visibility.Collapsed };
-    readonly StackPanel quickLevelPanel = new() { Spacing = 10, Visibility = Visibility.Collapsed };
-    readonly Slider quickLevelSlider = new() { Minimum = 1, Maximum = 1, StepFrequency = 1, TickFrequency = 1, IsThumbToolTipEnabled = false };
-    readonly TextBlock quickLevelTitle = Label("", 15), quickLevelDetails = Label("", 12);
-    readonly Button quickApplyLevel = new() { MinHeight = 32, HorizontalAlignment = HorizontalAlignment.Right, Padding = new(12, 4, 12, 4) };
+    readonly ToggleButton composerSelectionModeToggle = new() { Width = 26, Height = 30, MinWidth = 0, MinHeight = 0,
+        Padding = new(0), BorderThickness = new(0), CornerRadius = new(8), VerticalAlignment = VerticalAlignment.Center,
+        Visibility = Visibility.Collapsed, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+    readonly StackPanel quickLevelPanel = new() { Spacing = 8, Visibility = Visibility.Collapsed };
+    readonly TextBlock quickLevelTitle = Label("", 14), quickLevelDetails = Label("", 11);
+    readonly Button quickLevelSelect = new() { Padding = new(0), MinHeight = 0, MinWidth = 0, BorderThickness = new(0),
+        HorizontalAlignment = HorizontalAlignment.Left, HorizontalContentAlignment = HorizontalAlignment.Left,
+        Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+    Grid? modelOptionsPanel;
+    bool compactModelPicker;
     StackPanel? modelAdvancedSection;
     Grid? thinkingAdvancedSection;
     Button? modelDoneButton;
     TextBlock? modelOptionsHeading;
-    bool syncingQuickControls, applyingQuickLevel, changingQuickMode, modelOptionsIsOpen;
+    bool applyingQuickLevel, changingQuickMode, modelOptionsIsOpen;
     string? previewQuickLevelId;
 
     string[] ThinkingLevelLabels() => ["🧠 Auto", "🧠 " + WorkflowText("Faible", "Low"), "🧠 " + WorkflowText("Moyen", "Medium"),
@@ -26,28 +30,43 @@ public sealed partial class MainWindow
     StackPanel BuildQuickModelHeader(TextBlock heading)
     {
         modelOptionsHeading = heading;
-        quickModeTabs.Child = Row(quickSimpleMode, quickAdvancedMode);
-        quickSimpleMode.Click += async (_, _) => await Guard(() => SetQuickSelectionModeAsync("simple"));
-        quickAdvancedMode.Click += async (_, _) => await Guard(() => SetQuickSelectionModeAsync("advanced"));
-        var header = new StackPanel { Spacing = 8 }; header.Children.Add(quickModeTabs); header.Children.Add(heading); return header;
+        composerSelectionModeToggle.Click += async (_, _) =>
+        {
+            await Guard(async () =>
+            {
+                await SetQuickSelectionModeAsync(composerSelectionModeToggle.IsChecked == true ? "simple" : "advanced");
+                if (!modelOptionsIsOpen && modelOptionsButton.IsEnabled) modelOptionsFlyout?.ShowAt(modelOptionsButton);
+            });
+            RefreshQuickModelUi();
+        };
+        var row = new Grid { ColumnSpacing = 8 };
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        row.Children.Add(composerSelectionModeToggle);
+        var description = new StackPanel { Spacing = 2 };
+        quickLevelSelect.Content = quickLevelTitle; quickLevelSelect.Click += (_, _) => QueueComposerLevel();
+        description.Children.Add(heading); description.Children.Add(quickLevelSelect); description.Children.Add(quickLevelDetails);
+        Grid.SetColumn(description, 1); row.Children.Add(description);
+        var header = new StackPanel(); header.Children.Add(row); return header;
     }
 
     StackPanel BuildQuickLevelPicker()
     {
-        quickLevelPanel.Children.Add(quickLevelTitle);
-        quickLevelPanel.Children.Add(quickLevelSlider);
-        quickLevelPanel.Children.Add(quickLevelDetails);
-        quickApplyLevel.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
-        quickLevelSlider.ValueChanged += (_, _) =>
-        {
-            if (syncingQuickControls) return;
-            var levels = FeatureSettings.Read(state.FeaturesJson).QuickModelLevels;
-            var index = (int)Math.Round(quickLevelSlider.Value) - 1;
-            if (index >= 0 && index < levels.Count) previewQuickLevelId = levels[index].Id;
-            RefreshQuickLevelPreview();
-        };
-        quickApplyLevel.Click += async (_, _) => await Guard(() => ApplyQuickLevelAsync());
+        quickLevelTitle.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+        quickLevelTitle.Foreground = FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
+        quickLevelDetails.Foreground = FluentDesign.Secondary;
+        quickLevelDetails.MaxLines = 2; quickLevelDetails.TextTrimming = TextTrimming.CharacterEllipsis;
+        quickLevelPanel.Margin = new(0, 8, 0, 0);
+        quickLevelPanel.Children.Add(BuildComposerQuickLevels());
         return quickLevelPanel;
+    }
+
+    void ResizeModelPicker()
+    {
+        if (modelOptionsPanel == null) return;
+        var scale = TextZoom.ForWindow(root) / 100d;
+        modelOptionsPanel.Width = Math.Max(120, Math.Min((compactModelPicker ? 260 : 350) * scale, root.ActualWidth - 48));
+        modelOptionsPanel.RowSpacing = compactModelPicker ? 0 : 10;
     }
 
     async Task SetQuickSelectionModeAsync(string mode)
@@ -67,21 +86,29 @@ public sealed partial class MainWindow
         var config = FeatureSettings.Read(state.FeaturesJson);
         var enabled = config.QuickModelLevelsEnabled && config.QuickModelLevels.Count > 0;
         var simple = enabled && config.QuickModelSelectionMode == "simple";
-        quickModeTabs.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
-        quickSimpleMode.IsEnabled = quickAdvancedMode.IsEnabled = !applyingQuickLevel && !changingQuickMode;
-        quickApplyLevel.Visibility = simple ? Visibility.Visible : Visibility.Collapsed;
+        compactModelPicker = simple;
+        composerSelectionModeToggle.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        composerSelectionModeToggle.IsChecked = simple;
+        composerSelectionModeToggle.IsEnabled = enabled && !applyingQuickLevel && !changingQuickMode && ActiveRun == null;
+        var modeIcon = FluentDesign.Icon("\uE712", 14);
+        modeIcon.Foreground = simple ? FluentDesign.Resource("TextOnAccentFillColorPrimaryBrush") : FluentDesign.Secondary;
+        composerSelectionModeToggle.Content = modeIcon;
+        var switchLabel = WorkflowText(simple ? "Passer à la sélection détaillée" : "Passer aux niveaux rapides", simple ? "Switch to detailed selection" : "Switch to quick levels");
+        ToolTipService.SetToolTip(composerSelectionModeToggle, switchLabel);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerSelectionModeToggle, switchLabel);
         modelOptionsButton.IsEnabled = modelSelector.IsEnabled = !applyingQuickLevel && ActiveRun == null;
-        quickAdvancedMode.Content = WorkflowText("AVANCÉ", "ADVANCED");
-        quickSimpleMode.Style = simple ? (Style)Application.Current.Resources["AccentButtonStyle"] : null;
-        quickAdvancedMode.Style = !simple ? (Style)Application.Current.Resources["AccentButtonStyle"] : null;
         quickLevelPanel.Visibility = simple ? Visibility.Visible : Visibility.Collapsed;
+        quickLevelSelect.Visibility = quickLevelDetails.Visibility = simple ? Visibility.Visible : Visibility.Collapsed;
         if (modelAdvancedSection != null) modelAdvancedSection.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
         if (thinkingAdvancedSection != null) thinkingAdvancedSection.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
         modelContextEditor.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
         if (modelDoneButton != null) modelDoneButton.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
-        if (modelOptionsHeading != null) modelOptionsHeading.Text = simple ? WorkflowText("Réglage rapide", "Quick settings")
-            : WorkflowText("Modèle et réflexion", "Model and thinking");
-        RefreshQuickLevelPreview(); RefreshComposerQuickLevels(); RefreshComposerModelSummary();
+        if (modelOptionsHeading != null)
+        {
+            modelOptionsHeading.Text = WorkflowText("Modèle et réflexion", "Model and thinking");
+            modelOptionsHeading.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
+        }
+        ResizeModelPicker(); RefreshComposerQuickLevels(); RefreshComposerModelSummary();
     }
 
     string QuickLevelCaption(QuickModelLevel level, int index) => WorkflowText("Niveau ", "Level ") + (index + 1)
@@ -90,27 +117,32 @@ public sealed partial class MainWindow
     void RefreshQuickLevelPreview()
     {
         var config = FeatureSettings.Read(state.FeaturesJson); var levels = config.QuickModelLevels;
-        if (levels.Count == 0) { quickApplyLevel.IsEnabled = false; return; }
+        if (levels.Count == 0) return;
         var match = levels.FindIndex(level => QuickModelShortcuts.Matches(level, provider, state, chat));
         var index = modelOptionsIsOpen ? levels.FindIndex(l => l.Id == previewQuickLevelId) : match;
-        if (index < 0) index = match >= 0 ? match : 0;
-        var level = levels[index]; previewQuickLevelId = level.Id;
-        syncingQuickControls = true;
-        try { quickLevelSlider.Maximum = levels.Count; quickLevelSlider.Value = index + 1; quickLevelSlider.IsEnabled = levels.Count > 1 && !applyingQuickLevel; }
-        finally { syncingQuickControls = false; }
-        quickLevelTitle.Text = QuickLevelCaption(level, index);
-        var source = db.Providers.Local.FirstOrDefault(p => p.Id == level.ProviderId);
-        var available = source != null && db.Entry(source).State != Microsoft.EntityFrameworkCore.EntityState.Deleted && QuickModelShortcuts.Available(level, source);
-        quickLevelDetails.Text = level.Model + "\n" + (source?.Name ?? WorkflowText("Fournisseur indisponible", "Provider unavailable")) + " · "
-            + (level.InteractionMode == "chat" ? "Chat" : "Agent") + " · " + ThinkingLevelLabels()[Array.IndexOf(QuickModelShortcuts.ThinkingLevels, level.ThinkingLevel)];
-        if (!available) quickLevelDetails.Text += "\n" + WorkflowText("Ce modèle n’est plus activé. Corrigez ce niveau dans Réglages → Raccourcis.", "This model is no longer enabled. Update this level in Settings → Shortcuts.");
-        quickApplyLevel.Content = WorkflowText("Appliquer ce niveau", "Apply this level");
-        quickApplyLevel.IsEnabled = available && chat != null && selectedSubagent == null && ActiveRun == null && conversationReady
-            && !conversationLoading && !databaseMaintenanceBusy && !conversationRetentionBusy && !applyingQuickLevel;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(quickLevelSlider, WorkflowText("Niveau de modèle", "Model level"));
+        if (index < 0) index = match;
+        if (index < 0)
+        {
+            quickLevelTitle.Text = WorkflowText("Personnalisé", "Custom");
+            quickLevelDetails.Text = provider?.Model ?? WorkflowText("Choisir un modèle", "Choose a model");
+            ToolTipService.SetToolTip(quickLevelDetails, quickLevelDetails.Text);
+            var firstLevel = WorkflowText("Sélectionner le premier niveau configuré", "Select the first configured level") + " · " + QuickLevelCaption(levels[0], 0);
+            ToolTipService.SetToolTip(quickLevelSelect, firstLevel);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(quickLevelSelect, firstLevel);
+            return;
+        }
+        var level = levels[index];
+        quickLevelTitle.Text = level.Name.Length > 0 ? level.Name : QuickLevelCaption(level, index);
+        var detail = level.Model + " · " + (level.InteractionMode == "chat" ? "Chat" : "Agent") + " · "
+            + ThinkingLevelLabels()[Array.IndexOf(QuickModelShortcuts.ThinkingLevels, level.ThinkingLevel)];
+        quickLevelDetails.Text = detail;
+        if (!ComposerLevelAvailable(level)) quickLevelDetails.Text += " · " + WorkflowText("Indisponible", "Unavailable");
+        ToolTipService.SetToolTip(quickLevelSelect, WorkflowText("Sélectionner ce niveau", "Select this level") + " · " + QuickLevelCaption(level, index));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(quickLevelSelect, WorkflowText("Sélectionner ce niveau", "Select this level") + " · " + QuickLevelCaption(level, index));
+        ToolTipService.SetToolTip(quickLevelDetails, detail);
     }
 
-    async Task ApplyQuickLevelAsync(string? requestedId = null)
+    async Task ApplyQuickLevelAsync(string? requestedId = null, bool keepPickerOpen = false)
     {
         if (applyingQuickLevel || chat == null || selectedSubagent != null || ActiveRun != null || !conversationReady || conversationLoading || databaseMaintenanceBusy || conversationRetentionBusy) return;
         var config = FeatureSettings.Read(state.FeaturesJson);
@@ -120,7 +152,7 @@ public sealed partial class MainWindow
         if (target == null) throw new InvalidOperationException(WorkflowText("Le fournisseur de ce niveau est indisponible.", "This level’s provider is unavailable."));
         var owner = chat; var oldProvider = provider; var oldProviderId = state.ProviderId;
         var oldModel = target.Model; var oldMode = owner.InteractionMode; var oldThinking = state.ThinkingLevel; var oldChatThinking = state.ChatThinkingLevel;
-        applyingQuickLevel = true; RefreshGenerationControls(); RefreshQuickModelUi();
+        previewQuickLevelId = level.Id; applyingQuickLevel = true; RefreshGenerationControls(); RefreshQuickModelUi();
         try
         {
             QuickModelShortcuts.Apply(level, target, state, owner);
@@ -135,9 +167,10 @@ public sealed partial class MainWindow
             try { providers.SelectedItem = target; } finally { loading = wasLoading; }
             PopulateModelSelector(); UpdateProvider(); PopulateThinkingSelector(); RefreshConversationMode();
             if (chat?.Id == owner.Id) { await RefreshPinnedTasksAsync(); UpdateSourceLabel(); UpdateFloatingAssets(); }
-            modelOptionsFlyout?.Hide();
+            if (!keepPickerOpen) modelOptionsFlyout?.Hide();
             ShowStatus(WorkflowText("Niveau appliqué : ", "Level applied: ") + QuickLevelCaption(level, config.QuickModelLevels.IndexOf(level)), StatusKind.Notice);
         }
+        catch { previewQuickLevelId = null; throw; }
         finally { applyingQuickLevel = false; RefreshGenerationControls(); RefreshModelOptions(); }
     }
 }

@@ -45,6 +45,9 @@ public sealed class FeatureSettings
     public string RenderingGpuPreference { get; set; } = "auto";
     public bool ShowAttentionSection { get; set; } = true;
     public bool VirtualizeChat { get; set; } = true;
+    public List<int> SidebarProjectOrder { get; set; } = [];
+    public List<int> SidebarChatOrder { get; set; } = [];
+    public bool AllowWebViewInTools { get; set; }
     public bool RenderMermaid { get; set; } = true;
     public bool RenderMath { get; set; } = true;
     public bool AutoArchiveConversations { get; set; }
@@ -128,6 +131,8 @@ public sealed class FeatureSettings
                 }
             }
             settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
+            settings.SidebarProjectOrder = (settings.SidebarProjectOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
+            settings.SidebarChatOrder = (settings.SidebarChatOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
             settings.Compaction ??= new();
             settings.Compaction.Normalize();
             settings.WebHttpResponseMode = settings.WebHttpResponseMode?.Trim().ToLowerInvariant() switch {

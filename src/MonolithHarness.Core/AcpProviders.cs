@@ -24,7 +24,7 @@ public static class AcpProviders
     public static string SystemPrompt(string language, string mode) =>
         (language == "en" ? "You are connected through ACP inside Monolith Harness. Answer directly in English. " : "Tu es connecté via ACP dans Monolith Harness. Réponds directement en français. ") +
         "Use only your agent's native tools; the application's API tools and subagent orchestrator are not available through this connection. Respect every permission denial. " +
-        (mode == "plan" ? "Read-only planning: never change files, execute commands or delegate actions. " : mode == "chat" ? "Conversational mode: answer using the provided context; do not inspect the filesystem or execute tools. " : "") + MarkdownDisplay.Instructions;
+        (AgentPolicy.ReadOnly(mode) && mode != "chat" ? "Read-only planning: never change files, execute commands or delegate actions. " : mode == "chat" ? "Conversational mode: answer using the provided context; do not inspect the filesystem or execute tools. " : "") + MarkdownDisplay.Instructions;
 
     public static string[] Arguments(Provider provider)
     {

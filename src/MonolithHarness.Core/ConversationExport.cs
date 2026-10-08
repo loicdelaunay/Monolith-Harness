@@ -59,6 +59,7 @@ public static class ConversationExport
         Setting("Mode", chat.ExecutionMode);
         Setting(L("Sous-agents", "Subagents"), chat.OrchestrationMode);
         Setting("Sandbox", chat.SandboxEnabled);
+        Setting(L("Accès hors pièces jointes", "Access outside attachments"), chat.AllowOutsideResources);
         Setting(L("Autorisations", "Permissions"), state.PermissionMode);
         Setting(L("Continuation automatique", "Auto-continue"), state.AutoContinue);
         Setting("Skills", state.EnabledSkills);

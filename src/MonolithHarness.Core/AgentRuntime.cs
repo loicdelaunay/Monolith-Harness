@@ -175,12 +175,13 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     async Task<string> ChildAsync(string name, string prompt, int depth, string parent, CancellationToken ct)
     {
         var provider=run.AgentProviders.GetValueOrDefault(name) ?? run.Provider;
+        ResourceAccessPolicy.DemandProvider(run.Chat, provider);
         var path = parent.Length == 0 ? name : parent + " › " + name;
         await progress($"Sous-agent / Subagent · {path} · démarré / started");
         var mode = run.Chat.ExecutionMode;
         var source = new SourceAccess(run.Project.GetSourceFolders());
         var enabled = liveSkills == null ? run.Options.EnabledSkills : await liveSkills(ct);
-        var system = Skills.Prompt(enabled, run.Options.Language, source.Roots.Count > 0, BrowserSkillAccess.Enabled(enabled), Skills.Enabled(enabled, "write_sources")) + context + AgentPolicy.Prompt(mode, run.Chat.OrchestrationMode) +
+        var system = Skills.Prompt(enabled, run.Options.Language, source.Roots.Count > 0, BrowserSkillAccess.Enabled(enabled), Skills.Enabled(enabled, "write_sources")) + context + AgentPolicy.Prompt(mode, run.Chat.OrchestrationMode) + ResourceAccessPolicy.Prompt(run.Chat) +
             $"\nYou are subagent {path}, depth {depth}/{MaxDepth}. Complete your assigned task and report actual edits, findings, validation and remaining limitations to your parent. You inherit the conversation's enabled tools and permissions. Coordinate exclusive ownership of files and shared interactive resources. Delegate only independent portions when beneficial; never your entire task unchanged. Maximum {MaxSteps} model steps; the whole team shares {TotalBudget} agents. " +
             (depth >= MaxDepth ? "Further delegation is unavailable at this depth. " : "") +
             (!provider.IsOpenCode || provider.OpenCodeTools ? SubagentTasks.Instructions : "\nThe native task-list tool is unavailable. Do not invent task counts or completion percentages. ") +
@@ -215,7 +216,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         IDisposable? projectBinding = null;
         try
         {
-            if (agentOptions.UseGitWorktree && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(mode) &&
+            if (agentOptions.UseGitWorktree && run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(mode) &&
                 (Skills.Enabled(enabled, "write_sources") || Skills.Enabled(enabled, "patch_sources") || Skills.Enabled(enabled, "terminal") || Skills.Enabled(enabled, "python") || GitTools.WriteEnabled(enabled) || provider.IsOpenCode && provider.OpenCodeTools))
             {
                 await Report("Préparation du worktree Git / Preparing Git worktree");
@@ -239,7 +240,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                 var definitions = hostDefinitions == null ? ChatEngine.ToolDefinitions(source.Roots.Count > 0 && SourceTools.CanRead(enabled), false, Skills.Enabled(enabled, "write_sources") && source.Roots.Count > 0) : await hostDefinitions(ct);
                 if (hostDefinitions == null) SourceTools.AddDefinitions(definitions, source.Roots.Count > 0, enabled);
                 run.Options.EnabledSkills = enabled;
-                AddDefinitions(definitions, child: true, depth: depth); AgentPolicy.Filter(definitions, mode);
+                AddDefinitions(definitions, child: true, depth: depth); AgentPolicy.Filter(definitions, run.Chat);
                 SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
                 if (child.Progress.HasPlan)
                     wire[0]!["content"] = system + "\nYour current task list (keep it accurate through todowrite):\n" +
@@ -308,7 +309,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                         await Report("Outil / Tool · " + tool);
                         if (!TerminalHub.IsBoundedWait(tool, call?["function"]?["arguments"]?.GetValue<string>() ?? "{}"))
                             await loop.CheckAsync(tool, call?["function"]?["arguments"]?.GetValue<string>() ?? "{}", run.Workflow, ct);
-                        AgentPolicy.Demand(mode, tool);
+                        AgentPolicy.Demand(run.Chat, tool);
                         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, tool);
                         if (liveSkills != null) enabled = await liveSkills(ct);
                         source.MaintainFileIndex = Skills.Enabled(enabled, FileIndexTools.SkillId) && !AgentPolicy.ReadOnly(mode);

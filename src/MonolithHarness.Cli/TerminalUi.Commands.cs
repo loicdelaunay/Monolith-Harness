@@ -22,7 +22,8 @@ public sealed partial class TerminalUi
         new("/attach", "Joindre des sources / Attach sources", "/attach chemin"),
         new("/image", "Joindre une image / Attach image", "/image chemin.png"),
         new("/clear-images", "Retirer les images jointes / Clear attached images"),
-        new("/mode", "Plan / Exécution", "Protection technique des écritures"),
+        new("/proposals", "Revue des propositions / Proposal review", "Diffs avant application"),
+        new("/mode", "Plan / Proposition / Exécution", "Protection technique des écritures"),
         new("/chat", "Mode Chat / Chat mode", "Discussion, web et Python en option"),
         new("/agent", "Mode Agent / Agent mode", "Outils, plan et sous-agents"),
         new("/chat-skills", "Skills du Chat / Chat skills", "Recherche web · Python"),
@@ -95,10 +96,11 @@ public sealed partial class TerminalUi
                     else await client.Call("chat.modes", new { id, chatPythonEnabled = !selectedChat.ChatPythonEnabled });
                     await Refresh();
                 }); break;
+            case "/proposals": Work(() => ReviewProposals(id)); break;
             case "/mode":
                 Work(async () =>
                 {
-                    var mode = await Prompt("Mode", L("Plan bloque les outils de modification. Exécution autorise les outils selon les skills et permissions.", "Plan blocks modifying tools. Execution uses your enabled skills and permissions."), [new("plan", "Plan"), new("execute", "Exécution / Execution")]);
+                    var mode = await Prompt("Mode", L("Plan inspecte. Proposition prépare des fichiers à revoir avec /proposals. Exécution utilise les skills et permissions.", "Plan inspects. Proposal prepares files for /proposals review. Execution uses enabled skills and permissions."), [new("plan", "Plan"), new("propose", "Proposition / Proposal"), new("execute", "Exécution / Execution")]);
                     if (mode != null) { await client.Call("chat.modes", new { id, executionMode = mode }); await Refresh(); }
                 }); break;
             case "/agents": Work(() => Agents(id, selectedChat)); break;

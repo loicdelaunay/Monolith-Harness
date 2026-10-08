@@ -42,9 +42,9 @@ public sealed partial class HarnessService
             }
             else if (automatic == true) return true;
             if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await db.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return true;
-            if (request != null) details = request.Display;
-            if (risk != null) details = risk.Validator + " · " + risk.Classification + " · " + risk.Reason + (risk.Explanation == null ? "" : "\n" + risk.Explanation) + "\n\n" + details;
-            var reply = await host("permission", Obj(new { title, details, oneTimeOnly = guarded }), ct);
+            if (request != null) details = CommandImpact.Details(request, risk);
+            else if (risk != null) details = risk.Validator + " · " + risk.Classification + " · " + risk.Reason + "\n" + details;
+            var reply = await host("permission", Obj(new { title, details, command = request, oneTimeOnly = guarded }), ct);
             ct.ThrowIfCancellationRequested();
             var choice = reply?.GetValue<string>();
             if (choice == "always" && !guarded)
@@ -79,6 +79,7 @@ public sealed partial class HarnessService
         AssetTools.AddDefinitions(definitions, skills);
         ImageGenerationTools.AddDefinitions(definitions, skills);
         SourceTools.AddDefinitions(definitions, source, skills);
+        if (run.Chat.ExecutionMode == "propose" && source && SourceTools.CanRead(skills) && !run.Chat.SandboxEnabled) FileProposals.AddDefinition(definitions);
         void Add(string name, string description, params (string Name, string Type)[] properties)
         {
             var props = new JsonObject(); foreach (var (key, type) in properties) props[key] = new JsonObject { ["type"] = type };
@@ -126,6 +127,11 @@ public sealed partial class HarnessService
         if (FeatureSettings.Read(run.Options.FeaturesJson).AutoFocusTool)
             await emit(new { @event = "tool-focus", chatId = run.Chat.Id, name });
         AgentPolicy.Demand(run.Chat, name);
+        if (name == FileProposals.Tool)
+        {
+            if (run.Chat.ExecutionMode != "propose" || run.Chat.SandboxEnabled || !SourceTools.CanRead(run.Options.EnabledSkills)) throw new UnauthorizedAccessException("Proposition indisponible / Proposal unavailable.");
+            return new(await FileProposals.PrepareAsync(database, run.Chat.Id, new SourceAccess(run.Project.GetSourceFolders()), p, ct));
+        }
         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
         await using var db = Db();
         var skills = ConversationModes.EffectiveSkills(run.Chat, await db.States.Select(x => x.EnabledSkills).SingleAsync(ct), run.Provider.IsOpenCode);
@@ -190,7 +196,7 @@ public sealed partial class HarnessService
             var source = new SourceAccess(run.Project.GetSourceFolders()) { MaintainFileIndex = Skills.Enabled(skills, FileIndexTools.SkillId) && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode) }; var path = S(p, "path", ".");
             if (name == "list_sources") return new(source.List(path));
             try { source.Resolve(path); }
-            catch (UnauthorizedAccessException) when (!run.Chat.SandboxEnabled)
+            catch (UnauthorizedAccessException) when (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled)
             {
                 if (name == "read_source")
                 {

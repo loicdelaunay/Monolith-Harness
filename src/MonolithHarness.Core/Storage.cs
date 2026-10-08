@@ -47,6 +47,7 @@ public sealed class Chat
     public string OrchestrationMode { get; set; } = "disabled";
     public bool SandboxEnabled { get; set; }
     public string ResourcePathsJson { get; set; } = "";
+    public bool AllowOutsideResources { get; set; } = true;
     public bool TodoDismissed { get; set; }
     public List<Message> Messages { get; set; } = [];
     public override string ToString() => Title;

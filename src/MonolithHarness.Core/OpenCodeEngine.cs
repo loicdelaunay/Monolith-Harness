@@ -205,9 +205,9 @@ public sealed class OpenCodeEngine(HttpClient http)
             : await DisabledToolsAsync(provider, password, directory, ct);
         if (policy != null)
         {
-            if (AgentPolicy.Mode(policy.Mode) == "chat") payload["tools"] = new JsonObject
+            if (AgentPolicy.Mode(policy.ExternalMode) == "chat") payload["tools"] = new JsonObject
             { ["*"] = false, ["webfetch"] = provider.OpenCodeTools && policy.ChatWebEnabled, ["websearch"] = provider.OpenCodeTools && policy.ChatWebEnabled };
-            else if (AgentPolicy.ReadOnly(policy.Mode))
+            else if (AgentPolicy.ReadOnly(policy.ExternalMode))
             {
                 // OpenCode converts this ordered map into session permission rules. Deny every
                 // native/custom/MCP tool, then allow only its built-in source-reading operations.
@@ -218,7 +218,7 @@ public sealed class OpenCodeEngine(HttpClient http)
         }
         // Use explicit session rules so the loop guard remains "ask", even with automatic tool permissions.
         // prompt_async.tools would overwrite these rules with boolean allow/deny entries.
-        if (provider.OpenCodeTools && (authorize != null || workflow != null || policy != null && AgentPolicy.Mode(policy.Mode) == "chat"))
+        if (provider.OpenCodeTools && (authorize != null || workflow != null || policy != null && AgentPolicy.Mode(policy.ExternalMode) == "chat"))
         {
             var rules = new JsonArray();
             if (authorize != null) rules.Add(new JsonObject { ["permission"] = "*", ["pattern"] = "*", ["action"] = "ask" });
@@ -244,7 +244,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                     {
                         var response = permission.Action == "doom_loop"
                             ? workflow != null && await workflow.DecideLoopAsync(permission.Details + "\n" + string.Join("\n", permission.Resources), ct) ? "once" : "reject"
-                            : authorize == null || policy != null && AgentPolicy.ReadOnly(policy.Mode) && !policy.AllowsChatWeb(permission.Action) ? "reject" : await authorize(permission, ct);
+                            : authorize == null || policy != null && AgentPolicy.ReadOnly(policy.ExternalMode) && !policy.AllowsChatWeb(permission.Action) ? "reject" : await authorize(permission, ct);
                         if (permission.Action == "doom_loop" && response == "reject") throw new OperationCanceledException("Boucle OpenCode arrêtée / OpenCode loop stopped.", ct);
                         if (response is not ("once" or "always" or "reject")) response = "reject";
                         await JsonAsync(provider, password, HttpMethod.Post,

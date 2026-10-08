@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MonolithHarness.Core;
@@ -96,7 +97,7 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     async Task Refresh()
     {
         var snapshot = await client.Snapshot(lifetime.Token);
-        Post(() => workspace = snapshot);
+        Post(() => { workspace = snapshot; RefreshSkillCompletion(); });
     }
     public async Task<int> RunAsync()
     {
@@ -156,8 +157,32 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         {
             var choices = new List<Choice> { new("deny", L("Refuser", "Deny")), new("allow", L("Autoriser une fois", "Allow once")) };
             if (p["oneTimeOnly"]?.GetValue<bool>() != true) choices.Add(new("always", L("Toujours autoriser cet accès", "Always allow this access")));
-            var result = await Prompt(S(p, "title"), S(p, "details"), choices, ct: ct);
-            return JsonValue.Create(result ?? "deny");
+            var command = p["command"]?.Deserialize<CommandApproval>(MonolithHarness.Core.Hosting.HarnessService.Json);
+            if (command != null) choices.Add(new("info", L("Plus d’infos sur l’impact", "More impact information")));
+            var details = S(p, "details");
+            while (true)
+            {
+                var result = await Prompt(S(p, "title"), details, choices, ct: ct);
+                if (result != "info" || command == null) return JsonValue.Create(result ?? "deny");
+                if (await Prompt(L("Analyse de la commande", "Command analysis"), L("L’explication utilise le modèle actuel. La commande peut être transmise à son fournisseur et la requête facturée.", "The explanation uses the current model. The command may be sent to its provider and the request billed."),
+                    [new("no", L("Annuler", "Cancel")), new("yes", L("Demander l’explication", "Request explanation"))], ct: ct) != "yes") continue;
+                try
+                {
+                    await using var store = client.OpenDb();
+                    var current = await store.Providers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == providerId, ct) ?? throw new InvalidOperationException("Aucun modèle / No model.");
+                    if (current.IsComposite)
+                    {
+                        var spec = CompositeModel.Read(current.CompositeJson).Orchestrator;
+                        current = await store.Providers.AsNoTracking().SingleAsync(x => x.Id == spec.ProviderId, ct); current.Model = spec.Model;
+                    }
+                    using var requestHttp = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
+                    using var usage = TokenConsumption.Activity("command-impact");
+                    var explanation = await CommandImpact.ExplainAsync(command, current, requestHttp, KeyVault.Decrypt(current.ProtectedKey), workspace?.State.Language ?? "fr", ct);
+                    details = S(p, "details") + "\n\n" + Markdig.Markdown.ToPlainText(explanation);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex) { details = S(p, "details") + "\n\n" + L("Explication indisponible : ", "Explanation unavailable: ") + ex.Message; }
+            }
         }
         throw new NotSupportedException(name + L(" : utilisez l’application graphique ou un serveur MCP configuré avec /mcp.", ": use the desktop app or an MCP server configured with /mcp."));
     }
@@ -240,10 +265,16 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         }
         if (activeQuestions.ContainsKey(S(data, "id"))) await client.Call("question.answer", new { id = S(data, "id"), chatId = I(data, "chatId"), cancelled, answers }, lifetime.Token);
     }
+    void RefreshSkillCompletion()
+    {
+        completion.Skills = Skills.Available(CurrentProject?.GetSourceFolders(), CurrentProject?.Id ?? 0)
+            .Where(s => !ConversationModes.IsChat(CurrentChat?.InteractionMode) || s.Id is "web" or "python")
+            .Select(s => new Choice("/" + s.Id, "Skill · " + L(s.FrenchName, s.EnglishName), L("Utiliser explicitement ce skill", "Explicitly use this skill"))).ToList();
+    }
     void SwitchChat(int id)
     {
         if (chatId != 0) { View(chatId).InputHistory.RestoreDraft(editor); drafts[chatId] = editor.Text; }
-        chatId = id; editor.Set(drafts.GetValueOrDefault(id, "")); var view = View(id); view.Loading = true;
+        chatId = id; RefreshSkillCompletion(); editor.Set(drafts.GetValueOrDefault(id, "")); var view = View(id); view.Loading = true;
         Work(async () =>
         {
             var history = await client.History(id, lifetime.Token);
@@ -274,7 +305,7 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     {
         if (workspace == null || CurrentChat == null) return;
         string text = editor.Text.Trim();
-        if (text.StartsWith('/') && !steer) { View(chatId).InputHistory.Submitted(text); editor.Set(""); Command(text); return; }
+        if (text.StartsWith('/') && !steer && SkillInvocation.Requested(text, CurrentProject?.GetSourceFolders(), CurrentProject?.Id ?? 0).Count == 0) { View(chatId).InputHistory.Submitted(text); editor.Set(""); Command(text); return; }
         var images = attachments.GetValueOrDefault(chatId, []);
         if (text.Length == 0 && images.Count == 0) return;
         if (CurrentProvider == null || string.IsNullOrWhiteSpace(CurrentProvider.Model)) { notice = L("Configurez un fournisseur avec /connect.", "Configure a provider with /connect."); return; }

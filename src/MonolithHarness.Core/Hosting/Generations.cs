@@ -70,6 +70,9 @@ public sealed partial class HarnessService
             var agent = CreateAgentRuntime(run, secret, mcp);
             if (provider.IsAcp) system = AcpProviders.SystemPrompt(options.Language, run.Chat.ExecutionMode);
             else system += await agent.InitializeAsync(ct);
+            if (provider.IsAcp && run.Chat.ExecutionMode == "propose") system += AgentPolicy.Prompt("propose", "disabled");
+            system += ResourceAccessPolicy.Prompt(run.Chat);
+            system += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, project.GetSourceFolders(), project.Id);
             if (!chatOnly) system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
             if (!provider.IsAcp && run.Chat.OrchestrationMode != "disabled")
             {
@@ -99,7 +102,7 @@ public sealed partial class HarnessService
                     definitions = Definitions(run);
                     agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
                     SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
-                    if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                    if (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                         foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 }
                 if (!provider.IsExternalAgent) history = await Compact(run, history, system, definitions, secret, ct);

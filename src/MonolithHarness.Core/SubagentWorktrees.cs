@@ -42,6 +42,7 @@ public sealed class SubagentWorktrees
     }
     public static async Task<SubagentWorktrees?> CreateAsync(ConversationSession run, string name, CancellationToken ct)
     {
+        if (!run.Chat.AllowOutsideResources) return null;
         var roots = run.Project.GetSourceFolders();
         if (!roots.Any(x => FindRepository(x) != null)) return null;
         var token = Guid.NewGuid().ToString("N");

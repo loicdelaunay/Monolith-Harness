@@ -7,7 +7,7 @@ public static partial class PortableStorage
 {
     static readonly string[] OwnedFolders = ["skills", "temp", "exports", "terminal-profiles", "fonts",
         "OpenCodeWorkspaces", "AcpWorkspaces", "branding", "naming", "images", "scripts", "logs", "Chrome", "Browser",
-        "WebView2", "Captures", "model", "models", "sandboxes", "worktrees", "runtimes/python"];
+        "WebView2", "Captures", "model", "models", "sandboxes", "worktrees", "proposals", "runtimes/python"];
     static readonly ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Paths)> layouts = new(PlatformSupport.PathComparer);
     static string LayoutFile(string root) => Path.Combine(root, "workspace", ".storage-layout.json");
     static string Normalize(string path) => path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);

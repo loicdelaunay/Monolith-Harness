@@ -8,16 +8,20 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    sealed record SlashChoice(string Name, string Arguments, string Description)
+    sealed record SlashChoice(string Name, string Arguments, string Description, bool IsSkill = false)
     { public override string ToString() => "/" + Name + " " + Arguments + "  ·  " + Description; }
     readonly ListView slashChoices = new() { MaxHeight = 210, SelectionMode = ListViewSelectionMode.Single, IsItemClickEnabled = true };
     readonly Border slashSuggestions = new() { Background = FluentDesign.Card, BorderBrush = FluentDesign.Stroke, BorderThickness = new(1), CornerRadius = new(8), Visibility = Visibility.Collapsed };
-    bool slashDismissed;
-    SlashChoice[] SlashCatalog() =>
+    bool slashDismissed, completingSlash, slashRefreshQueued, slashShowingHelp;
+    SkillInvocation.CompletionToken? currentSlashToken;
+    string slashDraft = "";
+    SlashChoice[] CommandSlashCatalog() =>
     [
         new("chat", "", WorkflowText("Discussion, web et Python en option", "Conversation, web and optional Python")),
         new("agent", "", WorkflowText("Outils, plan et sous-agents", "Tools, planning and subagents")),
         new("agents", "[off|auto|on|nombre]", WorkflowText("Sous-agents et rôles de la conversation", "Conversation subagents and roles")),
+        new("proposition", "", WorkflowText("Préparer des fichiers pour revue", "Prepare files for review")),
+        new("proposals", "", WorkflowText("Réviser les fichiers proposés", "Review proposed files")),
         new("plan", "[on|off]", WorkflowText("Mode plan ou exécution", "Plan or execution mode")),
         new("goal", "[objectif|off]", WorkflowText("Définir l’objectif de la conversation", "Set the conversation goal")),
         new("model", "[nom]", WorkflowText("Choisir le modèle", "Choose the model")),
@@ -28,32 +32,79 @@ public sealed partial class MainWindow
         new("stop", "", WorkflowText("Arrêter cette génération", "Stop this generation")),
         new("help", "", WorkflowText("Afficher les commandes", "Show commands"))
     ];
+    SlashChoice[] SlashCatalog() => [.. CommandSlashCatalog(), .. Skills.Available(project?.GetSourceFolders(), project?.Id ?? 0)
+        .Where(s => !CommandSlashCatalog().Any(c => c.Name.Equals(s.Id, StringComparison.OrdinalIgnoreCase)))
+        .Select(s => new SlashChoice(s.Id, "", WorkflowText("Skill · ", "Skill · ") + WorkflowText(s.FrenchName, s.EnglishName)
+            + (ChatInteraction && s.Id is not ("web" or "python") ? WorkflowText(" · Mode Agent", " · Agent mode") : "")
+            + (!Skills.Enabled(state.EnabledSkills, s.Id) ? WorkflowText(" · Désactivé", " · Disabled") : ""), IsSkill: true))];
     UIElement BuildSlashSuggestions()
     {
         slashSuggestions.Child = slashChoices;
-        composer.TextChanged += (_, _) => { slashDismissed = false; RefreshSlashSuggestions(); };
+        composer.TextChanged += (_, _) =>
+        {
+            if (completingSlash) return;
+            slashDismissed = slashShowingHelp = false; ScheduleSlashRefresh();
+        };
+        composer.SelectionChanged += (_, _) => { if (!completingSlash) ScheduleSlashRefresh(); };
+        composer.GotFocus += (_, _) => { if (!completingSlash) { slashDismissed = false; ScheduleSlashRefresh(); } };
         slashChoices.ItemClick += (_, e) => { if (e.ClickedItem is SlashChoice choice) CompleteSlash(choice); };
         return slashSuggestions;
     }
+    void ScheduleSlashRefresh()
+    {
+        // TextChanged can precede the native editor's caret update, especially after paste.
+        // Coalesce both events and read the final caret once they have finished.
+        if (slashRefreshQueued) return;
+        slashRefreshQueued = true;
+        if (!DispatcherQueue.TryEnqueue(() => { slashRefreshQueued = false; RefreshSlashSuggestions(); })) slashRefreshQueued = false;
+    }
     void RefreshSlashSuggestions(bool all = false)
     {
-        var text = composer.Text.TrimStart();
-        if (slashDismissed || !all && (!text.StartsWith('/') || text.Any(char.IsWhiteSpace))) { slashSuggestions.Visibility = Visibility.Collapsed; return; }
-        var items = SlashCatalog().Where(x => !ChatInteraction || x.Name is not ("agents" or "plan" or "goal"))
-            .Where(x => all || x.Name.StartsWith(text[1..], StringComparison.OrdinalIgnoreCase)).ToArray();
+        var text = composer.Text;
+        var token = SkillInvocation.CompletionAt(text, composer.SelectionStart, composer.SelectionLength);
+        if (all) slashShowingHelp = true;
+        if (slashShowingHelp && token == null) token = SkillInvocation.CompletionAt(text, text.TrimEnd().Length);
+        if (slashDismissed || !slashShowingHelp && token == null)
+        { currentSlashToken = null; slashSuggestions.Visibility = Visibility.Collapsed; return; }
+        var selected = (slashChoices.SelectedItem as SlashChoice)?.Name;
+        var items = SlashCatalog()
+            .Where(x => slashShowingHelp || token?.AtMessageStart == true || x.IsSkill)
+            .Where(x => !ChatInteraction || x.IsSkill || x.Name is not ("agents" or "plan" or "proposition" or "proposals" or "goal"))
+            .Where(x => slashShowingHelp || x.Name.StartsWith(token!.Prefix, StringComparison.OrdinalIgnoreCase)).ToArray();
+        currentSlashToken = token; slashDraft = text;
         slashChoices.ItemsSource = items;
-        slashChoices.SelectedIndex = items.Length > 0 ? 0 : -1;
+        var selectedIndex = Array.FindIndex(items, item => item.Name == selected);
+        slashChoices.SelectedIndex = selectedIndex >= 0 ? selectedIndex : items.Length > 0 ? 0 : -1;
         slashSuggestions.Visibility = items.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
     void CompleteSlash(SlashChoice choice)
     {
-        composer.Text = "/" + choice.Name + " "; composer.Select(composer.Text.Length, 0);
-        slashSuggestions.Visibility = Visibility.Collapsed; composer.Focus(FocusState.Programmatic);
+        var text = composer.Text;
+        // Clicking a suggestion moves focus; preserve the token captured while editing.
+        var token = text == slashDraft ? currentSlashToken : SkillInvocation.CompletionAt(text, composer.SelectionStart, composer.SelectionLength);
+        if (token == null) return;
+        var end = token.Start + token.Length;
+        var replacement = "/" + choice.Name;
+        if (end == text.Length) replacement += " ";
+        var caret = token.Start + replacement.Length;
+        if (end < text.Length && text[end] == ' ') caret++;
+        completingSlash = true;
+        try
+        {
+            composer.Text = text[..token.Start] + replacement + text[end..];
+            composer.Select(caret, 0);
+            composer.Focus(FocusState.Programmatic);
+        }
+        finally { completingSlash = false; }
+        slashDismissed = true; slashShowingHelp = false; currentSlashToken = null;
+        slashSuggestions.Visibility = Visibility.Collapsed;
     }
     bool HandleSlashKey(KeyRoutedEventArgs e)
     {
+        // Finish pending caret updates before deciding whether Enter completes or sends.
+        RefreshSlashSuggestions();
         if (slashSuggestions.Visibility != Visibility.Visible) return false;
-        if (e.Key == VirtualKey.Escape) { slashDismissed = true; slashSuggestions.Visibility = Visibility.Collapsed; e.Handled = true; return true; }
+        if (e.Key == VirtualKey.Escape) { slashDismissed = true; slashShowingHelp = false; slashSuggestions.Visibility = Visibility.Collapsed; e.Handled = true; return true; }
         if (e.Key is VirtualKey.Up or VirtualKey.Down)
         {
             var count = slashChoices.Items.Count;
@@ -61,8 +112,9 @@ public sealed partial class MainWindow
             if (slashChoices.SelectedItem != null) slashChoices.ScrollIntoView(slashChoices.SelectedItem);
             e.Handled = true; return true;
         }
-        // Enter executes a complete command; Tab accepts autocomplete without submitting.
-        if (e.Key == VirtualKey.Enter && (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) == 0 && slashChoices.SelectedItem is SlashChoice partial && !SlashCatalog().Any(x => composer.Text.Trim().Equals("/" + x.Name, StringComparison.OrdinalIgnoreCase)))
+        var shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+        if (e.Key == VirtualKey.Enter && !shift && slashChoices.SelectedItem is SlashChoice partial
+            && (partial.IsSkill || !composer.Text.Trim().Equals("/" + partial.Name, StringComparison.OrdinalIgnoreCase)))
         { CompleteSlash(partial); e.Handled = true; return true; }
         if (e.Key == VirtualKey.Tab && slashChoices.SelectedItem is SlashChoice choice) { CompleteSlash(choice); e.Handled = true; return true; }
         return false;
@@ -74,14 +126,16 @@ public sealed partial class MainWindow
         var separator = input.IndexOfAny([' ', '\t']);
         var name = (separator < 0 ? input[1..] : input[1..separator]).ToLowerInvariant();
         var argument = separator < 0 ? "" : input[(separator + 1)..].Trim();
-        if (!SlashCatalog().Any(x => x.Name == name))
+        if (SkillInvocation.Requested(input, project?.GetSourceFolders(), project?.Id ?? 0).Any(s => s.Id.Equals(name.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}'), StringComparison.OrdinalIgnoreCase)))
+        { slashSuggestions.Visibility = Visibility.Collapsed; return false; }
+        if (!CommandSlashCatalog().Any(x => x.Name == name))
         {
             ShowStatus(WorkflowText("Commande inconnue. Tapez /help ou utilisez Tab pour compléter.", "Unknown command. Type /help or use Tab to autocomplete."), StatusKind.Notice);
             return true;
         }
         if (name == "help") { RefreshSlashSuggestions(all: true); return true; }
-        if (chat == null && name is "chat" or "agent" or "agents" or "plan" or "goal") return true;
-        if (ChatInteraction && name is "agents" or "plan" or "goal")
+        if (chat == null && name is "chat" or "agent" or "agents" or "plan" or "proposition" or "proposals" or "goal") return true;
+        if (ChatInteraction && name is "agents" or "plan" or "proposition" or "proposals" or "goal")
             throw new InvalidOperationException(WorkflowText("Passez en Agent pour configurer le plan et les sous-agents.", "Switch to Agent to configure planning and subagents."));
         var owner = chat;
         switch (name)
@@ -100,6 +154,8 @@ public sealed partial class MainWindow
                 }
                 else owner!.OrchestrationMode = argument.ToLowerInvariant() switch { "off" or "disabled" => "disabled", "auto" => "auto", "on" or "forced" => "forced", _ => throw new ArgumentException("/agents off|auto|on|nombre") };
                 break;
+            case "proposals": composer.Text = ""; await ReviewFileProposalsAsync(); return true;
+            case "proposition": if (owner != null) owner.ExecutionMode = "propose"; break;
             case "plan":
                 owner!.ExecutionMode = argument.ToLowerInvariant() switch { "" => owner.ExecutionMode == "plan" ? "execute" : "plan", "on" or "plan" => "plan", "off" or "execute" => "execute", _ => throw new ArgumentException("/plan on|off") }; break;
             case "goal":

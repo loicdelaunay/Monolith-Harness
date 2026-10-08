@@ -45,7 +45,7 @@ public class ConversationSession : IDisposable
         Chat = new Chat { Id = chat.Id, ProjectId = chat.ProjectId, Title = chat.Title, IsFavorite = chat.IsFavorite, IsPinned = chat.IsPinned, IsArchived = chat.IsArchived, UpdatedUtc = chat.UpdatedUtc, AgentOptionsJson = chat.AgentOptionsJson,
             InteractionMode = ConversationModes.Normalize(chat.InteractionMode),
             ChatWebEnabled = chat.ChatWebEnabled, ChatPythonEnabled = chat.ChatPythonEnabled,
-            SandboxEnabled = !ConversationModes.IsChat(chat.InteractionMode) && chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, TodoDismissed = chat.TodoDismissed,
+            SandboxEnabled = !ConversationModes.IsChat(chat.InteractionMode) && chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, AllowOutsideResources = chat.AllowOutsideResources, TodoDismissed = chat.TodoDismissed,
             ExecutionMode = ConversationModes.IsChat(chat.InteractionMode) ? "chat" : AgentPolicy.Mode(chat.ExecutionMode),
             OrchestrationMode = ConversationModes.IsChat(chat.InteractionMode) ? "disabled" : AgentPolicy.Orchestration(chat.OrchestrationMode) };
         capturedProject = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
@@ -64,6 +64,8 @@ public class ConversationSession : IDisposable
                 Chat.OrchestrationMode="forced";
             }
         }
+        ResourceAccessPolicy.DemandProvider(Chat, Provider);
+        foreach (var childProvider in AgentProviders.Values) ResourceAccessPolicy.DemandProvider(Chat, childProvider);
         OpenCodeProject = Provider.IsOpenCode && ConversationModes.IsChat(Chat.InteractionMode)
             ? ProjectResources.Effective(chat, project, databasePath) : Project;
         if (Provider.IsAcp) { Chat.ChatWebEnabled = false; Chat.ChatPythonEnabled = false; }

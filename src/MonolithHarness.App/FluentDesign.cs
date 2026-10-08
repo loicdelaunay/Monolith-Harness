@@ -10,6 +10,7 @@ namespace MonolithHarness.App;
 internal static partial class FluentDesign
 {
     static AppearanceTheme theme = AppearanceThemes.All[0];
+    internal static AppearanceTheme CurrentTheme => theme;
     static readonly Dictionary<string, SolidColorBrush> resources = [];
     static readonly Dictionary<(byte R, byte G, byte B), SolidColorBrush> adapted = [];
     static Windows.UI.Color Color(string hex) => ColorHelper.FromArgb(255, Convert.ToByte(hex.Substring(1,2),16), Convert.ToByte(hex.Substring(3,2),16), Convert.ToByte(hex.Substring(5,2),16));

@@ -198,10 +198,17 @@ public sealed partial class MainWindow
                     var welcome = new StackPanel { Spacing = 16, Margin = new(20, 42, 20, 24) };
                     welcome.Children.Add(Label(T("Un espace pour vos idées.\nDes outils pour aller plus loin."), 30));
                     welcome.Children.Add(Label(T("Discutez avec votre modèle, joignez une image ou explorez un dossier source. Chaque projet garde ses conversations et son contexte."), 15));
+                    if (selected == null)
+                    {
+                        var startDiscussion = Action(WorkflowText("Lancer une nouvelle discussion", "Start a new conversation"), NewChat);
+                        startDiscussion.HorizontalAlignment = HorizontalAlignment.Left; startDiscussion.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+                        welcome.Children.Add(startDiscussion);
+                    }
                     panel.Children.Add(welcome);
                 }
                 ScrollToBottom();
             }
+            if (selected != null && (await FileProposals.ReadAsync(db.FilePath, selected.Id, ct))?.Files.Count > 0) AddProposalReviewButton(panel);
             await Task.WhenAll(RefreshInboxAsync(), RefreshPinnedTasksAsync());
             ct.ThrowIfCancellationRequested();
             if (selected != null && displayedRun == null) await LoadSubagents(selected.Id);

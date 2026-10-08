@@ -101,6 +101,9 @@ namespace MonolithHarness.Core.Migrations
 
             modelBuilder.Entity("MonolithHarness.Core.Chat", b =>
                 {
+                    b.Property<bool>("AllowOutsideResources")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");

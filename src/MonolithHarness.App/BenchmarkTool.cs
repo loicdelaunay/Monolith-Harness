@@ -25,6 +25,7 @@ internal sealed partial class ModelToolsWindow
     TextBlock benchmarkPreviewTitle = null!;
     string? benchmarkPreviewHtml;
     Button reloadBenchmarkPreview = null!, copyBenchmarkHtml = null!;
+    bool ToolWebPreviewAllowed => readRetrySettings?.Invoke().AllowWebViewInTools == true;
     int BenchmarkSeed => double.IsFinite(benchmarkSeed.Value) ? (int)Math.Clamp(benchmarkSeed.Value, 0, 999_999_999) : 1729;
     int BenchmarkTimeout => new[] { 180, 600, 1200 }[Math.Max(0, benchmarkLimit.SelectedIndex)];
     string BenchmarkScope => new[] { "reasoning", "interactive", "combined" }[Math.Max(0, benchmarkScope.SelectedIndex)];
@@ -153,6 +154,19 @@ internal sealed partial class ModelToolsWindow
     async Task ShowBenchmarkPreview(string html, string title, CancellationToken ct)
     {
         SetBenchmarkPreviewVisible(true); benchmarkPreviewTitle.Text = title;
+        if (!ToolWebPreviewAllowed)
+        {
+            benchmarkPreview?.ClosePreview(); benchmarkPreview = null;
+            benchmarkPreviewHtml = html; benchmarkPreviewHost.Children.Clear();
+            var native = new Grid { RowSpacing = 8 };
+            native.RowDefinitions.Add(new() { Height = GridLength.Auto }); native.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
+            native.Children.Add(Text(L("Code consultable sans navigateur. L’application HTML n’est pas exécutée.", "Source is available without a browser. The HTML application is not executed."), 13, true));
+            var code = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
+                Text = html[..Math.Min(40000, html.Length)] + (html.Length > 40000 ? L("\n… Aperçu limité ; Copier le HTML conserve le code complet.", "\n… Preview truncated; Copy HTML keeps the complete source.") : ""),
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Code, Consolas"), FontSize = 12, VerticalAlignment = VerticalAlignment.Stretch };
+            At(native, code, 1); benchmarkPreviewHost.Children.Add(native);
+            benchmarkPreviewTitle.Text = title + L(" · code source", " · source"); refreshActions(); return;
+        }
         // A fresh frame on every load clears timers, prior applications and grading state.
         benchmarkPreview?.ClosePreview(); benchmarkPreview = new(); benchmarkPreviewHost.Children.Clear(); benchmarkPreviewHost.Children.Add(benchmarkPreview);
         benchmarkPreviewHtml = html; refreshActions();
@@ -171,6 +185,8 @@ internal sealed partial class ModelToolsWindow
 
     Task RunBenchmark() => StartOperation(async (selected, ct) =>
     {
+        if (!ToolWebPreviewAllowed && BenchmarkCases.Any(c => c.Visual != null))
+            throw new InvalidOperationException(L("Les épreuves interactives nécessitent WebView. Choisissez Raisonnement et code, ou activez Autoriser les aperçus WebView dans les outils dans Réglages / Général sur un poste compatible.", "Interactive challenges require WebView. Choose Reasoning and code, or enable Allow WebView previews in tools in Settings / General on a compatible device."));
         foreach (var button in benchmarkReplayButtons) busyControls.Remove(button); benchmarkReplayButtons.Clear();
         benchmarkEntries.Clear(); benchmarkRows.Children.Clear();
         var cases = BenchmarkCases;
@@ -234,6 +250,7 @@ internal sealed partial class ModelToolsWindow
                         benchmarkPreviewHost.IsHitTestVisible = false;
                         try
                         {
+                            if (!ToolWebPreviewAllowed || benchmarkPreview == null) throw new InvalidOperationException(L("Vérifications interactives indisponibles : WebView est désactivé.", "Interactive checks unavailable: WebView is disabled."));
                             var judgment = await VisualBenchmarkRunner.RunAsync(item.Visual, BenchmarkLevel, BenchmarkSeed, benchmarkPreview!.InvokeAsync, ct);
                             checks = judgment.Checks; passed = judgment.Passed;
                         }

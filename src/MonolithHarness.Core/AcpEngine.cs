@@ -63,7 +63,7 @@ public sealed class AcpEngine
             if (request["sessionId"]?.ToString() != sessionId) return false;
             var call = request["toolCall"];
             var kind = call?["kind"]?.ToString() ?? "other";
-            if (!options.ToolsEnabled || options.Mode == "chat" || options.Mode == "plan" && kind is not ("read" or "search" or "fetch" or "think")) return false;
+            if (!options.ToolsEnabled || options.Mode == "chat" || AgentPolicy.ReadOnly(options.Mode) && kind is not ("read" or "search" or "fetch" or "think")) return false;
             var paths = (call?["locations"] as JsonArray ?? []).Select(x => x?["path"]?.ToString() ?? "").Where(x => x.Length > 0).ToList();
             return options.Authorize != null && await options.Authorize(new(call?["title"]?.ToString() ?? "Outil ACP", kind,
                 call?["rawInput"]?.ToJsonString() ?? "", paths), token);

@@ -41,8 +41,8 @@ public sealed partial class MainWindow
                 var definitions = ChatEngine.ToolDefinitions(source && SourceTools.CanRead(enabled), BrowserSkillAccess.Enabled(enabled) && Skills.Enabled(enabled,"web"), source && Skills.Enabled(enabled,"write_sources"));
                 SourceTools.AddDefinitions(definitions, source, enabled); AddWorkspaceToolDefinitions(definitions, run);
                 FeatureSettings.Read(run.Options.FeaturesJson).FilterBrowser(definitions);
-                AgentPolicy.Filter(definitions, run.Chat.ExecutionMode); SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
-                if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                AgentPolicy.Filter(definitions, run.Chat); SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
+                if (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 return definitions;
             }
@@ -51,6 +51,7 @@ public sealed partial class MainWindow
             await toolQueue.WaitAsync(ct);
             try
             {
+                AgentPolicy.Demand(run.Chat, name);
                 if (name.StartsWith("mcp_",StringComparison.Ordinal))
                 {
                     var result = await mcp.CallAsync(name,args,run.Provider.SupportsImages || VisionBridge.Enabled(RunSkills(run)),ct);

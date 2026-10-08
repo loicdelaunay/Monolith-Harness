@@ -9,6 +9,21 @@ public sealed partial class MainWindow
 {
     readonly ToggleSwitch conversationModeSwitch = new() { IsOn = true, FontSize = 11, MinWidth = 0, MinHeight = 0, Height = 28, Padding = new(0), VerticalAlignment = VerticalAlignment.Center };
     bool updatingConversationMode;
+    bool compactComposerMode;
+    void SetComposerModeCompact(bool compact)
+    {
+        if (compactComposerMode == compact) return;
+        compactComposerMode = compact;
+        composerPermissionLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        conversationModeSwitch.OffContent = compact ? null : ConversationModeCaption("Chat", "\uE8BD");
+        conversationModeSwitch.OnContent = compact ? null : ConversationModeCaption("Agent", "\uE713");
+    }
+    FrameworkElement ConversationModeCaption(string name, string glyph)
+    {
+        var label = new TextBlock { Text = name, FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var icon = FluentDesign.Icon(glyph, 12); icon.VerticalAlignment = VerticalAlignment.Center;
+        var row = Row(icon, label); row.Spacing = 4; row.VerticalAlignment = VerticalAlignment.Center; return row;
+    }
     bool ChatInteraction => ConversationModes.IsChat(chat?.InteractionMode);
 
     FrameworkElement BuildConversationModeSelector(Button configureButton)
@@ -27,14 +42,8 @@ public sealed partial class MainWindow
         configureButton.VerticalAlignment = VerticalAlignment.Center;
         configureButton.VerticalContentAlignment = VerticalAlignment.Center;
         configureButton.HorizontalContentAlignment = HorizontalAlignment.Center;
-        FrameworkElement Caption(string name, string glyph)
-        {
-            var label = new TextBlock { Text = name, FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var icon = FluentDesign.Icon(glyph, 12); icon.VerticalAlignment = VerticalAlignment.Center;
-            var row = Row(icon, label); row.Spacing = 4; row.VerticalAlignment = VerticalAlignment.Center; return row;
-        }
-        conversationModeSwitch.OffContent = Caption("Chat", "\uE8BD");
-        conversationModeSwitch.OnContent = Caption("Agent", "\uE713");
+        conversationModeSwitch.OffContent = ConversationModeCaption("Chat", "\uE8BD");
+        conversationModeSwitch.OnContent = ConversationModeCaption("Agent", "\uE713");
         conversationModeSwitch.Toggled += async (_, _) =>
         {
             if (updatingConversationMode) return;

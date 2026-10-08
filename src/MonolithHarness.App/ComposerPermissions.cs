@@ -60,7 +60,11 @@ public sealed partial class MainWindow
             : mode == PermissionModes.Deny ? FluentDesign.Secondary : FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
         composerPermissionShield.Foreground = brush; composerPermissionLabel.Foreground = brush;
         var description = WorkflowText("Autorisations · ", "Permissions · ") + PermissionCaption(mode) + "\n" + PermissionDescription(mode)
-            + "\n" + WorkflowText("Réglage global partagé avec Paramètres / Autorisations.", "Global setting shared with Settings / Permissions.");
+            + "\n" + WorkflowText("Réglage global partagé avec Paramètres / Autorisations.", "Global setting shared with Settings / Permissions.")
+            + (chat == null ? "" : "\n" + (chat.AllowOutsideResources
+                ? WorkflowText("Cette conversation : accès hors pièces jointes autorisé selon le mode choisi.", "This conversation: outside access allowed according to the selected permission mode.")
+                : WorkflowText("Cette conversation : accès limité aux pièces jointes.", "This conversation: access restricted to attachments.")));
+
         ToolTipService.SetToolTip(composerPermissionsButton, description);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerPermissionsButton, description);
         composerPermissionsButton.IsEnabled = conversationReady && !conversationLoading && !changingComposerPermission
@@ -99,17 +103,73 @@ public sealed partial class MainWindow
             ? WorkflowText("Réglages ouverts : choisissez le mode dans l’onglet Autorisations.", "Settings are open: choose the mode in the Permissions tab.")
             : WorkflowText("Ce choix s’applique à toutes les conversations et aux prochaines demandes d’accès. Les autorisations mémorisées se gèrent dans les réglages.", "Applies to all conversations and future access requests. Manage saved grants in settings."), 12);
         note.Foreground = FluentDesign.Secondary; note.Margin = new(8, 6, 8, 4); panel.Children.Add(note);
+        panel.Children.Add(new Border { Height = 1, Background = FluentDesign.Secondary, Opacity = .25, Margin = new(8, 8, 8, 4) });
+        var outside = new ToggleSwitch
+        {
+            Header = WorkflowText("Travailler hors des pièces jointes", "Work outside attachments"),
+            IsOn = chat?.AllowOutsideResources ?? true,
+            OnContent = WorkflowText("Autorisé", "Allowed"), OffContent = WorkflowText("Limité aux pièces jointes", "Restricted to attachments"),
+            IsEnabled = chat != null && ActiveRun == null && !changingComposerPermission && !conversationLoading,
+            Margin = new(8, 4, 8, 0)
+        };
+        var ownerId = chat?.Id;
+        ToolTipService.SetToolTip(outside, WorkflowText("Réglage enregistré pour cette conversation, indépendant du mode d’approbation.", "Saved for this conversation, independently of the approval mode."));
+        bool restoringBoundary = false;
+        outside.Toggled += async (_, _) =>
+        {
+            if (restoringBoundary || ownerId == null || chat?.Id != ownerId) return;
+            var wanted = outside.IsOn;
+            outside.IsEnabled = false;
+            await Guard(() => ChangeComposerResourceBoundaryAsync(ownerId.Value, wanted));
+            restoringBoundary = true;
+            try { outside.IsOn = chat?.AllowOutsideResources ?? true; }
+            finally { restoringBoundary = false; }
+            outside.IsEnabled = chat?.Id == ownerId && ActiveRun == null && !conversationLoading && !changingComposerPermission;
+        };
+        panel.Children.Add(outside);
+        var boundaryNote = Label(WorkflowText(
+            "Ce choix concerne cette conversation et ses sous-agents. Désactivé : seuls les fichiers et dossiers joints, ainsi que l’espace de travail de la conversation, sont accessibles. Le terminal local, Python, GIT, le navigateur, le bureau, MCP et les agents OpenCode / ACP sont bloqués. La sandbox permet les commandes isolées. Les outils manuels restent disponibles.",
+            "Applies to this conversation and its subagents. When off, only attached files/folders and the conversation workspace are accessible. Local terminal, Python, GIT, browser, desktop, MCP and OpenCode / ACP agents are blocked. Sandbox mode allows isolated commands. Manual tools remain available."), 12);
+        boundaryNote.Foreground = FluentDesign.Secondary; boundaryNote.Margin = new(8, 2, 8, 8); panel.Children.Add(boundaryNote);
+        if (ActiveRun != null)
+        {
+            var busyNote = Label(WorkflowText("Arrêtez la réponse pour changer ce périmètre.", "Stop the response to change this boundary."), 12);
+            busyNote.Foreground = FluentDesign.Secondary; busyNote.Margin = new(8, 0, 8, 4); panel.Children.Add(busyNote);
+        }
         var details = Action(WorkflowText("Paramètres / Autorisations", "Settings / Permissions"), async () =>
         { flyout.Hide(); await Settings(showProviders: false, showPermissions: true); });
         details.HorizontalAlignment = HorizontalAlignment.Stretch; panel.Children.Add(details);
-        flyout.Content = panel;
+        flyout.Content = new ScrollViewer { Content = panel,
+            MaxHeight = Math.Max(220, Math.Min(620, root.ActualHeight - 80)),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+    }
+    async Task ChangeComposerResourceBoundaryAsync(int ownerId, bool value)
+    {
+        if (chat?.Id != ownerId || ActiveRun != null || changingComposerPermission || conversationLoading
+            || databaseMaintenanceBusy || conversationRetentionBusy) return;
+        var owner = chat;
+        if (owner.AllowOutsideResources == value) return;
+        changingComposerPermission = true; RefreshComposerPermissions(); RefreshGenerationControls();
+        try
+        {
+            await using var store = new HarnessDb();
+            var changed = await store.Chats.Where(item => item.Id == ownerId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.AllowOutsideResources, value));
+            if (changed != 1) throw new InvalidOperationException(WorkflowText("Conversation introuvable.", "Conversation not found."));
+            owner.AllowOutsideResources = value;
+            db.Entry(owner).Property(item => item.AllowOutsideResources).OriginalValue = value;
+            ShowStatus(value
+                ? WorkflowText("Accès hors pièces jointes autorisé pour cette conversation.", "Outside access enabled for this conversation.")
+                : WorkflowText("Cette conversation est limitée à ses pièces jointes.", "This conversation is restricted to its attachments."), StatusKind.Notice);
+        }
+        finally { changingComposerPermission = false; RefreshComposerPermissions(); RefreshGenerationControls(); }
     }
     async Task ChangeComposerPermissionAsync(string value)
     {
         if (changingComposerPermission || editingSettings || databaseMaintenanceBusy || conversationRetentionBusy) return;
         var mode = PermissionModes.Normalize(value);
         if (mode == PermissionModes.Normalize(state.PermissionMode)) return;
-        changingComposerPermission = true; RefreshComposerPermissions();
+        changingComposerPermission = true; RefreshComposerPermissions(); RefreshGenerationControls();
         try
         {
             // Use a separate context while conversations may be writing messages.
@@ -121,6 +181,6 @@ public sealed partial class MainWindow
             db.Entry(state).Property(item => item.PermissionMode).OriginalValue = mode;
             ShowStatus(WorkflowText("Autorisations : ", "Permissions: ") + PermissionCaption(mode), StatusKind.Notice);
         }
-        finally { changingComposerPermission = false; RefreshComposerPermissions(); }
+        finally { changingComposerPermission = false; RefreshComposerPermissions(); RefreshGenerationControls(); }
     }
 }

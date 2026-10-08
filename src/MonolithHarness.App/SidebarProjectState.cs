@@ -116,6 +116,7 @@ public sealed partial class MainWindow
             if (!conversationRuns.ContainsKey(item.Id)) Add(WorkflowText("Supprimer…", "Delete…"), DeleteChatAsync);
             menu.ShowAt(button, e.GetPosition(button));
         };
+        EnableSidebarDrag(button, false, () => item.Id);
         return button;
     }
 

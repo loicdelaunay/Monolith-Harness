@@ -17,8 +17,8 @@ static class AppearanceMcpChecks
                   ThemeContrast.Ratio(ThemeContrast.AccentText(theme), theme.Background) >= 4.5,
                 $"{theme.Id}: contraste des accents et sélections");
         }
-        var settings = FeatureSettings.Read(new FeatureSettings { Theme="ivory", ComposerInfoExpanded=false }.Json());
-        check(settings.Theme=="ivory" && !settings.ComposerInfoExpanded, "Thème et panneau replié persistés dans les réglages");
+        var settings = FeatureSettings.Read(new FeatureSettings { Theme="ivory", ShowComposerSpeed=false, ShowComposerContext=true }.Json());
+        check(settings.Theme=="ivory" && !settings.ShowComposerSpeed && settings.ShowComposerContext, "Thème et indicateurs de débit/contexte persistés indépendamment dans les réglages");
         var brandRoot=Path.Combine(Path.GetTempPath(),"omh-brand-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(brandRoot);
         var ownLogo=Path.Combine(brandRoot,"logo personnalisé.png");await File.WriteAllBytesAsync(ownLogo,[1,2,3]);
         check(await BrandingAssets.SaveLogoAsync(ownLogo,[1,2,3],brandRoot)=="logo personnalisé.png","Logo près de l’exécutable conservé en chemin relatif");

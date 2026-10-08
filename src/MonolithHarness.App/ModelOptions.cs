@@ -8,7 +8,7 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     readonly DropDownButton modelOptionsButton = new() { HorizontalAlignment = HorizontalAlignment.Right,
-        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0, MinHeight = 32,
+        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0, MinHeight = 38,
         MaxWidth = 240, Padding = new(8, 4, 8, 4), CornerRadius = new(8), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new(0) };
     readonly TextBlock selectedModelName = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
         Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
@@ -33,7 +33,7 @@ public sealed partial class MainWindow
             Background = FluentDesign.Resource("ControlSelectedBrush"), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(badge, 1); selection.Children.Add(badge);
         modelOptionsButton.Content = selection;
-        var panel = new Grid { RowSpacing = 10 };
+        var panel = modelOptionsPanel = new Grid { RowSpacing = 10 };
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -93,7 +93,7 @@ public sealed partial class MainWindow
         var done = new Button { HorizontalAlignment = HorizontalAlignment.Right, MinHeight = 32, Padding = new(12, 4, 12, 4), FontSize = 13,
             Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         modelDoneButton = done;
-        var footer = Row(quickApplyLevel, done); footer.HorizontalAlignment = HorizontalAlignment.Right;
+        var footer = Row(done); footer.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetRow(footer, 2); panel.Children.Add(footer);
         TextZoom.Observe(panel);
         modelOptionsFlyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.TopEdgeAlignedRight };
@@ -105,7 +105,7 @@ public sealed partial class MainWindow
         {
             modelOptionsIsOpen = true; previewQuickLevelId = null;
             var scale = TextZoom.ForWindow(root) / 100d;
-            panel.Width = Math.Max(120, Math.Min(350 * scale, root.ActualWidth - 48));
+            ResizeModelPicker();
             panel.MaxHeight = Math.Max(180, root.ActualHeight - 96);
             modelSelector.MaxSuggestionListHeight = Math.Max(100, Math.Min(260 * scale, root.ActualHeight / 2));
             heading.Text = WorkflowText("Modèle et réflexion", "Model and thinking");

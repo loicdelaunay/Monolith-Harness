@@ -6,16 +6,6 @@ using MonolithHarness.Core;
 
 namespace MonolithHarness.App;
 
-internal sealed partial class FormattedTextEditor
-{
-    internal async Task PasteForSmoke(string html, string plain)
-    {
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(25)); await pending;
-        await Script("(()=>{const e=document.getElementById('editor');e.focus();const r=document.createRange();r.selectNodeContents(e);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);const d=new DataTransfer();d.setData('text/html',"+JsonSerializer.Serialize(html)+");d.setData('text/plain',"+JsonSerializer.Serialize(plain)+");e.dispatchEvent(new ClipboardEvent('paste',{clipboardData:d,bubbles:true,cancelable:true}));})()");
-    }
-    internal Task<string> InspectForSmoke(string expression) => Script(expression);
-}
-
 public sealed partial class MainWindow
 {
     async Task SmokeTextToolRegression(string output)

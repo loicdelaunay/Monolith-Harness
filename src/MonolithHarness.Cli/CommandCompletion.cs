@@ -2,6 +2,7 @@ namespace MonolithHarness.Cli;
 
 public sealed class CommandCompletion(IReadOnlyList<Choice> commands)
 {
+    public IReadOnlyList<Choice> Skills { get; set; } = [];
     string previous = "";
     bool dismissed;
     public int Selected { get; private set; }
@@ -15,7 +16,7 @@ public sealed class CommandCompletion(IReadOnlyList<Choice> commands)
     {
         if (previous != input.Text) { previous = input.Text; Selected = 0; dismissed = false; }
         if (dismissed || input.HasSelection || !input.Text.StartsWith('/') || input.Text.Any(char.IsWhiteSpace) || input.Cursor != input.Text.Length) return [];
-        return commands.Where(c => c.Value.StartsWith(input.Text, StringComparison.OrdinalIgnoreCase)).ToList();
+        return Skills.Concat(commands).DistinctBy(c => c.Value, StringComparer.OrdinalIgnoreCase).Where(c => c.Value.StartsWith(input.Text, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     public bool Handle(ConsoleKeyInfo key, InputBuffer input)
@@ -23,6 +24,7 @@ public sealed class CommandCompletion(IReadOnlyList<Choice> commands)
         if (key.Modifiers != 0) return false;
         var matches = Matches(input);
         if (matches.Count == 0) return false;
+        Selected = Math.Clamp(Selected, 0, matches.Count - 1);
         switch (key.Key)
         {
             case ConsoleKey.UpArrow: Selected = (Selected + matches.Count - 1) % matches.Count; return true;

@@ -41,8 +41,8 @@ public sealed partial class HarnessService
             {
                 await using var db = Db(); run.Options.EnabledSkills = await db.States.Select(x => x.EnabledSkills).SingleAsync(ct);
                 var definitions = Definitions(run);
-                AgentPolicy.Filter(definitions,run.Chat.ExecutionMode); SandboxWorkspace.Filter(definitions,run.Chat.SandboxEnabled);
-                if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                AgentPolicy.Filter(definitions,run.Chat); SandboxWorkspace.Filter(definitions,run.Chat.SandboxEnabled);
+                if (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 return definitions;
             }
@@ -51,6 +51,7 @@ public sealed partial class HarnessService
             await tools.WaitAsync(ct);
             try
             {
+                AgentPolicy.Demand(run.Chat, name);
                 if (name.StartsWith("mcp_",StringComparison.Ordinal))
                 {
                     var mcpResult = await mcp.CallAsync(name,args,run.Provider.SupportsImages || VisionBridge.Enabled(run.Options.EnabledSkills),ct);

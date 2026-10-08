@@ -67,10 +67,31 @@ public sealed partial class MainWindow
             ui.Info.Text = row.Shell + " · " + row.Status + " · " + row.Directory;
             ToolTipService.SetToolTip(ui.Info, ui.Info.Text);
             var text = (row.Command.Length == 0 ? "" : "> " + row.Command + "\n") + row.Output;
-            if (ui.Output.Text != text) ui.Output.Text = text;
+            if (ui.Output.Text != text)
+            {
+                var scroller = FindTerminalScroll(ui.Output);
+                var offset = scroller?.VerticalOffset ?? 0;
+                var follow = scroller == null || scroller.ScrollableHeight - offset < 24;
+                var selection = ui.Output.SelectionStart; var length = ui.Output.SelectionLength;
+                ui.Output.Text = text;
+                if (length > 0) ui.Output.Select(Math.Min(selection, text.Length), Math.Min(length, Math.Max(0, text.Length - selection)));
+                ui.Output.DispatcherQueue.TryEnqueue(() => {
+                    if (ui.Output.Text != text) return;
+                    ui.Output.UpdateLayout();
+                    var view = FindTerminalScroll(ui.Output);
+                    view?.ChangeView(null, follow ? view.ScrollableHeight : offset, null, true);
+                });
+            }
             ui.Run.IsEnabled = row.Status != "running" && !row.Sandbox;
             ui.Stop.IsEnabled = row.Status == "running";
         }
+    }
+    static ScrollViewer? FindTerminalScroll(DependencyObject parent)
+    {
+        if (parent is ScrollViewer viewer) return viewer;
+        for (int i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            if (FindTerminalScroll(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i)) is { } child) return child;
+        return null;
     }
     void SelectTerminalTab(ConversationRun run, string? terminalId, bool legacyTerminal = false)
     {

@@ -230,7 +230,7 @@ internal sealed partial class ModelToolsWindow : Window
     FormattedTextEditor RichEditor(string placeholder, bool readOnly = false)
     {
         var editor = new FormattedTextEditor(placeholder, readOnly);
-        editor.Error += error => SetNotice(error, true); editors.Add(editor); return editor;
+        editor.Error += error => SetNotice(error, true); editor.Notice += message => SetNotice(message); editors.Add(editor); return editor;
     }
     Button CopyFormatted(Func<FormattedTextEditor> editor) => Button(L("Copier", "Copy"), async () =>
     {

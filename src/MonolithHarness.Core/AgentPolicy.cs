@@ -4,11 +4,11 @@ namespace MonolithHarness.Core;
 
 public static class AgentPolicy
 {
-    public static string Mode(string? value) => value is "plan" or "chat" ? value : "execute";
+    public static string Mode(string? value) => value is "plan" or "propose" or "chat" ? value : "execute";
     public static string Orchestration(string? value) => value is "auto" or "forced" ? value : "disabled";
-    public static bool ReadOnly(string mode) => Mode(mode) is "plan" or "chat";
+    public static bool ReadOnly(string mode) => Mode(mode) is "plan" or "propose" or "chat";
     // An allow-list is deliberate: new tools, MCP and arbitrary shell commands cannot silently bypass Plan.
-    public static bool Allowed(string mode, string tool) => Mode(mode) != "chat" && (!ReadOnly(mode) || tool is
+    public static bool Allowed(string mode, string tool) => Mode(mode) != "chat" && (Mode(mode) == "propose" && tool == FileProposals.Tool || !ReadOnly(mode) || tool is
         "asset_inspect" or "asset_capture" or "asset_guides" or "browser_viewport" or "browser_tabs" or "memory_search" or "memory_read" or
         "list_images" or "analyze_image" or "rag_search" or "rag_sources" or "rag_read" or "list_sources" or "read_source" or "glob_sources" or "grep_sources" or "git_changes" or
         "read_page" or "inspect_dom" or "python_info" or "keyboard_keys" or "desktop_applications" or "desktop_screens" or "desktop_screenshot" or "browser_screenshot" or
@@ -17,12 +17,13 @@ public static class AgentPolicy
     {
         if (!Allowed(mode, tool)) throw new UnauthorizedAccessException(Mode(mode) == "chat"
             ? $"Mode Chat : outil '{tool}' indisponible. Passez en Agent pour utiliser les outils / Chat mode has no tools."
-            : $"Mode Plan : outil '{tool}' interdit. Passez en Exécution au prochain envoi / Plan mode forbids this tool.");
+            : $"Mode {(Mode(mode) == "propose" ? "Proposition" : "Plan")} : outil '{tool}' interdit. Passez en Exécution au prochain envoi / Plan mode forbids this tool.");
     }
-    public static bool Allowed(Chat chat, string tool) => ConversationModes.IsChat(chat.InteractionMode)
-        ? ConversationModes.ToolAllowed(chat, tool) : Allowed(chat.ExecutionMode, tool);
+    public static bool Allowed(Chat chat, string tool) => ResourceAccessPolicy.Allowed(chat, tool) && (ConversationModes.IsChat(chat.InteractionMode)
+        ? ConversationModes.ToolAllowed(chat, tool) : Allowed(chat.ExecutionMode, tool));
     public static void Demand(Chat chat, string tool)
     {
+        ResourceAccessPolicy.Demand(chat, tool);
         if (!ConversationModes.IsChat(chat.InteractionMode)) { Demand(chat.ExecutionMode, tool); return; }
         if (!Allowed(chat, tool)) throw new UnauthorizedAccessException($"Mode Chat : outil '{tool}' indisponible ou skill désactivé / Tool unavailable or skill disabled in Chat mode.");
     }
@@ -38,7 +39,7 @@ public static class AgentPolicy
     }
     public static string Prompt(string mode, string orchestration) =>
         Mode(mode) == "chat" ? "\nCHAT MODE: Respond conversationally. Only enabled web research and Python skills are available; no project tools, autonomous goals or delegation." :
-        (ReadOnly(mode)
+        (Mode(mode) == "propose" ? "\nPROPOSITION MODE: Inspect files, list the files requiring changes and explain why. Use propose_file_changes to save the complete proposed contents for review. Do not apply changes, execute shell commands or use alternative tools to write project files. Drafts are inert; the user must review and explicitly apply selected files. If the host does not expose this tool, provide reviewable diffs in your answer and make no writes." : ReadOnly(mode)
             ? "\nPLAN MODE: Analyze, inspect and propose a plan. All writes, shell commands, navigation/interaction and external MCP calls are technically disabled. Do not attempt alternate tools to bypass this. User must switch to Execution for implementation."
             : "\nEXECUTION MODE: Implement the user request within the enabled tools and permission rules.") +
         (Orchestration(orchestration) == "disabled" ? "\nDelegation disabled: do the work yourself." :
@@ -47,6 +48,7 @@ public static class AgentPolicy
 
 public sealed record OpenCodeRunPolicy(string Mode, string Orchestration, bool ChatWebEnabled = false, string ThinkingLevel = "none")
 {
+    public string ExternalMode => Mode == "propose" ? "plan" : Mode;
     public bool RequireNoReasoning => Mode == "chat" && ThinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase);
     public bool AllowsChatWeb(string action) => Mode == "chat" && ChatWebEnabled && action is "webfetch" or "websearch";
 }

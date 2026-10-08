@@ -91,7 +91,7 @@ public sealed partial class MainWindow
         projectNavigation.Children.Add(attentionNavigation);
         var items = (projects.ItemsSource as IEnumerable<Project> ?? []).ToList();
         var summaries = navigationChats.Select(CurrentSidebarChat).ToList();
-        var pinned = summaries.Where(x => x.IsPinned && MatchesSidebarSearch(x)).OrderBy(x => x.Id).ToList();
+        var pinned = SidebarOrder(summaries.Where(x => x.IsPinned && MatchesSidebarSearch(x)).OrderBy(x => x.Id), false, x => x.Id).ToList();
         if (pinned.Count > 0)
         {
             var pinnedHeading = Label(WorkflowText("Épinglées", "Pinned"), 12); pinnedHeading.Foreground = FluentDesign.Secondary; pinnedHeading.Margin = new(8, 4, 0, 6);
@@ -118,9 +118,7 @@ public sealed partial class MainWindow
         addProject.Width = addProject.Height = 30; addProject.Padding = new(0); addProject.BorderThickness = new(0); addProject.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         Grid.SetColumn(addProject, 3); heading.Children.Add(addProject);
         projectNavigation.Children.Add(heading);
-        foreach (var owner in items.Where(x => !x.IsInbox)) AddGroup(owner, false);
-        var inbox = items.FirstOrDefault(x => x.IsInbox);
-        if (inbox != null) AddGroup(inbox, true);
+        foreach (var owner in SidebarOrder(items.OrderBy(x => x.IsInbox), true, x => x.Id)) AddGroup(owner, owner.IsInbox);
 
         void AddGroup(Project owner, bool standalone)
         {
@@ -144,6 +142,7 @@ public sealed partial class MainWindow
             var badges = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
             projectBadgeHosts[owner.Id] = badges; Grid.SetColumn(badges, 2); body.Children.Add(badges); open.Content = body;
             ToolTipService.SetToolTip(open, owner.Name); header.Children.Add(open);
+            EnableSidebarDrag(open, true, () => owner.Id);
             if (!standalone) open.RightTapped += (_, e) =>
             {
                 e.Handled = true;
@@ -176,9 +175,9 @@ public sealed partial class MainWindow
             {
                 var rows = new StackPanel { Spacing = 4 };
                 var matching = summaries.Where(x => x.ProjectId == owner.Id && MatchesSidebarSearch(x)).ToList();
-                foreach (var item in matching.Where(x => !x.IsArchived).OrderByDescending(x => x.IsFavorite).ThenByDescending(x => x.UpdatedUtc).ThenByDescending(x => x.Id))
+                foreach (var item in SidebarOrder(matching.Where(x => !x.IsArchived).OrderByDescending(x => x.IsFavorite).ThenByDescending(x => x.UpdatedUtc).ThenByDescending(x => x.Id), false, x => x.Id))
                     rows.Children.Add(BuildIndependentChatRow(item, false));
-                var archived = matching.Where(x => x.IsArchived).ToList();
+                var archived = SidebarOrder(matching.Where(x => x.IsArchived).OrderByDescending(x => x.UpdatedUtc), false, x => x.Id).ToList();
                 if (archived.Count > 0)
                 {
                     var archivedRows = new StackPanel { Spacing = 4 };
