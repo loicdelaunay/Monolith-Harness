@@ -1,42 +1,96 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using MonolithHarness.Core;
-using static MonolithHarness.App.UiText;
 
 namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
-    void AddProposalReviewButton(StackPanel host)
+    readonly Dictionary<int, ProposalReviewWindow> proposalReviewWindows = [];
+    readonly Dictionary<int, TaskCompletionSource<bool>> proposalCommits = [];
+    readonly HashSet<int> proposalReviewLoading = [];
+
+    void AddProposalReviewButton(StackPanel host, int ownerId, ProposalBatch batch, IReadOnlyList<ProposalDiff> diffs)
     {
-        if (host.Children.OfType<Button>().Any(b => Equals(b.Tag, "proposal-review"))) return;
-        var button = Action(WorkflowText("Réviser les fichiers proposés", "Review proposed files"), ReviewFileProposalsAsync);
-        button.Tag = "proposal-review"; button.HorizontalAlignment = HorizontalAlignment.Right; host.Children.Add(button);
-    }
-    async Task ReviewFileProposalsAsync()
-    {
-        if (chat == null || project == null) return;
-        var ownerId = chat.Id; var batch = await FileProposals.ReadAsync(db.FilePath, ownerId);
-        if (batch == null || batch.Files.Count == 0) { ShowStatus(WorkflowText("Aucune proposition en attente", "No pending proposal")); return; }
-        if (conversationRuns.ContainsKey(ownerId)) throw new InvalidOperationException(WorkflowText("Attendez la fin de la génération avant d’appliquer les fichiers.", "Wait for generation to finish before applying files."));
-        var panel = new StackPanel { Spacing = 12, Width = Math.Max(260, Math.Min(700, root.ActualWidth - 120)) };
-        panel.Children.Add(Label(WorkflowText("Examinez les différences et cochez les fichiers à appliquer. Les autres resteront en attente.", "Review the differences and select files to apply. Others remain pending."), 13));
-        var choices = new List<(FileProposal File, CheckBox Choice)>();
-        foreach (var file in batch.Files)
+        var button = host.Children.OfType<Button>().FirstOrDefault(item => Equals(item.Tag, "proposal-review"));
+        if (button == null)
         {
-            var choice = new CheckBox { Content = file.Path, IsChecked = false }; choices.Add((file, choice));
-            panel.Children.Add(choice);
-            var diff = new TextBlock { Text = FileProposals.Diff(file), IsTextSelectionEnabled = true, TextWrapping = TextWrapping.NoWrap,
-                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Code, Consolas"), FontSize = 12 };
-            panel.Children.Add(new Expander { Header = WorkflowText("Voir les différences", "View diff"), Content = new ScrollViewer { Content = diff, MaxHeight = 260,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }, HorizontalAlignment = HorizontalAlignment.Stretch });
+            button = Action("", () => ReviewFileProposalsAsync(ownerId));
+            button.Tag = "proposal-review";
+            button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            button.Padding = new(16, 12, 16, 12); button.MinHeight = 56; button.CornerRadius = new(10);
+            button.Background = FluentDesign.Card; button.BorderBrush = FluentDesign.Resource("ControlStrokeColorDefaultBrush"); button.BorderThickness = new(1);
+            button.Margin = new(0, 8, 0, 8); host.Children.Add(button);
         }
-        var dialog = new ContentDialog { XamlRoot = root.XamlRoot, Title = WorkflowText("Revue des modifications proposées", "Review proposed changes"),
-            Content = new ScrollViewer { Content = panel, MaxHeight = 460 }, PrimaryButtonText = WorkflowText("Appliquer la sélection", "Apply selection"),
-            CloseButtonText = T("Annuler"), DefaultButton = ContentDialogButton.Close };
-        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
-        var selected = choices.Where(c => c.Choice.IsChecked == true).Select(c => c.File.Path).ToList(); if (selected.Count == 0) return;
-        if (chat?.Id != ownerId || conversationRuns.ContainsKey(ownerId)) throw new InvalidOperationException("La conversation a changé / Conversation changed.");
-        await FileProposals.ApplyAsync(db.FilePath, ownerId, batch.Revision, selected, new SourceAccess(project.GetSourceFolders()), CancellationToken.None);
-        ShowStatus(WorkflowText($"{selected.Count} fichiers appliqués", $"{selected.Count} files applied")); await RefreshGitAsync(CancellationToken.None);
+        var content = new Grid { ColumnSpacing = 16 };
+        content.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); content.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var summary = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
+        summary.Children.Add(FluentDesign.Icon("\uE8A5", 18));
+        var count = new TextBlock { Text = batch.Files.Count == 1 ? WorkflowText("1 fichier proposé", "1 proposed file") : WorkflowText($"{batch.Files.Count} fichiers proposés", $"{batch.Files.Count} proposed files"),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
+        summary.Children.Add(count);
+        summary.Children.Add(new TextBlock { Text = "+" + diffs.Sum(diff => diff.Added), Foreground = FluentDesign.Resource("DiffAddedTextBrush"), VerticalAlignment = VerticalAlignment.Center });
+        summary.Children.Add(new TextBlock { Text = "−" + diffs.Sum(diff => diff.Removed), Foreground = FluentDesign.Resource("DiffRemovedTextBrush"), VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(summary);
+        var action = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        var reviewLabel = new TextBlock { Text = WorkflowText("Réviser", "Review"), Foreground = FluentDesign.Resource("AccentTextFillColorPrimaryBrush") };
+        action.Children.Add(reviewLabel);
+        action.Children.Add(FluentDesign.Icon("\uE76C", 12)); Grid.SetColumn(action, 1); content.Children.Add(action);
+        content.SizeChanged += (_, e) =>
+        {
+            var narrow = e.NewSize.Width < 420;
+            reviewLabel.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+            count.Text = narrow ? WorkflowText($"{batch.Files.Count} fichiers", $"{batch.Files.Count} files")
+                : batch.Files.Count == 1 ? WorkflowText("1 fichier proposé", "1 proposed file") : WorkflowText($"{batch.Files.Count} fichiers proposés", $"{batch.Files.Count} proposed files");
+        };
+        button.Content = content;
+        var label = WorkflowText($"Réviser {batch.Files.Count} fichiers proposés, {diffs.Sum(diff => diff.Added)} lignes ajoutées et {diffs.Sum(diff => diff.Removed)} lignes supprimées", $"Review {batch.Files.Count} proposed files, {diffs.Sum(diff => diff.Added)} added lines and {diffs.Sum(diff => diff.Removed)} removed lines");
+        AutomationProperties.SetName(button, label); ToolTipService.SetToolTip(button, label);
+    }
+    Task ReviewFileProposalsAsync() => chat == null ? Task.CompletedTask : ReviewFileProposalsAsync(chat.Id);
+    async Task ReviewFileProposalsAsync(int ownerId)
+    {
+        if (proposalReviewWindows.TryGetValue(ownerId, out var existing)) { existing.Activate(); return; }
+        if (!proposalReviewLoading.Add(ownerId)) return;
+        try
+        {
+            var database = db.FilePath;
+            var batch = await FileProposals.ReadAsync(database, ownerId);
+            if (batch == null || batch.Files.Count == 0) { ShowStatus(WorkflowText("Aucune proposition en attente", "No pending proposal")); return; }
+            if (conversationRuns.ContainsKey(ownerId)) throw new InvalidOperationException(WorkflowText("Attendez la fin de la génération avant de revoir les fichiers.", "Wait for generation to finish before reviewing files."));
+            var diffs = await Task.Run(() => batch.Files.Select(ProposalDiff.Create).ToList());
+            await using var reviewDb = new HarnessDb(database);
+            var owner = await reviewDb.Chats.AsNoTracking().SingleAsync(item => item.Id == ownerId);
+            var window = new ProposalReviewWindow(owner.Title, batch, diffs, root.RequestedTheme, WorkflowText,
+                decisions => FileProposals.SaveReviewAsync(database, ownerId, batch.Revision, decisions),
+                async decisions =>
+                {
+                    if (conversationRuns.ContainsKey(ownerId)) throw new InvalidOperationException(WorkflowText("Attendez la fin de la génération avant d’appliquer les fichiers.", "Wait for generation to finish before applying files."));
+                    var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    proposalCommits.Add(ownerId, completed);
+                    try
+                    {
+                        await using var store = new HarnessDb(database);
+                        var current = await store.Chats.AsNoTracking().SingleAsync(item => item.Id == ownerId);
+                        var storedProject = await store.Projects.AsNoTracking().SingleAsync(item => item.Id == current.ProjectId);
+                        var source = ProjectResources.Effective(current, storedProject);
+                        await FileProposals.CompleteReviewAsync(database, ownerId, batch.Revision, decisions, new SourceAccess(source.GetSourceFolders()), CancellationToken.None);
+                    }
+                    finally { proposalCommits.Remove(ownerId); completed.TrySetResult(true); }
+                    var accepted = decisions.Count(decision => decision.Accepted);
+                    ShowStatus(WorkflowText($"Revue terminée · {accepted} blocs appliqués", $"Review finished · {accepted} blocks applied"));
+                    if (chat?.Id == ownerId)
+                    {
+                        foreach (var button in messages.Children.OfType<Button>().Where(item => Equals(item.Tag, "proposal-review")).ToArray()) messages.Children.Remove(button);
+                        try { await RefreshGitAsync(CancellationToken.None); }
+                        catch (Exception ex) { AppLog.Write(AppLogLevel.Warning, "proposals.git_refresh_failed", ex); }
+                    }
+                });
+            proposalReviewWindows.Add(ownerId, window);
+            window.Closed += (_, _) => proposalReviewWindows.Remove(ownerId);
+            ApplyBrandingIcon(window); ObserveTextZoom(window.ReviewRoot); window.Activate();
+        }
+        finally { proposalReviewLoading.Remove(ownerId); }
     }
 }

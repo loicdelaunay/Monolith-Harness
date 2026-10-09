@@ -110,7 +110,7 @@ public sealed partial class MainWindow : Window
         ObserveTextZoom(root);
         root.Loaded += async (_, _) => await Guard(InitializeAsync);
         root.SizeChanged += (_, _) => ResizeLayout();
-        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); localModelsWindow?.Close(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
+        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); localModelsWindow?.Close(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var reviewWindow in proposalReviewWindows.Values.ToArray()) reviewWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
     }
     void BuildSidebar()
     {
@@ -137,10 +137,11 @@ public sealed partial class MainWindow : Window
             if (e.ItemContainer is ListViewItem container)
             {
                 if (e.InRecycleQueue && ReferenceEquals(hoveredConversationContainer, container)) hoveredConversationContainer = null;
+                if (!e.InRecycleQueue)
+                    EnableSidebarDrag(container, false, () => (list.ItemFromContainer(container) as Chat ?? container.Content as Chat)?.Id);
                 if (!e.InRecycleQueue && container.Tag is not true)
                 {
                     container.Tag = true;
-                    EnableSidebarDrag(container, false, () => (container.Content as Chat)?.Id);
                     container.PointerEntered += (sender, _) =>
                     {
                         var previous = hoveredConversationContainer;
@@ -224,11 +225,12 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(titleHost, 1); header.Children.Add(titleHost);
         var toolsButton = Action("Outils", ToggleBrowser);
         var headerActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        headerActions.Children.Add(Action("Exporter", ExportConversationAsync));
+        var exportButton = Action("Exporter", ExportConversationAsync); headerActions.Children.Add(exportButton);
         headerActions.Children.Add(toolsButton);
         autoScrollButton.Click += (_, _) => { chatScrollInputUntil = 0; SetChatFollow(autoScrollButton.IsChecked == true); if (followChatTail) ScrollToBottom(); };
         headerActions.Children.Add(autoScrollButton);
         Grid.SetColumn(headerActions, 2); header.Children.Add(headerActions);
+        BuildResponsiveHeader(header, headerActions, menuBtn, exportButton, toolsButton);
         var chatHeading = new StackPanel { Spacing = 10 }; chatHeading.Children.Add(header); chatHeading.Children.Add(BuildChatFindBar());
         main.Children.Add(chatHeading);
         var conversationPanel = new Grid { RowSpacing = 8 };
@@ -1864,7 +1866,12 @@ public sealed partial class MainWindow : Window
         {
             if (run.Chat.ExecutionMode != "propose" || !SourceTools.CanRead(RunSkills(run))) throw new UnauthorizedAccessException("Proposition indisponible / Proposal unavailable.");
             var result = await FileProposals.PrepareAsync(run.Db.FilePath, run.Chat.Id, new SourceAccess(run.Project.GetSourceFolders()), argsObj, ct);
-            DispatcherQueue.TryEnqueue(() => { if (IsVisible(run)) AddProposalReviewButton(run.Messages); });
+            var proposalBatch = await FileProposals.ReadAsync(run.Db.FilePath, run.Chat.Id, ct);
+            if (proposalBatch is { Files.Count: > 0 })
+            {
+                var proposalDiffs = await Task.Run(() => proposalBatch.Files.Select(ProposalDiff.Create).ToList(), ct);
+                DispatcherQueue.TryEnqueue(() => { if (IsVisible(run)) AddProposalReviewButton(run.Messages, run.Chat.Id, proposalBatch, proposalDiffs); });
+            }
             return result;
         }
         if (VisionBridge.Handles(name)) return await VisionFor(run).CallAsync(name, argsObj, ct);

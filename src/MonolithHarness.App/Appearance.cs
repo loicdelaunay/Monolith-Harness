@@ -40,6 +40,8 @@ public sealed partial class MainWindow
         shell.PaneBackground = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
         ApplyBranding(theme.Dark);
         FluentDesign.WindowChrome(this);
+        foreach (var review in proposalReviewWindows.Values)
+        { review.ReviewRoot.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(review); }
         if (settingsWindow?.Content is FrameworkElement settingsRoot)
         { settingsRoot.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(settingsWindow); }
         if (tasksWindow?.Content is FrameworkElement tasksRoot)

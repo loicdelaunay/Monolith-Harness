@@ -239,6 +239,9 @@ public sealed partial class MainWindow
     }
     async Task ExecuteRunAsync(ConversationRun run)
     {
+        // A modeless review can finish while a queued or scheduled generation starts.
+        // Reserve the run, but wait for the file commit before allowing any tools.
+        if (proposalCommits.TryGetValue(run.Chat.Id, out var proposalCommit)) await proposalCommit.Task;
         AppLog.Write(AppLogLevel.Information, "generation.started", chatId: run.Chat.Id);
         permissionProject.Value = run.Project;
         automaticToolRun.Value = run;

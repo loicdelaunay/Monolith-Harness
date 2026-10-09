@@ -208,7 +208,11 @@ public sealed partial class MainWindow
                 }
                 ScrollToBottom();
             }
-            if (selected != null && (await FileProposals.ReadAsync(db.FilePath, selected.Id, ct))?.Files.Count > 0) AddProposalReviewButton(panel);
+            if (selected != null && await FileProposals.ReadAsync(db.FilePath, selected.Id, ct) is { Files.Count: > 0 } proposalBatch)
+            {
+                var proposalDiffs = await Task.Run(() => proposalBatch.Files.Select(ProposalDiff.Create).ToList(), ct);
+                ct.ThrowIfCancellationRequested(); AddProposalReviewButton(panel, selected.Id, proposalBatch, proposalDiffs);
+            }
             await Task.WhenAll(RefreshInboxAsync(), RefreshPinnedTasksAsync());
             ct.ThrowIfCancellationRequested();
             if (selected != null && displayedRun == null) await LoadSubagents(selected.Id);

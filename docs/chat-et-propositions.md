@@ -28,7 +28,11 @@ Le message transmis au modèle contient une demande explicite de suivre ce skill
 | Proposition | Inspecter les sources, lister les fichiers à modifier et préparer leurs nouveaux contenus pour revue. |
 | Exécution | Utiliser les outils autorisés pour réaliser la demande. |
 
-En **Proposition**, l’outil `propose_file_changes` enregistre des brouillons séparés des fichiers du projet. Ouvrez **Réviser les fichiers proposés** dans les réglages de la conversation ou avec `/proposals`, examinez les différences, cochez les fichiers puis choisissez **Appliquer la sélection**. La CLI propose la même revue fichier par fichier avec une confirmation finale.
+En **Proposition**, l’outil `propose_file_changes` enregistre des brouillons séparés des fichiers du projet. Une carte visible dans le chat affiche le nombre de fichiers proposés et les totaux de lignes ajoutées/supprimées. Cliquez sur **Réviser**, utilisez les réglages de la conversation ou `/proposals` pour ouvrir une fenêtre native indépendante.
+
+La colonne de gauche liste les fichiers ; cliquez sur un fichier pour afficher ses blocs de différences à droite, avec les numéros de ligne. Les ajouts sont verts ; les lignes précédentes remplacées ou supprimées sont rouges. Chaque bloc peut être **accepté** ou **refusé**, avec aussi des actions par fichier et **Accepter tout / Refuser tout**. Les changements proches partageant leurs lignes de contexte sont regroupés dans un même bloc.
+
+**Terminer** reste désactivé tant qu’un bloc est sans décision. Une fois tous les choix faits, ce bouton applique seulement les blocs acceptés, conserve les passages refusés et retire la proposition terminée. **Fermer**, ou la croix de la fenêtre, ne modifie aucun fichier : la proposition et les décisions enregistrées restent disponibles, y compris après redémarrage. Une nouvelle proposition change la révision et nécessite de rouvrir la revue. La CLI conserve sa revue fichier par fichier avec une confirmation finale.
 
 Les propositions sont conservées par conversation. Une revue devenue ancienne, un fichier modifié depuis la préparation ou un dossier source différent bloque l’application. L’application conserve l’encodage des fichiers existants. Les propositions sont limitées à vingt fichiers texte des sources jointes, 128 000 caractères par contenu et deux millions d’unités cumulées (contenus et originaux). Les créations sont possibles ; les suppressions, renommages et fichiers binaires ne sont pas proposés par cet outil.
 

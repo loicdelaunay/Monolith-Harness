@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.75.1 - 2026-10-09
+
+- Makes attachment previews shrink with available composer width and window height, including their image, placeholder and removal control. Keeps previews square under text zoom, restores their size when widening and retains horizontal scrolling for many attachments.
+- Shows “Voir pièces jointes (X)” next to the expand arrow when attachments are collapsed, with a current count and matching accessible label; expanded previews keep the arrow-only layout.
+
+## 1.75.0 - 2026-10-09
+
+- Makes the composer footer adapt to measured available width: hides token speed first, then the context percentage while retaining its ring, then compacts mode/permission labels and scales controls down only when needed. Preserves saved visibility preferences, restores details when widening, retains tooltips and keeps all controls on one row.
+- Uses icon-only Export, Tools and Auto actions when header space is limited, preserving tooltips, accessible labels and the Auto state.
+- Restores dragging on recycled sidebar containers without duplicating handlers, refreshes ordering after native drag completion, and keeps the current chat/draft on same-project reorders. Adds a thin accent insertion marker above/below chat and project targets, including moving a chat into a project.
+
+## 1.74.0 - 2026-10-09
+
+- Replaces the proposal ContentDialog with a separate native review window: files on the left, selected-file change blocks with line numbers on the right, green additions and red previous/removed lines. Keeps large diffs virtualized and follows the application theme without WebView. Uses content-sized row containers so colored code lines are contiguous while real blank lines and taller block-action headers retain their size.
+- Adds accept/reject actions for each block, each file and the entire batch. Finish is enabled only after every change has a decision; it applies accepted blocks, preserves rejected ranges, and clears the completed proposal. Close preserves pending proposals and saved decisions without applying project changes.
+- Shows a prominent full-width review card in the conversation with proposed-file counts and green/red added/removed line totals. Retains stale-revision, source-boundary, changed-file, original-encoding and rollback protections; generations starting during a final file commit wait for it to finish. The CLI retains its file-by-file workflow with improved multi-block differences.
+
 ## 1.73.1 - 2026-10-08
 
 - Fixes slash-skill completion inside sentences and at the caret: suggestions no longer require a slash at the start of the draft. Clicking a skill, Tab or Enter completes only its token, preserves surrounding text and never submits the message. The explicit skill instruction is added only when the complete draft is sent.

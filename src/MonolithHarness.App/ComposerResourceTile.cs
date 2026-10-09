@@ -12,22 +12,25 @@ sealed class ComposerResourceTile : UserControl
     public Button PreviewButton { get; }
     public Button RemoveButton { get; }
     public Image Thumbnail { get; } = new() { Stretch = Stretch.UniformToFill };
-    readonly UIElement placeholder;
+    readonly FontIcon placeholder;
+    readonly Border frame;
+    readonly Grid content;
+    readonly TextBlock caption;
     Func<CancellationToken, Task<byte[]>>? load;
     CancellationTokenSource? request;
     bool pointerInside;
 
     public ComposerResourceTile(string name, string location, bool folder, Action open, Action? remove)
     {
-        Width = Height = 96; Tag = location;
-        var frame = new Border { CornerRadius = new(8), BorderThickness = new(1), BorderBrush = FluentDesign.Stroke, Background = FluentDesign.Card };
-        var content = new Grid { Width = 94, Height = 94 };
+        Tag = location;
+        frame = new Border { CornerRadius = new(8), BorderThickness = new(1), BorderBrush = FluentDesign.Stroke, Background = FluentDesign.Card };
+        content = new Grid();
         placeholder = FluentDesign.Icon(folder ? "\uE8B7" : "\uE8A5", 30);
-        ((FrameworkElement)placeholder).HorizontalAlignment = HorizontalAlignment.Center;
-        ((FrameworkElement)placeholder).VerticalAlignment = VerticalAlignment.Center;
-        ((FrameworkElement)placeholder).Margin = new(0, 0, 0, 16);
+        placeholder.HorizontalAlignment = HorizontalAlignment.Center;
+        placeholder.VerticalAlignment = VerticalAlignment.Center;
+        placeholder.Margin = new(0, 0, 0, 16);
         content.Children.Add(placeholder); content.Children.Add(Thumbnail);
-        var caption = new TextBlock { Text = name, FontSize = 10, MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = FluentDesign.Primary };
+        caption = new TextBlock { Text = name, FontSize = 10, MaxLines = 1, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = FluentDesign.Primary };
         content.Children.Add(new Border { Child = caption, Background = FluentDesign.Card, CornerRadius = new(4), Padding = new(4, 3, 4, 3),
             Margin = new(3), VerticalAlignment = VerticalAlignment.Bottom });
         PreviewButton = new() { Content = content, Padding = new(0), BorderThickness = new(0), CornerRadius = new(8),
@@ -35,7 +38,7 @@ sealed class ComposerResourceTile : UserControl
         ToolTipService.SetToolTip(PreviewButton, location);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(PreviewButton, name);
         PreviewButton.Click += (_, _) => open();
-        RemoveButton = new() { Width = 24, Height = 24, MinWidth = 0, MinHeight = 0, Padding = new(0),
+        RemoveButton = new() { Width = 24, MinWidth = 0, MinHeight = 24, Padding = new(0),
             Content = FluentDesign.Icon("\uE711", 10), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new(3), CornerRadius = new(12), Background = FluentDesign.Card, Opacity = 0, IsHitTestVisible = false, IsEnabled = remove != null };
         RemoveButton.Click += (_, _) => remove?.Invoke();
@@ -49,8 +52,19 @@ sealed class ComposerResourceTile : UserControl
         };
         GotFocus += (_, _) => SetRemoveVisible(true);
         LostFocus += (_, _) => { if (!pointerInside) SetRemoveVisible(false); };
+        SetPreviewSize(96);
         Loaded += async (_, _) => await LoadAsync();
         Unloaded += (_, _) => request?.Cancel();
+    }
+    internal void SetPreviewSize(double size)
+    {
+        size = Math.Clamp(size, 48, 96);
+        // Let the frame determine height: text zoom must not inflate only one side of the tile.
+        Width = size; frame.Width = frame.Height = size;
+        content.Width = content.Height = Math.Max(0, size - 2);
+        placeholder.FontSize = Math.Clamp(size * .3, 14, 30);
+        placeholder.Margin = new(0, 0, 0, caption.FontSize + 14);
+        RemoveButton.Width = RemoveButton.MinHeight = size < 64 ? 20 : 24;
     }
     internal void SetRemoveVisible(bool visible) { RemoveButton.Opacity = visible ? 1 : 0; RemoveButton.IsHitTestVisible = visible && RemoveButton.IsEnabled; }
     public void LoadPreview(Func<CancellationToken, Task<byte[]>> loader) => load = loader;

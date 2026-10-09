@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 namespace MonolithHarness.Core;
 
 public sealed record FileProposal(string Path, string ResolvedPath, byte[]? Original, string Content);
-public sealed record ProposalBatch(string Revision, List<FileProposal> Files);
+public sealed record ProposalBatch(string Revision, List<FileProposal> Files, List<ProposalDecision>? Decisions = null);
 public static class FileProposals
 {
     public const string Tool = "propose_file_changes";
@@ -66,65 +66,121 @@ public static class FileProposals
     }
     public static string Diff(FileProposal file)
     {
-        var original = file.Original == null ? "" : SourceText.TryDecode(file.Original, out var decoded) ? decoded.Content : "";
-        var before = original.Length == 0 ? Array.Empty<string>() : original.Replace("\r\n", "\n").Split('\n');
-        var after = file.Content.Length == 0 ? Array.Empty<string>() : file.Content.Replace("\r\n", "\n").Split('\n');
-        int prefix = 0, suffix = 0;
-        while (prefix < before.Length && prefix < after.Length && before[prefix] == after[prefix]) prefix++;
-        while (suffix < before.Length - prefix && suffix < after.Length - prefix && before[^(suffix + 1)] == after[^(suffix + 1)]) suffix++;
+        var diff = ProposalDiff.Create(file);
         var result = new StringBuilder("--- " + file.Path + (file.Original == null ? " (nouveau / new)" : "") + "\n+++ " + file.Path + "\n");
-        if (prefix == before.Length && prefix == after.Length) return result.Append("Aucune différence textuelle / No text differences.").ToString();
-        var contextStart = Math.Max(0, prefix - 3); var contextEnd = Math.Min(suffix, 3);
-        result.Append($"@@ -{contextStart + 1},{before.Length - suffix - contextStart + contextEnd} +{contextStart + 1},{after.Length - suffix - contextStart + contextEnd} @@\n");
-        for (int i = contextStart; i < prefix; i++) result.AppendLine("  " + before[i]);
-        for (int i = prefix; i < before.Length - suffix; i++) result.AppendLine("- " + before[i]);
-        for (int i = prefix; i < after.Length - suffix; i++) result.AppendLine("+ " + after[i]);
-        for (int i = after.Length - suffix; i < after.Length - suffix + contextEnd; i++) result.AppendLine("  " + after[i]);
+        if (diff.Hunks.Count == 0) return result.Append("Aucune différence textuelle / No text differences.").ToString();
+        foreach (var hunk in diff.Hunks)
+        {
+            var leading = hunk.Lines.TakeWhile(line => line.Kind == ProposalLineKind.Context).Count();
+            var trailing = hunk.Lines.Reverse().TakeWhile(line => line.Kind == ProposalLineKind.Context).Count();
+            var oldCount = hunk.BeforeCount + leading + trailing; var newCount = hunk.AfterCount + leading + trailing;
+            var oldStart = hunk.BeforeStart - leading + (oldCount == 0 ? 0 : 1); var newStart = hunk.AfterStart - leading + (newCount == 0 ? 0 : 1);
+            result.AppendLine($"@@ -{oldStart},{oldCount} +{newStart},{newCount} @@");
+            foreach (var line in hunk.Lines)
+            {
+                result.AppendLine((line.Kind == ProposalLineKind.Added ? "+ " : line.Kind == ProposalLineKind.Removed ? "- " : "  ") + line.Text);
+                if (!line.HasLineEnding) result.AppendLine("\\ No newline at end of file");
+            }
+        }
         return result.ToString();
+    }
+
+    static Dictionary<string, ProposalDiff> ReviewDiffs(ProposalBatch batch) => batch.Files.ToDictionary(file => file.Path, ProposalDiff.Create, StringComparer.Ordinal);
+    static void ValidateDecisions(IReadOnlyDictionary<string, ProposalDiff> diffs, IReadOnlyCollection<ProposalDecision> decisions, bool complete)
+    {
+        var seen = new HashSet<(string Path, int Hunk)>();
+        foreach (var decision in decisions)
+            if (!diffs.TryGetValue(decision.Path, out var diff) || diff.Hunks.All(hunk => hunk.Id != decision.HunkId) || !seen.Add((decision.Path, decision.HunkId)))
+                throw new ArgumentException("Décision de revue invalide / Invalid review decision.");
+        if (complete && seen.Count != diffs.Values.Sum(diff => diff.Hunks.Count))
+            throw new InvalidOperationException("Décidez chaque modification avant de terminer / Decide every change before finishing.");
+    }
+    static async Task<ProposalBatch> CurrentBatch(string database, int chatId, string revision, CancellationToken ct)
+    {
+        var batch = await ReadAsync(database, chatId, ct) ?? throw new IOException("Aucune proposition / No proposal.");
+        if (batch.Revision != revision) throw new IOException("La proposition a changé, rouvrez la revue / Proposal changed, reopen review.");
+        return batch;
+    }
+    public static async Task SaveReviewAsync(string database, int chatId, string revision, IReadOnlyCollection<ProposalDecision> decisions, CancellationToken ct = default)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            var batch = await CurrentBatch(database, chatId, revision, ct);
+            var diffs = await Task.Run(() => ReviewDiffs(batch), ct);
+            ValidateDecisions(diffs, decisions, complete: false);
+            // Saving a review changes neither project files nor the proposal revision.
+            await SaveBatch(database, chatId, batch with { Decisions = decisions.ToList() }, ct);
+        }
+        finally { gate.Release(); }
+    }
+    public static async Task CompleteReviewAsync(string database, int chatId, string revision, IReadOnlyCollection<ProposalDecision> decisions, SourceAccess access, CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            var batch = await CurrentBatch(database, chatId, revision, ct);
+            var diffs = await Task.Run(() => ReviewDiffs(batch), ct);
+            ValidateDecisions(diffs, decisions, complete: true);
+            var files = new List<FileProposal>();
+            foreach (var diff in diffs.Values)
+            {
+                var accepted = decisions.Where(decision => decision.Path == diff.File.Path && decision.Accepted).Select(decision => decision.HunkId).ToHashSet();
+                if (accepted.Count > 0) files.Add(diff.File with { Content = diff.Compose(accepted) });
+            }
+            // Rejected changes are removed only on Finish, together with successfully applied changes.
+            await Commit(database, chatId, files, new(Guid.NewGuid().ToString("N"), []), access, ct);
+        }
+        finally { gate.Release(); }
     }
     public static async Task ApplyAsync(string database, int chatId, string revision, IEnumerable<string> paths, SourceAccess access, CancellationToken ct)
     {
         await gate.WaitAsync(ct);
         try
         {
-            var batch = await ReadAsync(database, chatId, ct) ?? throw new IOException("Aucune proposition / No proposal.");
-            if (batch.Revision != revision) throw new IOException("La proposition a changé, rouvrez la revue / Proposal changed, reopen review.");
-            var selected = paths.ToHashSet(StringComparer.Ordinal); var files = batch.Files.Where(f => selected.Contains(f.Path)).ToList();
+            var batch = await CurrentBatch(database, chatId, revision, ct);
+            var selected = paths.ToHashSet(StringComparer.Ordinal); var files = batch.Files.Where(file => selected.Contains(file.Path)).ToList();
             if (files.Count == 0 || files.Count != selected.Count) throw new ArgumentException("Sélection invalide / Invalid selection.");
-            async Task Validate(FileProposal file)
-            {
-                if (!PlatformSupport.PathComparer.Equals(access.Resolve(file.Path), file.ResolvedPath)) throw new IOException("Dossier source modifié / Source scope changed.");
-                if (File.Exists(file.ResolvedPath) && new FileInfo(file.ResolvedPath).Length > 128_000) throw new IOException("Fichier modifié depuis la proposition : " + file.Path);
-                var current = File.Exists(file.ResolvedPath) ? await File.ReadAllBytesAsync(file.ResolvedPath, ct) : null;
-                if (current == null != (file.Original == null) || current != null && !current.AsSpan().SequenceEqual(file.Original))
-                    throw new IOException("Fichier modifié depuis la proposition : " + file.Path + " / File changed since proposal.");
-            }
-            foreach (var file in files) await Validate(file);
-            var written = new List<(FileProposal File, byte[] Bytes)>();
-            try
-            {
-                foreach (var file in files)
-                {
-                    ct.ThrowIfCancellationRequested(); await Validate(file);
-                    var bytes = file.Original != null && SourceText.TryDecode(file.Original, out var text) ? text.Encode(file.Content) : new UTF8Encoding(false).GetBytes(file.Content);
-                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file.ResolvedPath)!);
-                    var temporary = file.ResolvedPath + ".monolith-" + Guid.NewGuid().ToString("N") + ".tmp";
-                    try { await File.WriteAllBytesAsync(temporary, bytes, ct); await Validate(file); File.Move(temporary, file.ResolvedPath, true); written.Add((file, bytes)); }
-                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
-                }
-                await SaveBatch(database, chatId, new(Guid.NewGuid().ToString("N"), batch.Files.Except(files).ToList()), ct);
-            }
-            catch
-            {
-                foreach (var entry in written.AsEnumerable().Reverse())
-                {
-                    if (!File.Exists(entry.File.ResolvedPath) || !(await File.ReadAllBytesAsync(entry.File.ResolvedPath)).AsSpan().SequenceEqual(entry.Bytes)) continue;
-                    if (entry.File.Original == null) File.Delete(entry.File.ResolvedPath);
-                    else await File.WriteAllBytesAsync(entry.File.ResolvedPath, entry.File.Original);
-                }
-                throw;
-            }
+            var remaining = batch.Files.Except(files).ToList();
+            var savedDecisions = batch.Decisions?.Where(decision => !selected.Contains(decision.Path)).ToList();
+            await Commit(database, chatId, files, new(Guid.NewGuid().ToString("N"), remaining, savedDecisions), access, ct);
         }
         finally { gate.Release(); }
+    }
+    static async Task Commit(string database, int chatId, List<FileProposal> files, ProposalBatch remaining, SourceAccess access, CancellationToken ct)
+    {
+        async Task Validate(FileProposal file)
+        {
+            if (!PlatformSupport.PathComparer.Equals(access.Resolve(file.Path), file.ResolvedPath)) throw new IOException("Dossier source modifié / Source scope changed.");
+            if (File.Exists(file.ResolvedPath) && new FileInfo(file.ResolvedPath).Length > 128_000) throw new IOException("Fichier modifié depuis la proposition : " + file.Path);
+            var current = File.Exists(file.ResolvedPath) ? await File.ReadAllBytesAsync(file.ResolvedPath, ct) : null;
+            if (current == null != (file.Original == null) || current != null && !current.AsSpan().SequenceEqual(file.Original))
+                throw new IOException("Fichier modifié depuis la proposition : " + file.Path + " / File changed since proposal.");
+        }
+        foreach (var file in files) await Validate(file);
+        var written = new List<(FileProposal File, byte[] Bytes)>();
+        try
+        {
+            foreach (var file in files)
+            {
+                ct.ThrowIfCancellationRequested(); await Validate(file);
+                var bytes = file.Original != null && SourceText.TryDecode(file.Original, out var text) ? text.Encode(file.Content) : new UTF8Encoding(false).GetBytes(file.Content);
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file.ResolvedPath)!);
+                var temporary = file.ResolvedPath + ".monolith-" + Guid.NewGuid().ToString("N") + ".tmp";
+                try { await File.WriteAllBytesAsync(temporary, bytes, ct); await Validate(file); File.Move(temporary, file.ResolvedPath, true); written.Add((file, bytes)); }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            }
+            await SaveBatch(database, chatId, remaining, ct);
+        }
+        catch
+        {
+            foreach (var entry in written.AsEnumerable().Reverse())
+            {
+                if (!File.Exists(entry.File.ResolvedPath) || !(await File.ReadAllBytesAsync(entry.File.ResolvedPath)).AsSpan().SequenceEqual(entry.Bytes)) continue;
+                if (entry.File.Original == null) File.Delete(entry.File.ResolvedPath);
+                else await File.WriteAllBytesAsync(entry.File.ResolvedPath, entry.File.Original);
+            }
+            throw;
+        }
     }
 }
