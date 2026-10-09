@@ -20,6 +20,7 @@ public sealed partial class MainWindow
             var features = FeatureSettings.Read(state.FeaturesJson);
             features.GuiUpdateMode = mode; state.FeaturesJson = features.Json();
             ConfigureAutomaticUpdates();
+            guiUpdateTimer.Interval = TimeSpan.FromMilliseconds(80);
         }
         var fixture = new GitHubUpdate("9.0.0", "v9.0.0", GitHubUpdates.Repository + "/releases/tag/v9.0.0",
             "MonolithHarness-v9.0.0-win-x64.zip", GitHubUpdates.Repository + "/releases/download/v9.0.0/fixture.zip", new string('a', 64), 123);
@@ -29,7 +30,7 @@ public sealed partial class MainWindow
         await File.WriteAllTextAsync(staged, "offline fixture");
         smokeGuiUpdateDownload = (_, _) => { downloads++; return Task.FromResult(staged); };
         smokeGuiUpdateInstall = _ => { installs++; guiUpdate = null; };
-        Check(guiUpdateTimer.Interval == TimeSpan.FromHours(2), "Automatic checks use the two-hour interval.");
+        Check(guiUpdateTimer.Interval == TimeSpan.FromHours(1), "Automatic checks use the default hourly interval.");
         guiUpdateTimer.Interval = TimeSpan.FromMilliseconds(80);
 
         Mode(AutomaticUpdateMode.Disabled);

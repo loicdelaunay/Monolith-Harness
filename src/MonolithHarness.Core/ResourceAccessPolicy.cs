@@ -9,7 +9,7 @@ public static class ResourceAccessPolicy
     // tools are unavailable in restricted conversations; sandbox commands stay in private copies.
     public static bool Allowed(Chat chat, string tool) => chat.AllowOutsideResources
         || chat.SandboxEnabled && SandboxWorkspace.Allowed(tool)
-        || WebHttpTools.Handles(tool) || MemoryTools.Handles(tool) || FileIndexTools.Handles(tool)
+        || InformationSkill.Handles(tool) || WebHttpTools.Handles(tool) || MemoryTools.Handles(tool) || FileIndexTools.Handles(tool)
         || tool is "list_sources" or "read_source" or "write_source" or "edit_source"
             or "glob_sources" or "grep_sources" or "patch_sources" or FileProposals.Tool
             or "rag_index" or "rag_search" or "rag_sources" or "rag_read"

@@ -71,6 +71,7 @@ public sealed partial class HarnessService
             if (provider.IsAcp) system = AcpProviders.SystemPrompt(options.Language, run.Chat.ExecutionMode);
             else system += await agent.InitializeAsync(ct);
             if (provider.IsAcp && run.Chat.ExecutionMode == "propose") system += AgentPolicy.Prompt("propose", "disabled");
+            system += await InformationSkill.PromptAsync(run, ct);
             system += ResourceAccessPolicy.Prompt(run.Chat);
             system += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, project.GetSourceFolders(), project.Id);
             if (!chatOnly) system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);

@@ -62,6 +62,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         }
         if (!run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
             WebHttpTools.AddDefinitions(definitions, run.Options.EnabledSkills, agentSettings.WebHttpResponseMode);
+        InformationSkill.AddDefinitions(definitions, run.Options.EnabledSkills);
         MemoryTools.AddDefinitions(definitions, run.Options.EnabledSkills);
         SkillAuthoring.AddDefinitions(definitions, run.Options.EnabledSkills);
         if (run.Workflow != null) WorkflowTools.AddDefinitions(definitions, child);
@@ -76,11 +77,12 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
             new() { ["tasks"] = new JsonObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = Math.Min(TotalBudget, run.Composite == null ? agentOptions.BatchSize ?? TotalBudget : run.Composite.Agents.Count), ["items"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject {
                 ["name"] = new JsonObject { ["type"] = "string" }, ["prompt"] = new JsonObject { ["type"] = "string" } }, ["required"] = new JsonArray("name", "prompt"), ["additionalProperties"] = false } } }, "tasks");
     }
-    public static bool Handles(string name) => WebHttpTools.Handles(name) || MemoryTools.Handles(name) || SkillAuthoring.Handles(name) || WorkflowTools.Handles(name) || name is "load_skill" or "read_skill_resource" or "delegate_tasks";
+    public static bool Handles(string name) => InformationSkill.Handles(name) || WebHttpTools.Handles(name) || MemoryTools.Handles(name) || SkillAuthoring.Handles(name) || WorkflowTools.Handles(name) || name is "load_skill" or "read_skill_resource" or "delegate_tasks";
     public async Task<string> CallAsync(string name, JsonObject args, CancellationToken ct)
     {
         AgentPolicy.Demand(run.Chat, name);
         SandboxWorkspace.Demand(run.Chat.SandboxEnabled, name);
+        if (InformationSkill.Handles(name)) return await InformationSkill.CallAsync(run, args, ct);
         if (WebHttpTools.Handles(name)) return await run.WebHttp.CallAsync(name, args,
             async token => ConversationModes.EffectiveSkills(run.Chat, liveSkills == null ? run.Options.EnabledSkills : await liveSkills(token), run.Provider.IsOpenCode), approve, ct);
         if (SkillAuthoring.Handles(name))
@@ -186,6 +188,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
             (depth >= MaxDepth ? "Further delegation is unavailable at this depth. " : "") +
             (!provider.IsOpenCode || provider.OpenCodeTools ? SubagentTasks.Instructions : "\nThe native task-list tool is unavailable. Do not invent task counts or completion percentages. ") +
             (provider.IsOpenCode ? "\nOpenCode child session: native task is disabled because its descendants cannot be counted in the shared application budget. Complete this assigned task with native enabled tools. delegate_tasks and memory_* are not native tools. Do not access the application's SQLite file through other tools." : "");
+        system += await InformationSkill.PromptAsync(run, ct, provider);
         var wire = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = system }, new JsonObject { ["role"] = "user", ["content"] = "Conversation context (context only):\n" + conversationContext + "\n\nAssigned task:\n" + prompt });
         var transcript = new JsonArray();
         var child = new SubagentRecord { ChatId=run.Chat.Id,Name=path,Task=$"{provider.Name} · {provider.Model}\n{prompt}",Activity="Démarrage / Starting" };

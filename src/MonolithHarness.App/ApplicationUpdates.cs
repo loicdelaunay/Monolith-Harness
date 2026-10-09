@@ -11,7 +11,7 @@ public sealed partial class MainWindow
     string? stagedGuiUpdatePath;
     string? stagedGuiUpdateHash;
     readonly CancellationTokenSource updateLifetime = new();
-    readonly DispatcherTimer guiUpdateTimer = new() { Interval = TimeSpan.FromHours(2) };
+    readonly DispatcherTimer guiUpdateTimer = new() { Interval = TimeSpan.FromHours(1) };
     readonly DispatcherTimer guiUpdateInstallTimer = new() { Interval = TimeSpan.FromMinutes(1) };
     readonly Button guiUpdateButton = new() { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch,
         FontSize = 12, Padding = new(8), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
@@ -21,6 +21,9 @@ public sealed partial class MainWindow
     Task? guiUpdateCheck, automaticInstallAttempt;
     CancellationTokenSource? guiUpdateRequest, automaticUpdateInstall;
     AutomaticUpdateMode automaticUpdateMode;
+    AutomaticUpdateFrequency automaticUpdateFrequency = AutomaticUpdateFrequency.Hourly;
+    bool AutomaticGuiUpdatesEnabled => automaticUpdateMode != AutomaticUpdateMode.Disabled
+        && automaticUpdateFrequency != AutomaticUpdateFrequency.Never;
     string automaticUpdateVersion = GitHubUpdates.Latest;
     long guiUpdateGeneration;
     DateTimeOffset nextAutomaticInstallAttempt;
@@ -88,9 +91,16 @@ public sealed partial class MainWindow
     {
         if (!updateChecksStarted || updateLifetime.IsCancellationRequested) return;
         var previous = automaticUpdateMode;
+        var previousFrequency = automaticUpdateFrequency;
         var features = FeatureSettings.Read(state.FeaturesJson);
         var targetChanged = automaticUpdateVersion != features.GuiUpdateVersion;
         automaticUpdateMode = features.EffectiveGuiUpdateMode;
+        automaticUpdateFrequency = features.GuiUpdateFrequency;
+        if (previousFrequency != automaticUpdateFrequency || guiUpdateTimer.Interval != features.GuiUpdateCheckInterval)
+        {
+            guiUpdateTimer.Stop();
+            guiUpdateTimer.Interval = features.GuiUpdateCheckInterval;
+        }
         automaticUpdateVersion = features.GuiUpdateVersion;
         if (targetChanged)
         {
@@ -99,17 +109,17 @@ public sealed partial class MainWindow
             guiUpdateCheck = null; guiUpdate = null;
             RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer();
         }
-        if (automaticUpdateMode != AutomaticUpdateMode.Install) automaticUpdateInstall?.Cancel();
-        if (automaticUpdateMode == AutomaticUpdateMode.Disabled
+        if (automaticUpdateMode != AutomaticUpdateMode.Install || !AutomaticGuiUpdatesEnabled) automaticUpdateInstall?.Cancel();
+        if (!AutomaticGuiUpdatesEnabled
             || Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE") != null && smokeGuiUpdateCheck == null)
         {
             guiUpdateTimer.Stop(); guiUpdateInstallTimer.Stop();
-            if (automaticUpdateMode == AutomaticUpdateMode.Disabled) guiUpdateRequest?.Cancel();
+            if (!AutomaticGuiUpdatesEnabled) guiUpdateRequest?.Cancel();
             return;
         }
         guiUpdateTimer.Start();
         UpdateAutomaticInstallTimer();
-        if (previous != automaticUpdateMode || targetChanged)
+        if (previous != automaticUpdateMode || previousFrequency != automaticUpdateFrequency || targetChanged)
         {
             nextAutomaticInstallAttempt = DateTimeOffset.MinValue;
             _ = CheckAutomaticGuiUpdateAsync();
@@ -118,14 +128,14 @@ public sealed partial class MainWindow
 
     void UpdateAutomaticInstallTimer()
     {
-        if (automaticUpdateMode == AutomaticUpdateMode.Install && guiUpdate != null && CanInstallGuiUpdate && !updatingApplication)
+        if (AutomaticGuiUpdatesEnabled && automaticUpdateMode == AutomaticUpdateMode.Install && guiUpdate != null && CanInstallGuiUpdate && !updatingApplication)
             guiUpdateInstallTimer.Start();
         else guiUpdateInstallTimer.Stop();
     }
 
     async Task CheckAutomaticGuiUpdateAsync()
     {
-        if (automaticUpdateMode == AutomaticUpdateMode.Disabled || updatingApplication || updateLifetime.IsCancellationRequested) return;
+        if (!AutomaticGuiUpdatesEnabled || updatingApplication || updateLifetime.IsCancellationRequested) return;
         await CheckGuiUpdateAsync(true);
         await TryInstallAutomaticGuiUpdateAsync();
     }
@@ -137,7 +147,7 @@ public sealed partial class MainWindow
         var request = guiUpdateCheck ??= FetchGuiUpdateAsync();
         try { await request; }
         catch (OperationCanceledException) when (updateLifetime.IsCancellationRequested
-            || quiet && (automaticUpdateMode == AutomaticUpdateMode.Disabled || generation != guiUpdateGeneration)) { }
+            || quiet && (!AutomaticGuiUpdatesEnabled || generation != guiUpdateGeneration)) { }
         catch (Exception ex)
         {
             if (!quiet) throw;
@@ -185,7 +195,7 @@ public sealed partial class MainWindow
 
     async Task InstallAutomaticGuiUpdateAsync()
     {
-        if (automaticUpdateMode != AutomaticUpdateMode.Install || guiUpdate == null || !CanInstallGuiUpdate
+        if (!AutomaticGuiUpdatesEnabled || automaticUpdateMode != AutomaticUpdateMode.Install || guiUpdate == null || !CanInstallGuiUpdate
             || updatingApplication || updateLifetime.IsCancellationRequested || DateTimeOffset.UtcNow < nextAutomaticInstallAttempt
             || GuiUpdateHasActiveWork() || GuiUpdateHasOpenEditors()) return;
         try
@@ -193,10 +203,10 @@ public sealed partial class MainWindow
             if (await ReadStoreAsync(store => store.PendingInputs.Any())) return;
             await InstallGuiUpdateAsync(ReportGuiUpdateProgress, automatic: true);
         }
-        catch (OperationCanceledException) when (updateLifetime.IsCancellationRequested || automaticUpdateMode != AutomaticUpdateMode.Install) { }
+        catch (OperationCanceledException) when (updateLifetime.IsCancellationRequested || !AutomaticGuiUpdatesEnabled || automaticUpdateMode != AutomaticUpdateMode.Install) { }
         catch (Exception ex)
         {
-            // Failed downloads wait for the next two-hour cycle instead of retrying every idle minute.
+            // Failed installations back off independently of the update-check frequency.
             nextAutomaticInstallAttempt = DateTimeOffset.UtcNow + TimeSpan.FromHours(2);
             AppLog.Write(AppLogLevel.Warning, "gui.automatic_update_failed", ex);
             if (!updateLifetime.IsCancellationRequested)
@@ -214,11 +224,12 @@ public sealed partial class MainWindow
     {
         var update = selectedUpdate ?? guiUpdate;
         if (update == null || updatingApplication || !CanInstallGuiUpdate || updateLifetime.IsCancellationRequested || !GuiUpdateMatchesTarget(update)) return;
-        if (GuiUpdateHasActiveWork()) throw new InvalidOperationException(WorkflowText(
-            "Terminez les agents et envoyez ou effacez les brouillons avant l’installation.", "Finish agents and send or clear drafts before installing."));
-        if (automatic && (automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasOpenEditors())) return;
+        if (conversationRuns.Count > 0) throw new InvalidOperationException(WorkflowText(
+            "Terminez les agents avant l’installation. Les brouillons seront conservés.", "Finish agents before installing. Drafts will be preserved."));
+        if (automatic && (!AutomaticGuiUpdatesEnabled || automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasActiveWork() || GuiUpdateHasOpenEditors())) return;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(updateLifetime.Token);
         if (automatic) automaticUpdateInstall = cancellation;
+        bool draftsSaved = false;
         updatingApplication = true; guiUpdateProgress.IsIndeterminate = true; guiUpdateProgress.Value = 0;
         ReportGuiUpdateProgress(WorkflowText("Préparation du téléchargement…", "Preparing download…"));
         RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer();
@@ -253,13 +264,25 @@ public sealed partial class MainWindow
                 cancellation.Token.ThrowIfCancellationRequested();
                 if (ownerIsOpen != null && !ownerIsOpen()) return;
                 if (!GuiUpdateMatchesTarget(update)) return;
-                if (GuiUpdateHasActiveWork())
+                if (conversationRuns.Count > 0)
                 {
                     if (automatic) return;
                     throw new InvalidOperationException(WorkflowText(
-                        "Un agent ou brouillon est actif ; relancez l’installation après sa fin.", "An agent or draft is active; retry installation when finished."));
+                        "Un agent est actif ; relancez l’installation après sa fin.", "An agent is active; retry installation when finished."));
                 }
-                if (automatic && (automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasOpenEditors())) return;
+                if (automatic && (!AutomaticGuiUpdatesEnabled || automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasActiveWork() || GuiUpdateHasOpenEditors())) return;
+                draftsSaved = true;
+                await SaveUpdateDraftsAsync(cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (conversationRuns.Count > 0)
+                {
+                    if (automatic) return;
+                    throw new InvalidOperationException(WorkflowText(
+                        "Un agent a démarré pendant la préparation ; relancez l’installation après sa fin.",
+                        "An agent started during preparation; retry installation when finished."));
+                }
+                if (!GuiUpdateMatchesTarget(update) || ownerIsOpen != null && !ownerIsOpen()) return;
+                if (automatic && (!AutomaticGuiUpdatesEnabled || automaticUpdateMode != AutomaticUpdateMode.Install || GuiUpdateHasActiveWork() || GuiUpdateHasOpenEditors())) return;
                 Report(WorkflowText("Installation et redémarrage…", "Installing and restarting…"));
                 if (smokeGuiUpdateInstall != null) { smokeGuiUpdateInstall(staged); return; }
                 scheduleTimer.Stop();
@@ -273,6 +296,7 @@ public sealed partial class MainWindow
         }
         finally
         {
+            if (draftsSaved && !updateLifetime.IsCancellationRequested) ClearUpdateDrafts();
             if (automatic) automaticUpdateInstall = null;
             updatingApplication = false;
             if (!updateLifetime.IsCancellationRequested) { RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer(); }
@@ -299,14 +323,20 @@ public sealed partial class MainWindow
                 WorkflowText("Installer automatiquement", "Install automatically") },
             SelectedIndex = (int)features.EffectiveGuiUpdateMode };
         panel.Children.Add(mode);
+        var frequency = new ComboBox { Header = WorkflowText("Vérification mise à jour automatique", "Automatic update checks"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            ItemsSource = new[] { WorkflowText("Jamais", "Never"), WorkflowText("Toutes les heures", "Every hour"),
+                WorkflowText("Tous les jours", "Every day"), WorkflowText("Toutes les semaines", "Every week") },
+            SelectedIndex = (int)features.GuiUpdateFrequency };
+        panel.Children.Add(frequency);
         panel.Children.Add(Label(WorkflowText(
-            "Désactivées : aucune vérification automatique. Sinon, recherche au démarrage puis toutes les 2 heures. L’installation automatique attend la fin des agents, des brouillons et la fermeture des fenêtres d’édition.",
-            "Disabled: no automatic checks. Otherwise, check at startup and every 2 hours. Automatic installation waits for agents, drafts and editing windows to finish."), 12));
+            "Vérification au démarrage puis à la fréquence choisie, lorsque l’application est ouverte. « Jamais » ou les mises à jour désactivées arrêtent la vérification et l’installation automatiques. La recherche et l’installation manuelles restent disponibles. L’installation automatique attend la fin des agents, des brouillons et la fermeture des fenêtres d’édition.",
+            "Check at startup and at the selected interval while the app is open. Never or Disabled stops automatic checks and installation. Manual checking and installation remain available. Automatic installation waits for agents, drafts and editing windows to finish."), 12));
         var info = Label("", 13); panel.Children.Add(info);
         var check = new Button { Content = WorkflowText("Rechercher", "Check") };
         var install = new Button { Content = WorkflowText("Télécharger et redémarrer", "Download and restart") };
         panel.Children.Add(Row(check, install));
-        panel.Children.Add(Label(WorkflowText("Les données sont conservées. Enregistrez vos réglages avant l’installation ; les changements non enregistrés seront annulés. Les outils seront fermés. L’ancien EXE est conservé dans .updates.", "Data is preserved. Save settings before installing; unsaved changes will be discarded. Tools will close. The previous EXE is kept in .updates."), 12));
+        panel.Children.Add(Label(WorkflowText("Les données et les brouillons sont conservés après le redémarrage. Enregistrez vos réglages avant l’installation ; les changements non enregistrés seront annulés. Les outils seront fermés. L’ancien EXE est conservé dans .updates.", "Data and drafts are preserved after restarting. Save settings before installing; unsaved changes will be discarded. Tools will close. The previous EXE is kept in .updates."), 12));
         if (!CanInstallGuiUpdate) panel.Children.Add(Label(WorkflowText(
             "L’installation nécessite une version Windows autonome.", "Installation requires a standalone Windows release."), 12));
 
@@ -387,6 +417,7 @@ public sealed partial class MainWindow
         return (panel, config =>
         {
             config.GuiUpdateMode = (AutomaticUpdateMode)Math.Clamp(mode.SelectedIndex, 0, 2);
+            config.GuiUpdateFrequency = (AutomaticUpdateFrequency)Math.Clamp(frequency.SelectedIndex, 0, 3);
             config.GuiUpdateVersion = SelectedVersion();
         });
     }

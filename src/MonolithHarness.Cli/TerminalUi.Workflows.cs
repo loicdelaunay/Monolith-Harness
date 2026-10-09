@@ -117,7 +117,7 @@ public sealed partial class TerminalUi
     }
     async Task Settings(WorkspaceSnapshot snapshot)
     {
-        var action = await Prompt("RÃ©glages / Settings", client.Database, [new("language", "Langue / Language"), new("theme", "ThÃ¨me / Theme"), new("font", "Police et CRT / Font and CRT"), new("thinking", "RÃ©flexion / Thinking"), new("style", "Style de rÃ©ponse / Response style"), new("compaction", "Compactage / Compaction"), new("web", "Recherche web Â· HTTP / Web research Â· HTTP"), new("artifacts", "Entretien Â· Artefacts / Maintenance Â· Artifacts"), new("permissions", "Autorisations / Permissions"), new("continue", "Auto-continue : " + snapshot.State.AutoContinue), new("naming", "Nommage des conversations / Conversation naming"), new("vision", "Bypass image AI"), new("logs", "Logs"), new("updates", "Mises Ã  jour GitHub / GitHub updates")]);
+        var action = await Prompt("RÃ©glages / Settings", client.Database, [new("language", "Langue / Language"), new("theme", "ThÃ¨me / Theme"), new("font", "Police et CRT / Font and CRT"), new("thinking", "RÃ©flexion / Thinking"), new("style", "Style de rÃ©ponse / Response style"), new("compaction", "Compactage / Compaction"), new("web", "Recherche web Â· HTTP / Web research Â· HTTP"), new("artifacts", "Entretien Â· Artefacts / Maintenance Â· Artifacts"), new("permissions", "Autorisations / Permissions"), new("continue", "Auto-continue : " + snapshot.State.AutoContinue), new("naming", "Nommage des conversations / Conversation naming"), new("vision", "Bypass image AI"), new("information", "Informations · date et PC / Information · date and computer"), new("logs", "Logs"), new("updates", "Mises Ã  jour GitHub / GitHub updates")]);
         if (action == "style")
         {
             var current = FeatureSettings.Read(snapshot.State.FeaturesJson).ResponseStyle;
@@ -132,6 +132,7 @@ public sealed partial class TerminalUi
         if (action == "naming") await NamingSettings(snapshot);
         if (action == "font") await ConfigureTerminalFont(snapshot);
         if (action == "vision") await VisionSettings(snapshot);
+        if (action == "information") await InformationPreferences();
         if (action == "logs") await LogSettings(snapshot);
         if (action == "continue") await client.State(s => s.AutoContinue = !s.AutoContinue);
         if (action == "language") { var value = await Prompt("Language", choices: [new("fr", "FranÃ§ais"), new("en", "English")]); if (value != null) await client.State(s => s.Language = value); }

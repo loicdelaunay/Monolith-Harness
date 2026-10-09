@@ -494,6 +494,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
             var agent = CreateAgentRuntime(run, password, agentMcp);
 
             system += await agent.InitializeAsync(ct);
+            system += await InformationSkill.PromptAsync(run, ct);
             if (!ConversationModes.IsChat(run.Chat.InteractionMode)) system += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
             system += "\n" + Skills.ReplyLanguage(run.Options.Language);
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.77.0 - 2026-10-09
+
+- Adds the configurable Information skill, available as /informations in Agent and Chat modes: current date/time, computer or UTC clock, timezone, OS/shell, language/region, CPU/runtime memory, application/.NET/bundled Python versions, local PATH tool detection, selected development environment variables, optional paths/identity, conversation context and custom notes. Sensitive optional categories remain off by default; no commands are executed and no arbitrary environment variables are dumped.
+- Adds per-category controls and a local preview in Settings → Skills → Information, plus equivalent CLI preferences. The skill injects fresh selected context on each user turn when automatic context is enabled; compatible direct models and subagents can refresh selected categories with get_information. External OpenCode/ACP agents receive snapshots without claiming this application tool exists in their host.
+
+## 1.76.0 - 2026-10-09
+
+- Adds an About setting for automatic update checks: Never, every hour (default), every day or every week. Checks run at startup and periodically while the app is open, respect disabled automatic updates and preserve manual checks.
+- Allows manual update installation with unsent conversation drafts and attachments, saving them locally and restoring them after restarting. Running agents still block installation; automatic installation continues to wait for drafts.
+- Completes slash skills with a space for continued typing, deferring native editor replacement until the completion key has finished so Enter does not introduce an extra newline or submit the message.
+
 ## 1.75.1 - 2026-10-09
 
 - Makes attachment previews shrink with available composer width and window height, including their image, placeholder and removal control. Keeps previews square under text zoom, restores their size when widening and retains horizontal scrolling for many attachments.

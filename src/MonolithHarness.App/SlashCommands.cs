@@ -77,7 +77,7 @@ public sealed partial class MainWindow
         slashChoices.SelectedIndex = selectedIndex >= 0 ? selectedIndex : items.Length > 0 ? 0 : -1;
         slashSuggestions.Visibility = items.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
-    void CompleteSlash(SlashChoice choice)
+    void CompleteSlash(SlashChoice choice, bool afterKey = false)
     {
         var text = composer.Text;
         // Clicking a suggestion moves focus; preserve the token captured while editing.
@@ -85,19 +85,31 @@ public sealed partial class MainWindow
         if (token == null) return;
         var end = token.Start + token.Length;
         var replacement = "/" + choice.Name;
-        if (end == text.Length) replacement += " ";
+        if (end == text.Length || !char.IsWhiteSpace(text[end])) replacement += " ";
         var caret = token.Start + replacement.Length;
         if (end < text.Length && text[end] == ' ') caret++;
-        completingSlash = true;
-        try
+        var completed = text[..token.Start] + replacement + text[end..];
+        var originalCaret = composer.SelectionStart;
+        void Apply()
         {
-            composer.Text = text[..token.Start] + replacement + text[end..];
-            composer.Select(caret, 0);
-            composer.Focus(FocusState.Programmatic);
+            // Ignore unrelated edits queued after this key. Some native editors still
+            // insert the completion key's newline before handing control back to Uno.
+            var current = composer.Text;
+            if (current != text && !(afterKey && new[] { "\r", "\n", "\r\n", "\t" }
+                .Any(key => current == text.Insert(Math.Clamp(originalCaret, 0, text.Length), key)))) return;
+            completingSlash = true;
+            try
+            {
+                composer.Text = completed;
+                composer.Select(caret, 0);
+                if (composer.FocusState == FocusState.Unfocused) composer.Focus(FocusState.Programmatic);
+            }
+            finally { completingSlash = false; }
+            slashDismissed = true; slashShowingHelp = false; currentSlashToken = null;
+            slashSuggestions.Visibility = Visibility.Collapsed;
         }
-        finally { completingSlash = false; }
-        slashDismissed = true; slashShowingHelp = false; currentSlashToken = null;
-        slashSuggestions.Visibility = Visibility.Collapsed;
+        if (afterKey) DispatcherQueue.TryEnqueue(Apply);
+        else Apply();
     }
     bool HandleSlashKey(KeyRoutedEventArgs e)
     {
@@ -115,8 +127,8 @@ public sealed partial class MainWindow
         var shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift) & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
         if (e.Key == VirtualKey.Enter && !shift && slashChoices.SelectedItem is SlashChoice partial
             && (partial.IsSkill || !composer.Text.Trim().Equals("/" + partial.Name, StringComparison.OrdinalIgnoreCase)))
-        { CompleteSlash(partial); e.Handled = true; return true; }
-        if (e.Key == VirtualKey.Tab && slashChoices.SelectedItem is SlashChoice choice) { CompleteSlash(choice); e.Handled = true; return true; }
+        { e.Handled = true; CompleteSlash(partial, afterKey: true); return true; }
+        if (e.Key == VirtualKey.Tab && slashChoices.SelectedItem is SlashChoice choice) { e.Handled = true; CompleteSlash(choice, afterKey: true); return true; }
         return false;
     }
     async Task<bool> ExecuteSlashCommandAsync()

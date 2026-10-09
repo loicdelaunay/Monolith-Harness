@@ -492,6 +492,7 @@ public sealed partial class MainWindow : Window
         await SyncMcpFile();
         await db.McpServers.LoadAsync();
         state = await db.States.SingleAsync();
+        await RestoreUpdateDraftsAsync();
         AppLog.Configure(FeatureSettings.Read(state.FeaturesJson));
         AppLog.Write(AppLogLevel.Information, "ui.started");
         UiText.Language = state.Language;
@@ -1450,6 +1451,7 @@ public sealed partial class MainWindow : Window
         var skillToggles = new Dictionary<string, ToggleSwitch>();
         var imageGenerationSettings = BuildImageGenerationSettings(providerEditor.Drafts);
         var webHttpSettings = BuildWebHttpSettings();
+        var informationSettings = BuildInformationSettings();
         var gitRead = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableRead) };
         var gitWrite = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableWrite) };
         var gitSettings = new StackPanel { Spacing = 8 };
@@ -1469,13 +1471,13 @@ public sealed partial class MainWindow : Window
             var skillTitle = toggle.Header.ToString()!;
             toggle.Header = null;
             skillPanel.Children.Add(FluentDesign.Setting(skillTitle,
-                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
+                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == InformationSkill.SkillId ? informationSettings.Panel : skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
                 caption: SkillLabel(skill, bold: true), information: SkillInfoButton(skill)));
             if (skill.Id == "git")
             { gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; toggle.Toggled += (_, _) => gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; }
-            if(skill.Id is "rag" or "vision_bridge" or "web" or ImageGenerationTools.SkillId)
+            if(skill.Id is "rag" or "vision_bridge" or "web" or ImageGenerationTools.SkillId or InformationSkill.SkillId)
             {
-                var settingsPanel = skill.Id == "rag" ? features.Rag : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
+                var settingsPanel = skill.Id == InformationSkill.SkillId ? informationSettings.Panel : skill.Id == "rag" ? features.Rag : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
                 settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 toggle.Toggled+=(_,_)=>settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 settingsPanel.Margin = new(0, 8, 0, 0);
@@ -1600,6 +1602,7 @@ public sealed partial class MainWindow : Window
         agentAutomationSettings.Save(savedFeatures);
         compactionSettings.Save(savedFeatures);
         webHttpSettings.Save(savedFeatures);
+        informationSettings.Save(savedFeatures);
         commandGuardSettings.Save(savedFeatures);
         await branding.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
@@ -2264,6 +2267,7 @@ public sealed partial class MainWindow : Window
         if (provider.IsAcp) systemPrompt = AcpSystemPrompt(run);
         else systemPrompt += await agent.InitializeAsync(ct);
         if (provider.IsAcp && run.Chat.ExecutionMode == "propose") systemPrompt += AgentPolicy.Prompt("propose", "disabled");
+        systemPrompt += await InformationSkill.PromptAsync(run, ct);
         systemPrompt += ResourceAccessPolicy.Prompt(run.Chat);
         systemPrompt += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, sourceFolders, run.Project.Id);
         if (!chatOnly) systemPrompt += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);

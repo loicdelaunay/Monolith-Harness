@@ -12,6 +12,7 @@ namespace MonolithHarness.Core;
 
 public enum UpdateChannel { Gui, Cli }
 public enum AutomaticUpdateMode { Disabled, Notify, Install }
+public enum AutomaticUpdateFrequency { Never, Hourly, Daily, Weekly }
 public sealed record GitHubUpdate(string Version, string Tag, string Page, string AssetName, string DownloadUrl, string Sha256, long Size);
 
 public sealed class GitHubUpdates(HttpClient http)

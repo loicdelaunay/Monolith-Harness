@@ -4,6 +4,7 @@ namespace MonolithHarness.Core;
 
 public sealed class FeatureSettings
 {
+    public InformationSettings Information { get; set; } = new();
     public int ImageGenerationProviderId { get; set; }
     public string ImageGenerationModel { get; set; } = "";
     public int ImageGenerationWidth { get; set; } = 1024;
@@ -24,6 +25,14 @@ public sealed class FeatureSettings
     public int CliFontSize { get; set; } = 14;
     public bool GuiCheckUpdates { get; set; } = true;
     public AutomaticUpdateMode? GuiUpdateMode { get; set; }
+    public AutomaticUpdateFrequency GuiUpdateFrequency { get; set; } = AutomaticUpdateFrequency.Hourly;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TimeSpan GuiUpdateCheckInterval => GuiUpdateFrequency switch
+    {
+        AutomaticUpdateFrequency.Daily => TimeSpan.FromDays(1),
+        AutomaticUpdateFrequency.Weekly => TimeSpan.FromDays(7),
+        _ => TimeSpan.FromHours(1)
+    };
     public string GuiUpdateVersion { get; set; } = GitHubUpdates.Latest;
     [System.Text.Json.Serialization.JsonIgnore]
     public AutomaticUpdateMode EffectiveGuiUpdateMode => GuiUpdateMode is { } mode && Enum.IsDefined(mode)
@@ -133,12 +142,15 @@ public sealed class FeatureSettings
             settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
             settings.SidebarProjectOrder = (settings.SidebarProjectOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
             settings.SidebarChatOrder = (settings.SidebarChatOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
+            settings.Information ??= new();
+            settings.Information.Normalize();
             settings.Compaction ??= new();
             settings.Compaction.Normalize();
             settings.WebHttpResponseMode = settings.WebHttpResponseMode?.Trim().ToLowerInvariant() switch {
                 "legacy" or "full" => "legacy", _ => "smart" };
             if (settings.ArtifactRetentionDays is < 1 or > 3650) settings.ArtifactRetentionDays = 7;
             if (settings.GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) settings.GuiUpdateMode = null;
+            if (!Enum.IsDefined(settings.GuiUpdateFrequency)) settings.GuiUpdateFrequency = AutomaticUpdateFrequency.Hourly;
             settings.GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(settings.GuiUpdateVersion);
             settings.CommandGuardMode = settings.CommandGuardMode == "model" ? "model" : "lancet";
             settings.CommandGuardModel ??= "";
@@ -149,14 +161,17 @@ public sealed class FeatureSettings
     }
     public string Json()
     {
+        if (Information == null) throw new ArgumentException("Information skill settings required.");
+        Information.Validate();
         if (CommandGuardMode is not ("lancet" or "model") || CommandGuardProviderId < 0 || CommandGuardModel == null || CommandGuardModel.Length > 300)
             throw new ArgumentException("Réglages du validateur de commandes invalides / Invalid command validator settings.");
         WebHttpResponseMode = WebHttpTools.NormalizeResponseMode(WebHttpResponseMode);
         if (ArtifactRetentionDays is < 1 or > 3650)
             throw new ArgumentException("Réglages HTTP ou de nettoyage des artefacts invalides / Invalid HTTP or artifact cleanup settings.");
         if (GuiUpdateMode is { } mode && !Enum.IsDefined(mode)) throw new ArgumentException("Invalid automatic update mode.");
+        if (!Enum.IsDefined(GuiUpdateFrequency)) throw new ArgumentException("Invalid automatic update frequency.");
         // Keep older versions aware of the user's choice when reading the same portable profile.
-        GuiCheckUpdates = EffectiveGuiUpdateMode != AutomaticUpdateMode.Disabled;
+        GuiCheckUpdates = EffectiveGuiUpdateMode != AutomaticUpdateMode.Disabled && GuiUpdateFrequency != AutomaticUpdateFrequency.Never;
         GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(GuiUpdateVersion);
         if (ImageGenerationProviderId < 0 || ImageGenerationModel == null || ImageGenerationModel.Length > 300 ||
             ImageGenerationWidth is < 256 or > 2048 || ImageGenerationHeight is < 256 or > 2048 || ImageGenerationWidth % 64 != 0 || ImageGenerationHeight % 64 != 0 || ImageGenerationSteps is < 1 or > 100)
