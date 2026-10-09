@@ -31,6 +31,7 @@ public sealed class MarkdownRenderer
     {
         public List<string> Keys = [];
         public string Density = "", Markdown = "";
+        public bool UsingPlainText;
         public Func<string, Task>? OpenFile;
         public Func<string, MenuFlyout>? FileMenu;
     }
@@ -73,6 +74,28 @@ public sealed class MarkdownRenderer
         if (!states.TryGetValue(container, out var state))
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;
+        try
+        {
+            RenderBlocks(container, markdown, openFile, fileMenu, state);
+            state.UsingPlainText = false;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Display failures must not escape into the streaming generation callback.
+            // Retry Markdown on the next update; do not cache partially rendered blocks.
+            if (!state.UsingPlainText) AppLog.Write(AppLogLevel.Warning, "markdown.render.fallback", ex);
+            state.UsingPlainText = true; state.Keys.Clear(); state.Density = "";
+            container.Children.Clear();
+            container.Children.Add(new TextBlock
+            {
+                Text = markdown, IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+                Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight
+            });
+        }
+    }
+    static void RenderBlocks(Panel container, string markdown, Func<string, Task>? openFile,
+        Func<string, MenuFlyout>? fileMenu, RenderState state)
+    {
         var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath);
         if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
         {
@@ -81,8 +104,7 @@ public sealed class MarkdownRenderer
             view.Update(markdown); state.Keys.Clear(); state.Density = ChatDensity.Id; return;
         }
         var groups = GroupTextBlocks(blocks).ToList();
-        var keys = groups.Select(group => markdown.Substring(group[0].Span.Start,
-            group[^1].Span.End - group[0].Span.Start + 1)).ToList();
+        var keys = groups.Select(group => SourceText(markdown, group[0].Span.Start, group[^1].Span.End)).ToList();
         int shared = 0;
         while (state.Density == ChatDensity.Id && shared < keys.Count && shared < state.Keys.Count && shared < container.Children.Count && keys[shared] == state.Keys[shared]) shared++;
         // Adjacent headings, paragraphs, lists and quotes share one selection surface.
@@ -130,6 +152,14 @@ public sealed class MarkdownRenderer
         state.Keys = keys; state.Density = ChatDensity.Id;
         AppTypography.Apply(container);
     }
+    static string SourceText(string markdown, int start, int end)
+    {
+        // Markdig spans are inclusive and an unfinished block can extend past the
+        // current streamed text. Clamp before slicing, including empty/invalid spans.
+        int first = Math.Clamp(start, 0, markdown.Length);
+        int last = (int)Math.Clamp((long)end + 1, first, markdown.Length);
+        return markdown.Substring(first, last - first);
+    }
     static IEnumerable<MdBlock[]> GroupTextBlocks(IEnumerable<MdBlock> blocks)
     {
         var text = new List<MdBlock>();
@@ -144,7 +174,7 @@ public sealed class MarkdownRenderer
     void UpdateTextFlow(TextBlock flow, IReadOnlyList<MdBlock> blocks, string markdown)
     {
         var state = textFlows.GetOrCreateValue(flow);
-        var keys = blocks.Select(block => markdown.Substring(block.Span.Start, block.Span.Length)).ToList();
+        var keys = blocks.Select(block => SourceText(markdown, block.Span.Start, block.Span.End)).ToList();
         int shared = 0;
         while (shared < keys.Count && shared < state.Keys.Count && keys[shared] == state.Keys[shared]) shared++;
         int keep = shared > 0 ? state.InlineEnds[shared - 1] : 0;
@@ -181,7 +211,7 @@ public sealed class MarkdownRenderer
             var panel = new StackPanel { Spacing = 6 };
             // Avoid thousands of native controls for pathological tables or highlighted code.
             if (nodes.Length > 1200 || block is FencedCodeBlock && block.Span.Length > 8000)
-                panel.Children.Add(new TextBlock { Text = markdown.Substring(block.Span.Start, block.Span.Length), IsTextSelectionEnabled = true,
+                panel.Children.Add(new TextBlock { Text = SourceText(markdown, block.Span.Start, block.Span.End), IsTextSelectionEnabled = true,
                     FontFamily = new FontFamily("Cascadia Code, Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Primary });
             else if (CanJoinText(block))
             {

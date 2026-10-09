@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.77.1 - 2026-10-09
+
+- Fixes interrupted responses caused by Markdown source spans extending beyond partially streamed text: bounds native chat rendering, incremental text reuse and file-preview slices to the available source.
+- Keeps the full response visible as selectable plain text if native Markdown rendering fails, records a diagnostic warning without response content, and retries formatted rendering on subsequent updates instead of aborting generation.
+
 ## 1.77.0 - 2026-10-09
 
 - Adds the configurable Information skill, available as /informations in Agent and Chat modes: current date/time, computer or UTC clock, timezone, OS/shell, language/region, CPU/runtime memory, application/.NET/bundled Python versions, local PATH tool detection, selected development environment variables, optional paths/identity, conversation context and custom notes. Sensitive optional categories remain off by default; no commands are executed and no arbitrary environment variables are dumped.
