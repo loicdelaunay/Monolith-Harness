@@ -24,3 +24,6 @@ desktop/.data/
 *.jks
 **/key.properties
 **/local.properties
+
+# Durable Android signing backups (private; never commit)
+.signing/
