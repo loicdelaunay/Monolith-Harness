@@ -10,10 +10,10 @@ static class CliThemeChecks
     [DllImport("kernel32.dll")] static extern nint LocalFree(nint pointer);
     public static async Task Run(Action<bool, string> check)
     {
-        var monogram = TerminalLogo.Outline;
-        check(monogram.Length == 8 && monogram.All(row => row.Length == TerminalLogo.Width && row.SequenceEqual(row.Reverse())) &&
-            monogram.All(row => row.StartsWith("##") && row.EndsWith("##")) && monogram[3][3] == '#' && monogram[4][3] == '.',
-            "CLI icon is an M monogram with symmetric stems and a central V");
+        var monolith = TerminalLogo.Outline;
+        check(monolith.Length == 8 && monolith.All(row => row.Length == TerminalLogo.Width) &&
+            monolith.Skip(1).All(row => row[1..4] == "###") && monolith.Skip(4).All(row => row[4..7] == ".CC"),
+            "CLI icon is a tall monolith with a separate accent face");
         var picker = new UiDialog("Theme", "", [new("crt-green", "Vert"), new("crt-amber", "Ambre")]) { PreviewTheme = true, Selected = 1 };
         check(picker.ThemePreview == "crt-amber", "Theme picker previews the initially selected theme");
         picker.Selected = 0;
@@ -50,7 +50,7 @@ static class CliThemeChecks
                 TerminalLogo.Draw(logoCanvas, 0, 0, theme.Palette);
                 var logo = string.Join('\n', logoCanvas.Lines());
                 string AnsiColor(int color) => $"38;2;{color >> 16 & 255};{color >> 8 & 255};{color & 255}";
-                check(new[] { theme.Palette.Accent, theme.Palette.Green, theme.Palette.Gold }.All(color => logo.Contains(AnsiColor(color))),
+                check(new[] { theme.Palette.Foreground, TerminalLogo.BrandAccent }.All(color => logo.Contains(AnsiColor(color))),
                     theme.Id + ": icon colors follow the active theme");
                 check(CliOptions.Parse(["--render-demo", "--theme", theme.Id]).Theme == theme.Id, theme.Id + ": preview option accepted");
                 var p = theme.Palette;

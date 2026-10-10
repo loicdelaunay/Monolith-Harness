@@ -10,7 +10,19 @@ Under **Settings → Appearance**, open **Application name and logo**:
 
 The name appears in the sidebar and titles of the main, Settings and Scheduled tasks windows. The logo appears in the sidebar and also serves as the window icon on Windows. The EXE filename and application system identity remain unchanged.
 
-The default Monolith Harness logo uses an illuminated M in cyan, violet and magenta. Matching small PNGs and a Windows ICO are bundled with the GUI and CLI; the terminal draws an M using its theme colors. Custom logos and the light/dark logo settings continue to take precedence. The [generation prompt](logo-monolith-prompt.md) records the image source and instructions.
+The default logo is a white architectural monolith on charcoal, selected on 2026-10-10. Version **1.84.0** distinguishes the hosts by the narrow accent plane:
+
+| Host | Accent | Source artwork |
+| --- | --- | --- |
+| Desktop GUI / historical Electron host | Cyan/blue | `src/MonolithHarness.App/Assets/logo.png` / `desktop/ui/logo.png` |
+| CLI | Orange | `src/MonolithHarness.Cli/Assets/logo.png` |
+| Android | Green | `src/MonolithHarnessGui.Portable/Assets/logo.png` |
+
+![Desktop logo](images/branding/desktop.png) ![CLI logo](images/branding/cli.png) ![Android logo](images/branding/android.png)
+
+The orange and green images are precise edits of the selected artwork: the white monolith, dark background and composition remain the same. Each host owns its source image. The CLI's native Windows ICO and PNG previews use orange; its character mark uses an orange accent with the active terminal foreground. Terminal interface themes continue to control the rest of the UI. Android uses its own green source for density/adaptive launcher and startup imagery via Uno.Resizetizer. Desktop/Electron keep cyan. Custom desktop logos continue to take precedence. [Artwork prompts](logo-monolith-prompt.md).
+
+Export all variants on Windows with `./build/update-branding-assets.ps1`. To regenerate a single host, pass `-Target Desktop`, `-Target CLI` or `-Target Android`. Optional `-SourceLogo`, `-CliSourceLogo` and `-AndroidSourceLogo` replace only the respective source. The exporter resizes existing artwork and packages native icons; it does not recolor or redesign it.
 
 ## Portable storage
 
