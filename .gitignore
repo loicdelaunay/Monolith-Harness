@@ -18,3 +18,12 @@ desktop/.data/
 **/logs/
 /model/
 /images/chat-*/
+
+# Android signing material and machine-local SDK settings
+*.keystore
+*.jks
+**/key.properties
+**/local.properties
+
+# Durable Android signing backups (private; never commit)
+.signing/
