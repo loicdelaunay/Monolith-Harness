@@ -2,6 +2,10 @@ name: Android portable (manual)
 on:
   workflow_dispatch:
     inputs:
+      source_ref:
+        description: 'Source branch, tag or commit to build (mobile sources are on feature/android-portable)'
+        required: true
+        default: 'feature/android-portable'
       release_tag:
         description: 'Optional existing release tag for a signed APK; empty produces preview artifacts only'
         required: false
@@ -17,6 +21,8 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -25,14 +31,21 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: dotnet workload install android
       - name: Read application version
         run: |
           python3 - <<'PY'
-          import os,xml.etree.ElementTree as E
+          import os,subprocess,xml.etree.ElementTree as E
           version=E.parse('src/MonolithHarnessGui.Portable/MonolithHarnessGui.Portable.csproj').findtext('.//ApplicationDisplayVersion')
-          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('ANDROID_VERSION='+version+'\n')
+          source_sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('ANDROID_VERSION='+version+'\n')
+              f.write('ANDROID_SOURCE_SHA='+source_sha+'\n')
+          print('APK source commit: '+source_sha)
           PY
       - name: Publish APK
         env:
@@ -71,7 +84,7 @@ jobs:
         if: inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 build/upload-android-release.py
+        run: GITHUB_SHA="$ANDROID_SOURCE_SHA" python3 build/upload-android-release.py
       - name: Remove signing material
         if: always()
         run: rm -f -- "$RUNNER_TEMP/monolith-android.keystore"
