@@ -20,8 +20,9 @@ public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens
     public int? CachedInputTokens { get; init; }
 }
 
-public sealed class ChatEngine(HttpClient http)
+public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = null)
 {
+    readonly IChatEngineRuntime platform = runtime ?? ChatEngineServices.Runtime;
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, ProviderCompatibility> compatibility = new();
     public static Uri Endpoint(string baseUrl, string resource)
     {
@@ -32,15 +33,7 @@ public sealed class ChatEngine(HttpClient http)
     }
     public async Task<List<string>> ModelsAsync(Provider provider, string key, CancellationToken ct)
     {
-        if (provider.IsAcp) return await new AcpEngine().ModelsAsync(provider, ct);
-        if (provider.IsLocal)
-        {
-            var config = LocalProviderSettings.Read(provider.LocalModelsJson);
-            foreach (var model in config.Models.Where(x => x.Purpose == "chat" && x.ContextTokens == null))
-                model.ContextTokens = await Task.Run(() => GgufContext.Read(model.FullPath, ct), ct);
-            provider.LocalModelsJson = config.Json(); ModelContexts.MergeLocal(provider);
-            return ProviderModels.Available(provider);
-        }
+        if (provider.IsAcp || provider.IsLocal) return await platform.ModelsAsync(provider, ct);
         using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint(provider.BaseUrl, "models"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         using var response = await http.SendAsync(request, ct);
@@ -90,13 +83,13 @@ public sealed class ChatEngine(HttpClient http)
         catch (JsonException) { }
     }
     public Task<Completion> StreamAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
-        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, FeatureSettings? retrySettings = null,
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort = null, IRetrySettings? retrySettings = null,
         Action<ContextRequestProgress>? requestProgress = null, bool requireNoReasoning = false, AcpRunOptions? acp = null)
     {
-        if (provider.IsAcp) return TokenConsumption.TrackAsync(provider, ContextWindow.Estimate(messages),
-            progress => new AcpEngine().PromptAsync(provider, messages, progress, ct, reasoningEffort, acp), update);
+        if (provider.IsAcp) return platform.TrackAsync(provider, ContextWindow.Estimate(messages),
+            progress => platform.PromptExternalAsync(provider, messages, progress, ct, reasoningEffort, acp), update);
         var inputEstimate = ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools);
-        return RequestRetry.RunAsync(() => TokenConsumption.TrackAsync(provider, inputEstimate,
+        return RequestRetry.RunAsync(() => platform.TrackAsync(provider, inputEstimate,
             progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, requireNoReasoning ? "none" : reasoningEffort, inputEstimate, requestProgress, requireNoReasoning), update), retrySettings, ct,
             retry => update(new("", "", null, null, 0) { Retry = retry }));
     }
@@ -107,7 +100,7 @@ public sealed class ChatEngine(HttpClient http)
         if (requireNoReasoning) ChatReasoning.CheckModel(provider);
         var progress = new ContextRequestProgress(ContextRequestStage.Preparing, inputEstimate, messages.Count);
         requestProgress?.Invoke(progress);
-        using var local = provider.IsLocal ? await LocalModelRuntime.ChatAsync(provider, ct) : null;
+        using var local = provider.IsLocal ? await platform.StartLocalAsync(provider, ct) : null;
         var baseUrl = local?.Url ?? provider.BaseUrl;
         key = local?.Key ?? key;
         var payload = new JsonObject { ["model"] = ProviderPresets.NormalizeModelId(provider, provider.Model), ["messages"] = messages.DeepClone(), ["stream"] = true,

@@ -1,6 +1,6 @@
 # Sources des benchmarks de modèles
 
-Les fichiers suivants sont intégrés au moteur partagé, avec leurs licences MIT ou Apache-2.0 complètes dans `src/MonolithHarness.Core/Benchmarks`. Aucun téléchargement de dataset n’est nécessaire pendant un benchmark.
+Les fichiers suivants sont intégrés au moteur desktop, avec leurs licences MIT ou Apache-2.0 complètes dans `src/MonolithHarness.Core.Desktop/Benchmarks`. Aucun téléchargement de dataset n’est nécessaire pendant un benchmark.
 
 ## BIG-Bench Hard
 

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/MonolithHarness.Core/MonolithHarness.Core.csproj" />
+  <Project Path="src/MonolithHarness.Core.Mobile/MonolithHarness.Core.Mobile.csproj" />
+  <Project Path="src/MonolithHarnessGui.Portable/MonolithHarnessGui.Portable.csproj" />
+</Solution>

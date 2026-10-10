@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>MonolithHarness.Cli</AssemblyName>
     <RootNamespace>MonolithHarness.Cli</RootNamespace>
-    <Version>1.77.1</Version>
+    <Version>1.78.0</Version>
     <AssemblyTitle>Monolith Harness CLI</AssemblyTitle>
     <Product>Monolith Harness</Product>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -12,7 +12,7 @@
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../MonolithHarness.Core/MonolithHarness.Core.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../MonolithHarness.Core.Desktop/MonolithHarness.Core.Desktop.csproj" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="MonolithHarness.Cli.Tests" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Fonts/**/*" /></ItemGroup>
   <ItemGroup><AssemblyMetadata Include="MonolithHarness.SingleFile" Value="$(PublishSingleFile)" /></ItemGroup>

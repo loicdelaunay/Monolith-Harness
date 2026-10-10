@@ -1,32 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
-  <PropertyGroup><AssemblyTitle>Monolith Harness Engine</AssemblyTitle><Product>Monolith Harness</Product></PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="AngleSharp" Version="1.8.4" />
-    <PackageReference Include="Cronos" Version="0.11.1" />
-    <PackageReference Include="SkiaSharp" Version="3.119.2" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.2" />
-    <PackageReference Include="PdfPig" Version="0.1.14" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
-    <!-- Keep the native osx-x64 runtime: 1.30.0 no longer ships it. -->
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.23.2" />
-    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
-    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9"><PrivateAssets>all</PrivateAssets></PackageReference>
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.2" />
-    <PackageReference Include="Markdig" Version="0.40.0" />
-  </ItemGroup>
-  <ItemGroup><EmbeddedResource Include="Models/minilm_multilingual/*" /><EmbeddedResource Include="Models/command_guard/manifest.json" /></ItemGroup>
-  <ItemGroup><EmbeddedResource Include="Benchmarks/*" /></ItemGroup>
-  <Target Name="ValidateBundledEmbeddingModel" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
-    <!-- Match the pinned weights in Models/minilm_multilingual/README.md before embedding them. -->
-    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Models/minilm_multilingual/model.onnx')"
-           Text="The bundled MiniLM model is missing. Install Git LFS and run 'git lfs pull' before building." />
-    <GetFileHash Files="$(MSBuildProjectDirectory)/Models/minilm_multilingual/model.onnx" Algorithm="SHA256">
-      <Output TaskParameter="Hash" PropertyName="_BundledEmbeddingModelHash" />
-    </GetFileHash>
-    <Error Condition="'$(_BundledEmbeddingModelHash)' != '66FC00F5F29AFCAFF34092E1BDD20008CA3918265A82FB9695A551E510CC4EBC'"
-           Text="The bundled MiniLM model is incomplete or corrupt (possibly a Git LFS pointer). Run 'git lfs pull'; CI checkout must enable 'lfs: true'." />
-  </Target>
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyTitle>Monolith Harness Shared Engine</AssemblyTitle></PropertyGroup>
+  <ItemGroup><InternalsVisibleTo Include="MonolithHarness.Core.Desktop" /></ItemGroup>
 </Project>

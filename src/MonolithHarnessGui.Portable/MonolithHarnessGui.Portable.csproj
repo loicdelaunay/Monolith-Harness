@@ -1,0 +1,10 @@
+<Project Sdk="Uno.Sdk/6.7.30">
+  <PropertyGroup>
+    <UnoSingleProject>true</UnoSingleProject><TargetFramework>net10.0-android</TargetFramework><OutputType>Exe</OutputType>
+    <UnoFeatures>SkiaRenderer</UnoFeatures><ApplicationTitle>Monolith Harness Portable</ApplicationTitle>
+    <ApplicationId>com.monolithharness.portable</ApplicationId><ApplicationDisplayVersion>1.78.0</ApplicationDisplayVersion><ApplicationVersion>111</ApplicationVersion>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AndroidPackageFormats>apk</AndroidPackageFormats><RunAOTCompilation>false</RunAOTCompilation><PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../MonolithHarness.Core.Mobile/MonolithHarness.Core.Mobile.csproj" /></ItemGroup>
+</Project>

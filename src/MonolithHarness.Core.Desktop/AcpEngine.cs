@@ -5,10 +5,6 @@ using System.Text.Json.Nodes;
 
 namespace MonolithHarness.Core;
 
-public sealed record AcpPermission(string Title, string Kind, string Details, IReadOnlyList<string> Paths);
-public sealed record AcpRunOptions(string Directory, string Mode = "plan", bool ToolsEnabled = false,
-    Func<AcpPermission, CancellationToken, Task<bool>>? Authorize = null);
-
 /// <summary>ACP v1 over newline-delimited JSON-RPC stdio. Each turn replays the saved history into a fresh session.</summary>
 public sealed class AcpEngine
 {

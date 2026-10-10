@@ -16,7 +16,7 @@ public static class LocalModelRuntime
         public string Key { get; } = key;
         public int Users;
     }
-    public sealed class ChatLease : IDisposable
+    public sealed class ChatLease : IChatEndpoint
     {
         readonly Server server;
         internal ChatLease(Server value) => server = value;

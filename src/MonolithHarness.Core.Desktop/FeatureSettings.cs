@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace MonolithHarness.Core;
 
-public sealed class FeatureSettings
+public sealed class FeatureSettings : IRetrySettings
 {
     public InformationSettings Information { get; set; } = new();
     public int ImageGenerationProviderId { get; set; }

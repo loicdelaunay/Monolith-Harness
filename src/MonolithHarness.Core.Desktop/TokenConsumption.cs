@@ -92,11 +92,6 @@ public static class TokenConsumption
     }
 }
 
-internal sealed record CompletionUsage(long Input, long Output, bool InputEstimated, bool OutputEstimated)
-{
-    public long? CachedInputTokens { get; init; }
-}
-
 public enum ConsumptionPeriod { Today, ThreeDays, SevenDays, ThirtyDays, Year }
 public sealed record ConsumptionFilter(ConsumptionPeriod Period, string Provider = "", string Model = "", string Activity = "", int? ProjectId = null);
 public sealed record TokenBucket(string Label, long Input, long Output, int Calls)

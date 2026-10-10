@@ -2,6 +2,9 @@
   <Folder Name="/src/">
     <Project Path="src/MonolithHarness.App/MonolithHarness.App.csproj" />
     <Project Path="src/MonolithHarness.Core/MonolithHarness.Core.csproj" />
+    <Project Path="src/MonolithHarness.Core.Desktop/MonolithHarness.Core.Desktop.csproj" />
     <Project Path="src/MonolithHarness.Cli/MonolithHarness.Cli.csproj" />
+    <Project Path="src/MonolithHarness.Core.Mobile/MonolithHarness.Core.Mobile.csproj" />
+    <Project Path="src/MonolithHarnessGui.Portable/MonolithHarnessGui.Portable.csproj" />
   </Folder>
 </Solution>

@@ -36,17 +36,17 @@ public static class CommandImpact
         }
         else result = await new ChatEngine(http).StreamAsync(selected, secret,
             new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction }, new JsonObject { ["role"] = "user", ["content"] = prompt }), [], _ => { }, timeout.Token,
-            reasoningEffort: "none", retrySettings: new() { RetryEnabled = false }, acp: selected.IsAcp ? new(command.Directory, "plan", false, (_, _) => Task.FromResult(false)) : null);
+            reasoningEffort: "none", retrySettings: new RetrySettings(RetryEnabled: false), acp: selected.IsAcp ? new(command.Directory, "plan", false, (_, _) => Task.FromResult(false)) : null);
         var explanation = result.Message["content"]?.GetValue<string>() ?? "";
-        if (string.IsNullOrWhiteSpace(explanation)) throw new IOException("Le modèle n’a pas renvoyé d’explication / Empty model explanation.");
+        if (string.IsNullOrWhiteSpace(explanation)) throw new IOException("Le modÃ¨le nâ€™a pas renvoyÃ© dâ€™explication / Empty model explanation.");
         return explanation[..Math.Min(12000, explanation.Length)];
     }
     public static string Details(CommandApproval command, CommandGuardResult? risk)
     {
-        var level = risk?.Classification == "risky" ? "ROUGE · Risque élevé / RED · High risk" : risk?.AllowsAutomatic == true ? "VERT · Risque faible / GREEN · Low risk" : "ORANGE · À vérifier / ORANGE · Needs review";
+        var level = risk?.Classification == "risky" ? "ROUGE Â· Risque Ã©levÃ© / RED Â· High risk" : risk?.AllowsAutomatic == true ? "VERT Â· Risque faible / GREEN Â· Low risk" : "ORANGE Â· Ã€ vÃ©rifier / ORANGE Â· Needs review";
         return "COMMANDE / COMMAND\n" + command.Command + "\n\nRisque / Risk: " + level + "\n" +
-            (risk == null ? "Analyse non disponible / No analysis available" : "Validateur / Validator: " + risk.Validator + (risk.Reason == null ? "" : " · " + risk.Reason)) +
+            (risk == null ? "Analyse non disponible / No analysis available" : "Validateur / Validator: " + risk.Validator + (risk.Reason == null ? "" : " Â· " + risk.Reason)) +
             (string.IsNullOrWhiteSpace(risk?.Explanation) ? "" : "\n" + risk.Explanation) +
-            "\n\nDossier de travail / Working directory\n" + command.Directory + "\nShell: " + command.Shell + " · Timeout: " + command.TimeoutSeconds + " s";
+            "\n\nDossier de travail / Working directory\n" + command.Directory + "\nShell: " + command.Shell + " Â· Timeout: " + command.TimeoutSeconds + " s";
     }
 }

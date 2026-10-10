@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.78.0 - 2026-10-10
+
+- Splits the engine into a platform-neutral Core, Core.Desktop and Core.Mobile. Desktop GUI/CLI retain their existing data model, migrations, resource names and system tools through a desktop runtime adapter; desktop and mobile have independent solutions.
+- Adds MonolithHarnessGui.Portable for Android 8+ with API chat, streamed replies, native image attachments, project/chat history in private SQLite storage and API keys protected by Android Keystore. Mobile references no desktop engine, Python runtime or embedded desktop models. Generation stops and its partial response is saved when the activity stops.
+- Adds manual Android packaging with preview APK artifacts and optional release upload using a persistent signing identity. Android is not added to desktop release jobs.
+
 ## 1.77.1 - 2026-10-09
 
 - Fixes interrupted responses caused by Markdown source spans extending beyond partially streamed text: bounds native chat rendering, incremental text reuse and file-preview slices to the available source.
