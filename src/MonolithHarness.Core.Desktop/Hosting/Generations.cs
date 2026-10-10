@@ -62,13 +62,13 @@ public sealed partial class HarnessService
             await emit(new { @event = "message", chatId = chat.Id, title = run.Chat.Title, message = MessageView(user) });
             var definitions = Definitions(run);
             var chatOnly = ConversationModes.IsChat(run.Chat.InteractionMode);
-            var system = chatOnly ? ConversationModes.ChatPrompt(options.Language, run.Chat, provider.IsOpenCode, provider.OpenCodeTools, options.ThinkingLevel) : Skills.Prompt(options.EnabledSkills, options.Language, project.GetSourceFolders().Count > 0,
+            var system = chatOnly ? ConversationModes.ChatPrompt(options.Language, run.Chat, provider.IsOpenCode, provider.OpenCodeTools, options.ThinkingLevel, FeatureSettings.Read(options.FeaturesJson)) : Skills.Prompt(options.EnabledSkills, options.Language, project.GetSourceFolders().Count > 0,
                 BrowserSkillAccess.Enabled(options.EnabledSkills) && FeatureSettings.Read(options.FeaturesJson).BrowserMode == "embedded",
-                Skills.Enabled(options.EnabledSkills, "write_sources"));
+                Skills.Enabled(options.EnabledSkills, "write_sources"), FeatureSettings.Read(options.FeaturesJson));
             if (provider.IsAcp) definitions.Clear();
             run.Workflow = chatOnly ? null : CreateWorkflow(run);
             var agent = CreateAgentRuntime(run, secret, mcp);
-            if (provider.IsAcp) system = AcpProviders.SystemPrompt(options.Language, run.Chat.ExecutionMode);
+            if (provider.IsAcp) system = AcpProviders.SystemPrompt(options.Language, run.Chat.ExecutionMode, FeatureSettings.Read(options.FeaturesJson));
             else system += await agent.InitializeAsync(ct);
             if (provider.IsAcp && run.Chat.ExecutionMode == "propose") system += AgentPolicy.Prompt("propose", "disabled");
             system += await InformationSkill.PromptAsync(run, ct);

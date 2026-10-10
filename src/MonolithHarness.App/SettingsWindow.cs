@@ -96,7 +96,14 @@ public sealed partial class MainWindow
         var heading = Label(T("Réglages"), 28);
         heading.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         heading.Margin = new(24, 20, 24, 12);
-        panel.Children.Add(heading);
+        if (content is SettingsNavigation navigation)
+        {
+            var top = new StackPanel { Spacing = 12, Margin = new(24, 20, 24, 12) };
+            heading.Margin = new(0);
+            top.Children.Add(heading); top.Children.Add(navigation.SearchBox);
+            panel.Children.Add(top);
+        }
+        else panel.Children.Add(heading);
         Grid.SetRow((FrameworkElement)content, 1);
         panel.Children.Add(content);
         var save = new Button { Content = T("Enregistrer"), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };

@@ -1,6 +1,6 @@
-# Monolith for Android — preview 1.84.0
+# Monolith for Android — preview 1.88.0
 
-Desktop and Android development now share `main`; `feature/android-portable` has been merged. [Download the signed ARM64 APK](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0); source tag `v1.84.0` contains desktop and mobile projects. The Android release is marked as a preview and does not replace desktop downloads. The default branch contains both platform hosts; use `main` or a release tag to build Android.
+Desktop and Android development now share `main`; `feature/android-portable` has been merged. [Download the signed ARM64 APK](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0); source tag `v1.88.0` contains desktop and mobile projects. The Android release is marked as a preview and does not replace desktop downloads. The default branch contains both platform hosts; use `main` or a release tag to build Android.
 
 ## Boundaries
 
@@ -36,7 +36,7 @@ The helper publishes a preview in `artifacts/TEMP/android-portable`. Without exp
 
 An empty `release_tag` produces preview artifacts only. To attach a signed APK to an existing release, configure `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `ANDROID_STORE_PASSWORD`, then specify `v<version>` or `android-v<version>`. The tag must match the application version and exact build commit. Existing Android assets are never overwritten. APK and SHA-256 manifest uploads are verified against GitHub digests; signing files are removed from the runner.
 
-No public Android release is created as part of this branch implementation. Compilation/packaging do not confirm runtime behavior on a phone or emulator.
+The signed Android preview is published separately on request. Compilation and packaging do not confirm runtime behavior on every phone or emulator.
 
 ## Device startup check
 
@@ -149,3 +149,19 @@ USB development builds use a different debug certificate. Android cannot install
 The manual `Android portable (manual)` workflow accepts a source ref and defaults to `main`. An empty `release_tag` produces downloadable build artifacts; a matching existing `android-vX.Y.Z` or `vX.Y.Z` release tag attaches the signed APK and checksum file after verifying the exact commit. Release signing requires all four secrets. Public release metadata, APK identity and fingerprints are checked before publishing.
 
 Historical device captures are kept locally because they can contain real conversation content. Compilation and past scoped UI checks do not establish every provider/tool exchange, device or Android version; no new automated functional suite was requested for this branding change.
+
+## Rich replies and Create web app (1.85.0)
+
+Assistant replies display Markdown raster images (PNG, JPEG, GIF and WebP) and HTML/CSS preview cards. Images are bounded to 8 MiB, loaded on a worker and cancelled when unloaded. Remote images require the mobile Web permission and a public HTTPS endpoint; data images remain available offline. Redirects and connection-time DNS addresses are checked, with no cookies or credentials.
+
+The new **Create web app** skill is enabled when introduced and configurable in Paramètres / Skills. `/create-web-app` is autocompleted without sending; its instructions are prioritized when the message is sent. Ask for an app or visualization: the model returns one complete fenced `html` document with CSS in `<style>` and JavaScript in `<script>`. The response remains in history. Touch the response bubble or **Ouvrir en plein écran** to launch its document in a dedicated Android activity. A still-generating response cannot launch the preview.
+
+The fullscreen preview uses Android's system WebView for HTML/CSS/JavaScript, separate from Uno's native chat. It has a close action and respects Android Back, window insets and keyboard resize. No HTML is put in an Intent transaction; only an in-process token is passed. When Android recreates a killed process, reopen the preview from the retained chat.
+
+Generated content runs in an opaque-origin sandboxed iframe, without a host bridge. A restrictive CSP, [WebSettings](https://developer.android.com/reference/android/webkit/WebSettings) and request interception disable network, files, content providers, storage, popups, downloads, camera/microphone/geolocation and external navigation. Apps must embed assets and work offline; JavaScript state resets when closed. The host handles a failed WebView renderer and keeps the conversation intact. This is an interactive preview, not an APK generator or background service.
+
+The native card is a simplified preview (text, basic CSS colors/spacing/fonts, headings, lists and images); fullscreen Android is the complete browser layout. HTML is limited to 450000 characters. Desktop offers the same native previews on devices that block WebView and an optional complete HTML/CSS preview when WebView previews are enabled in Paramètres / Général. Desktop previews do not execute JavaScript.
+
+### Interfaces et graphiques locaux dans les réponses
+
+Tailwind CSS 4.3.3 et Chart.js 4.5.1 sont intégrés au rendu HTML plein écran. Deux options indépendantes dans **Paramètres / Général**, activées par défaut, contrôlent leur injection et les instructions du modèle. Aucun CDN ni accès Internet n’est nécessaire pour ces bibliothèques. Voir [Réponses riches](reponses-riches.md#bibliothèques-locales--tailwind-css-et-chartjs) pour le fonctionnement, les versions et les limites du rendu natif.

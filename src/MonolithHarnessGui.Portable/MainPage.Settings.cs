@@ -56,10 +56,12 @@ public sealed partial class MainPage
             language.SelectionChanged+=(_,_)=>draft.ReplyLanguage=language.SelectedIndex switch {1=>"fr",2=>"en",_=>"auto"};panel.Children.Add(language);
             panel.Children.Add(SettingsText("Taille du texte"));var size=new Slider {Minimum=14,Maximum=22,StepFrequency=1,Value=draft.TextSize,MinHeight=48};size.ValueChanged+=(_,_)=>draft.TextSize=size.Value;panel.Children.Add(size);
             Option(panel,"Afficher les activités des outils","Regroupe les appels et leurs résultats dans une bulle dépliable qui se met à jour. Les résultats restent conservés même si l’affichage est masqué.",draft.ShowToolActivity,x=>draft.ShowToolActivity=x);
+            Option(panel,"Tailwind CSS dans les réponses HTML","Copie locale pour les interfaces générées, utilisée dans l’aperçu plein écran. Fonctionne sans CDN.",draft.RenderTailwind,x=>draft.RenderTailwind=x);
+            Option(panel,"Chart.js dans les réponses HTML","Copie locale pour les graphiques interactifs dans l’aperçu plein écran. Fonctionne sans CDN.",draft.RenderChartJs,x=>draft.RenderChartJs=x);
             var rounds=new NumberBox {Header="Nombre maximal de tours d’outils par message",Minimum=1,Maximum=16,Value=draft.MaxToolRounds,SpinButtonPlacementMode=NumberBoxSpinButtonPlacementMode.Inline};rounds.ValueChanged+=(_,_)=>{if(double.IsFinite(rounds.Value))draft.MaxToolRounds=(int)rounds.Value;};panel.Children.Add(rounds);
         }
         else if(section=="Skills") {
-            panel.Children.Add(SettingsText("Activez les skills utiles. Tapez /summary, /planning, /review, /informations, /web, /sources ou /memory dans votre message pour en demander explicitement l’utilisation à l’envoi."));
+            panel.Children.Add(SettingsText("Activez les skills utiles. Tapez /summary, /planning, /review, /informations, /web, /sources /memory ou /create-web-app dans votre message pour en demander explicitement l’utilisation à l’envoi."));
             foreach(var skill in MobileSkills.All)Option(panel,skill.FrenchName,skill.FrenchDescription,draft.Enabled(skill.Id),x=>{draft.EnabledSkills.Remove(skill.Id);if(x)draft.EnabledSkills.Add(skill.Id);});
             panel.Children.Add(SettingsText("Informations · catégories",18));
             Option(panel,"Informations automatiques","Ajoute les catégories choisies à chaque message quand le skill Informations est activé. Sinon le modèle peut appeler son outil.",draft.AutomaticInformation,x=>draft.AutomaticInformation=x);
@@ -130,7 +132,7 @@ public sealed partial class MainPage
 #pragma warning restore CS0618
         panel.Children.Add(SettingsText("Monolith · "+version,24));panel.Children.Add(SettingsText("Android · application portable",18));
         panel.Children.Add(SettingsText("Chat avec modèles API, images, documents texte UTF-8/UTF-16, skills, recherche web et mémoires locales. Les documents peuvent être lus et modifiés dans la copie privée, puis exportés."));
-        panel.Children.Add(SettingsText("Markdown natif : titres, listes, tableaux, citations, liens et blocs de code. Les diagrammes Mermaid et formules restent présentés comme du texte ou du code.\n\nLes outils desktop de terminal, Git, Python, contrôle d’applications et les modèles locaux ne sont pas disponibles dans cette version. Le web lit le texte HTML/JSON ; les pages qui demandent JavaScript ou une connexion peuvent être inaccessibles."));
+        panel.Children.Add(SettingsText("Markdown natif : titres, listes, tableaux, citations, liens, images et blocs de code. Les réponses HTML/CSS ont un aperçu ; touchez une réponse HTML pour l’ouvrir en plein écran, avec JavaScript local et sans accès réseau ni fichiers. Les diagrammes Mermaid et formules restent présentés comme du texte ou du code.\n\nLes outils desktop de terminal, Git, Python, contrôle d’applications et les modèles locaux ne sont pas disponibles dans cette version. Le web lit le texte HTML/JSON ; les pages qui demandent JavaScript ou une connexion peuvent être inaccessibles."));
         await ShowDialogAsync(CreateDialog("À propos",panel,"","Retour"));
     }
     Task<bool> ApproveToolAsync(string heading,string detail,CancellationToken ct)

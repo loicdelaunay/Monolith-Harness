@@ -487,7 +487,8 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
                 : "Tu es connecté à travers OpenCode dans Monolith Harness. Réponds directement à l’utilisateur en français. Respecte chaque refus d’autorisation de l’application.";
 
-            if (ConversationModes.IsChat(run.Chat.InteractionMode)) system = ConversationModes.ChatPrompt(run.Options.Language, run.Chat, true, provider.OpenCodeTools, run.Options.ThinkingLevel);
+            if (ConversationModes.IsChat(run.Chat.InteractionMode)) system = ConversationModes.ChatPrompt(run.Options.Language, run.Chat, true, provider.OpenCodeTools, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson));
+            else system += "\n" + MarkdownDisplay.InstructionsFor(FeatureSettings.Read(run.Options.FeaturesJson));
             run.Workflow = ConversationModes.IsChat(run.Chat.InteractionMode) ? null : CreateWorkflow(run);
 
             await using var agentMcp = CreateMcpSession(run.Chat.Id);

@@ -1,2 +1,5 @@
 *.sh text eol=lf
 src/MonolithHarness.Core.Desktop/Models/minilm_multilingual/model.onnx filter=lfs diff=lfs merge=lfs -text
+# Preserve official browser bundles and license bytes recorded in the manifest.
+src/MonolithHarness.Core/WebAssets/*.js -text
+src/MonolithHarness.Core/WebAssets/*.LICENSE.txt -text

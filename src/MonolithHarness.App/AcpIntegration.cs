@@ -4,7 +4,7 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    string AcpSystemPrompt(ConversationRun run) => AcpProviders.SystemPrompt(run.Options.Language, run.Chat.ExecutionMode);
+    string AcpSystemPrompt(ConversationRun run) => AcpProviders.SystemPrompt(run.Options.Language, run.Chat.ExecutionMode, FeatureSettings.Read(run.Options.FeaturesJson));
     AcpRunOptions AcpOptions(ConversationRun run)
     {
         var directory = run.Project.GetSourceFolders().FirstOrDefault(Directory.Exists) ??

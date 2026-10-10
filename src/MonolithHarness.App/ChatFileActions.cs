@@ -7,6 +7,29 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
+    Func<string,CancellationToken,Task<byte[]?>> ReplyImageReader(Project? messageProject)
+    {
+        var messageChatId=chat?.Id??0;
+        return (path,ct)=>ReadReplyImageAsync(path,messageProject,messageChatId,ct);
+    }
+    async Task<byte[]?> ReadReplyImageAsync(string requested,Project? messageProject,int messageChatId,CancellationToken ct)
+    {
+        // Automatic previews only read attached roots, including this chat's workspace.
+        // SourceAccess also rejects symlinks and traversal; manual Open remains separate.
+        if(messageProject==null)return null;
+        var path=LocalFileLinks.PathFromUrl(requested)??requested;
+        var roots=messageProject.GetSourceFolders().ToList();
+        if(messageChatId>0) {
+            // Generated images/plots are private resources of the captured chat,
+            // never directories belonging to whichever chat is currently selected.
+            foreach(var generated in new[]{Path.Combine(PortableStorage.Folder("images"),"chat-"+messageChatId),PythonTools.ScriptsDirectory(messageChatId)})
+                if(Directory.Exists(generated))roots.Add(generated);
+        }
+        var resolved=new SourceAccess(roots).Resolve(path);
+        if(!File.Exists(resolved))return null;
+        if(new FileInfo(resolved).Length>ReplyImages.MaxBytes)throw new IOException("Image trop volumineuse (8 Mo maximum).");
+        return await File.ReadAllBytesAsync(resolved,ct);
+    }
     string ResolveChatDiskPath(string requested, Project? messageProject)
     {
         var path = LocalFileLinks.WithoutLocation(requested.Trim());

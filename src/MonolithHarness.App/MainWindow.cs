@@ -661,6 +661,7 @@ public sealed partial class MainWindow : Window
         public string CurrentText { get; private set; } = "";
         public Func<string, Task>? OpenFile { get; init; }
         public Func<string, MenuFlyout>? FileMenu { get; init; }
+        public Func<string,CancellationToken,Task<byte[]?>>? ReadImage {get;init;}
         public TextBlock Duration { get; init; } = null!;
         public Func<bool> CanPaint { get; init; } = () => true;
         public Action<Panel>? ContentRendered { get; init; }
@@ -723,7 +724,7 @@ public sealed partial class MainWindow : Window
         void RenderContent(string text)
         {
             if (Container is { } card) card.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
-            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu);
+            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu,ReadImage);
             ContentRendered?.Invoke(BodyContainer);
         }
 
@@ -820,6 +821,7 @@ public sealed partial class MainWindow : Window
             ShowReasoningDetails = () => state.ShowReasoningDetails,
             OpenFile = path => OpenChatItemAsync(path, messageProject),
             FileMenu = path => CreateChatFileMenu(path, messageProject),
+            ReadImage=ReplyImageReader(messageProject),
             ThinkingCard = thinkingCard,
             ThinkingHeaderBtn = thinkingHeaderBtn,
             ThinkingHeaderLabel = thinkingHeaderLabel,
@@ -1214,7 +1216,7 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(text))
         {
             var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
-            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject));
+            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject),ReplyImageReader(messageProject));
         }
         if (attachments != null && attachments.Count > 0)
         {
@@ -1369,6 +1371,7 @@ public sealed partial class MainWindow : Window
         var language = BuildLanguagePicker();
         var appearance = BuildAppearanceSettings(loadingWindow);
         var general = new StackPanel { Spacing = 14 };
+        var chatSettings = new StackPanel { Spacing = 14 };
         var updates = BuildUpdateSettings();
         var branding = BuildBrandingSettings();
         var conversationPreferences = BuildConversationPreferences();
@@ -1387,37 +1390,57 @@ public sealed partial class MainWindow : Window
             SelectedIndex = ResponseStyles.All.ToList().FindIndex(x => x.Id == ResponseStyles.Get(FeatureSettings.Read(state.FeaturesJson).ResponseStyle).Id),
             MinWidth = 170
         };
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Style de réponse", "Response style"),
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Style de réponse", "Response style"),
             WorkflowText("Appliqué aux prochains envois. DEFAULT conserve le comportement habituel.", "Applies to subsequent messages. DEFAULT keeps the usual behavior."), responseStyle));
         var autoContinue = new ToggleSwitch { Header = T("Continuer automatiquement après 12 étapes"), IsOn = state.AutoContinue,
             OnContent = T("Activé"), OffContent = T("Désactivé") };
         autoContinue.Header = null;
-        general.Children.Add(FluentDesign.Setting(T("Continuer automatiquement après 12 étapes"),
+        chatSettings.Children.Add(FluentDesign.Setting(T("Continuer automatiquement après 12 étapes"),
             T("Poursuit les appels d’outils jusqu’à la réponse finale ou Arrêter. Des tokens supplémentaires peuvent être consommés ; les autorisations restent applicables."), autoContinue));
         var showReasoning = new CheckBox { Content = T("Afficher les détails du raisonnement"), IsChecked = state.ShowReasoningDetails };
         showReasoning.Content = null;
-        general.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
+        chatSettings.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
             WorkflowText("Déplie par défaut le groupe des réflexions et outils, dans l’historique et pendant la génération.", "Expand the reasoning and tools group by default, in history and during generation."), showReasoning));
         var markdownFeatures = FeatureSettings.Read(state.FeaturesJson);
         var toolWebViews = new ToggleSwitch { IsOn = markdownFeatures.AllowWebViewInTools };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Autoriser les aperçus WebView dans les outils", "Allow WebView previews in tools"),
-            WorkflowText("Désactivé par défaut pour les postes qui bloquent WebView. Le correcteur et le traducteur restent natifs. Les benchmarks d’applications interactives nécessitent cette option ; leur code peut être consulté sans exécution.", "Disabled by default for devices that block WebView. Proofreader and translator always use native controls. Interactive application benchmarks require this option; their source can be viewed without execution."), toolWebViews));
+            WorkflowText("Autorise les aperçus web des outils, notamment les benchmarks. Indépendant du chat et désactivé par défaut sur les nouveaux profils. Le correcteur et le traducteur restent natifs.", "Allow tool web previews, including benchmarks. Independent from chat and disabled by default in new profiles. Proofreader and translator remain native."), toolWebViews));
+        var chatWebViews = new ToggleSwitch { IsOn = markdownFeatures.AllowWebViewInChat };
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Autoriser les aperçus WebView dans le chat", "Allow WebView previews in chat"),
+            WorkflowText("Autorise le rendu HTML/CSS complet et JavaScript isolé dans les réponses. Désactivé : conserve un aperçu natif simplifié et le code source. Indépendant des outils.", "Allow full HTML/CSS rendering and isolated JavaScript in replies. When disabled, keep simplified native previews and source code. Independent from tools."), chatWebViews));
+        var previewHtmlInline = new ToggleSwitch { IsOn = markdownFeatures.PreviewHtmlInline };
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Prévisualiser directement le HTML", "Preview HTML directly"),
+            WorkflowText("Affiche l’aperçu HTML interactif dans la bulle, sans ouvrir une fenêtre. Nécessite l’autorisation WebView du chat ; les scripts restent isolés sans accès au réseau ni aux fichiers.", "Show the interactive HTML preview inside the bubble without opening a window. Requires chat WebView permission; scripts remain isolated without network or file access."), previewHtmlInline));
+        void RefreshInlinePreview() => previewHtmlInline.IsEnabled = chatWebViews.IsOn;
+        chatWebViews.Toggled += (_, _) => RefreshInlinePreview(); RefreshInlinePreview();
+        var dynamicHtmlHeight = new ToggleSwitch { IsOn = markdownFeatures.DynamicHtmlHeight };
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Taille dynamique du rendu HTML", "Dynamic HTML render height"),
+            WorkflowText("Adapte la hauteur de l’aperçu intégré au contenu de la page. Les pages très longues restent défilables pour préserver la navigation du chat.", "Adjust inline preview height to the page content. Very long pages remain scrollable to preserve chat navigation."), dynamicHtmlHeight));
         var virtualizeChat = new ToggleSwitch { IsOn = markdownFeatures.VirtualizeChat };
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Virtualiser l’affichage du chat", "Virtualize chat display"),
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Virtualiser l’affichage du chat", "Virtualize chat display"),
             WorkflowText("Activé : conserve les bulles enrichies proches de l’écran. Désactivé : garde toutes les bulles affichées, avec davantage de mémoire utilisée.", "When enabled, keep rich bubbles near the viewport. When disabled, keep all bubbles rendered, using more memory."), virtualizeChat));
         var renderMermaid = new ToggleSwitch { IsOn = markdownFeatures.RenderMermaid };
         var renderMath = new ToggleSwitch { IsOn = markdownFeatures.RenderMath };
+        var renderTailwind = new ToggleSwitch { IsOn = markdownFeatures.RenderTailwind };
+        var renderChartJs = new ToggleSwitch { IsOn = markdownFeatures.RenderChartJs };
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Tailwind CSS dans les réponses HTML", "Tailwind CSS in HTML responses"),
+            WorkflowText("Copie locale pour les interfaces générées. Le rendu complet nécessite les aperçus WebView ; le rendu natif reste simplifié.", "Local copy for generated interfaces. Full rendering requires WebView previews; native rendering remains simplified."), renderTailwind));
+        var followTailwindTheme = new ToggleSwitch { IsOn = markdownFeatures.TailwindFollowApplicationTheme };
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Tailwind suit le thème de l’application", "Tailwind follows the application theme"),
+            WorkflowText("Activé par défaut : synchronise le mode clair/sombre et fournit les couleurs de l’application aux réponses HTML. Désactivé : conserve le thème défini par la page.", "Enabled by default: synchronize light/dark mode and provide application colors to HTML replies. When disabled, keep the page's own theme."), followTailwindTheme));
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Chart.js dans les réponses HTML", "Chart.js in HTML responses"),
+            WorkflowText("Copie locale pour les graphiques interactifs dans les aperçus WebView du chat. Aucun CDN nécessaire.", "Local copy for interactive charts in chat WebView previews. No CDN required."), renderChartJs));
         var showComposerSpeed = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerSpeed };
         var showComposerContext = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerContext };
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le débit", "Show token speed"),
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le débit", "Show token speed"),
             WorkflowText("Affiche les tokens par seconde à côté du modèle, dans la zone de saisie.",
                 "Show tokens per second beside the model in the composer."), showComposerSpeed));
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le contexte", "Show context usage"),
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le contexte", "Show context usage"),
             WorkflowText("Affiche l’utilisation du contexte à côté du modèle, dans la zone de saisie.",
                 "Show context usage beside the model in the composer."), showComposerContext));
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des diagrammes Mermaid", "Mermaid diagram compatibility"),
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des diagrammes Mermaid", "Mermaid diagram compatibility"),
             WorkflowText("Rend les blocs Mermaid en diagrammes dans le chat et les aperçus. Désactivé : affiche le code source.", "Render Mermaid blocks as diagrams in chat and previews. When disabled, show their source."), renderMermaid));
-        general.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des symboles mathématiques", "Mathematical notation compatibility"),
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Compatibilité des symboles mathématiques", "Mathematical notation compatibility"),
             WorkflowText("Rend les formules LaTeX dans le Markdown. Désactivé : conserve le texte des formules.", "Render LaTeX formulas in Markdown. When disabled, keep formula text."), renderMath));
         var autoFocusTool = new CheckBox { IsChecked = FeatureSettings.Read(state.FeaturesJson).AutoFocusTool };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Ouvrir et sélectionner le dernier outil utilisé par l’IA", "Open and focus the latest AI tool"), WorkflowText("Dans la conversation affichée uniquement.", "Only in the visible conversation."), autoFocusTool));
@@ -1523,7 +1546,7 @@ public sealed partial class MainWindow : Window
         await YieldSettingsAsync(loadingWindow);
         var tabs = new SettingsNavigation();
         tabs.Add(T("Général"),general);
-        tabs.Add(WorkflowText("Test", "Test"), BuildModelTestSettings(loadingWindow), "\uE9D9");
+        tabs.Add(WorkflowText("Chat", "Chat"), chatSettings, "\uE8F2");
         tabs.Add(WorkflowText("Apparence", "Appearance"), appearance.Panel, "\uE790");
         var shortcutsTab = tabs.Add(WorkflowText("Raccourcis", "Shortcuts"), quickModelSettings.Panel, "\uE765");
         var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968", fixedHeader: providerEditor.Header);
@@ -1537,6 +1560,7 @@ public sealed partial class MainWindow : Window
         var permissionTab = tabs.Add(T("Autorisations"),permissionPanel, "\uE72E");
         tabs.Add(WorkflowText("Navigateur", "Browser"),features.Browser, "\uE774");
         tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
+        tabs.Add(WorkflowText("Test", "Test"), BuildModelTestSettings(loadingWindow), "\uE9D9");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
         settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab;
@@ -1588,6 +1612,11 @@ public sealed partial class MainWindow : Window
         savedFeatures.AgentPresets = FeatureSettings.Read(state.FeaturesJson).AgentPresets;
         savedFeatures.ChatGoals = FeatureSettings.Read(state.FeaturesJson).ChatGoals;
         savedFeatures.AllowWebViewInTools = toolWebViews.IsOn;
+        savedFeatures.AllowWebViewInChat = chatWebViews.IsOn;
+        savedFeatures.PreviewHtmlInline = previewHtmlInline.IsOn;
+        savedFeatures.DynamicHtmlHeight = dynamicHtmlHeight.IsOn;
+        savedFeatures.TailwindFollowApplicationTheme = followTailwindTheme.IsOn;
+        savedFeatures.RenderTailwind = renderTailwind.IsOn; savedFeatures.RenderChartJs = renderChartJs.IsOn;
         savedFeatures.VirtualizeChat = virtualizeChat.IsOn;
         savedFeatures.RenderMermaid = renderMermaid.IsOn; savedFeatures.RenderMath = renderMath.IsOn;
         savedFeatures.ShowComposerSpeed = showComposerSpeed.IsOn;
@@ -2259,7 +2288,7 @@ public sealed partial class MainWindow : Window
         var hasBrowser = BrowserSkillAccess.Enabled(run.Options.EnabledSkills) && Skills.Enabled(run.Options.EnabledSkills, "web")
             && FeatureSettings.Read(run.Options.FeaturesJson).BrowserMode == "embedded";
         var chatOnly = ConversationModes.IsChat(run.Chat.InteractionMode);
-        var systemPrompt = chatOnly ? ConversationModes.ChatPrompt(run.Options.Language, run.Chat, thinkingLevel: run.Options.ThinkingLevel) : Skills.Prompt(run.Options.EnabledSkills, run.Options.Language, hasSources, hasBrowser, canWriteSources) +
+        var systemPrompt = chatOnly ? ConversationModes.ChatPrompt(run.Options.Language, run.Chat, thinkingLevel: run.Options.ThinkingLevel, rendering: FeatureSettings.Read(run.Options.FeaturesJson)) : Skills.Prompt(run.Options.EnabledSkills, run.Options.Language, hasSources, hasBrowser, canWriteSources, FeatureSettings.Read(run.Options.FeaturesJson)) +
             "\nAdditional tools may request one-time user approval for local previews, files outside the project and terminal commands. Never claim approval before the tool returns success. A denial is final for that action; explain it and do not retry to bypass it.";
         run.Workflow = chatOnly ? null : CreateWorkflow(run);
         await using var mcp = CreateMcpSession(run.Chat.Id);

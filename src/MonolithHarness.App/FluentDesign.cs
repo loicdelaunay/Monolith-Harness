@@ -149,7 +149,9 @@ internal static partial class FluentDesign
             control.Margin = narrow ? new Thickness(0, 12, 0, 0) : new Thickness(0);
             if (details != null) Grid.SetRow(details, narrow ? 2 : 1);
         };
-        return Surface(row, 16);
+        var card = Surface(row, 16);
+        SettingsSearch.Register(card, title, description, control);
+        return card;
     }
 
     public static FontIcon Icon(string glyph, double size = 16) => new()

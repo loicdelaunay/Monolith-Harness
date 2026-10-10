@@ -7,7 +7,12 @@ namespace MonolithHarness.Core;
 
 public static class MarkdownDisplay
 {
-    public const string Instructions = "DISPLAY: Use Markdown with blank lines between paragraphs, headings and lists. The application renders LaTeX mathematics: $...$ inline and $$...$$ on separate lines for display equations. Use fenced ```mermaid blocks for diagrams (flowcharts, sequences, state diagrams, etc.). These are display formats, not executable tools; no tool call is needed to render them. Choose them when they clarify the answer, and keep ordinary text and code in their normal Markdown formats.";
+    public const string Instructions = ReplyWebDocument.Instructions + " DISPLAY: Use Markdown with blank lines between paragraphs, headings and lists. The application renders LaTeX mathematics: $...$ inline and $$...$$ on separate lines for display equations. Use fenced ```mermaid blocks for diagrams (flowcharts, sequences, state diagrams, etc.). These are display formats, not executable tools; no tool call is needed to render them. Choose them when they clarify the answer, and keep ordinary text and code in their normal Markdown formats.";
+    public static string InstructionsFor(FeatureSettings? settings = null) => Instructions + " " +
+        (settings?.ReplyRendering ?? ReplyRenderOptions.Default).Instructions +
+        (settings is { AllowWebViewInChat: false }
+            ? " Desktop web previews are currently disabled. Include ordinary inline CSS and a text/table or SVG alternative for charts, so the native static preview remains useful. The user can enable web previews in Settings / Chat."
+            : "");
     static readonly MarkdownPipeline pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().UseMathematics().DisableHtml().Build();
     static readonly MarkdownPipeline plainMathPipeline = BuildPlainMathPipeline();
     static MarkdownPipeline BuildPlainMathPipeline()

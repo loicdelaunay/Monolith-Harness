@@ -4,14 +4,14 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current desktop downloads are **1.84.0**; portable data remains compatible with existing workspaces.
+**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current desktop downloads are **1.88.0**; portable data remains compatible with existing workspaces.
 
 <p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.84.0">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.84.0">Download CLI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0">Download Android APK (preview)</a>
+  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.88.0">Download GUI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.88.0">Download CLI</a>
+  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0">Download Android APK (preview)</a>
   · <a href="#quick-start">Quick start</a>
   · <a href="#build-from-source">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
@@ -25,7 +25,7 @@
 
 Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
 
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.84.0) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.84.0) · [CLI guide](docs/cli.md)
+> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.88.0) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.88.0) · [CLI guide](docs/cli.md)
 
 **Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
 
@@ -42,7 +42,7 @@ Monolith Harness brings projects, concurrent chats, agents, sources, tools, and 
 
 **Monolith on Android** shares the API conversation engine through Core and Core.Mobile, with an Android-only UI and private app storage. It has a project/chat sidebar, Material 3 styling, model selection in the header, a compact expanding composer, native Markdown and grouped tool summaries. Settings include providers, skills, permissions and scoped memory. The global tool policy offers **Refuse all / Ask all / Allow all**; Ask all is the default.
 
-Mobile skills include summarization, planning, code review, configurable date/time/system information, public HTTPS web research, imported text documents and memory. Local models, desktop commands/control, MCP, proposal review, Mermaid rendering and desktop/mobile synchronization are not included. The signed APK is an **Android 8+ ARM64 preview**, distributed separately from the desktop downloads. See the [Android guide](docs/android-portable.md) for installation, signing and limits.
+Mobile skills include summarization, planning, code review, configurable date/time/system information, public HTTPS web research, imported text documents, memory and Create web app. Replies can display images and HTML/CSS cards; tapping a web app opens its isolated fullscreen preview with optional bundled Tailwind CSS and Chart.js. Local models, desktop commands/control, MCP, proposal review, Mermaid rendering and desktop/mobile synchronization are not included. The signed APK is an **Android 8+ ARM64 preview**, distributed separately from the desktop downloads. See the [Android guide](docs/android-portable.md) for installation, signing and limits.
 
 ## Take a look
 
@@ -89,8 +89,12 @@ The CLI offers the same conversation workflow with its own terminal themes. Thes
 
 ## New in the current downloads
 
+- **Rich replies on GUI and Android:** Markdown images, HTML/CSS previews and source access. Complete HTML documents stay in one card, including replies already saved in history. [Rich reply guide](docs/reponses-riches.md).
+- **Local web libraries:** Tailwind CSS 4.3.3 and Chart.js 4.5.1 are bundled for isolated HTML previews, with separate switches and no CDN. Android adds the **Create web app** skill and fullscreen web apps.
+- **Desktop chat settings:** a dedicated Chat tab, search across all settings, separate WebView permissions for chat and tools, optional inline HTML preview, application-following Tailwind theme and optional dynamic preview height. Preview windows reuse their instance and restore the inline card when closed.
+
 - **Platform logos:** cyan for the desktop app, orange for the CLI executable and terminal mark, green for the Android launcher/startup icon. [Branding guide](docs/branding.md).
-- **Android preview:** settings and skills, projects/chat sidebar, permissions for every tool call, native Markdown, grouped tool activity and a compact composer with header model selection. [Android release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0).
+- **Android preview:** settings and skills, projects/chat sidebar, permissions for every tool call, native Markdown, grouped tool activity and a compact composer with header model selection. [Android release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0).
 - **Separate platform engines:** Core contains neutral conversation/provider contracts; Core.Desktop retains desktop tools and native dependencies; Core.Mobile owns Android storage/tools. Windows and Linux publications retain their existing desktop composition.
 
 - **Chat / Agent modes** are saved per conversation. Chat offers optional **Web research** (on by default) and **Python script execution** (off by default), without project, terminal, MCP or subagent tools. Its configuration button is now to the right of the mode switch.
@@ -154,7 +158,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.84.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.84.0) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.88.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.88.0) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its portable resources under <code>workspace/</code> beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
@@ -196,7 +200,7 @@ For a Windows source build, install the .NET 10 SDK and Git LFS. The native WinU
 ~~~powershell
 git clone https://github.com/loicdelaunay/Monolith-Harness.git
 cd Monolith-Harness
-git checkout v1.84.0
+git checkout v1.88.0
 git lfs pull
 dotnet run --project tests/MonolithHarness.Tests -c Release
 .\publish.ps1 -OutputDirectory artifacts\GUI
@@ -208,9 +212,9 @@ The [Windows v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/re
 
 ### Android application
 
-Install the APK from the [Android preview release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
+Install the APK from the [Android preview release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
 
-For source builds, use tag `v1.84.0` or branch `main`, .NET 10 with the Android workload, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/android-portable.md).
+For source builds, use tag `v1.88.0` or branch `main`, .NET 10 with the Android workload, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/android-portable.md).
 
 ## More documentation
 

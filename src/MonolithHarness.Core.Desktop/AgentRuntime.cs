@@ -183,7 +183,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         var mode = run.Chat.ExecutionMode;
         var source = new SourceAccess(run.Project.GetSourceFolders());
         var enabled = liveSkills == null ? run.Options.EnabledSkills : await liveSkills(ct);
-        var system = Skills.Prompt(enabled, run.Options.Language, source.Roots.Count > 0, BrowserSkillAccess.Enabled(enabled), Skills.Enabled(enabled, "write_sources")) + context + AgentPolicy.Prompt(mode, run.Chat.OrchestrationMode) + ResourceAccessPolicy.Prompt(run.Chat) +
+        var system = Skills.Prompt(enabled, run.Options.Language, source.Roots.Count > 0, BrowserSkillAccess.Enabled(enabled), Skills.Enabled(enabled, "write_sources"), FeatureSettings.Read(run.Options.FeaturesJson)) + context + AgentPolicy.Prompt(mode, run.Chat.OrchestrationMode) + ResourceAccessPolicy.Prompt(run.Chat) +
             $"\nYou are subagent {path}, depth {depth}/{MaxDepth}. Complete your assigned task and report actual edits, findings, validation and remaining limitations to your parent. You inherit the conversation's enabled tools and permissions. Coordinate exclusive ownership of files and shared interactive resources. Delegate only independent portions when beneficial; never your entire task unchanged. Maximum {MaxSteps} model steps; the whole team shares {TotalBudget} agents. " +
             (depth >= MaxDepth ? "Further delegation is unavailable at this depth. " : "") +
             (!provider.IsOpenCode || provider.OpenCodeTools ? SubagentTasks.Instructions : "\nThe native task-list tool is unavailable. Do not invent task counts or completion percentages. ") +

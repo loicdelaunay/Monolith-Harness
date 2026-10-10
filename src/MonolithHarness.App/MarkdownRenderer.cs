@@ -10,6 +10,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using MonolithHarness.Core;
+using MonolithHarness.Presentation;
+using Markdig.Extensions.Mathematics;
 using System.Text;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
@@ -27,6 +29,9 @@ public sealed class MarkdownRenderer
 
     readonly Func<string, Task>? openFile;
     readonly Func<string, MenuFlyout>? fileMenu;
+    readonly Func<string,CancellationToken,Task<byte[]?>>? localImage;
+    readonly string fullMarkdown;
+    readonly bool displayImages;
     sealed class RenderState
     {
         public List<string> Keys = [];
@@ -34,6 +39,7 @@ public sealed class MarkdownRenderer
         public bool UsingPlainText;
         public Func<string, Task>? OpenFile;
         public Func<string, MenuFlyout>? FileMenu;
+        public Func<string,CancellationToken,Task<byte[]?>>? LocalImage;
     }
     sealed class TextFlowState
     {
@@ -49,11 +55,18 @@ public sealed class MarkdownRenderer
         visualViews.Add(new(view));
     }
     internal static bool RenderMermaid { get; private set; } = true;
+    internal static bool AllowRichWebPreview {get;private set;}
+    internal static bool PreviewHtmlInline {get;private set;}
+    internal static bool DynamicHtmlHeight {get;private set;}
+    internal static ReplyRenderOptions ReplyRendering {get;private set;} = ReplyRenderOptions.Default;
     internal static bool RenderMath { get; private set; } = true;
     internal static void ConfigureVisuals(FeatureSettings settings)
     {
-        if (RenderMermaid == settings.RenderMermaid && RenderMath == settings.RenderMath) return;
-        RenderMermaid = settings.RenderMermaid; RenderMath = settings.RenderMath;
+        if (RenderMermaid == settings.RenderMermaid && RenderMath == settings.RenderMath && AllowRichWebPreview == settings.AllowWebViewInChat && PreviewHtmlInline == settings.PreviewHtmlInline && DynamicHtmlHeight == settings.DynamicHtmlHeight && ReplyRendering == settings.ReplyRendering) return;
+        RenderMermaid = settings.RenderMermaid; RenderMath = settings.RenderMath; AllowRichWebPreview=settings.AllowWebViewInChat; PreviewHtmlInline=settings.PreviewHtmlInline; DynamicHtmlHeight=settings.DynamicHtmlHeight; ReplyRendering=settings.ReplyRendering;
+        // Settings affect existing cards even when their Markdown has not changed.
+        foreach (var reference in renderedPanels.ToArray())
+            if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state)) state.Density = "";
         RefreshDensity();
         visualViews.RemoveAll(x => !x.TryGetTarget(out _));
         foreach (var reference in visualViews.ToArray())
@@ -64,16 +77,16 @@ public sealed class MarkdownRenderer
         renderedPanels.RemoveAll(x => !x.TryGetTarget(out _));
         foreach (var reference in renderedPanels.ToArray())
             if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state))
-                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu);
+                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu,state.LocalImage);
     }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
-    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null) { this.openFile = openFile; this.fileMenu = fileMenu; }
-    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null)
+    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true) { this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages; }
+    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null)
     {
         markdown ??= "";
         if (!states.TryGetValue(container, out var state))
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
-        state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;
+        state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;state.LocalImage=localImage;
         try
         {
             RenderBlocks(container, markdown, openFile, fileMenu, state);
@@ -96,26 +109,33 @@ public sealed class MarkdownRenderer
     static void RenderBlocks(Panel container, string markdown, Func<string, Task>? openFile,
         Func<string, MenuFlyout>? fileMenu, RenderState state)
     {
+        markdown=ReplyWebDocument.PrepareMarkdown(markdown);
         var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath);
-        if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
+        if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
         {
             var view = container.Children.Count == 1 ? container.Children[0] as AdvancedMarkdownView : null;
             if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile); container.Children.Add(view); }
             view.Update(markdown); state.Keys.Clear(); state.Density = ChatDensity.Id; return;
         }
         var groups = GroupTextBlocks(blocks).ToList();
-        var keys = groups.Select(group => SourceText(markdown, group[0].Span.Start, group[^1].Span.End)).ToList();
+        var cssKey=groups.Any(g=>g.Any(b=>b is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info)))?ReplyWebDocument.ExtraCss(markdown):"";
+        var keys = groups.Select(group => SourceText(markdown, group[0].Span.Start, group[^1].Span.End)+(group.Any(b=>b is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info))?"\0"+cssKey:"")).ToList();
         int shared = 0;
         while (state.Density == ChatDensity.Id && shared < keys.Count && shared < state.Keys.Count && shared < container.Children.Count && keys[shared] == state.Keys[shared]) shared++;
         // Adjacent headings, paragraphs, lists and quotes share one selection surface.
         // Reuse that surface and its completed inlines when the streamed tail changes.
         var replacements = new List<UIElement>();
-        var renderer = new MarkdownRenderer(openFile, fileMenu);
+        var renderer = new MarkdownRenderer(openFile, fileMenu,state.LocalImage,markdown);
         for (int index = shared; index < groups.Count; index++)
         {
             var group = groups[index];
             StackPanel blockPanel;
-            if (CanJoinText(group[0]))
+            if(group.Any(b=>PreviewNodes(b).Any(n=>RenderMath && n is MathBlock or MathInline || RenderMermaid && n is FencedCodeBlock code && code.Info=="mermaid")))
+            {
+                blockPanel=new StackPanel();var visual=new AdvancedMarkdownView(openFile);blockPanel.Children.Add(visual);visual.Update(SourceText(markdown,group[0].Span.Start,group[^1].Span.End));
+                foreach(var image in group.SelectMany(PreviewNodes).OfType<LinkInline>().Where(x=>x.IsImage).Take(12))blockPanel.Children.Add(new ReplyImageView(image.Url??"",image.Title??"Image",FluentDesign.Secondary,true,state.LocalImage));
+            }
+            else if (CanJoinText(group[0]))
             {
                 TextBlock flow;
                 if (state.Density == ChatDensity.Id && index < container.Children.Count &&
@@ -197,7 +217,7 @@ public sealed class MarkdownRenderer
         {
             var visual = new AdvancedMarkdownView(openFile); target.Children.Add(visual); visual.Update(markdown); return;
         }
-        var renderer = new MarkdownRenderer(openFile, fileMenu);
+        var renderer = new MarkdownRenderer(openFile, fileMenu,displayImages:false);
         int imageCount = 0, blockCount = 0;
         foreach (var block in blocks)
         {
@@ -316,8 +336,9 @@ public sealed class MarkdownRenderer
         }
     }
 
-    static bool CanJoinText(MdBlock block) => block is ParagraphBlock or HeadingBlock ||
-        block is ListBlock or ListItemBlock or QuoteBlock && ((ContainerBlock)block).All(CanJoinText);
+    static bool IsRichNode(Markdig.Syntax.MarkdownObject node)=>node is LinkInline {IsImage:true} or HtmlBlock || node is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info);
+    static bool CanJoinText(MdBlock block) => !PreviewNodes(block).Any(IsRichNode) && (block is ParagraphBlock or HeadingBlock ||
+        block is ListBlock or ListItemBlock or QuoteBlock && ((ContainerBlock)block).All(CanJoinText));
 
     void AppendText(MdBlock block, TextBlock flow, int depth, string prefix = "")
     {
@@ -369,6 +390,10 @@ public sealed class MarkdownRenderer
 
             case ParagraphBlock paragraph:
                 return RenderParagraph(paragraph);
+
+            case HtmlBlock html:
+                var htmlSource=html.Lines.ToString();
+                return ReplyWebDocument.IsEnvelopeFragment(htmlSource)?new Border():new ReplyHtmlCard(ReplyWebDocument.FromHtml(htmlSource),localImage);
 
             case FencedCodeBlock fenced:
                 return RenderFencedCode(fenced);
@@ -450,14 +475,23 @@ public sealed class MarkdownRenderer
             RenderInlines(paragraph.Inline, p.Inlines);
         }
         foreach(var inline in p.Inlines.ToList()) { p.Inlines.Remove(inline); rtb.Inlines.Add(inline); }
-        return rtb;
+        var images=displayImages?PreviewNodes(paragraph).OfType<LinkInline>().Where(x=>x.IsImage).Take(12).ToArray():[];
+        if(images.Length==0)return rtb;
+        var media=new StackPanel {Spacing=8};media.Children.Add(rtb);
+        foreach(var image in images)media.Children.Add(new ReplyImageView(image.Url??"",image.Title??string.Concat(image.OfType<LiteralInline>().Select(x=>x.Content.ToString())),FluentDesign.Secondary,true,localImage));
+        return media;
     }
 
     private FrameworkElement RenderFencedCode(FencedCodeBlock fenced)
     {
         var rawCode = ExtractCode(fenced.Lines);
         var lang = string.IsNullOrWhiteSpace(fenced.Info) ? "code" : fenced.Info.Trim();
-        return CreateCodeBlockElement(lang, rawCode);
+        var code=CreateCodeBlockElement(lang,rawCode);
+        if(fenced.ClosingFencedCharCount>0 && ReplyWebDocument.IsHtml(lang) && rawCode.Length<=ReplyWebDocument.MaxCharacters) {
+            var artifact=ReplyWebDocument.Extract(fullMarkdown).FirstOrDefault(x=>x.Html.StartsWith(rawCode,StringComparison.Ordinal))??ReplyWebDocument.FromHtml(rawCode);
+            var panel=new StackPanel {Spacing=8};panel.Children.Add(new ReplyHtmlCard(artifact,localImage));panel.Children.Add(new Expander {Header=T("Voir le code HTML"),Content=code,HorizontalAlignment=HorizontalAlignment.Stretch});return panel;
+        }
+        return code;
     }
 
     private FrameworkElement RenderCodeBlock(CodeBlock code)

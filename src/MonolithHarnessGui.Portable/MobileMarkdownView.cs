@@ -1,3 +1,5 @@
+using MonolithHarness.Core;
+using MonolithHarness.Presentation;
 using Markdig;
 using Markdig.Extensions.Tables;
 using Markdig.Extensions.TaskLists;
@@ -14,7 +16,7 @@ using MdBlock=Markdig.Syntax.Block;
 using MdInline=Markdig.Syntax.Inlines.Inline;
 namespace MonolithHarnessGui.Portable;
 
-/// <summary>Native, theme-aware Markdown. No browser/WebView or automatic remote image requests.</summary>
+/// <summary>Native Markdown and media previews. Interactive HTML opens only on user action.</summary>
 sealed class MobileMarkdownView : UserControl
 {
     static readonly MarkdownPipeline pipeline=new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -22,12 +24,15 @@ sealed class MobileMarkdownView : UserControl
     readonly DispatcherTimer timer=new() {Interval=TimeSpan.FromMilliseconds(180)};
     readonly Brush ink;
     readonly double size;
+    readonly bool media,allowNetwork;
+    readonly Action<ReplyWebDocument>? openWeb;
+    int imageCount;
     readonly List<string> keys=[];
-    string text="";
+    string text="",renderText="";
     public string Text {get=>text;set {if(text==value)return;text=value;timer.Start();}}
-    public MobileMarkdownView(string value,double fontSize,Brush foreground)
+    public MobileMarkdownView(string value,double fontSize,Brush foreground,bool media=false,bool allowNetwork=true,Action<ReplyWebDocument>? openWeb=null)
     {
-        size=fontSize;ink=foreground;text=value;Content=blocks;
+        size=fontSize;ink=foreground;text=value;this.media=media;this.allowNetwork=allowNetwork;this.openWeb=openWeb;Content=blocks;
         timer.Tick+=(_,_)=>Flush();Unloaded+=(_,_)=>timer.Stop();Loaded+=(_,_)=>Flush();Flush();
     }
     static Brush Role(string name)=>Application.Current.Resources.TryGetValue(name,out var value) && value is Brush brush?brush:new SolidColorBrush(Microsoft.UI.Colors.Gray);
@@ -38,9 +43,11 @@ sealed class MobileMarkdownView : UserControl
     {
         timer.Stop();
         try {
-            var document=Markdown.Parse(text,pipeline);int index=0;
+            renderText=media?ReplyWebDocument.PrepareMarkdown(text):text;
+            var document=Markdown.Parse(renderText,pipeline);int index=0;imageCount=0;
+            var cssKey=media && document.OfType<FencedCodeBlock>().Any(b=>ReplyWebDocument.IsHtml(b.Info))?ReplyWebDocument.ExtraCss(renderText):"";
             foreach(var block in document) {
-                var key=Slice(text,block.Span.Start,block.Span.End);
+                var key=Slice(renderText,block.Span.Start,block.Span.End)+(media && block is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info)?"\0"+cssKey:"");
                 if(index>=keys.Count || keys[index]!=key) {
                     var element=Render(block);
                     if(index<blocks.Children.Count)blocks.Children[index]=element;else blocks.Children.Add(element);
@@ -60,7 +67,10 @@ sealed class MobileMarkdownView : UserControl
         switch(block) {
             case HeadingBlock heading:
                 var title=InlineText(heading.Inline,Math.Max(size,size+12-heading.Level*2));title.FontWeight=FontWeights.SemiBold;return title;
-            case ParagraphBlock paragraph:return InlineText(paragraph.Inline);
+            case ParagraphBlock paragraph:return Paragraph(paragraph);
+            case HtmlBlock html when media:
+                var htmlSource=html.Lines.ToString();
+                return ReplyWebDocument.IsEnvelopeFragment(htmlSource)?new Border():Html(ReplyWebDocument.FromHtml(htmlSource));
             case CodeBlock code:return Code(code);
             case QuoteBlock quote:
                 return new Border {Child=Container(quote),Padding=new(12,4,0,4),BorderThickness=new(3,0,0,0),BorderBrush=Role("PrimaryBrush")};
@@ -74,8 +84,30 @@ sealed class MobileMarkdownView : UserControl
             case Table table:return TableView(table);
             case ThematicBreakBlock:return new Border {Height=1,Background=Role("OutlineVariantBrush"),Margin=new(0,4,0,4)};
             case ContainerBlock container:return Container(container);
-            default:return Plain(Slice(text,block.Span.Start,block.Span.End));
+            default:return Plain(Slice(renderText,block.Span.Start,block.Span.End));
         }
+    }
+    FrameworkElement Paragraph(ParagraphBlock paragraph)
+    {
+        var panel=new StackPanel {Spacing=8};panel.Children.Add(InlineText(paragraph.Inline));
+        if(media && paragraph.Inline!=null)foreach(var link in Images(paragraph.Inline)) {
+            if(imageCount++>=12)break;
+            panel.Children.Add(new ReplyImageView(link.Url??"",link.Title??PlainInline(link),ink,allowNetwork));
+        }
+        return panel;
+    }
+    static string PlainInline(ContainerInline inline)=>string.Concat(inline.OfType<LiteralInline>().Select(x=>x.Content.ToString()));
+    static IEnumerable<LinkInline> Images(ContainerInline inline)
+    {foreach(var child in inline) {if(child is LinkInline {IsImage:true} image)yield return image;else if(child is ContainerInline nested)foreach(var nestedImage in Images(nested))yield return nestedImage;}}
+    FrameworkElement Html(ReplyWebDocument artifact)
+    {
+        var panel=new StackPanel {Spacing=12};panel.Children.Add(Plain(artifact.Title,18));
+        panel.Children.Add(new ScrollViewer {Content=ReplyHtmlView.Build(artifact,size,ink,Role("SurfaceBrush"),Role("OutlineVariantBrush"),Role("PrimaryBrush"),allowNetwork),MaxHeight=240,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollMode=ScrollMode.Disabled});
+        if(openWeb!=null) {
+            var open=new Button {Content="Ouvrir en plein écran",MinHeight=48,CornerRadius=new(24),Background=Role("PrimaryBrush"),Foreground=Role("OnPrimaryBrush"),HorizontalAlignment=HorizontalAlignment.Stretch};
+            open.Click+=(_,_)=>openWeb(artifact);panel.Children.Add(open);
+        }
+        return new Border {Child=panel,Padding=new(12),CornerRadius=new(16),BorderBrush=Role("OutlineVariantBrush"),BorderThickness=new(1)};
     }
     StackPanel Container(ContainerBlock container)
     {var panel=new StackPanel {Spacing=8};foreach(var child in container)panel.Children.Add(Render(child));return panel;}
@@ -93,6 +125,7 @@ sealed class MobileMarkdownView : UserControl
                 else if(emphasis.DelimiterCount>=2)emphasisSpan.FontWeight=FontWeights.Bold;
                 else emphasisSpan.FontStyle=FontStyle.Italic;
                 foreach(var child in emphasis)emphasisSpan.Inlines.Add(Inline(child));return emphasisSpan;
+            case LinkInline {IsImage:true} image when media:return new Run {Text=""};
             case LinkInline link:
                 var linked=new Span();foreach(var child in link)linked.Inlines.Add(Inline(child));
                 if(SafeLink(link.Url) is {} uri) {
@@ -109,7 +142,7 @@ sealed class MobileMarkdownView : UserControl
             case HtmlInline html:return html.Tag is "<br>" or "<br/>" or "<br />"?new LineBreak():new Run {Text=html.Tag};
             case ContainerInline container:
                 var span=new Span();foreach(var child in container)span.Inlines.Add(Inline(child));return span;
-            default:return new Run {Text=Slice(text,inline.Span.Start,inline.Span.End)};
+            default:return new Run {Text=Slice(renderText,inline.Span.Start,inline.Span.End)};
         }
     }
     static Uri? SafeLink(string? url)=>Uri.TryCreate(url,UriKind.Absolute,out var uri) && uri.Scheme is "https" or "http" or "mailto"?uri:null;
@@ -122,7 +155,12 @@ sealed class MobileMarkdownView : UserControl
         copy.Click+=(_,_)=>{var package=new DataPackage();package.SetText(value);Clipboard.SetContent(package);};panel.Children.Add(header);
         var source=Plain(value,Math.Max(13,size-2));source.FontFamily=new("monospace");source.TextWrapping=TextWrapping.NoWrap;
         panel.Children.Add(new ScrollViewer {Content=source,HorizontalScrollMode=ScrollMode.Enabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollMode=ScrollMode.Disabled,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled});
-        return new Border {Child=panel,CornerRadius=new(16),Padding=new(12),BorderBrush=Role("OutlineVariantBrush"),BorderThickness=new(1)};
+        var sourceCard=new Border {Child=panel,CornerRadius=new(16),Padding=new(12),BorderBrush=Role("OutlineVariantBrush"),BorderThickness=new(1)};
+        if(media && code is FencedCodeBlock {ClosingFencedCharCount:>0} && ReplyWebDocument.IsHtml(language) && value.Length<=ReplyWebDocument.MaxCharacters) {
+            var artifact=ReplyWebDocument.Extract(renderText).FirstOrDefault(x=>x.Html.StartsWith(value,StringComparison.Ordinal))??ReplyWebDocument.FromHtml(value);
+            var preview=new StackPanel {Spacing=8};preview.Children.Add(Html(artifact));preview.Children.Add(new Expander {Header="Voir le code HTML",Content=sourceCard,HorizontalAlignment=HorizontalAlignment.Stretch});return preview;
+        }
+        return sourceCard;
     }
     FrameworkElement TableView(Table table)
     {

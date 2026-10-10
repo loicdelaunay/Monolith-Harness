@@ -57,6 +57,22 @@ public sealed class FeatureSettings : IRetrySettings
     public List<int> SidebarProjectOrder { get; set; } = [];
     public List<int> SidebarChatOrder { get; set; } = [];
     public bool AllowWebViewInTools { get; set; }
+    public bool AllowWebViewInChat { get; set; }
+    public bool PreviewHtmlInline { get; set; }
+    public bool DynamicHtmlHeight { get; set; }
+    public bool TailwindFollowApplicationTheme { get; set; } = true;
+    public bool RenderTailwind { get; set; } = true;
+    public bool RenderChartJs { get; set; } = true;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ReplyRenderOptions ReplyRendering
+    {
+        get
+        {
+            var theme = AppearanceThemes.Get(Theme, CustomThemes);
+            return new(RenderTailwind, RenderChartJs, TailwindFollowApplicationTheme,
+                new(theme.Dark, theme.Background, theme.Surface, theme.Text, theme.Muted, theme.Accent));
+        }
+    }
     public bool RenderMermaid { get; set; } = true;
     public bool RenderMath { get; set; } = true;
     public bool AutoArchiveConversations { get; set; }
@@ -128,6 +144,11 @@ public sealed class FeatureSettings : IRetrySettings
         try
         {
             var settings = JsonSerializer.Deserialize<FeatureSettings>(json) ?? new();
+            // Preserve the former shared permission once; future changes are independent.
+            using var settingsDocument = JsonDocument.Parse(json);
+            if (settingsDocument.RootElement.ValueKind == JsonValueKind.Object &&
+                !settingsDocument.RootElement.TryGetProperty(nameof(AllowWebViewInChat), out _))
+                settings.AllowWebViewInChat = settings.AllowWebViewInTools;
             // Carry the former combined switch into each missing independent preference.
             if (json.Contains("\"ShowComposerMetrics\"", StringComparison.Ordinal))
             {

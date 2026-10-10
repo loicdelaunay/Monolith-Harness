@@ -21,10 +21,10 @@ public static class AcpProviders
     public static AcpPreset? Find(string? kind) => Presets.FirstOrDefault(x => x.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase));
     public static Provider Create(AcpPreset preset) => new() { Name = preset.Name, Kind = preset.Kind, BaseUrl = "", Model = DefaultModel,
         SupportsImages = false, OpenCodeTools = true, DetectedModelsJson = "[\"default\"]", SelectedModelsJson = "[\"default\"]" };
-    public static string SystemPrompt(string language, string mode) =>
+    public static string SystemPrompt(string language, string mode, FeatureSettings? rendering = null) =>
         (language == "en" ? "You are connected through ACP inside Monolith Harness. Answer directly in English. " : "Tu es connecté via ACP dans Monolith Harness. Réponds directement en français. ") +
         "Use only your agent's native tools; the application's API tools and subagent orchestrator are not available through this connection. Respect every permission denial. " +
-        (AgentPolicy.ReadOnly(mode) && mode != "chat" ? "Read-only planning: never change files, execute commands or delegate actions. " : mode == "chat" ? "Conversational mode: answer using the provided context; do not inspect the filesystem or execute tools. " : "") + MarkdownDisplay.Instructions;
+        (AgentPolicy.ReadOnly(mode) && mode != "chat" ? "Read-only planning: never change files, execute commands or delegate actions. " : mode == "chat" ? "Conversational mode: answer using the provided context; do not inspect the filesystem or execute tools. " : "") + MarkdownDisplay.InstructionsFor(rendering);
 
     public static string[] Arguments(Provider provider)
     {

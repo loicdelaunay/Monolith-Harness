@@ -41,7 +41,7 @@ public static class Skills
         CommonSkills.Summary
     ];
     public static bool Enabled(string selection, string id) => selection.Split(',', StringSplitOptions.RemoveEmptyEntries).Contains(id, StringComparer.Ordinal);
-    public static string Prompt(string selection, string language, bool hasSources = true, bool hasBrowser = true, bool canWriteSources = false)
+    public static string Prompt(string selection, string language, bool hasSources = true, bool hasBrowser = true, bool canWriteSources = false, FeatureSettings? rendering = null)
     {
         var isFr = language == "fr";
         var readOnlyClause = canWriteSources || Enabled(selection, "patch_sources") || Enabled(selection, "terminal") || GitTools.WriteEnabled(selection) || Enabled(selection, FileIndexTools.SkillId) ? " Only modify files using an authorized tool, after any requested user approval." : " File tools are read-only; never claim to have modified files.";
@@ -97,6 +97,6 @@ public static class Skills
             prompt += "\nGIT CAPABILITIES: read=" + GitTools.ReadEnabled(selection) + ", write=" + GitTools.WriteEnabled(selection) + ". Do not call a disabled capability or substitute a native tool for it.";
         if (Enabled(selection, AssetTools.SkillId) && VisionBridge.Enabled(selection))
             prompt += "\nAsset captures automatically use the configured Bypass image AI observer, including when the main model supports images. Use asset_capture after edits to receive its visual observations; keep its uncertainties and do not claim direct sight.";
-        return prompt + "\n" + MarkdownDisplay.Instructions + "\n" + PlatformSupport.SystemPrompt;
+        return prompt + "\n" + MarkdownDisplay.InstructionsFor(rendering) + "\n" + PlatformSupport.SystemPrompt;
     }
 }

@@ -19,8 +19,8 @@ public static class ConversationModes
         InformationSkill.AddDefinitions(result, skills);
         return result;
     }
-    public static string ChatPrompt(string language, Chat chat, bool nativeOpenCode = false, bool nativeToolsEnabled = true, string thinkingLevel = "none") =>
-        "You are a conversational assistant. Answer questions, explain, draft and analyze the text and attachments supplied by the user. " + MarkdownDisplay.Instructions + " " +
+    public static string ChatPrompt(string language, Chat chat, bool nativeOpenCode = false, bool nativeToolsEnabled = true, string thinkingLevel = "none", FeatureSettings? rendering = null) =>
+        "You are a conversational assistant. Answer questions, explain, draft and analyze the text and attachments supplied by the user. " + MarkdownDisplay.InstructionsFor(rendering) + " " +
         "CHAT MODE: " + (thinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase) ? "Answer directly without extended reasoning. " : "Use the selected thinking level (" + thinkingLevel + ") and keep the final answer focused. ") +
         "Only explicitly enabled web research, Python and host Information skills are available. Host Information is read-only metadata; it does not grant filesystem or command access. No project-folder tools, terminal, browser control, Git, MCP, memory tools or agents. " +
         (chat.ChatWebEnabled && (!nativeOpenCode || nativeToolsEnabled) ? nativeOpenCode ? "Web research is available through webfetch and websearch when supported by the server. Cite fetched URLs and read only the information needed. " : WebHttpTools.Instructions + " " : "Web research is disabled. ") +

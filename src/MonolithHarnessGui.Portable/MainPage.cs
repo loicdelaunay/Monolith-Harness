@@ -63,12 +63,27 @@ public sealed partial class MainPage : Page
     MobileMarkdownView Bubble(string role,string text)
     {
         var ink=Brush(role=="user"?"OnPrimaryContainerBrush":"OnSurfaceBrush");
-        var body=new MobileMarkdownView(text,mobileSettings.TextSize,ink);
+        var body=new MobileMarkdownView(text,mobileSettings.TextSize,ink,role=="assistant",mobileSettings.AllowNetwork,OpenReplyWeb);
         var card=new StackPanel {Spacing=6};card.Children.Add(new TextBlock {Text=role=="user"?"Vous":role=="tool"?"Outil":"Assistant",FontSize=12,Foreground=ink,Opacity=.7});card.Children.Add(body);
-        messages.Children.Add(new Border {Child=card,Padding=new(16),CornerRadius=role=="user"?new(24,24,8,24):new(24,24,24,8),
+        var bubble=new Border {Child=card,Padding=new(16),CornerRadius=role=="user"?new(24,24,8,24):new(24,24,24,8),
             HorizontalAlignment=role=="user"?HorizontalAlignment.Right:HorizontalAlignment.Left,MaxWidth=Math.Max(48,layoutMetrics.ContentWidth*.96),
-            Background=Brush(role=="user"?"PrimaryContainerBrush":"SurfaceBrush"),BorderBrush=Brush("OutlineVariantBrush"),BorderThickness=new(role=="user"?0:1)});
+            Background=Brush(role=="user"?"PrimaryContainerBrush":"SurfaceBrush"),BorderBrush=Brush("OutlineVariantBrush"),BorderThickness=new(role=="user"?0:1)};
+        if(role=="assistant")bubble.Tapped+=(_,args)=> {
+            if(generation!=null)return;
+            try {
+                for(var target=args.OriginalSource as DependencyObject;target!=null;target=Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(target))
+                    if(target is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase or Expander or Microsoft.UI.Xaml.Documents.Hyperlink)return;
+                var artifact=ReplyWebDocument.Extract(body.Text).FirstOrDefault();if(artifact==null)return;
+                args.Handled=true;OpenReplyWeb(artifact);
+            } catch(Exception ex) when(ex is not OutOfMemoryException) {SetStatus("Aperçu indisponible : "+ex.Message,true);}
+        };
+        messages.Children.Add(bubble);
         scroll.Content=messageRail;scroll.VerticalContentAlignment=VerticalAlignment.Top;return body;
+    }
+    void OpenReplyWeb(ReplyWebDocument artifact)
+    {
+        if(generation!=null){SetStatus("L’aperçu sera disponible à la fin de la réponse.");return;}
+        try {MainActivity.HideKeyboard();MainActivity.ShowWebPreview(artifact,mobileSettings.ReplyRendering);}catch(Exception ex){SetStatus("Aperçu indisponible : "+ex.Message,true);}
     }
     async Task RenderHistoryAsync()
     {

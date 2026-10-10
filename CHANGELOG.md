@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.88.0 — 2026-10-10
+
+- Desktop : stabilisation du cycle de vie des aperçus HTML lors des changements de fenêtre ; un seul aperçu externe par carte, réactivé aux clics suivants, et restauration de l’aperçu intégré à sa fermeture.
+- Paramètres / Chat : Tailwind suit par défaut le thème et les couleurs de l’application, avec une option indépendante pour conserver le thème du document.
+- Paramètres / Chat : taille dynamique optionnelle des aperçus HTML intégrés, adaptée au contenu et limitée pour les pages très longues.
+- Réessayer automatiquement, nommage des conversations, Attention requise et entretien des conversations replacés dans Général.
+
+## 1.87.0 — 2026-10-10
+
+- Desktop : nouvel onglet Chat regroupant le style de réponse, le raisonnement, l’affichage du débit et du contexte, la virtualisation, Mermaid, les formules, les bibliothèques HTML et les préférences des conversations. L’onglet Test se trouve après Notifications.
+- Recherche des paramètres en haut de la fenêtre, dans tous les onglets, avec accès direct au réglage trouvé ; recherche insensible aux accents et à la casse.
+- Autorisations WebView indépendantes pour les outils et les réponses du chat. Le choix précédent est conservé lors de la migration des profils.
+- Option de prévisualisation HTML interactive directement dans les bulles, avec Tailwind CSS et Chart.js selon leurs réglages ; isolation des scripts et repli natif si WebView est indisponible.
+
+## 1.86.1 — 2026-10-10
+
+- GUI et Android : les documents HTML complets dans les réponses sont regroupés avant le traitement Markdown, même sans bloc de code HTML reconnu. Le CSS et le JavaScript restent dans une seule carte et un seul aperçu plein écran.
+- Le texte explicatif autour du document est conservé et les exemples déjà placés dans des blocs de code gardent leur format. Les messages enregistrés bénéficient du nouveau rendu sans modification de leur contenu.
+- Android : consignes Create web app renforcées pour produire un seul document HTML, sans enveloppes XML ou CDATA.
+
+## 1.86.0 — 2026-10-10
+
+- GUI et Android : Tailwind CSS 4.3.3 et Chart.js 4.5.1 embarqués localement dans les aperçus HTML, sans CDN ni téléchargement à l’ouverture.
+- Paramètres / Général : deux options indépendantes, activées par défaut, pour les interfaces Tailwind et les graphiques Chart.js. Les consignes du modèle suivent les réglages choisis.
+- Desktop : JavaScript exécuté uniquement dans l’aperçu web isolé ouvert à la demande, afin d’afficher les graphiques interactifs ; repli natif conservé lorsque WebView est désactivé ou indisponible.
+
+## 1.85.0 — 2026-10-10
+
+- GUI et Android : les réponses de l’IA affichent les images Markdown et des aperçus HTML/CSS, avec accès au code source.
+- Desktop : aperçu HTML natif sans WebView ; rendu HTML/CSS complet à la demande lorsque les aperçus WebView sont autorisés, avec repli natif si le navigateur est indisponible.
+- Android : nouveau skill Create web app (/create-web-app), configurable dans Paramètres / Skills. Touchez une réponse HTML pour ouvrir son application HTML, CSS et JavaScript en plein écran ; l’aperçu fonctionne sans accès réseau, fichiers ou API natives.
+- Les aperçus sont reconstruits depuis les messages conservés ; les images distantes sont limitées aux serveurs HTTPS publics et les images raster à 8 Mo.
+
 ## 1.84.0 — 2026-10-10
 
 - Logos distincts : accent orange pour la CLI (icône Windows et monolithe du terminal), vert pour Android (lanceur et démarrage), cyan conservé pour le desktop.
