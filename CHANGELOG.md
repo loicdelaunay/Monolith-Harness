@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.84.0 — 2026-10-10
+
+- Logos distincts : accent orange pour la CLI (icône Windows et monolithe du terminal), vert pour Android (lanceur et démarrage), cyan conservé pour le desktop.
+- Chaque interface possède son image source ; la régénération des tailles et icônes conserve la variante de chaque plateforme.
+
+## 1.83.0 — 2026-10-10
+
+- Android : sélection du modèle dans la barre du haut à la place du titre de la discussion ; les titres restent accessibles dans la sidebar.
+- Android : saisie compacte sur une ligne par défaut, bouton + pour les pièces jointes à gauche et Envoyer à droite. Le champ grandit avec le texte et le bouton Arrêter remplace Envoyer pendant la génération.
+
+## 1.82.0 — 2026-10-10
+
+- Android : modes d’autorisation Refuser tout, Demander tout (par défaut) et Autoriser tout, conservés dans Paramètres / Autorisations et appliqués à chaque appel d’outil.
+- Android : appels d’outils regroupés dans une bulle compacte dépliable par réponse, mise à jour pendant le traitement et restaurée depuis l’historique.
+- Android : état de réflexion placé au-dessus de la saisie et rendu Markdown natif des messages (titres, listes, citations, liens, tableaux et blocs de code copiables).
+
+## 1.81.0 — 2026-10-10
+
+- Nouveau logo monolithe blanc et cyan appliqué aux interfaces desktop, CLI, Android, à l’hôte Electron et aux icônes natives Windows/macOS.
+- Le dessin du logo dans le terminal reprend le monolithe avec les couleurs du thème actif ; Android partage la même image pour son icône et son écran de démarrage.
+
+## 1.80.0 — 2026-10-10
+
+- Android : remplace les sélecteurs Projet et Discussion par une sidebar latérale avec projets repliables, liste des discussions, sélection active et création dans chaque projet.
+- Android : conserve les brouillons et images de chaque discussion pendant les changements de conversation ; le bouton Retour et un appui en dehors ferment la sidebar.
+- Android : conserve le contexte du projet sous le titre du chat et libère la hauteur occupée par les sélecteurs.
+
+## 1.79.0 — 2026-10-10
+
+- Android : ajout du menu Paramètres avec Général, Fournisseurs, Skills, Autorisations, Mémoire et À propos ; réglages conservés localement.
+- Android : skills Synthèse, Planification et Revue de code partagés avec le desktop ; Informations configurables (date, heure, fuseau, version Android et langue), avec autocomplétion slash sans envoi anticipé.
+- Android : recherche et lecture web publiques HTTPS, import/lecture/recherche/modification de documents texte privés par discussion et export via le sélecteur Android.
+- Android : génération API et chargement des modèles hors du thread UI pour éviter `NetworkOnMainThreadException` lors de la lecture des réponses réseau.
+- Android : mémoires distinctes Conversation et Projet, mémoire Partagée optionnelle, gestion des souvenirs et autorisations avant les accès web et les écritures.
+- Android : nom installé Monolith et icône adaptative générée à partir du logo existant. Les dépendances natives desktop restent séparées.
+- Android : libellés des interrupteurs Material rendus explicitement et bouton Retour moderne qui ferme le clavier ou les paramètres avant de quitter l’application.
+
+## 1.78.1 - 2026-10-10
+
+- Rebuilds the Android interface with Uno Material 3 components, wallpaper-derived colors, rounded expressive surfaces, vector Material icons and 48 dp touch targets. The mobile theme follows the Android light/dark setting.
+- Keeps the composer and modal actions outside Android status/navigation bars and the keyboard. Adapts navigation, input height and reading width to portrait, landscape and unfolded screens without counting keyboard resizing twice.
+- Adds portable layout regression checks for system insets, keyboard transitions, narrow screens and foldable formats; desktop rendering and conversation storage remain independent.
+
+## 1.78.0 - 2026-10-10
+
+- Fixes Android Release startup on the Pixel 9 Pro Fold by keeping dynamic JNI registration instead of native marshal methods for Uno application callbacks.
+- Splits the engine into a platform-neutral Core, Core.Desktop and Core.Mobile. Desktop GUI/CLI retain their existing data model, migrations, resource names and system tools through a desktop runtime adapter; desktop and mobile have independent solutions.
+- Adds MonolithHarnessGui.Portable for Android 8+ with API chat, streamed replies, native image attachments, project/chat history in private SQLite storage and API keys protected by Android Keystore. Mobile references no desktop engine, Python runtime or embedded desktop models. Generation stops and its partial response is saved when the activity stops.
+- Adds manual Android packaging with preview APK artifacts and optional release upload using a persistent signing identity. Android is not added to desktop release jobs.
+
 ## 1.77.1 - 2026-10-09
 
 - Fixes interrupted responses caused by Markdown source spans extending beyond partially streamed text: bounds native chat rendering, incremental text reuse and file-preview slices to the available source.

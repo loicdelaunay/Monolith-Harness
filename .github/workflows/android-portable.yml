@@ -1,0 +1,77 @@
+name: Android portable (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional existing release tag for a signed APK; empty produces preview artifacts only'
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - run: dotnet workload install android
+      - name: Read application version
+        run: |
+          python3 - <<'PY'
+          import os,xml.etree.ElementTree as E
+          version=E.parse('src/MonolithHarnessGui.Portable/MonolithHarnessGui.Portable.csproj').findtext('.//ApplicationDisplayVersion')
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('ANDROID_VERSION='+version+'\n')
+          PY
+      - name: Publish APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ -n "$RELEASE_TAG" || -n "$ANDROID_KEYSTORE_BASE64" ]]; then
+            [[ -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" && -n "$ANDROID_STORE_PASSWORD" ]] || { echo 'Configure all four Android signing secrets before uploading a release APK.'; exit 1; }
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/monolith-android.keystore"
+            args=(-p:AndroidKeyStore=true "-p:AndroidSigningKeyStore=$RUNNER_TEMP/monolith-android.keystore" "-p:AndroidSigningKeyAlias=$ANDROID_KEY_ALIAS" -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASSWORD -p:AndroidSigningStorePass=env:ANDROID_STORE_PASSWORD)
+          fi
+          dotnet publish src/MonolithHarnessGui.Portable -c Release -f net10.0-android -r android-arm64 -p:AndroidPackageFormats=apk -p:RunAOTCompilation=false -o artifacts/TEMP/android-portable "${args[@]}"
+      - name: Prepare APK and checksums
+        run: |
+          python3 - <<'PY'
+          import hashlib,os,pathlib,shutil
+          root=pathlib.Path('artifacts/TEMP/android-portable');signed=list(root.glob('*-Signed.apk'))
+          if len(signed)!=1:raise SystemExit('Expected exactly one signed APK')
+          output=pathlib.Path('artifacts/TEMP/android-download');output.mkdir()
+          target=output/('MonolithHarness-Portable-v'+os.environ['ANDROID_VERSION']+'-android-arm64.apk')
+          shutil.copyfile(signed[0],target)
+          with target.open('rb') as f:digest=hashlib.file_digest(f,'sha256').hexdigest()
+          (output/'SHA256SUMS-android.txt').write_text(digest+'  '+target.name+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MonolithHarness-Android-preview
+          path: artifacts/TEMP/android-download/*
+          if-no-files-found: error
+      - name: Upload to explicitly requested release
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 build/upload-android-release.py
+      - name: Remove signing material
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/monolith-android.keystore"
