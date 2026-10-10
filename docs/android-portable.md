@@ -1,6 +1,6 @@
 # Monolith for Android — preview 1.84.0
 
-Development remains on `feature/android-portable`. [Download the signed ARM64 APK](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0); source tag `v1.84.0` contains desktop and mobile projects. The Android release is marked as a preview and does not replace desktop downloads. On the default branch, this guide documents the release; use the tag/feature branch to build Android.
+Desktop and Android development now share `main`; `feature/android-portable` has been merged. [Download the signed ARM64 APK](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0); source tag `v1.84.0` contains desktop and mobile projects. The Android release is marked as a preview and does not replace desktop downloads. The default branch contains both platform hosts; use `main` or a release tag to build Android.
 
 ## Boundaries
 
@@ -146,6 +146,6 @@ The public APK is signed with a durable release certificate. Its private keystor
 
 USB development builds use a different debug certificate. Android cannot install a release APK over an app signed with a different key. Uninstalling removes private chats, providers, documents and memory; keep the existing debug installation if its data must be preserved. No debug installation is replaced as part of publishing this release.
 
-The manual `Android portable (manual)` workflow accepts a source ref. An empty `release_tag` produces downloadable build artifacts; a matching existing `android-vX.Y.Z` or `vX.Y.Z` release tag attaches the signed APK and checksum file after verifying the exact commit. Release signing requires all four secrets. Public release metadata, APK identity and fingerprints are checked before publishing.
+The manual `Android portable (manual)` workflow accepts a source ref and defaults to `main`. An empty `release_tag` produces downloadable build artifacts; a matching existing `android-vX.Y.Z` or `vX.Y.Z` release tag attaches the signed APK and checksum file after verifying the exact commit. Release signing requires all four secrets. Public release metadata, APK identity and fingerprints are checked before publishing.
 
 Historical device captures are kept locally because they can contain real conversation content. Compilation and past scoped UI checks do not establish every provider/tool exchange, device or Android version; no new automated functional suite was requested for this branding change.

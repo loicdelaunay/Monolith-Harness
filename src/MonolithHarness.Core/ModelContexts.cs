@@ -70,7 +70,7 @@ public static class ModelContexts
     }
     public static void MergeLocal(Provider provider)
     {
-        if (provider.IsLocal) Merge(provider, LocalProviderSettings.Read(provider.LocalModelsJson).Models
+        if (provider.IsLocal) Merge(provider, LocalModelInfo.Read(provider)
             .Where(x => x.Purpose == "chat").Select(x => new ModelContextMetadata(x.Id, x.ContextTokens, "GGUF")));
     }
     public static ModelContextMetadata FromApi(string model, JsonObject data)

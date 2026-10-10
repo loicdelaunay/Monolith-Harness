@@ -19,7 +19,7 @@ public static class RequestRetry
     };
 
     // Retry one model request, never the surrounding agent turn or its tool effects.
-    public static async Task<T> RunAsync<T>(Func<Task<T>> request, FeatureSettings? settings, CancellationToken ct,
+    public static async Task<T> RunAsync<T>(Func<Task<T>> request, IRetrySettings? settings, CancellationToken ct,
         Action<RetryProgress>? progress = null, Func<Exception, bool>? canRetry = null)
     {
         int retries = settings?.RetryEnabled == true ? Math.Clamp(settings.RetryCount, 0, 10) : 0;

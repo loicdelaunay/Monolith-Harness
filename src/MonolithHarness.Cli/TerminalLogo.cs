@@ -1,21 +1,22 @@
 namespace MonolithHarness.Cli;
 
-/// <summary>An M monogram drawn with the active terminal theme.</summary>
+/// <summary>The monolith mark drawn with an orange CLI accent and the active foreground.</summary>
 internal static class TerminalLogo
 {
     internal static readonly string[] Outline =
     [
-        "##....##",
-        "###..###",
-        "########",
-        "##.##.##",
-        "##....##",
-        "##....##",
-        "##....##",
-        "##....##"
+        "..##....",
+        ".####...",
+        ".#####..",
+        ".###..C.",
+        ".###.CC.",
+        ".###.CC.",
+        ".###.CC.",
+        ".###.CC."
     ];
 
     public const int Width = 8;
+    internal const int BrandAccent = 0xF97316;
 
     public static void Draw(TerminalCanvas canvas, int x, int y, Palette palette)
     {
@@ -32,13 +33,11 @@ internal static class TerminalLogo
 
     private static int Color(int row, int column, Palette palette)
     {
-        if (Outline[row][column] == '.') return 0;
-        return Math.Min(row, Outline.Length - 1 - row) switch
+        return Outline[row][column] switch
         {
-            0 => palette.Accent,
-            1 => palette.Green,
-            2 => palette.Gold,
-            _ => palette.Accent
+            '#' => palette.Foreground,
+            'C' => BrandAccent,
+            _ => 0
         };
     }
 }

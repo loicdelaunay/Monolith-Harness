@@ -13,7 +13,7 @@ public static class ProviderModels
     }
     public static List<string> Normalize(IEnumerable<string> models) => models.Where(x => !string.IsNullOrWhiteSpace(x))
         .Select(x => x.Trim()).Distinct(StringComparer.Ordinal).Order(StringComparer.OrdinalIgnoreCase).ToList();
-    public static List<string> Available(Provider provider) => provider.IsLocal ? Normalize(LocalProviderSettings.Read(provider.LocalModelsJson).Models.Where(x => x.Purpose == "chat").Select(x => x.Id)) : provider.IsComposite ? [provider.Model] :
+    public static List<string> Available(Provider provider) => provider.IsLocal ? Normalize(LocalModelInfo.Read(provider).Where(x => x.Purpose == "chat").Select(x => x.Id)) : provider.IsComposite ? [provider.Model] :
         Parse(provider.DetectedModelsJson);
     public static List<string> Visible(Provider provider) => provider.IsComposite ? [provider.Model] :
         string.IsNullOrWhiteSpace(provider.SelectedModelsJson) ? Normalize([provider.Model]) : Parse(provider.SelectedModelsJson);

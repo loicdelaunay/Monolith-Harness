@@ -1,0 +1,17 @@
+<Project Sdk="Uno.Sdk/6.7.30">
+  <PropertyGroup>
+    <UnoSingleProject>true</UnoSingleProject><TargetFramework>net10.0-android</TargetFramework><OutputType>Exe</OutputType>
+    <UnoFeatures>SkiaRenderer;Material</UnoFeatures><ApplicationTitle>Monolith</ApplicationTitle>
+    <ApplicationId>com.monolithharness.portable</ApplicationId><ApplicationDisplayVersion>1.84.0</ApplicationDisplayVersion><ApplicationVersion>118</ApplicationVersion>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AndroidPackageFormats>apk</AndroidPackageFormats><RunAOTCompilation>false</RunAOTCompilation><PublishTrimmed>false</PublishTrimmed>
+    <!-- Keep dynamic JNI registration: .NET 10 marshal methods can miss Uno NativeApplication.onCreate. -->
+    <AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Generate Android density and adaptive icons from the dedicated green Android brand asset. -->
+    <UnoIcon Include="Assets/Icons/appicon.svg" ForegroundFile="Assets/logo.png" ForegroundScale="0.82" Color="#16181D" />
+  </ItemGroup>
+  <ItemGroup><PackageReference Include="Markdig" Version="0.40.0" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../MonolithHarness.Core.Mobile/MonolithHarness.Core.Mobile.csproj" /></ItemGroup>
+</Project>

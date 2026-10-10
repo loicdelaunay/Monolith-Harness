@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="src/MonolithHarness.Core/MonolithHarness.Core.csproj" />
+  <Project Path="src/MonolithHarness.Core.Desktop/MonolithHarness.Core.Desktop.csproj" />
   <Project Path="src/MonolithHarness.Cli/MonolithHarness.Cli.csproj" />
   <Project Path="src/MonolithHarness.App/MonolithHarness.App.csproj" />
 </Solution>

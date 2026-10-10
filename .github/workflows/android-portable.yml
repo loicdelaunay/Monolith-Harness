@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: 'Source branch, tag or commit to build (mobile sources are on feature/android-portable)'
+        description: 'Source branch, tag or commit to build (desktop and mobile sources are on main)'
         required: true
-        default: 'feature/android-portable'
+        default: 'main'
       release_tag:
         description: 'Optional existing release tag for a signed APK; empty produces preview artifacts only'
         required: false

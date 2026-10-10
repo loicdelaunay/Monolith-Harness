@@ -210,7 +210,7 @@ The [Windows v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/re
 
 Install the APK from the [Android preview release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.84.0) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
 
-For source builds, use tag `v1.84.0` or branch `feature/android-portable`, .NET 10 with the Android workload, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/android-portable.md).
+For source builds, use tag `v1.84.0` or branch `main`, .NET 10 with the Android workload, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/android-portable.md).
 
 ## More documentation
 

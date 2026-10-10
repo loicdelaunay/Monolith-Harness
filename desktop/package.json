@@ -1,6 +1,6 @@
 {
   "name": "monolith-harness-desktop",
-  "version": "1.77.1",
+  "version": "1.84.0",
   "private": true,
   "description": "Monolith Harness desktop host for macOS and Windows",
   "author": "Monolith Harness",
@@ -20,9 +20,10 @@
     "productName": "Monolith Harness",
     "asar": true,
     "files": ["main.cjs", "preload.cjs", "browser.cjs", "application-capture.cjs", "policy.cjs", "ui/**", "package.json"],
-    "extraResources": [{ "from": "sidecar/${os}-${arch}", "to": "service" }],
     "directories": { "output": "dist" },
     "mac": {
+      "icon": "ui/app.icns",
+      "extraResources": [{ "from": "sidecar/mac-${arch}/MonolithHarness", "to": "service/MonolithHarness" }],
       "category": "public.app-category.developer-tools",
       "target": ["dmg", "zip"],
       "hardenedRuntime": true,
@@ -35,6 +36,7 @@
         "NSScreenCaptureUsageDescription": "Share screenshots with your AI provider only after approval."
       }
     },
-    "win": { "target": "dir" }
+    "win": { "icon": "ui/app.ico", "extraResources": [{ "from": "sidecar/win-${arch}/MonolithHarness.exe", "to": "service/MonolithHarness.exe" }], "target": "dir" },
+    "linux": { "icon": "ui/logo.png" }
   }
 }
