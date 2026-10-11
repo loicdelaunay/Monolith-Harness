@@ -56,7 +56,7 @@
 
 **Tired of powerful AI harnesses that need a stack of configuration and external services before the first conversation? What if a portable EXE handled the workspace?**
 
-> **No Monolith Harness account. No telemetry to a Monolith Harness service. No subscription.** Just a standalone app with its workspace beside the EXE. Model requests go to the provider you choose, which may have its own costs.
+> **No Monolith Harness account required for local use. No telemetry to a Monolith Harness service. No subscription.** Just a standalone app with its workspace beside the EXE. Model requests go to the provider you choose, which may have its own costs. The optional self-hosted Server uses accounts managed by your own administrator.
 >
 > **Why build it this way?** I needed something straightforward enough to use at work, without a stack of extra services. And I thought it would be nice to share it, too. :)
 
@@ -197,6 +197,7 @@ See the [Flutter Android guide](docs/flutter-android.md) for configuration and p
 | **Control and extensions** | Choose an agent mode and approval policy. Extend the workflow with project instructions, custom skills and MCP servers. |
 | **Context that lasts** | Keep useful context through compaction and memory. Search sources with local or API embeddings. |
 | **Desktop workflow** | Schedule project tasks and customize the English/French interface. See the [user guide](docs/guide.md) for details. |
+| **Optional Server** | Add on-premise cloud execution, shared providers and live collaboration. Desktop and CLI integration; see the [Server guide](docs/server.md). |
 
 Plan mode blocks modifying tools at the application boundary. The optional sandbox uses Docker or Podman and keeps a copy of approved sources separate from the real project until changes are reviewed. Permissions still apply to sensitive actions. See the [agent modes](docs/agent-modes.md) and [sandbox guide](docs/sandbox.md) for their exact boundaries.
 
