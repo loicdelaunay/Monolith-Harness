@@ -25,6 +25,22 @@
   <ItemGroup><InternalsVisibleTo Include="MonolithHarness.Server.Tests" /></ItemGroup>
   <ItemGroup><AssemblyMetadata Include="MonolithHarness.SingleFile" Value="$(PublishSingleFile)" /></ItemGroup>
   <Import Project="../../build/MonolithLauncher.targets" />
+  <!-- ASP.NET publishes static assets separately; add them explicitly to the portable bundle. -->
+  <Target Name="BundleServerWebAssets" BeforeTargets="_GenerateSingleFileBundleInputCache"
+          DependsOnTargets="PrepareForBundle;CopyStaticWebAssetsToPublishDirectory"
+          Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <FilesToBundle Include="@(_PublishStaticWebAssetsCopyAlways)">
+        <RelativePath>%(_PublishStaticWebAssetsCopyAlways.TargetPath)</RelativePath>
+      </FilesToBundle>
+      <FilesToBundle Include="@(_PublishStaticWebAssetsPreserveNewest)">
+        <RelativePath>%(_PublishStaticWebAssetsPreserveNewest.TargetPath)</RelativePath>
+      </FilesToBundle>
+      <FilesToBundle Include="$(StaticWebAssetEndpointsPublishManifestPath)" Condition="Exists('$(StaticWebAssetEndpointsPublishManifestPath)')">
+        <RelativePath>$(AssemblyName).staticwebassets.endpoints.json</RelativePath>
+      </FilesToBundle>
+    </ItemGroup>
+  </Target>
   <!-- Les symboles natifs de SkiaSharp (80 Mo) ne servent à rien dans le serveur publié. -->
   <Target Name="DropNativeSymbols" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>

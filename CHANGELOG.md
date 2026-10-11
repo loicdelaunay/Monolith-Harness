@@ -3,6 +3,7 @@
 ## 1.91.0 — 2026-10-11
 
 - Nouveau : Monolith Harness Server (`src/MonolithHarness.Server`), un exécutable autonome avec interface web, API REST/OpenAPI, WebSocket, comptes et rôles, exécutions cloud isolées, tâches planifiées, file d’attente, providers partagés et partage en direct. Publié dans `artifacts/SERVER`.
+- Distribution : ressources web du serveur embarquées dans son exécutable ; nouvelles archives Server Windows/Linux, documentation simplifiée en anglais et téléchargement dans le tableau du README.
 - Desktop : Réglages › Serveur pour connecter, déconnecter ou oublier un serveur, avec HTTPS par défaut et acceptation explicite du HTTP en clair. Sans serveur, l’application reste entièrement locale.
 - Providers partagés : ceux du serveur apparaissent comme providers locaux (« · serveur » pour un usage local, « · cloud » pour les exécutions cloud) ; la clé du fournisseur reste sur le serveur et le mot de passe n’est jamais conservé, seul un jeton protégé par le système.
 - Projets cloud : ouverture et création depuis le Desktop et le CLI ; la requête s’exécute sur le serveur, avec ses approbations et questions, et la conversation est reflétée localement.

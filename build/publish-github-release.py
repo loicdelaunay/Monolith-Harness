@@ -25,12 +25,13 @@ def digest(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def validate_archive(path, windows):
+def validate_archive(path, windows, server=False):
     expected = {"MonolithHarness.exe" if windows else "MonolithHarness", "LICENSE", "README.txt"}
     if windows:
         with zipfile.ZipFile(path) as archive:
             if len(archive.infolist()) != 3 or set(archive.namelist()) != expected:
                 raise RuntimeError(f"Unexpected archive contents: {path.name}")
+            launcher = archive.read("MonolithHarness.exe") if server else None
     else:
         with tarfile.open(path, "r:gz") as archive:
             members = archive.getmembers()
@@ -38,6 +39,12 @@ def validate_archive(path, windows):
                 raise RuntimeError(f"Unexpected archive contents: {path.name}")
             if not archive.getmember("MonolithHarness").mode & 0o111:
                 raise RuntimeError(f"Launcher is not executable: {path.name}")
+            launcher = archive.extractfile("MonolithHarness").read() if server else None
+    if server:
+        for asset in ("wwwroot/app.css", "wwwroot/app.js", "wwwroot/_content/MudBlazor/MudBlazor.min.css",
+                      "wwwroot/_content/MudBlazor/MudBlazor.min.js", "MonolithHarness.Server.staticwebassets.endpoints.json"):
+            if asset.encode() not in launcher and asset.replace("/", "\\").encode() not in launcher:
+                raise RuntimeError(f"Server web asset is missing from the launcher: {asset}")
 
 
 def main():
@@ -91,7 +98,7 @@ def main():
                 declared[name.strip()] = sha
             for name in expected:
                 path = source / name
-                validate_archive(path, runtime == "win-x64")
+                validate_archive(path, runtime == "win-x64", server=channel == "SERVER")
                 if digest(path) != declared.get(name):
                     raise RuntimeError(f"Checksum mismatch: {name}")
                 shutil.copyfile(path, output / name)
