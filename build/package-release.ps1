@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('win-x64', 'linux-x64')][string]$Runtime
+    [Parameter(Mandatory)][ValidateSet('win-x64', 'linux-x64')][string]$Runtime,
+    [ValidateSet('GUI', 'CLI', 'SERVER')][string[]]$Channels = @('GUI', 'CLI')
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -8,9 +9,14 @@ $repo = Split-Path $PSScriptRoot -Parent
 $version = [string]($guiProject.Project.PropertyGroup.ApplicationDisplayVersion | Where-Object { $_ } | Select-Object -First 1)
 $cliVersion = [string]($cliProject.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
 if (!$version -or $version -ne $cliVersion) { throw 'GUI and CLI versions must match.' }
+if ($Channels -contains 'SERVER') {
+    [xml]$serverProject = Get-Content (Join-Path $repo 'src/MonolithHarness.Server/MonolithHarness.Server.csproj')
+    $serverVersion = [string]($serverProject.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+    if ($version -ne $serverVersion) { throw 'Server version must match GUI and CLI.' }
+}
 $root = Join-Path $repo 'artifacts/TEMP/release-packages'
 $windows = $Runtime.StartsWith('win-')
-foreach ($channel in @('GUI', 'CLI')) {
+foreach ($channel in $Channels) {
     $exe = 'MonolithHarness'
     if ($windows) { $exe += '.exe' }
     $source = Join-Path $repo "artifacts/$channel/$exe"
@@ -27,7 +33,21 @@ foreach ($channel in @('GUI', 'CLI')) {
         $platformNote = if ($Runtime -eq 'linux-x64') {
             'Linux x64 (tested on Fedora 44). Use an X11 desktop for the GUI; WebKitGTK and GTK3 are needed for the browser. No separate .NET or Python installation is required. Desktop control tools are not available.'
         } else { 'Windows x64. No separate .NET or Python installation is required.' }
-        @"
+        $instructions = if ($channel -eq 'SERVER') { @"
+Monolith Harness Server $version ($Runtime)
+
+This server is optional: it adds on-premise cloud and collaborative features.
+Extract into a writable, private folder and run ./$exe, then open
+http://127.0.0.1:5800. Set your own administrator password before remote access;
+see the Server guide for first sign-in, HTTPS and optional container execution.
+No separate .NET installation is required.
+
+To update, stop the server and replace only $exe. Back up and keep
+database.sqlite, server.json and the entire workspace/ folder (including keys).
+This download includes no user data or configured provider credentials.
+
+https://github.com/loicdelaunay/Monolith-Harness/blob/main/docs/server.md
+"@ } else { @"
 Monolith Harness $channel $version ($Runtime)
 
 Extract into a writable folder. $start
@@ -41,8 +61,9 @@ The chat model is not bundled; configure a provider. Optional integrations
 such as Git, Docker/Podman, OpenCode and MCP retain their own prerequisites.
 
 https://github.com/loicdelaunay/Monolith-Harness
-"@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding utf8
-        $prefix = if ($channel -eq 'GUI') { 'MonolithHarness' } else { 'MonolithHarness-CLI' }
+"@ }
+        $instructions | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding utf8
+        $prefix = switch ($channel) { 'GUI' { 'MonolithHarness' } 'CLI' { 'MonolithHarness-CLI' } 'SERVER' { 'MonolithHarness-Server' } }
         $extension = if ($windows) { 'zip' } else { 'tar.gz' }
         $archive = Join-Path $output "$prefix-v$version-$Runtime.$extension"
         if (Test-Path -LiteralPath $archive) { throw "Archive already exists: $archive" }
@@ -56,7 +77,7 @@ https://github.com/loicdelaunay/Monolith-Harness
         }
         $sum = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
         $checksums = @("$sum  $([IO.Path]::GetFileName($archive))")
-        if ($windows) {
+        if ($windows -and $channel -ne 'SERVER') {
             # Older installed update clients recognize only the historical archive prefix.
             $legacyNames = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'LegacyReleaseNames.json') -Raw | ConvertFrom-Json
             $legacyArchive = Join-Path $output "$($legacyNames.$channel)-v$version-$Runtime.$extension"

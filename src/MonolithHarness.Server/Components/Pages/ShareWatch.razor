@@ -1,0 +1,174 @@
+@page "/shares/{Id:guid}"
+@attribute [Authorize]
+@implements IDisposable
+@using System.Text.Json
+@inject UiContext Ui
+@inject ShareService Shares
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+
+<PageTitle>@(_share?.Title ?? "Conversation partagée") · Monolith Harness Server</PageTitle>
+
+@if (_closed != null)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-3">@_closed</MudAlert>
+    <MudButton Href="/shares" Variant="Variant.Text">Retour aux partages</MudButton>
+}
+else if (_share != null)
+{
+    <div class="d-flex align-center flex-wrap gap-2 mb-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/shares" aria-label="Retour aux partages" />
+        <MudText Typo="Typo.h4">@_share.Title</MudText>
+        <MudChip T="string" Size="Size.Small" Color="@(_online ? Color.Success : Color.Default)">@(_online ? "En direct" : "Appareil de l’hôte hors ligne")</MudChip>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Hôte: @_share.HostEmail</MudText>
+        @if (!_share.IsHost)
+        {
+            <MudButton Variant="Variant.Text" OnClick="Leave">Quitter la discussion</MudButton>
+        }
+    </div>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <div id="share-scroll" class="mh-chat">
+                @foreach (var item in _items)
+                {
+                    <div class="mh-msg @item.Role">@item.Text</div>
+                }
+                @if (_items.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-2">@(_online ? "En attente de contenu de l’hôte…" : "Le contenu n’est disponible que lorsque l’appareil de l’hôte est connecté. Le serveur n’en garde aucun historique.")</MudText>
+                }
+                @if (_raw.Length > 0)
+                {
+                    <pre class="mh-mono" style="white-space:pre-wrap">@_raw</pre>
+                }
+            </div>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-3" Outlined="true">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Commentaires</MudText>
+                <div style="max-height:calc(100vh - 460px);min-height:120px;overflow-y:auto">
+                    @foreach (var comment in _comments)
+                    {
+                        <div class="mb-2">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@comment.Author · @comment.Time.ToLocalTime().ToString("T")</MudText>
+                            <MudText Typo="Typo.body2" Style="white-space:pre-wrap">@comment.Text</MudText>
+                        </div>
+                    }
+                    @if (_comments.Count == 0) { <MudText Typo="Typo.body2" Class="mud-text-secondary">Aucun commentaire.</MudText> }
+                </div>
+                @if (_canComment)
+                {
+                    <MudTextField @bind-Value="_comment" Label="Votre commentaire" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" MaxLength="@ShareService.MaxCommentLength" Immediate="true" />
+                    <div class="d-flex justify-end mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_comment.Trim().Length == 0 || !_online)" OnClick="Comment">Envoyer</MudButton>
+                    </div>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">Vous pouvez lire cette conversation mais pas la commenter.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    sealed record Item(string Key, string Role, string Text);
+    sealed record Remark(string Author, string Text, DateTime Time);
+
+    ShareView? _share;
+    string? _closed;
+    bool _online, _canComment, _scroll;
+    string _comment = "", _raw = "";
+    readonly List<Item> _items = [];
+    readonly List<Remark> _comments = [];
+    IDisposable? _watch, _userWatch;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Ui.UserAsync();
+        _canComment = Ui.Can(user, Permissions.SharingComment);
+        var ok = await Ui.TryAsync(async u =>
+        {
+            _share = await Shares.GetAsync(u, Id);
+            _watch = await Shares.WatchAsync(u, Id, message => _ = InvokeAsync(() => OnMessage(message)));
+        });
+        if (!ok) { _closed = "Cette conversation partagée n’est pas (ou plus) disponible."; return; }
+        _userWatch = Ui.Hub.Listen(RealtimeHub.UserTopic(user.RequireUserId()), message =>
+        {
+            if (message.Name == "share.closed") _ = InvokeAsync(() => { _closed = "Vous ne suivez plus cette conversation."; StateHasChanged(); });
+        });
+    }
+
+    void OnMessage(RealtimeMessage message)
+    {
+        switch (message.Name)
+        {
+            case "bridge":
+                _online = message.Data.TryGetProperty("online", out var online) && online.ValueKind == JsonValueKind.True;
+                if (!_online) { _items.Clear(); _raw = ""; }
+                break;
+            case "snapshot":
+                _items.Clear();
+                _raw = "";
+                if (message.Data.ValueKind == JsonValueKind.Object && message.Data.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array)
+                    foreach (var element in messages.EnumerateArray()) Upsert(element);
+                else _raw = message.Data.GetRawText();
+                break;
+            case "message":
+                // Engine events nest the message: {chatId, message:{id, role, content, ...}}.
+                Upsert(message.Data.ValueKind == JsonValueKind.Object && message.Data.TryGetProperty("message", out var inner) && inner.ValueKind == JsonValueKind.Object ? inner : message.Data);
+                break;
+            case "stream":
+                Upsert(message.Data, streaming: true);
+                break;
+            case "comment":
+                _comments.Add(new Remark(Text(message.Data, "author"), Text(message.Data, "text"), message.Data.TryGetProperty("time", out var time) && time.TryGetDateTime(out var at) ? at : DateTime.UtcNow));
+                break;
+            case "closed":
+                _closed = message.Data.TryGetProperty("reason", out var reason) && reason.GetString() == "revoked" ? "L’hôte a révoqué le partage." : "Le partage est terminé.";
+                break;
+        }
+        _scroll = true;
+        StateHasChanged();
+    }
+
+    void Upsert(JsonElement element, bool streaming = false)
+    {
+        var key = element.TryGetProperty("id", out var id) ? id.ToString() : element.TryGetProperty("messageId", out var messageId) ? messageId.ToString() : Guid.NewGuid().ToString();
+        var role = streaming ? "assistant" : Text(element, "role") is { Length: > 0 } r ? r : "assistant";
+        var text = streaming ? Text(element, "text") : Text(element, "content");
+        var index = _items.FindIndex(x => x.Key == key);
+        if (index >= 0) _items[index] = new Item(key, role, text); else _items.Add(new Item(key, role, text));
+    }
+
+    static string Text(JsonElement element, string name) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+
+    async Task Comment()
+    {
+        var text = _comment;
+        if (await Ui.TryAsync(user => Shares.CommentAsync(user, Id, text))) _comment = "";
+    }
+
+    async Task Leave()
+    {
+        if (await Ui.TryAsync(user => Shares.LeaveAsync(user, Id), "Vous avez quitté la discussion.")) Navigation.NavigateTo("/shares");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scroll) return;
+        _scroll = false;
+        try { await Js.InvokeVoidAsync("mhScrollToEnd", "share-scroll"); } catch (JSException) { } catch (InvalidOperationException) { }
+    }
+
+    public void Dispose()
+    {
+        _watch?.Dispose();
+        _userWatch?.Dispose();
+    }
+}

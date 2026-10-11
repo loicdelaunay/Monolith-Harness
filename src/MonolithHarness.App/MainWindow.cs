@@ -514,6 +514,7 @@ public sealed partial class MainWindow : Window
         StartScheduler();
         conversationRetentionTimer.Start(); await MaintainConversationsAsync();
         StartUpdateCheck();
+        _ = ResumeSharesAsync();
         if(Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE") is {Length:>0} smoke)
             DispatcherQueue.TryEnqueue(async () => await UnoSmokeAsync(smoke));
     }
@@ -1562,6 +1563,7 @@ public sealed partial class MainWindow : Window
         var permissionTab = tabs.Add(T("Autorisations"),permissionPanel, "\uE72E");
         tabs.Add(WorkflowText("Navigateur", "Browser"),features.Browser, "\uE774");
         tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
+        tabs.Add(WorkflowText("Serveur", "Server"), BuildServerSettings(loadingWindow), "\uE753");
         tabs.Add(WorkflowText("Test", "Test"), BuildModelTestSettings(loadingWindow), "\uE9D9");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
@@ -2284,6 +2286,7 @@ public sealed partial class MainWindow : Window
         if (history.Count == 1) ClearMessagePanel(run.Messages);
         AddHistoryActions(user, AddMessage("user", user.Content, user.Attachments, run.Messages, run.Project));
         ScrollRunToBottom(run);
+        ShareMessage(chat, user);
         var sourceFolders = project.GetSourceFolders();
         var hasSources = sourceFolders.Count > 0 && SourceTools.CanRead(run.Options.EnabledSkills);
         var canWriteSources = sourceFolders.Count > 0 && Skills.Enabled(run.Options.EnabledSkills, "write_sources");
@@ -2368,6 +2371,7 @@ public sealed partial class MainWindow : Window
                     if (update.CompatibilityNotice.Length > 0) { active.CompatibilityNotice = update.CompatibilityNotice; compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible; }
                     run.ExportProgress = new(active.Id, update);
                     active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
+                    ShareStream(chat, active.Id, update.Text, update.Reasoning);
                     var currentTokens = update.OutputTokens ?? Math.Ceiling((update.Text.Length + update.Reasoning.Length) / 4.0);
                     run.Tracker?.AddSample(update.Seconds, currentTokens);
                     if ((DateTime.UtcNow - lastPaint).TotalMilliseconds < 70) return;
@@ -2471,6 +2475,7 @@ public sealed partial class MainWindow : Window
                     }
                 active.State = "complete"; active.WireJson = completion.Message.ToJsonString();
                 db.Messages.AddRange(toolResults); await db.SaveChangesAsync();
+                ShareMessage(chat, active); foreach (var shared in toolResults) ShareMessage(chat, shared);
                 AddHistoryActions(active, assistantUi.Container);
                 var steered=await ApplySteeringAsync(run,ct);
                 if(steered.Count>0)round=0;

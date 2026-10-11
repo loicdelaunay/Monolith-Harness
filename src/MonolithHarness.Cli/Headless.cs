@@ -19,8 +19,9 @@ public static class Headless
         var timer = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            client = new(options, (name, _, _) => name == "permission"
-                ? Task.FromResult<JsonNode?>(JsonValue.Create("deny"))
+            client = new(options, (name, parameters, _) => name == "permission"
+                // Sensitive local tools stay denied; --allow-tools also approves the actions of a cloud run, which the user asked for explicitly.
+                ? Task.FromResult<JsonNode?>(JsonValue.Create(options.Allow && parameters["cloud"]?.GetValue<bool>() == true ? "allow" : "deny"))
                 : throw new NotSupportedException("Host operation unavailable in CLI: " + name), value =>
             {
                 var node = CliClient.J(value);
@@ -51,8 +52,10 @@ public static class Headless
                 }
                 return Task.CompletedTask;
             });
-            var initial = await client.Initialize(options, cancellation.Token);
-            if (initial.ProviderId == 0) throw new InvalidOperationException("Configure a provider in interactive mode with /connect.");
+            var initial = options.Cloud != null ? await OpenCloudAsync(client, options, cancellation.Token) : await client.Initialize(options, cancellation.Token);
+            if (initial.ProviderId == 0) throw new InvalidOperationException(options.Cloud != null
+                ? "No server provider: connect with 'MonolithHarness server login' (providers are synchronized at sign-in)."
+                : "Configure a provider in interactive mode with /connect.");
             await client.Call("send", new { chatId = initial.ChatId, providerId = initial.ProviderId, text = options.Prompt }, cancellation.Token);
             if (!options.Json) Console.WriteLine();
             return 0;
@@ -67,5 +70,20 @@ public static class Headless
             Console.CancelKeyPress -= cancel;
             if (client != null) await client.DisposeAsync();
         }
+    }
+
+    /// <summary>Selects (or creates) the conversation of a cloud project and a server provider; nothing is created for the current folder.</summary>
+    static async Task<(WorkspaceSnapshot Snapshot, int ChatId, int ProviderId)> OpenCloudAsync(CliClient client, CliOptions options, CancellationToken ct)
+    {
+        await client.Service.Initialize();
+        var opened = (await client.Call("server.project.open", new { id = options.Cloud }, ct))!;
+        int projectId = opened["id"]!.GetValue<int>();
+        var snapshot = await client.Snapshot(ct);
+        var chatId = options.Chat ?? await client.CreateChat(projectId, ct);
+        if (snapshot.Chats.All(c => c.Id != chatId)) snapshot = await client.Snapshot(ct);
+        var link = client.ServerLink;
+        var provider = options.Provider ?? snapshot.Providers.FirstOrDefault(p => link.Providers.Values.Contains(p.Id) && p.Name.EndsWith(MonolithHarness.Core.Remote.ServerSync.ServerProviderSuffix))?.Id
+            ?? snapshot.Providers.FirstOrDefault(p => link.Providers.Values.Contains(p.Id))?.Id ?? 0;
+        return (snapshot, chatId, provider);
     }
 }

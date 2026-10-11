@@ -18,6 +18,7 @@ public sealed partial class TerminalUi
         new("/project", "Projet / Project", "Choisir ou attacher un dossier"),
         new("/models", "Modèles / Models", "Ctrl+B · choisir / actualiser"),
         new("/providers", "Fournisseurs / Providers", "Connexions et clés API"),
+        new("/server", "Serveur / Server", "Connexion · projets cloud · partage en direct"),
         new("/connect", "Ajouter un fournisseur / Add provider"),
         new("/attach", "Joindre des sources / Attach sources", "/attach chemin"),
         new("/image", "Joindre une image / Attach image", "/image chemin.png"),
@@ -82,6 +83,7 @@ public sealed partial class TerminalUi
             case "/name": Work(async () => { await client.Call("chat.autoname", new { id }); await Refresh(); }); break;
             case "/connect": Work(() => Connect()); break;
             case "/providers": Work(() => Providers(snapshot)); break;
+            case "/server": Work(() => Server(snapshot, argument)); break;
             case "/models": Work(() => Models(snapshot, selectedProvider)); break;
             case "/chat": case "/agent":
                 Work(async () => { await client.Call("chat.modes", new { id, interactionMode = command[1..] }); await Refresh(); Post(() => notice = command == "/chat" ? L("Mode Chat · /chat-skills", "Chat mode · /chat-skills") : L("Mode Agent", "Agent mode")); }); break;

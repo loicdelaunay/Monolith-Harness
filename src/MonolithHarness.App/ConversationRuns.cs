@@ -253,7 +253,8 @@ public sealed partial class MainWindow
         {
             var secret=KeyVault.Decrypt(run.Provider.ProtectedKey);
             await run.PrepareSandboxAsync(run.Cancellation.Token);
-            if (run.Provider.IsOpenCode) await SendOpenCodeAsync(run, secret);
+            if (IsCloudProject(run.Project.Id)) await SendCloudAsync(run);
+            else if (run.Provider.IsOpenCode) await SendOpenCodeAsync(run, secret);
             else await SendCoreAsync(run, secret);
             success=!run.Failed && !run.Cancellation.IsCancellationRequested;
         }

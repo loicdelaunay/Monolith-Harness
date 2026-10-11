@@ -1,0 +1,27 @@
+html, body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; }
+.mh-auth { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: var(--bg); }
+.mh-auth-card { width: 100%; max-width: 420px; background: var(--surface); color: var(--text); border-radius: 8px; padding: 28px 28px 20px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
+.mh-auth-card h1 { font-size: 1.35rem; margin: 12px 0 4px; font-weight: 600; }
+.mh-auth-card p { color: var(--muted); margin: 0 0 18px; font-size: .92rem; }
+.mh-auth-card label { display: block; font-size: .82rem; margin: 12px 0 4px; color: var(--muted); }
+.mh-auth-card input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 1rem; }
+.mh-auth-card input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+/* Primary action at the bottom right, secondary actions discreet (project convention). */
+.mh-actions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 22px; }
+.mh-actions a { color: var(--muted); font-size: .9rem; text-decoration: none; }
+.mh-actions a:hover { text-decoration: underline; }
+.mh-primary { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 4px; padding: 10px 22px; font-size: .95rem; font-weight: 600; cursor: pointer; }
+.mh-primary:hover { filter: brightness(1.08); }
+.mh-error { background: rgba(214, 69, 65, .14); color: var(--error); border-radius: 4px; padding: 8px 12px; margin-bottom: 8px; font-size: .9rem; }
+.mh-note { color: var(--muted); font-size: .8rem; margin-top: 16px; }
+:root { --bg: #202020; --surface: #2d2d2d; --text: #f3f3f3; --muted: #b8b8b8; --border: #4a4a4a; --accent: #60cdff; --on-accent: #0b2a38; --error: #ff8a80; }
+@media (prefers-color-scheme: light) { :root { --bg: #f3f3f3; --surface: #ffffff; --text: #202020; --muted: #606060; --border: #c8c8c8; --accent: #0067a3; --on-accent: #ffffff; --error: #b3261e; } }
+.mh-mono { font-family: Consolas, "Cascadia Mono", monospace; }
+.mh-chat { min-height: 160px; max-height: calc(100vh - 430px); overflow-y: auto; padding: 8px 4px; }
+.mh-msg { max-width: 860px; margin: 6px 0; padding: 10px 14px; border-radius: 8px; white-space: pre-wrap; word-break: break-word; }
+.mh-msg.user { margin-left: auto; background: var(--mud-palette-primary-hover); }
+.mh-msg.assistant { background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default); }
+.mh-msg.tool, .mh-msg.interaction { font-size: .85rem; opacity: .8; border: 1px dashed var(--mud-palette-lines-default); }
+.mh-table-wrap { overflow-x: auto; }
+@media (max-width: 600px) { .mh-auth-card { padding: 20px 16px 14px; } .mh-chat { max-height: calc(100vh - 480px); } }
+.mud-tabs-panels { padding-top: 16px; }

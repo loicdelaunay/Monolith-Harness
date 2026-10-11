@@ -1,0 +1,108 @@
+@page "/shares"
+@attribute [Authorize]
+@implements IDisposable
+@inject UiContext Ui
+@inject ShareService Shares
+@inject IDialogService Dialogs
+
+<PageTitle>Partages · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Conversations partagées</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Le partage se déclare depuis l’application (Desktop, CLI, Android): la conversation et ses outils restent sur l’appareil de l’hôte, qui transmet au serveur l’affichage en temps réel.
+    Les spectateurs peuvent lire et commenter, rien de plus. Le serveur ne garde aucun historique quand l’appareil se déconnecte.
+</MudText>
+
+@if (!Ui.Enabled(Features.Sharing))
+{
+    <MudAlert Severity="Severity.Warning">Le partage en temps réel est désactivé par l’administrateur.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h6" Class="mb-2">Que je partage</MudText>
+    <div class="mh-table-wrap mb-6">
+        <MudTable Items="_hosted" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Conversation</MudTh><MudTh>État</MudTh><MudTh>Spectateurs</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Conversation"><MudLink Href="@($"/shares/{context.Id}")">@context.Title</MudLink></MudTd>
+                <MudTd DataLabel="État">
+                    @if (context.RevokedUtc != null) { <MudChip T="string" Size="Size.Small" Color="Color.Default">Révoqué</MudChip> }
+                    else if (context.Live) { <MudChip T="string" Size="Size.Small" Color="Color.Success">En direct</MudChip> }
+                    else { <MudChip T="string" Size="Size.Small">Appareil hors ligne</MudChip> }
+                </MudTd>
+                <MudTd DataLabel="Spectateurs">@string.Join(", ", context.Participants.Where(x => x.LeftUtc == null).Select(x => x.Email))</MudTd>
+                <MudTd>
+                    @if (context.RevokedUtc == null)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Invite(context))">Inviter</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Revoke(context))">Révoquer</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Aucune conversation partagée.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Partagées avec moi</MudText>
+    <div class="mh-table-wrap">
+        <MudTable Items="_invited" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Conversation</MudTh><MudTh>Hôte</MudTh><MudTh>État</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Conversation"><MudLink Href="@($"/shares/{context.Id}")">@context.Title</MudLink></MudTd>
+                <MudTd DataLabel="Hôte">@context.HostEmail</MudTd>
+                <MudTd DataLabel="État">@(context.Live ? "En direct" : "Appareil hors ligne")</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/shares/{context.Id}")">Suivre</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Leave(context))">Quitter</MudButton>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Personne ne partage de conversation avec vous.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<ShareView> _hosted = [], _invited = [];
+    IDisposable? _listener;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        var user = await Ui.UserAsync();
+        _listener = Ui.Hub.Listen(RealtimeHub.UserTopic(user.RequireUserId()), message =>
+        {
+            if (message.Name.StartsWith("share.", StringComparison.Ordinal)) _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+        });
+    }
+
+    async Task Load()
+    {
+        if (!Ui.Enabled(Features.Sharing)) return;
+        await Ui.TryAsync(async user =>
+        {
+            var all = await Shares.ListAsync(user);
+            _hosted = all.Where(x => x.IsHost).ToList();
+            _invited = all.Where(x => !x.IsHost).ToList();
+        });
+    }
+
+    async Task Invite(ShareView share)
+    {
+        var dialog = await Dialogs.ShowAsync<TextDialog>($"Inviter — {share.Title}", new DialogParameters<TextDialog> { { x => x.Label, "Adresse e-mail du compte" }, { x => x.Confirm, "Inviter" } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string email }) return;
+        if (await Ui.TryAsync(user => Shares.InviteAsync(user, share.Id, email), "Invitation envoyée.")) await Load();
+    }
+
+    async Task Revoke(ShareView share)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Révoquer le partage", "Les spectateurs seront déconnectés de la conversation immédiatement.", yesText: "Révoquer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => Shares.RevokeAsync(user, share.Id), "Partage révoqué.")) await Load();
+    }
+
+    async Task Leave(ShareView share)
+    {
+        if (await Ui.TryAsync(user => Shares.LeaveAsync(user, share.Id), "Vous avez quitté la discussion.")) await Load();
+    }
+
+    public void Dispose() => _listener?.Dispose();
+}

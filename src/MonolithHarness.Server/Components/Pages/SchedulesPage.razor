@@ -1,0 +1,100 @@
+@page "/schedules"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject ScheduleService SchedulesService
+@inject ProviderService Providers
+@inject IDialogService Dialogs
+
+<PageTitle>Tâches planifiées · Monolith Harness Server</PageTitle>
+
+<div class="d-flex align-center mb-2">
+    <MudText Typo="Typo.h4">Tâches planifiées</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddAlarm" OnClick="Create" Disabled="@(!Ui.Enabled(Features.Schedules))">Nouvelle tâche</MudButton>
+</div>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Le serveur exécute ces tâches aux horaires définis, même sans client connecté. Elles suivent les mêmes règles de permissions, d’isolation, de limites et d’approbation que les requêtes cloud:
+    une action qui n’est pas préautorisée attend votre approbation.
+</MudText>
+
+@if (!Ui.Enabled(Features.Schedules) || !Ui.Enabled(Features.Cloud))
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-3">Les tâches planifiées cloud (et l’exécution cloud) doivent être activées par l’administrateur. Aucune occurrence n’est lancée tant qu’elles sont désactivées.</MudAlert>
+}
+@if (_error)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de gérer des tâches planifiées.</MudAlert>
+}
+else
+{
+    <div class="mh-table-wrap">
+        <MudTable Items="_schedules" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Tâche</MudTh><MudTh>Horaire</MudTh><MudTh>Prochaine</MudTh><MudTh>Dernière exécution</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Tâche">@context.Name @if (!context.Enabled) { <MudChip T="string" Size="Size.Small">Désactivée</MudChip> }</MudTd>
+                <MudTd DataLabel="Horaire"><span class="mh-mono">@context.Cron</span> · @context.TimeZoneId</MudTd>
+                <MudTd DataLabel="Prochaine">@(context.NextRunUtc?.ToLocalTime().ToString("g") ?? "—")</MudTd>
+                <MudTd DataLabel="Dernière">@(context.LastRunUtc?.ToLocalTime().ToString("g") ?? "—") @(context.LastResult.Length > 0 ? "· " + context.LastResult : "")</MudTd>
+                <MudTd>
+                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        <MudMenuItem OnClick="@(() => RunNow(context))">Exécuter maintenant</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => Edit(context))">Modifier</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => Toggle(context))">@(context.Enabled ? "Désactiver" : "Activer")</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem OnClick="@(() => Delete(context))">Supprimer</MudMenuItem>
+                    </MudMenu>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Aucune tâche planifiée.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<ScheduleView> _schedules = [];
+    List<CatalogProvider> _catalog = [];
+    bool _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load() =>
+        _error = !await Ui.TryAsync(async user =>
+        {
+            _schedules = await SchedulesService.ListAsync(user);
+            _catalog = await Providers.CatalogAsync(user);
+        });
+
+    async Task<ScheduleRequest?> Ask(string title, ScheduleView? existing)
+    {
+        var dialog = await Dialogs.ShowAsync<ScheduleDialog>(title, new DialogParameters<ScheduleDialog> { { x => x.Existing, existing }, { x => x.Catalog, _catalog } }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        return (await dialog.Result) is { Canceled: false, Data: ScheduleRequest request } ? request : null;
+    }
+
+    async Task Create()
+    {
+        if (await Ask("Nouvelle tâche planifiée", null) is not { } request) return;
+        if (await Ui.TryAsync(user => SchedulesService.CreateAsync(user, request), "Tâche créée.")) await Load();
+    }
+
+    async Task Edit(ScheduleView schedule)
+    {
+        if (await Ask("Modifier la tâche", schedule) is not { } request) return;
+        if (await Ui.TryAsync(user => SchedulesService.UpdateAsync(user, schedule.Id, request), "Tâche enregistrée.")) await Load();
+    }
+
+    async Task Toggle(ScheduleView schedule)
+    {
+        if (await Ui.TryAsync(user => SchedulesService.UpdateAsync(user, schedule.Id, new ScheduleRequest(null, null, null, null, null, !schedule.Enabled, null, null, null)))) await Load();
+    }
+
+    async Task RunNow(ScheduleView schedule)
+    {
+        if (await Ui.TryAsync(user => SchedulesService.RunNowAsync(user, schedule.Id), "Requête mise en file. Suivez-la dans « Requêtes ».")) await Load();
+    }
+
+    async Task Delete(ScheduleView schedule)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer la tâche", schedule.Name, yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => SchedulesService.DeleteAsync(user, schedule.Id), "Tâche supprimée.")) await Load();
+    }
+}

@@ -8,6 +8,7 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     static readonly (string Id, string Glyph, string French, string English)[] projectIcons = [
+        ("cloud", "\uE753", "Cloud (serveur)", "Cloud (server)"),
         ("folder", "\uE8B7", "Dossier", "Folder"), ("code", "\uE943", "Code", "Code"),
         ("web", "\uE774", "Web", "Web"), ("document", "\uE8A5", "Document", "Document"),
         ("book", "\uE82D", "Livre", "Book"), ("image", "\uEB9F", "Image", "Image"),

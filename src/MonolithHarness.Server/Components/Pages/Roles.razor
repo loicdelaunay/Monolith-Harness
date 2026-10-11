@@ -1,0 +1,82 @@
+@page "/admin/roles"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject DirectoryService Directory
+@inject IDialogService Dialogs
+
+<PageTitle>Rôles · Monolith Harness Server</PageTitle>
+
+<div class="d-flex align-center mb-2">
+    <MudText Typo="Typo.h4">Rôles</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="Create">Nouveau rôle</MudButton>
+</div>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Un rôle accorde des permissions par ensemble de fonctionnalités. Une opération exige aussi que la fonctionnalité soit activée et que l’utilisateur ait des droits sur la ressource (projet, partage, provider).
+</MudText>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de gérer les rôles.</MudAlert>
+}
+else
+{
+    <div class="mh-table-wrap">
+        <MudTable Items="_roles" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Rôle</MudTh><MudTh>Description</MudTh><MudTh>Permissions</MudTh><MudTh>Membres</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Rôle">@context.Name@(context.IsSystem ? " (système)" : "")</MudTd>
+                <MudTd DataLabel="Description">@context.Description</MudTd>
+                <MudTd DataLabel="Permissions">@context.Permissions.Count / @Permissions.All.Count</MudTd>
+                <MudTd DataLabel="Membres">@context.Members</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(context))" aria-label="Modifier" />
+                    @if (!context.IsSystem)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => Delete(context))" aria-label="Supprimer" />
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<RoleView> _roles = [];
+    bool _denied;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load() =>
+        _denied = !await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.RolesManage)) throw ApiException.Forbidden("missing_permission");
+            _roles = await Directory.ListRolesAsync();
+        });
+
+    async Task Create()
+    {
+        var dialog = await Dialogs.ShowAsync<RoleDialog>("Nouveau rôle", new DialogParameters<RoleDialog>(), new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: RoleDialog.Result form }) return;
+        if (await Ui.TryAsync(user => Guarded(user, () => Directory.CreateRoleAsync(form.Name, form.Description, form.Permissions)), "Rôle créé.")) await Load();
+    }
+
+    async Task Edit(RoleView role)
+    {
+        var dialog = await Dialogs.ShowAsync<RoleDialog>("Modifier le rôle", new DialogParameters<RoleDialog> { { x => x.Existing, role } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: RoleDialog.Result form }) return;
+        if (await Ui.TryAsync(user => Guarded(user, () => Directory.UpdateRoleAsync(role.Id, form.Name, form.Description, role.IsSystem ? null : form.Permissions)), "Rôle enregistré. Les permissions s’appliquent immédiatement.")) await Load();
+    }
+
+    async Task Delete(RoleView role)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer le rôle", $"Supprimer « {role.Name} » ? Ses {role.Members} membre(s) perdent ses permissions.", yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => Guarded(user, () => Directory.DeleteRoleAsync(role.Id)), "Rôle supprimé.")) await Load();
+    }
+
+    Task Guarded(ClaimsPrincipal user, Func<Task> action)
+    {
+        if (!Ui.Can(user, Permissions.RolesManage)) throw ApiException.Forbidden("missing_permission");
+        return action();
+    }
+}

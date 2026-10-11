@@ -1,0 +1,44 @@
+@page "/approvals"
+@attribute [Authorize]
+@implements IDisposable
+@inject UiContext Ui
+@inject ApprovalService Approvals
+
+<PageTitle>Approbations · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Approbations</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Les actions des outils qui demandent votre accord et les questions de l’agent, pour vos requêtes cloud et vos tâches planifiées.
+    Une demande reste en attente jusqu’à votre réponse (ou son expiration).
+</MudText>
+
+@if (_items.Count == 0)
+{
+    <MudAlert Severity="Severity.Success" Dense="true">Rien n’attend votre réponse.</MudAlert>
+}
+@foreach (var item in _items)
+{
+    <div>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Requête <MudLink Href="@($"/projects/{item.ProjectId}")">@item.RunId.ToString("N")[..8]</MudLink></MudText>
+        <ApprovalCard Item="item" OnDone="Load" @key="item.Id" />
+    </div>
+}
+
+@code {
+    List<ApprovalView> _items = [];
+    IDisposable? _listener;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        var user = await Ui.UserAsync();
+        _listener = Ui.Hub.Listen(RealtimeHub.UserTopic(user.RequireUserId()), message =>
+        {
+            if (message.Name.StartsWith("approval.", StringComparison.Ordinal)) _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+        });
+    }
+
+    async Task Load() => await Ui.TryAsync(async user => _items = await Approvals.ListAsync(user.RequireUserId(), true));
+
+    public void Dispose() => _listener?.Dispose();
+}

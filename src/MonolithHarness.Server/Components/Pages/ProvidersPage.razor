@@ -1,0 +1,101 @@
+@page "/admin/providers"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject ProviderService Providers
+@inject ProviderRelay Relay
+@inject IDialogService Dialogs
+
+<PageTitle>Providers · Monolith Harness Server</PageTitle>
+
+<div class="d-flex align-center mb-2">
+    <MudText Typo="Typo.h4">Providers partagés</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="Create">Ajouter un provider</MudButton>
+</div>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Les clés restent chiffrées sur le serveur, qui relaie les appels autorisés. Les clients ne reçoivent que le catalogue des modèles auxquels ils ont accès.
+</MudText>
+
+@if (!Ui.Enabled(Features.Providers))
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-3">La fonctionnalité « Providers partagés » est désactivée: le catalogue et le relais sont fermés.</MudAlert>
+}
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de gérer les providers.</MudAlert>
+}
+else
+{
+    <div class="mh-table-wrap">
+        <MudTable Items="_providers" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Nom</MudTh><MudTh>Adresse</MudTh><MudTh>Modèles</MudTh><MudTh>Clé</MudTh><MudTh>Accès</MudTh><MudTh>Appels relayés</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nom">
+                    @context.Name
+                    @if (!context.IsEnabled) { <MudChip T="string" Size="Size.Small" Color="Color.Default">Désactivé</MudChip> }
+                    @if (context.AllowLocalUse) { <MudChip T="string" Size="Size.Small" Color="Color.Info">Usage local</MudChip> }
+                </MudTd>
+                <MudTd DataLabel="Adresse"><span class="mh-mono">@context.BaseUrl</span></MudTd>
+                <MudTd DataLabel="Modèles">@string.Join(", ", context.Models.Select(x => x.Id))</MudTd>
+                <MudTd DataLabel="Clé">@(context.HasSecret ? "enregistrée" : "aucune")</MudTd>
+                <MudTd DataLabel="Accès">@context.Access.Count</MudTd>
+                <MudTd DataLabel="Appels">@(Relay.Calls.TryGetValue(context.Id, out var calls) ? calls : 0)</MudTd>
+                <MudTd>
+                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        <MudMenuItem OnClick="@(() => Edit(context))">Modifier</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => EditAccess(context))">Utilisateurs et rôles autorisés…</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem OnClick="@(() => Delete(context))">Supprimer</MudMenuItem>
+                    </MudMenu>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<ProviderView> _providers = [];
+    bool _denied;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load() =>
+        _denied = !await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.ProvidersManage)) throw ApiException.Forbidden("missing_permission");
+            _providers = await Providers.ListAsync();
+        });
+
+    Task Guard(ClaimsPrincipal user, Func<Task> action)
+    {
+        if (!Ui.Can(user, Permissions.ProvidersManage)) throw ApiException.Forbidden("missing_permission");
+        return action();
+    }
+
+    async Task Create()
+    {
+        var dialog = await Dialogs.ShowAsync<ProviderDialog>("Ajouter un provider", new DialogParameters<ProviderDialog>(), new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: ProviderDialog.Result form }) return;
+        if (await Ui.TryAsync(user => Guard(user, () => Providers.CreateAsync(form.Name, form.BaseUrl, form.Secret, form.Models, form.Enabled, form.AllowLocalUse)), "Provider ajouté. Donnez-lui des utilisateurs ou des rôles autorisés.")) await Load();
+    }
+
+    async Task Edit(ProviderView provider)
+    {
+        var dialog = await Dialogs.ShowAsync<ProviderDialog>("Modifier le provider", new DialogParameters<ProviderDialog> { { x => x.Existing, provider } }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: ProviderDialog.Result form }) return;
+        if (await Ui.TryAsync(user => Guard(user, () => Providers.UpdateAsync(provider.Id, form.Name, form.BaseUrl, form.Secret, form.Models, form.Enabled, form.AllowLocalUse)), "Provider enregistré.")) await Load();
+    }
+
+    async Task EditAccess(ProviderView provider)
+    {
+        var dialog = await Dialogs.ShowAsync<ProviderAccessDialog>($"Accès — {provider.Name}", new DialogParameters<ProviderAccessDialog> { { x => x.Provider, provider } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: List<AccessEntry> entries }) return;
+        if (await Ui.TryAsync(user => Guard(user, () => Providers.SetAccessAsync(provider.Id, entries)), "Accès enregistrés.")) await Load();
+    }
+
+    async Task Delete(ProviderView provider)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer le provider", $"Supprimer « {provider.Name} » ? Les exécutions et tâches qui l’utilisent échoueront.", yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => Guard(user, () => Providers.DeleteAsync(provider.Id)), "Provider supprimé.")) await Load();
+    }
+}

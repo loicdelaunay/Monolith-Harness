@@ -1,0 +1,75 @@
+@inject ProjectService ProjectsService
+@inject UiContext Ui
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField Immediate="true" @bind-Value="_name" Label="Nom de la tâche" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+        <MudSelect T="Guid" Label="Projet" @bind-Value="_project" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" Disabled="@(Existing != null)">
+            @foreach (var project in _projects) { <MudSelectItem T="Guid" Value="@project.Id">@project.Name</MudSelectItem> }
+        </MudSelect>
+        <MudTextField Immediate="true" @bind-Value="_instruction" Label="Instruction" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" HelperText="Ce que l’agent doit faire à chaque exécution." />
+        <div class="d-flex flex-wrap gap-3 mb-2">
+            <MudTextField Immediate="true" @bind-Value="_cron" Label="CRON (minute heure jour mois semaine)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mh-mono" Style="flex:1;min-width:240px" HelperText="Exemple: 0 9 * * 1-5 (9 h en semaine)" />
+            <MudSelect T="string" Label="Fuseau horaire" @bind-Value="_zone" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;min-width:240px">
+                @foreach (var zone in _zones) { <MudSelectItem T="string" Value="@zone.Id">@zone.Id</MudSelectItem> }
+            </MudSelect>
+        </div>
+        <div class="d-flex flex-wrap gap-3 mb-2">
+            <MudSelect T="Guid" Label="Provider" Value="_provider" ValueChanged="ChangeProvider" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;min-width:200px">
+                @foreach (var provider in Catalog) { <MudSelectItem T="Guid" Value="@provider.Id">@provider.Name</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="string" Label="Modèle" @bind-Value="_model" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1;min-width:200px">
+                @foreach (var model in Catalog.FirstOrDefault(x => x.Id == _provider)?.Models ?? []) { <MudSelectItem T="string" Value="@model.Id">@model.Id</MudSelectItem> }
+            </MudSelect>
+        </div>
+        <MudSelect T="string" Label="Si le serveur était arrêté à l’échéance" @bind-Value="_policy" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1">
+            <MudSelectItem T="string" Value="@("skip")">Ignorer l’occurrence manquée</MudSelectItem>
+            <MudSelectItem T="string" Value="@("run-once")">Exécuter une fois au redémarrage</MudSelectItem>
+        </MudSelect>
+        <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="Tâche activée" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit">@(Existing == null ? "Créer la tâche" : "Enregistrer")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ScheduleView? Existing { get; set; }
+    [Parameter] public List<CatalogProvider> Catalog { get; set; } = [];
+
+    string _name = "", _instruction = "", _cron = "0 9 * * 1-5", _zone = "UTC", _model = "", _policy = "skip";
+    Guid _project, _provider;
+    bool _enabled = true;
+    List<ProjectView> _projects = [];
+    List<TimeZoneInfo> _zones = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _zones = TimeZoneInfo.GetSystemTimeZones().ToList();
+        _zone = _zones.Any(x => x.Id == TimeZoneInfo.Local.Id) ? TimeZoneInfo.Local.Id : "UTC";
+        await Ui.TryAsync(async user => _projects = (await ProjectsService.ListAsync(user)).Where(x => x.Access is "owner" or "run").ToList());
+        if (Existing != null)
+        {
+            (_name, _instruction, _cron, _zone, _model, _policy, _project, _provider, _enabled) =
+                (Existing.Name, Existing.Instruction, Existing.Cron, Existing.TimeZoneId, Existing.Model, Existing.MissedPolicy, Existing.ProjectId, Existing.ProviderId, Existing.Enabled);
+        }
+        else
+        {
+            _project = _projects.FirstOrDefault()?.Id ?? Guid.Empty;
+            _provider = Catalog.FirstOrDefault()?.Id ?? Guid.Empty;
+            _model = Catalog.FirstOrDefault()?.Models.FirstOrDefault()?.Id ?? "";
+        }
+    }
+
+    void ChangeProvider(Guid provider)
+    {
+        _provider = provider;
+        _model = Catalog.FirstOrDefault(x => x.Id == provider)?.Models.FirstOrDefault()?.Id ?? "";
+    }
+
+    void Cancel() => MudDialog.Cancel();
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(new ScheduleRequest(_name, _project, _instruction, _cron, _zone, _enabled, _provider, _model, _policy)));
+}

@@ -1,0 +1,112 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject UiContext Ui
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+@inject ApprovalService Approvals
+
+<MudThemeProvider @ref="_provider" Theme="_theme" @bind-IsDarkMode="_dark" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Dense="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@(() => _drawer = !_drawer)" aria-label="Menu" />
+        <img src="logo-32.png" alt="" width="24" height="24" style="margin:0 10px" />
+        <MudText Typo="Typo.h6" Class="mr-2 d-none d-sm-block" Style="white-space:nowrap">Monolith Harness Server</MudText>
+        <MudText Typo="Typo.h6" Class="mr-2 d-sm-none" Style="white-space:nowrap">Monolith</MudText>
+        <MudSpacer />
+        <MudTooltip Text="@(_dark ? "Thème clair" : "Thème sombre")">
+            <MudIconButton Icon="@(_dark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="ToggleTheme" aria-label="Changer de thème" />
+        </MudTooltip>
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <MudText Typo="Typo.caption" Class="px-4 py-2">@_email</MudText>
+            <MudMenuItem Href="/account">Mon compte</MudMenuItem>
+            <MudMenuItem Href="/auth/signout" ForceLoad="true">Se déconnecter</MudMenuItem>
+        </MudMenu>
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawer" Elevation="1" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always">
+        <NavMenu User="_user" PendingApprovals="_pending" />
+    </MudDrawer>
+    <MudMainContent>
+        @if (_user?.PasswordChangePending() == true && !_dismissed && !Navigation.Uri.Contains("/account", StringComparison.Ordinal))
+        {
+            <MudAlert Severity="Severity.Warning" Square="true" Dense="true" Class="mb-0">
+                <div class="d-flex align-center flex-wrap gap-3">
+                    <span>Votre mot de passe est temporaire: choisissez-en un nouveau.</span>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => _dismissed = true)">Plus tard</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Href="/account">Changer maintenant</MudButton>
+                </div>
+            </MudAlert>
+        }
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    MudThemeProvider? _provider;
+    bool _dark = true, _drawer = true, _dismissed;
+    string _email = "";
+    int _pending;
+    ClaimsPrincipal? _user;
+    IDisposable? _listener;
+
+    // Fluent palettes, like the Desktop application.
+    readonly MudTheme _theme = new()
+    {
+        PaletteDark = new PaletteDark { Primary = "#60CDFF", Secondary = "#B8B8B8", Background = "#202020", Surface = "#2D2D2D", AppbarBackground = "#2D2D2D", DrawerBackground = "#262626", TextPrimary = "#F3F3F3", TextSecondary = "#B8B8B8" },
+        PaletteLight = new PaletteLight { Primary = "#0067A3", Secondary = "#606060", Background = "#F3F3F3", Surface = "#FFFFFF", AppbarBackground = "#0067A3", DrawerBackground = "#FFFFFF" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        await LoadUserAsync();
+    }
+
+    async Task LoadUserAsync()
+    {
+        try
+        {
+            _user = await Ui.UserAsync();
+            _email = _user.Email();
+            _pending = (await Approvals.ListAsync(_user.RequireUserId(), true)).Count;
+            if (_listener == null)
+                _listener = Ui.Hub.Listen(RealtimeHub.UserTopic(_user.RequireUserId()), message =>
+                {
+                    if (message.Name.StartsWith("approval.", StringComparison.Ordinal)) _ = InvokeAsync(async () => { await LoadUserAsync(); StateHasChanged(); });
+                });
+            // A policy can require the change before anything else.
+            if (_user.PasswordChangePending() && Ui.Settings.Bool(SettingKeys.EnforcePasswordChange) && !Navigation.Uri.Contains("/account", StringComparison.Ordinal))
+                Navigation.NavigateTo("/account");
+        }
+        catch (ApiException) { /* signed out: UiContext already redirected */ }
+    }
+
+    void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(async () => { await LoadUserAsync(); StateHasChanged(); });
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _provider == null) return;
+        string? saved = null;
+        try { saved = await Js.InvokeAsync<string?>("mhTheme.get"); } catch (JSException) { } catch (InvalidOperationException) { }
+        _dark = saved is null ? await _provider.GetSystemDarkModeAsync() : saved == "dark";
+        StateHasChanged();
+    }
+
+    async Task ToggleTheme()
+    {
+        _dark = !_dark;
+        try { await Js.InvokeVoidAsync("mhTheme.set", _dark ? "dark" : "light"); } catch (JSException) { }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        _listener?.Dispose();
+    }
+}

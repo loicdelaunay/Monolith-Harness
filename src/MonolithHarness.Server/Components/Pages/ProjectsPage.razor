@@ -1,0 +1,75 @@
+@page "/projects"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject ProjectService ProjectsService
+@inject IDialogService Dialogs
+
+<PageTitle>Projets cloud · Monolith Harness Server</PageTitle>
+
+<div class="d-flex align-center mb-2">
+    <MudText Typo="Typo.h4">Projets cloud</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreateNewFolder" OnClick="Create" Disabled="@(!Ui.Enabled(Features.Cloud))">Nouveau projet</MudButton>
+</div>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Le moteur, les outils et les opérations sur les fichiers s’exécutent sur le serveur, dans le workspace isolé du projet.
+</MudText>
+
+@if (!Ui.Enabled(Features.Cloud))
+{
+    <MudAlert Severity="Severity.Warning">L’exécution cloud est désactivée par l’administrateur.</MudAlert>
+}
+else if (_error)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit d’utiliser les projets cloud.</MudAlert>
+}
+else
+{
+    <div class="mh-table-wrap">
+        <MudTable Items="_projects" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Projet</MudTh><MudTh>Propriétaire</MudTh><MudTh>Mon accès</MudTh><MudTh>Fichiers</MudTh><MudTh>Créé le</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Projet"><MudLink Href="@($"/projects/{context.Id}")">@context.Name</MudLink></MudTd>
+                <MudTd DataLabel="Propriétaire">@context.OwnerEmail</MudTd>
+                <MudTd DataLabel="Accès">@(context.Access switch { "owner" => "Propriétaire", "run" => "Exécution", _ => "Lecture" })</MudTd>
+                <MudTd DataLabel="Fichiers">@Display.Size(context.FilesBytes)</MudTd>
+                <MudTd DataLabel="Créé le">@context.CreatedUtc.ToLocalTime().ToString("d")</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/projects/{context.Id}")">Ouvrir</MudButton>
+                    @if (context.Access == "owner")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Delete(context))">Supprimer</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Aucun projet. Créez-en un pour commencer.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<ProjectView> _projects = [];
+    bool _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        if (!Ui.Enabled(Features.Cloud)) return;
+        _error = !await Ui.TryAsync(async user => _projects = await ProjectsService.ListAsync(user));
+    }
+
+    async Task Create()
+    {
+        var dialog = await Dialogs.ShowAsync<TextDialog>("Nouveau projet", new DialogParameters<TextDialog> { { x => x.Label, "Nom du projet" }, { x => x.Confirm, "Créer" } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string name }) return;
+        if (await Ui.TryAsync(user => ProjectsService.CreateAsync(user, name), "Projet créé.")) await Load();
+    }
+
+    async Task Delete(ProjectView project)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer le projet", $"Supprimer « {project.Name} » avec ses fichiers et ses conversations ? Cette action est définitive.", yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => ProjectsService.DeleteAsync(user, project.Id), "Projet supprimé.")) await Load();
+    }
+
+}

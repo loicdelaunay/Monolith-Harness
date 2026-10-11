@@ -1,4 +1,4 @@
-"""Publish validated GUI/CLI/Flutter Android artifacts using the runner's repository-scoped GitHub token."""
+"""Publish validated GUI/CLI/Server/Flutter artifacts using the runner's repository-scoped GitHub token."""
 
 import hashlib
 import json
@@ -48,8 +48,11 @@ def main():
     root = Path(__file__).resolve().parent.parent
     gui = ET.parse(root / "src/MonolithHarness.App/MonolithHarness.App.csproj").findtext(".//ApplicationDisplayVersion")
     cli = ET.parse(root / "src/MonolithHarness.Cli/MonolithHarness.Cli.csproj").findtext(".//Version")
-    if gui != version or cli != version:
-        raise RuntimeError("Both application versions must match the release tag.")
+    server = ET.parse(root / "src/MonolithHarness.Server/MonolithHarness.Server.csproj").findtext(".//Version")
+    flutter = re.search(r"^version: (\S+)", (root / "src/MonolithHarness.App.Flutter/pubspec.yaml").read_text(), re.M)[1]
+    code = ET.parse(root / "src/MonolithHarness.App/MonolithHarness.App.csproj").findtext(".//ApplicationVersion")
+    if any(value != version for value in (gui, cli, server)) or flutter != f"{version}+{code}":
+        raise RuntimeError("Desktop, CLI, Server and Flutter versions must match the release tag.")
     if os.environ.get("RELEASE_ARTIFACT_RUN"):
         repo = os.environ["GH_REPO"]
         run = json.loads(gh("api", f"repos/{repo}/actions/runs/{os.environ['RELEASE_ARTIFACT_RUN']}").stdout)
@@ -69,14 +72,17 @@ def main():
     work = root / "artifacts/TEMP/publishing-packages"
     work.mkdir(parents=True, exist_ok=False)
     channels = []
-    for channel in ("GUI", "CLI"):
-        prefix = "MonolithHarness" if channel == "GUI" else "MonolithHarness-CLI"
+    for channel, prefix, release_tag in (
+        ("GUI", "MonolithHarness", tag),
+        ("CLI", "MonolithHarness-CLI", f"cli-{tag}"),
+        ("SERVER", "MonolithHarness-Server", f"server-{tag}"),
+    ):
         output = work / channel
         output.mkdir()
         for runtime, extension in (("win-x64", "zip"), ("linux-x64", "tar.gz")):
             source = root / f"artifacts/TEMP/downloaded-packages/{prefix}-{runtime}"
             expected = [f"{prefix}-{tag}-{runtime}.{extension}"]
-            if runtime == "win-x64":
+            if runtime == "win-x64" and channel in aliases:
                 expected.append(f"{aliases[channel]}-{tag}-{runtime}.{extension}")
             manifest = source / f"SHA256SUMS-{runtime}.txt"
             declared = {}
@@ -89,12 +95,12 @@ def main():
                 if digest(path) != declared.get(name):
                     raise RuntimeError(f"Checksum mismatch: {name}")
                 shutil.copyfile(path, output / name)
-            if runtime == "win-x64" and digest(source / expected[0]) != digest(source / expected[1]):
+            if len(expected) > 1 and digest(source / expected[0]) != digest(source / expected[1]):
                 raise RuntimeError("Compatibility alias differs from the canonical download.")
         archives = sorted(output.iterdir())
         (output / "SHA256SUMS.txt").write_text("".join(f"{digest(path)}  {path.name}\n" for path in archives), encoding="ascii")
         assets = sorted(output.iterdir())
-        channels.append((channel, tag if channel == "GUI" else f"cli-{tag}", assets))
+        channels.append((channel, release_tag, assets))
 
     android_source = root / "artifacts/TEMP/downloaded-packages/MonolithHarness-Android-preview"
     android_name = f"MonolithHarness-Flutter-{tag}-android-arm64.apk"
@@ -133,9 +139,10 @@ def main():
                 raise RuntimeError(f"Remote asset verification failed: {path.name}")
         print(f"Validated draft {release_tag}: {len(assets)} assets", flush=True)
     gh("release", "edit", f"android-{tag}", "--draft=false", "--latest=false")
+    gh("release", "edit", f"server-{tag}", "--draft=false", "--latest=false")
     gh("release", "edit", f"cli-{tag}", "--draft=false", "--latest=false")
     gh("release", "edit", tag, "--draft=false", "--latest=true")
-    print(f"Published GUI, CLI and Flutter Android {version}", flush=True)
+    print(f"Published GUI, CLI, Server and Flutter Android {version}", flush=True)
 
 
 if __name__ == "__main__":

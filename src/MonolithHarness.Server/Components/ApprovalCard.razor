@@ -1,0 +1,134 @@
+@using System.Text.Json
+@inject UiContext Ui
+@inject ApprovalService Approvals
+
+<MudPaper Class="pa-3 mb-3" Outlined="true">
+    <div class="d-flex align-center mb-1">
+        <MudIcon Icon="@(Item.Kind == "question" ? Icons.Material.Filled.HelpOutline : Icons.Material.Filled.GppMaybe)" Color="Color.Warning" Class="mr-2" />
+        <MudText Typo="Typo.subtitle1">@(Item.Kind == "question" ? "L’agent pose une question" : Item.Title)</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@Item.CreatedUtc.ToLocalTime().ToString("T")</MudText>
+    </div>
+
+    @if (Item.Kind == "permission")
+    {
+        @if (!string.IsNullOrWhiteSpace(Item.Details))
+        {
+            <pre class="mh-mono" style="white-space:pre-wrap;max-height:220px;overflow:auto;margin:6px 0">@Item.Details</pre>
+        }
+        @if (Item.OneTimeOnly)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Commande sensible: elle ne peut être autorisée qu’une seule fois.</MudText>
+        }
+        <div class="d-flex justify-end align-center gap-3 mt-2">
+            <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="@(() => Decide("deny"))">Refuser</MudButton>
+            @if (!Item.OneTimeOnly)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy" OnClick="@(() => Decide("always"))">Toujours autoriser</MudButton>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="@(() => Decide("allow"))">Autoriser</MudButton>
+        </div>
+    }
+    else
+    {
+        @for (var i = 0; i < _questions.Count; i++)
+        {
+            var index = i;
+            var question = _questions[index];
+            <MudText Typo="Typo.body1" Class="mt-2">@question.Text</MudText>
+            @if (question.Options.Count > 0)
+            {
+                @if (question.Multiple)
+                {
+                    @foreach (var option in question.Options)
+                    {
+                        <div><MudCheckBox T="bool" Value="@question.Selected.Contains(option)" ValueChanged="@(on => Toggle(question, option, on))" Dense="true" Color="Color.Primary" Label="@option" /></div>
+                    }
+                }
+                else
+                {
+                    <MudRadioGroup T="string" Value="@question.Selected.FirstOrDefault()" ValueChanged="@(value => Pick(question, value))">
+                        @foreach (var option in question.Options)
+                        {
+                            <MudRadio T="string" Value="@option" Color="Color.Primary" Dense="true">@option</MudRadio>
+                        }
+                    </MudRadioGroup>
+                }
+            }
+            @if (question.Custom)
+            {
+                <MudTextField T="string" Value="@question.Free" ValueChanged="@(value => Free(question, value))" Label="Votre réponse" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-1" />
+            }
+        }
+        <div class="d-flex justify-end align-center gap-3 mt-3">
+            <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="Cancel">Ne pas répondre</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Answer">Répondre</MudButton>
+        </div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public ApprovalView Item { get; set; } = default!;
+    [Parameter] public EventCallback OnDone { get; set; }
+
+    sealed class Ask
+    {
+        public string Text = "";
+        public bool Multiple, Custom;
+        public List<string> Options = [];
+        public HashSet<string> Selected = [];
+        public string Free = "";
+    }
+
+    List<Ask> _questions = [];
+    bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (Item.Kind != "question" || Item.Questions is not { ValueKind: JsonValueKind.Array } array || _questions.Count > 0) return;
+        foreach (var element in array.EnumerateArray())
+        {
+            var ask = new Ask
+            {
+                Text = element.TryGetProperty("question", out var q) ? q.GetString() ?? "" : element.TryGetProperty("Question", out var q2) ? q2.GetString() ?? "" : "",
+                Multiple = (element.TryGetProperty("multiple", out var m) || element.TryGetProperty("Multiple", out m)) && m.ValueKind == JsonValueKind.True,
+                Custom = !(element.TryGetProperty("custom", out var c) || element.TryGetProperty("Custom", out c)) || c.ValueKind == JsonValueKind.True
+            };
+            if (element.TryGetProperty("options", out var options) || element.TryGetProperty("Options", out options))
+                foreach (var option in options.EnumerateArray())
+                    ask.Options.Add((option.TryGetProperty("label", out var l) || option.TryGetProperty("Label", out l)) ? l.GetString() ?? "" : "");
+            _questions.Add(ask);
+        }
+    }
+
+    static void Toggle(Ask question, string option, bool on) { if (on) question.Selected.Add(option); else question.Selected.Remove(option); }
+
+    static void Pick(Ask question, string option) { question.Selected.Clear(); question.Selected.Add(option); question.Free = ""; }
+
+    static void Free(Ask question, string value) { question.Free = value; if (!question.Multiple && value.Length > 0) question.Selected.Clear(); }
+
+    async Task Decide(string choice)
+    {
+        _busy = true;
+        var ok = await Ui.TryAsync(user => Approvals.DecideAsync(user.RequireUserId(), Item.Id, choice));
+        _busy = false;
+        if (ok) await OnDone.InvokeAsync();
+    }
+
+    async Task Answer()
+    {
+        var answers = _questions.Select(x => (IReadOnlyList<string>)(x.Free.Length > 0 && !x.Multiple ? [x.Free] : x.Selected.Concat(x.Free.Length > 0 ? [x.Free] : []).ToList())).ToList();
+        _busy = true;
+        var ok = await Ui.TryAsync(user => Approvals.AnswerAsync(user.RequireUserId(), Item.Id, false, answers));
+        _busy = false;
+        if (ok) await OnDone.InvokeAsync();
+    }
+
+    async Task Cancel()
+    {
+        _busy = true;
+        var ok = await Ui.TryAsync(user => Approvals.AnswerAsync(user.RequireUserId(), Item.Id, true, null));
+        _busy = false;
+        if (ok) await OnDone.InvokeAsync();
+    }
+}

@@ -1,0 +1,65 @@
+@page "/admin/audit"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject IDbContextFactory<ServerDb> Factory
+
+<PageTitle>Journal d’audit · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Journal d’audit</MudText>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de consulter le journal.</MudAlert>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-3 mb-3 align-center">
+        <MudTextField @bind-Value="_action" Label="Action (préfixe)" Placeholder="auth." Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
+        <MudTextField @bind-Value="_actor" Label="Utilisateur" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:260px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Search">Filtrer</MudButton>
+    </div>
+    <div class="mh-table-wrap">
+        <MudTable Items="_entries" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm" Filter="null" RowsPerPage="50">
+            <HeaderContent><MudTh>Date</MudTh><MudTh>Utilisateur</MudTh><MudTh>Action</MudTh><MudTh>Cible</MudTh><MudTh>Détail</MudTh><MudTh>Adresse</MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Date">@context.TimestampUtc.ToLocalTime().ToString("G")</MudTd>
+                <MudTd DataLabel="Utilisateur">@context.ActorEmail</MudTd>
+                <MudTd DataLabel="Action"><span class="mh-mono" style="@(context.Success ? "" : "color:var(--mud-palette-error)")">@context.Action</span></MudTd>
+                <MudTd DataLabel="Cible">@context.Target</MudTd>
+                <MudTd DataLabel="Détail">@context.Detail</MudTd>
+                <MudTd DataLabel="Adresse">@context.Address</MudTd>
+            </RowTemplate>
+            <PagerContent><MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" /></PagerContent>
+        </MudTable>
+    </div>
+    <div class="d-flex justify-end mt-3">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="More">Charger plus ancien</MudButton>
+    </div>
+}
+
+@code {
+    List<AuditEntry> _entries = [];
+    string _action = "", _actor = "";
+    bool _denied;
+
+    protected override async Task OnInitializedAsync() => await Search();
+
+    async Task Search()
+    {
+        _entries = [];
+        await More();
+    }
+
+    async Task More()
+    {
+        _denied = !await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.AuditRead)) throw ApiException.Forbidden("missing_permission");
+            await using var db = await Factory.CreateDbContextAsync();
+            var query = db.Audit.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(_action)) query = query.Where(x => x.Action.StartsWith(_action));
+            if (!string.IsNullOrWhiteSpace(_actor)) query = query.Where(x => x.ActorEmail.Contains(_actor));
+            _entries.AddRange(await query.OrderByDescending(x => x.Id).Skip(_entries.Count).Take(200).ToListAsync());
+        });
+    }
+}

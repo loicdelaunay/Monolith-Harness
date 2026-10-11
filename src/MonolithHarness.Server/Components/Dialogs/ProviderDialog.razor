@@ -1,0 +1,55 @@
+@using System.Globalization
+<MudDialog>
+    <DialogContent>
+        <MudTextField Immediate="true" @bind-Value="_name" Label="Nom" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+        <MudTextField Immediate="true" @bind-Value="_url" Label="Adresse de l’API (compatible OpenAI)" Placeholder="https://api.openai.com/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2"
+                      HelperText="Reste sur le serveur: jamais transmise aux clients." />
+        <MudTextField Immediate="true" @bind-Value="_secret" Label="@(Existing is { HasSecret: true } ? "Clé d’API (laisser vide pour conserver l’actuelle)" : "Clé d’API")" InputType="InputType.Password"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1" HelperText="Chiffrée sur le serveur; elle ne peut plus être relue ensuite." />
+        @if (Existing is { HasSecret: true })
+        {
+            <MudCheckBox T="bool" @bind-Value="_clearSecret" Dense="true" Color="Color.Primary" Label="Supprimer la clé enregistrée" />
+        }
+        <MudTextField Immediate="true" @bind-Value="_models" Label="Modèles proposés" Lines="5" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mh-mono"
+                      HelperText="Un modèle par ligne: identifiant ; contexte (jetons) ; images (oui/non). Exemple: gpt-4.1-mini ; 128000 ; oui" />
+        <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="Provider activé" />
+        <MudSwitch T="bool" @bind-Value="_local" Color="Color.Primary" Label="Utilisable aussi par les exécutions locales des clients (relais)" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit">@(Existing == null ? "Ajouter" : "Enregistrer")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ProviderView? Existing { get; set; }
+
+    public sealed record Result(string Name, string BaseUrl, string? Secret, List<ProviderModel> Models, bool Enabled, bool AllowLocalUse);
+
+    string _name = "", _url = "", _secret = "", _models = "";
+    bool _enabled = true, _local, _clearSecret;
+
+    protected override void OnInitialized()
+    {
+        if (Existing == null) return;
+        _name = Existing.Name;
+        _url = Existing.BaseUrl;
+        _enabled = Existing.IsEnabled;
+        _local = Existing.AllowLocalUse;
+        _models = string.Join('\n', Existing.Models.Select(x => $"{x.Id} ; {x.ContextLimit} ; {(x.SupportsImages ? "oui" : "non")}"));
+    }
+
+    static List<ProviderModel> Parse(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(line =>
+    {
+        var parts = line.Split(';', StringSplitOptions.TrimEntries);
+        var context = parts.Length > 1 && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 128000;
+        var images = parts.Length > 2 && parts[2].ToLowerInvariant() is "oui" or "yes" or "true" or "1";
+        return new ProviderModel(parts[0], context, images);
+    }).ToList();
+
+    void Cancel() => MudDialog.Cancel();
+
+    // null keeps the stored key, an empty string removes it.
+    void Submit() => MudDialog.Close(DialogResult.Ok(new Result(_name, _url, _clearSecret ? "" : string.IsNullOrEmpty(_secret) ? (Existing == null ? "" : null) : _secret, Parse(_models), _enabled, _local)));
+}

@@ -131,7 +131,10 @@ public sealed partial class TerminalUi
             canvas.Write(brandLeft, 1, appearance.Brand, p.Dim, left + width - brandLeft);
         var thinking = ConversationModes.EffectiveThinking(CurrentChat, workspace?.State.ThinkingLevel, workspace?.State.ChatThinkingLevel);
         canvas.Write(textLeft, 2, (CurrentProvider == null ? L("Aucun fournisseur · /connect", "No provider · /connect") : CurrentProvider.Name + " · " + CurrentProvider.Model) + " (" + thinking + ")", p.Dim, textWidth);
-        canvas.Write(textLeft, 3, CurrentProject?.GetSourceFolders().FirstOrDefault() ?? Environment.CurrentDirectory, p.Dim, textWidth);
+        var cloud = CurrentProject is { } owner && serverLink?.Projects.ContainsKey(owner.Id) == true;
+        var shared = CurrentChat is { } current && serverLink?.Shares.ContainsKey(current.Id) == true;
+        canvas.Write(textLeft, 3, cloud ? "☁ " + L("Projet cloud · exécution sur le serveur", "Cloud project · runs on the server") + (shared ? " · " + L("partagé", "shared") : "")
+            : (shared ? "⇄ " + L("Conversation partagée en direct · ", "Live shared conversation · ") : "") + (CurrentProject?.GetSourceFolders().FirstOrDefault() ?? Environment.CurrentDirectory), p.Dim, textWidth);
         int active = runs.Count(r => !r.Value.IsCompleted);
         if (active > 0) canvas.Write(textLeft, 4, $"{active} " + L("conversation(s) active(s) · /chats", "active conversation(s) · /chats"), new(p.Green, p.Background), textWidth);
         else if (availableUpdate != null) canvas.Write(textLeft, 4, L("Mise à jour ", "Update ") + availableUpdate.Version + " · /update", p.Highlight, textWidth);

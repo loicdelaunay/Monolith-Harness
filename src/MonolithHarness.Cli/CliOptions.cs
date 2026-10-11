@@ -16,10 +16,22 @@ public sealed class CliOptions
     public bool Version { get; set; }
     public bool RenderDemo { get; set; }
     public string? Theme { get; set; }
+    /// <summary>Cloud project (name or id) of the Monolith Harness Server for a one-shot run.</summary>
+    public string? Cloud { get; set; }
+    /// <summary><c>MonolithHarness server ...</c>: optional server connection from the command line.</summary>
+    public bool Server { get; set; }
+    public string[] ServerArgs { get; set; } = [];
 
     public static CliOptions Parse(string[] args)
     {
         var result = new CliOptions();
+        if (args.Length > 0 && args[0] == "server")
+        {
+            result.Server = true; result.ServerArgs = args[1..];
+            var database = Array.IndexOf(args, "--database");
+            if (database >= 0 && database + 1 < args.Length) result.Database = Path.GetFullPath(args[database + 1]);
+            return result;
+        }
         for (int i = 0; i < args.Length; i++)
         {
             string Value() => ++i < args.Length ? args[i] : throw new ArgumentException("Missing value for " + args[i - 1]);
@@ -33,6 +45,7 @@ public sealed class CliOptions
                 case "--project": result.Directory = Path.GetFullPath(Value()); break;
                 case "--chat": result.Chat = Positive(Value()); break;
                 case "--provider": result.Provider = Positive(Value()); break;
+                case "--cloud": result.Cloud = Value(); break;
                 case "--json": result.Json = true; break;
                 case "--execute": result.Execute = true; break;
                 case "--allow-tools": result.Allow = true; break;
@@ -47,7 +60,9 @@ public sealed class CliOptions
         }
         if (result.Directory != null && !System.IO.Directory.Exists(result.Directory)) throw new DirectoryNotFoundException(result.Directory);
         if (!result.Run && (result.Json || result.Execute || result.Allow)) throw new ArgumentException("--json, --execute and --allow-tools require 'run'.");
-        if (result.Directory == null && result.Chat == null) result.Directory = Environment.CurrentDirectory;
+        if (result.Cloud != null && !result.Run) throw new ArgumentException("--cloud requires 'run'.");
+        if (result.Cloud != null && result.Directory != null) throw new ArgumentException("--cloud and --project cannot be combined.");
+        if (result.Directory == null && result.Chat == null && result.Cloud == null) result.Directory = Environment.CurrentDirectory;
         return result;
         static int Positive(string text) => int.TryParse(text, out int value) && value > 0 ? value : throw new ArgumentException("Expected a positive numeric ID.");
     }
@@ -61,12 +76,15 @@ public sealed class CliOptions
       MonolithHarness run "Review this repository" --project .  One-shot, Plan mode by default
       MonolithHarness run "Implement the fix" --project . --execute
       MonolithHarness run "Explain the code" --project . --json
+      MonolithHarness run "Review the plan" --cloud "My cloud project"   Run on the server (optional)
+      MonolithHarness server status|connect|login|logout|sync|projects|open|forget   Optional server connection
 
     Options
       --database PATH   SQLite file (default: beside MonolithHarness.exe)
       --project PATH    Attach this source folder to a project
       --chat ID         Resume an existing conversation
       --provider ID     Select a configured provider
+      --cloud PROJECT   Run in a cloud project of the connected server (name or id)
       --theme ID        CLI theme (e.g. crt-green, crt-amber, neon-synthwave)
       --render-demo     Offline preview; can be combined with --theme
       --execute         Allow modifying tools in non-interactive runs

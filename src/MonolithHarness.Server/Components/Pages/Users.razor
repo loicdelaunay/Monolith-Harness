@@ -1,0 +1,134 @@
+@page "/admin/users"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject DirectoryService Directory
+@inject AccountService Accounts
+@inject IDialogService Dialogs
+
+<PageTitle>Comptes · Monolith Harness Server</PageTitle>
+
+<div class="d-flex align-center mb-4">
+    <MudText Typo="Typo.h4">Comptes</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="Create">Nouveau compte</MudButton>
+</div>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de gérer les comptes.</MudAlert>
+}
+else
+{
+    <div class="mh-table-wrap">
+        <MudTable Items="_users" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>Adresse e-mail</MudTh><MudTh>Nom</MudTh><MudTh>Rôles</MudTh><MudTh>État</MudTh><MudTh>Dernière connexion</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="E-mail">@context.Email</MudTd>
+                <MudTd DataLabel="Nom">@context.DisplayName</MudTd>
+                <MudTd DataLabel="Rôles">
+                    @foreach (var role in context.Roles) { <MudChip T="string" Size="Size.Small">@role.Name</MudChip> }
+                </MudTd>
+                <MudTd DataLabel="État">
+                    @if (!context.IsActive) { <MudChip T="string" Size="Size.Small" Color="Color.Error">Désactivé</MudChip> }
+                    else if (context.PasswordChangePending) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">Mot de passe temporaire</MudChip> }
+                    else { <MudChip T="string" Size="Size.Small" Color="Color.Success">Actif</MudChip> }
+                </MudTd>
+                <MudTd DataLabel="Connexion">@(context.LastLoginUtc?.ToLocalTime().ToString("g") ?? "—")</MudTd>
+                <MudTd>
+                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        <MudMenuItem OnClick="@(() => Edit(context))">Modifier</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ResetPassword(context))">Mot de passe temporaire…</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => Recovery(context))">Code de récupération…</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => Unlock(context))">Débloquer les tentatives de connexion</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => RevokeSessions(context))">Révoquer les connexions</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem OnClick="@(() => Delete(context))">Supprimer</MudMenuItem>
+                    </MudMenu>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<UserView> _users = [];
+    List<RoleView> _roles = [];
+    bool _denied;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _denied = !await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.UsersManage)) throw ApiException.Forbidden("missing_permission");
+            _users = await Directory.ListUsersAsync();
+            _roles = await Directory.ListRolesAsync();
+        });
+    }
+
+    async Task Create()
+    {
+        var parameters = new DialogParameters<UserDialog> { { x => x.Roles, _roles } };
+        var dialog = await Dialogs.ShowAsync<UserDialog>("Nouveau compte", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: UserDialog.Result form }) return;
+        if (await Ui.TryAsync(user => RequireAdmin(user, () => Directory.CreateUserAsync(form.Email, form.Password, form.DisplayName, form.RoleIds)), "Compte créé.")) await Load();
+    }
+
+    async Task Edit(UserView account)
+    {
+        var parameters = new DialogParameters<UserDialog> { { x => x.Roles, _roles }, { x => x.Existing, account } };
+        var dialog = await Dialogs.ShowAsync<UserDialog>("Modifier le compte", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: UserDialog.Result form }) return;
+        if (await Ui.TryAsync(user => RequireAdmin(user, () => Directory.UpdateUserAsync(account.Id, form.DisplayName, form.IsActive, form.RoleIds)), "Compte mis à jour.")) await Load();
+    }
+
+    async Task ResetPassword(UserView account)
+    {
+        var dialog = await Dialogs.ShowAsync<TextDialog>($"Mot de passe temporaire — {account.Email}", new DialogParameters<TextDialog>
+        {
+            { x => x.Label, "Nouveau mot de passe" }, { x => x.Secret, true }, { x => x.Confirm, "Définir" },
+            { x => x.Message, "Toutes les connexions du compte seront fermées; l’utilisateur pourra choisir un autre mot de passe à sa prochaine connexion." }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string password }) return;
+        await Ui.TryAsync(user => RequireAdmin(user, () => Directory.ResetPasswordAsync(account.Id, password)), "Mot de passe temporaire défini.");
+        await Load();
+    }
+
+    async Task Recovery(UserView account)
+    {
+        var issued = await Ui.Try(user => RequireAdmin(user, () => Accounts.IssueRecoveryAsync(account.Id, user.Email())));
+        if (issued.Token == null) return;
+        await Dialogs.ShowAsync<TextDialog>($"Code de récupération — {account.Email}", new DialogParameters<TextDialog>
+        {
+            { x => x.Label, "Code à usage unique (valable jusqu’à " + issued.ExpiresUtc.ToLocalTime().ToString("t") + ")" }, { x => x.Value, issued.Token }, { x => x.ReadOnly, true }, { x => x.Confirm, "Fermer" },
+            { x => x.Message, "Transmettez ce code à la personne par un canal sûr. Elle le saisit sur la page de connexion, « Code de récupération »." }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+    }
+
+    async Task Unlock(UserView account) =>
+        await Ui.TryAsync(user => RequireAdmin(user, () => { Accounts.Unlock(account.Email); return Task.CompletedTask; }), "Tentatives débloquées.");
+
+    async Task RevokeSessions(UserView account) =>
+        await Ui.TryAsync(user => RequireAdmin(user, () => Directory.RevokeSessionsAsync(account.Id)), "Connexions révoquées.");
+
+    async Task Delete(UserView account)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer le compte", $"Supprimer {account.Email} ainsi que ses projets, tâches et partages ?", yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => RequireAdmin(user, () => Directory.DeleteUserAsync(account.Id, user.RequireUserId())), "Compte supprimé.")) await Load();
+    }
+
+    Task RequireAdmin(ClaimsPrincipal user, Func<Task> action)
+    {
+        if (!Ui.Can(user, Permissions.UsersManage)) throw ApiException.Forbidden("missing_permission");
+        return action();
+    }
+
+    Task<T> RequireAdmin<T>(ClaimsPrincipal user, Func<Task<T>> action)
+    {
+        if (!Ui.Can(user, Permissions.UsersManage)) throw ApiException.Forbidden("missing_permission");
+        return action();
+    }
+}

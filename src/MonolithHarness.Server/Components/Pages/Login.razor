@@ -1,0 +1,47 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+
+<PageTitle>Connexion · Monolith Harness Server</PageTitle>
+
+<div class="mh-auth">
+    <form class="mh-auth-card" method="post" action="/auth/login">
+        <AntiforgeryToken />
+        <img src="logo-256.png" alt="" width="48" height="48" />
+        <h1>Monolith Harness Server</h1>
+        <p>Connectez-vous avec votre adresse e-mail.</p>
+        @if (Recovered == "1")
+        {
+            <div class="mh-note">Mot de passe mis à jour. Vous pouvez vous connecter.</div>
+        }
+        @if (!string.IsNullOrEmpty(Error))
+        {
+            <div class="mh-error" role="alert">@Message</div>
+        }
+        <label for="email">Adresse e-mail</label>
+        <input id="email" name="email" type="email" autocomplete="username" required autofocus />
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <div class="mh-actions">
+            <a href="/recover">Code de récupération</a>
+            <button class="mh-primary" type="submit">Se connecter</button>
+        </div>
+    </form>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] string? Error { get; set; }
+    [SupplyParameterFromQuery] int? Wait { get; set; }
+    [SupplyParameterFromQuery] string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] string? Recovered { get; set; }
+
+    string Message => Error switch
+    {
+        "too_many_attempts" => $"Trop de tentatives. Réessayez dans {Wait ?? 30} secondes.",
+        "invalid_credentials" => "Adresse e-mail ou mot de passe incorrect.",
+        "credentials_required" => "Saisissez votre adresse e-mail et votre mot de passe.",
+        _ => "Connexion impossible."
+    };
+}

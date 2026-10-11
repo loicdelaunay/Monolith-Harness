@@ -1,0 +1,88 @@
+@page "/admin/queue"
+@attribute [Authorize]
+@implements IDisposable
+@inject UiContext Ui
+@inject RunService Runs
+
+<PageTitle>File d’attente · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">File d’attente</MudText>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de voir la file d’attente.</MudAlert>
+}
+else if (_overview != null)
+{
+    <div class="d-flex flex-wrap gap-2 mb-4 align-center">
+        <MudChip T="string" Color="Color.Default">@_overview.Queued en attente</MudChip>
+        <MudChip T="string" Color="Color.Info">@_overview.Running en cours</MudChip>
+        <MudChip T="string" Color="Color.Warning">@_overview.AwaitingApproval en attente d’approbation</MudChip>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @(_overview.LimitsEnabled ? $"Limites: {_overview.MaxConcurrentUsers} utilisateur(s) et {_overview.MaxConcurrentRuns} exécution(s) simultanés." : "File désactivée: pas de limite de simultanéité.")
+            <MudLink Href="/admin/settings">Régler</MudLink>
+        </MudText>
+    </div>
+    <div class="mh-table-wrap">
+        <MudTable Items="_overview.Items" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm" RowsPerPage="25">
+            <HeaderContent><MudTh>Rang</MudTh><MudTh>État</MudTh><MudTh>Utilisateur</MudTh><MudTh>Origine</MudTh><MudTh>Modèle</MudTh><MudTh>Demande</MudTh><MudTh>Depuis</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Rang">@(context.QueuePosition?.ToString() ?? "—")</MudTd>
+                <MudTd DataLabel="État"><MudChip T="string" Size="Size.Small" Color="@StateColor(context.State)">@StateLabel(context.State)</MudChip></MudTd>
+                <MudTd DataLabel="Utilisateur">@context.Requester</MudTd>
+                <MudTd DataLabel="Origine">@(context.Source == "schedule" ? "Planifiée" : "Interactive")</MudTd>
+                <MudTd DataLabel="Modèle">@context.Model</MudTd>
+                <MudTd DataLabel="Demande">@context.Prompt</MudTd>
+                <MudTd DataLabel="Depuis">@context.CreatedUtc.ToLocalTime().ToString("T")</MudTd>
+                <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Cancel(context))">Annuler</MudButton></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Aucune requête en cours ni en attente.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
+}
+
+@code {
+    QueueOverview? _overview;
+    bool _denied;
+    IDisposable? _listener;
+    int _refreshing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        if (!_denied) _listener = Ui.Hub.Listen(RealtimeHub.QueueTopic, message => _ = InvokeAsync(Refresh));
+    }
+
+    async Task Load() =>
+        _denied = !await Ui.TryAsync(async user => _overview = await Runs.OverviewAsync(user));
+
+    async Task Refresh()
+    {
+        // Bursts of events collapse into one reload.
+        if (Interlocked.Exchange(ref _refreshing, 1) == 1) return;
+        await Task.Delay(300);
+        _refreshing = 0;
+        await Load();
+        StateHasChanged();
+    }
+
+    async Task Cancel(RunView run)
+    {
+        await Ui.TryAsync(user => Runs.CancelAsync(user, run.Id), "Requête annulée.");
+        await Load();
+    }
+
+    public static Color StateColor(string state) => state switch
+    {
+        RunStates.Running => Color.Info, RunStates.AwaitingApproval => Color.Warning, RunStates.Completed => Color.Success,
+        RunStates.Failed => Color.Error, _ => Color.Default
+    };
+
+    public static string StateLabel(string state) => state switch
+    {
+        RunStates.Queued => "En attente", RunStates.Running => "En cours", RunStates.AwaitingApproval => "En attente d’approbation",
+        RunStates.Completed => "Terminée", RunStates.Failed => "Échouée", RunStates.Cancelled => "Annulée", _ => state
+    };
+
+    public void Dispose() => _listener?.Dispose();
+}

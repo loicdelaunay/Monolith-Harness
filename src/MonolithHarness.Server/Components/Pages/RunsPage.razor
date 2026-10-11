@@ -1,0 +1,66 @@
+@page "/runs"
+@attribute [Authorize]
+@implements IDisposable
+@inject UiContext Ui
+@inject RunService Runs
+
+<PageTitle>Requêtes · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Mes requêtes</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    État de vos requêtes cloud: en attente, en cours, en attente d’approbation, terminée, échouée ou annulée.
+</MudText>
+
+<div class="mh-table-wrap">
+    <MudTable Items="_runs" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm" RowsPerPage="25">
+        <HeaderContent><MudTh>État</MudTh><MudTh>Rang</MudTh><MudTh>Demande</MudTh><MudTh>Modèle</MudTh><MudTh>Origine</MudTh><MudTh>Créée</MudTh><MudTh>Durée</MudTh><MudTh></MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="État"><MudChip T="string" Size="Size.Small" Color="@QueueAdmin.StateColor(context.State)">@QueueAdmin.StateLabel(context.State)</MudChip></MudTd>
+            <MudTd DataLabel="Rang">@(context.QueuePosition?.ToString() ?? "—")</MudTd>
+            <MudTd DataLabel="Demande"><MudLink Href="@($"/projects/{context.ProjectId}?chat={context.ChatId}")">@context.Prompt</MudLink>@(context.Error.Length > 0 ? " — " + context.Error.Split('\n')[0] : "")</MudTd>
+            <MudTd DataLabel="Modèle">@context.Model</MudTd>
+            <MudTd DataLabel="Origine">@(context.Source == "schedule" ? "Planifiée" : "Interactive")</MudTd>
+            <MudTd DataLabel="Créée">@context.CreatedUtc.ToLocalTime().ToString("g")</MudTd>
+            <MudTd DataLabel="Durée">@Duration(context)</MudTd>
+            <MudTd>
+                @if (!RunStates.IsFinal(context.State))
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Cancel(context))">Annuler</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText Class="pa-4">Aucune requête.</MudText></NoRecordsContent>
+    </MudTable>
+</div>
+
+@code {
+    List<RunView> _runs = [];
+    IDisposable? _listener;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        var user = await Ui.UserAsync();
+        _listener = Ui.Hub.Listen(RealtimeHub.UserTopic(user.RequireUserId()), message =>
+        {
+            if (message.Name == "run.state") _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+        });
+    }
+
+    async Task Load() => await Ui.TryAsync(async user => _runs = await Runs.ListAsync(user, false, 200));
+
+    async Task Cancel(RunView run)
+    {
+        await Ui.TryAsync(user => Runs.CancelAsync(user, run.Id), "Requête annulée.");
+        await Load();
+    }
+
+    static string Duration(RunView run)
+    {
+        if (run.StartedUtc is not { } start) return "—";
+        var span = (run.FinishedUtc ?? DateTime.UtcNow) - start;
+        return span.TotalMinutes >= 1 ? $"{(int)span.TotalMinutes} min {span.Seconds} s" : $"{span.TotalSeconds:0} s";
+    }
+
+    public void Dispose() => _listener?.Dispose();
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.91.0 — 2026-10-11
+
+- Nouveau : Monolith Harness Server (`src/MonolithHarness.Server`), un exécutable autonome avec interface web, API REST/OpenAPI, WebSocket, comptes et rôles, exécutions cloud isolées, tâches planifiées, file d’attente, providers partagés et partage en direct. Publié dans `artifacts/SERVER`.
+- Desktop : Réglages › Serveur pour connecter, déconnecter ou oublier un serveur, avec HTTPS par défaut et acceptation explicite du HTTP en clair. Sans serveur, l’application reste entièrement locale.
+- Providers partagés : ceux du serveur apparaissent comme providers locaux (« · serveur » pour un usage local, « · cloud » pour les exécutions cloud) ; la clé du fournisseur reste sur le serveur et le mot de passe n’est jamais conservé, seul un jeton protégé par le système.
+- Projets cloud : ouverture et création depuis le Desktop et le CLI ; la requête s’exécute sur le serveur, avec ses approbations et questions, et la conversation est reflétée localement.
+- Partage en direct : « Partager en direct… » dans le menu d’une conversation ; l’exécution et les outils restent sur l’appareil, les spectateurs invités lisent et commentent.
+- CLI : commande `/server` dans l’interface interactive, sous-commandes `server status|connect|login|logout|sync|projects|open|new|forget` et option `run --cloud` pour une exécution sans interface.
+- Android : pas encore de connexion au serveur (portage prévu).
+
 ## 1.90.1 — 2026-10-11
 
 - Desktop : badges de fichiers lisibles dans les thèmes clair et sombre, avec les icônes Material Icon Theme embarquées sous licence MIT.

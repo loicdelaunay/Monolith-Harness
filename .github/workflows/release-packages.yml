@@ -26,9 +26,12 @@ jobs:
         run: dotnet publish src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
       - name: Publish CLI
         run: dotnet publish src/MonolithHarness.Cli -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+      - name: Publish Server
+        shell: pwsh
+        run: ./publish-server.ps1 -Runtime ${{ matrix.rid }} -OutputDirectory artifacts/SERVER
       - name: Package clean portable downloads
         shell: pwsh
-        run: ./build/package-release.ps1 -Runtime ${{ matrix.rid }}
+        run: ./build/package-release.ps1 -Runtime ${{ matrix.rid }} -Channels GUI,CLI,SERVER
       - uses: actions/upload-artifact@v4
         with:
           name: MonolithHarness-${{ matrix.rid }}
@@ -39,6 +42,12 @@ jobs:
         with:
           name: MonolithHarness-CLI-${{ matrix.rid }}
           path: artifacts/TEMP/release-packages/CLI/*
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MonolithHarness-Server-${{ matrix.rid }}
+          path: artifacts/TEMP/release-packages/SERVER/*
           if-no-files-found: error
           compression-level: 0
   fedora:
@@ -54,8 +63,10 @@ jobs:
         run: dotnet publish src/MonolithHarness.App -f net10.0-desktop -p:MonolithHarnessDesktopOnly=true -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/GUI
       - name: Publish CLI
         run: dotnet publish src/MonolithHarness.Cli -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/CLI
+      - name: Publish Server
+        run: dotnet publish src/MonolithHarness.Server -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/SERVER
       - name: Package clean Linux downloads
-        run: bash ./build/package-fedora.sh
+        run: bash ./build/package-fedora.sh GUI CLI SERVER
       - uses: actions/upload-artifact@v4
         with:
           name: MonolithHarness-linux-x64
@@ -66,6 +77,12 @@ jobs:
         with:
           name: MonolithHarness-CLI-linux-x64
           path: artifacts/TEMP/release-packages/CLI/*
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MonolithHarness-Server-linux-x64
+          path: artifacts/TEMP/release-packages/SERVER/*
           if-no-files-found: error
           compression-level: 0
   android:
@@ -134,7 +151,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/TEMP/downloaded-packages
-      - name: Prepare and publish all three releases
+      - name: Prepare and publish all four releases
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

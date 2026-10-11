@@ -1,0 +1,122 @@
+@page "/admin/settings"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject SettingsService Settings
+@inject AuditService Audit
+@inject IDialogService Dialogs
+
+<PageTitle>Fonctionnalités et réglages · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Fonctionnalités et réglages</MudText>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de régler le serveur.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Fonctionnalités</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+        Une fonctionnalité désactivée est fermée à tous, administrateurs compris. Les fonctionnalités qui exécutent du code sur le serveur (exécution cloud, tâches planifiées) sont désactivées par défaut.
+    </MudText>
+    <MudGrid>
+        @foreach (var feature in Features.All)
+        {
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Outlined="true">
+                    <div class="d-flex align-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle1">@feature.Name</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@feature.Description</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@Consequence(feature.Key)</MudText>
+                        </div>
+                        <MudSpacer />
+                        <MudSwitch T="bool" Value="@Settings.FeatureEnabled(feature.Key)" ValueChanged="@(value => SetFeature(feature, value))" Color="Color.Primary" aria-label="@feature.Name" />
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @foreach (var group in SettingsService.Catalog.GroupBy(x => x.Group))
+    {
+        <MudText Typo="Typo.h6" Class="mt-6 mb-2">@group.Key</MudText>
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudGrid>
+                @foreach (var setting in group)
+                {
+                    <MudItem xs="12" md="6">
+                        @if (setting.Type == "bool")
+                        {
+                            <MudSwitch T="bool" Value="@(Value(setting) == "true")" ValueChanged="@(value => Edit(setting, value ? "true" : "false"))" Color="Color.Primary" Label="@setting.Label" />
+                        }
+                        else
+                        {
+                            <MudNumericField T="int" Value="@int.Parse(Value(setting))" ValueChanged="@(value => Edit(setting, value.ToString()))" Label="@setting.Label"
+                                             Min="@setting.Min" Max="@setting.Max" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="false" />
+                        }
+                    </MudItem>
+                }
+            </MudGrid>
+            <div class="d-flex justify-end gap-3 mt-4">
+                <MudButton Variant="Variant.Text" Disabled="@(!HasChanges(group))" OnClick="@(() => Reset(group))">Annuler les modifications</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!HasChanges(group))" OnClick="@(() => Save(group))">Enregistrer</MudButton>
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    bool _denied;
+    readonly Dictionary<string, string> _edited = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _denied = !await Ui.TryAsync(user => Ui.Can(user, Permissions.SettingsManage) ? Task.CompletedTask : throw ApiException.Forbidden("missing_permission"));
+
+    string Value(SettingInfo setting) => _edited.TryGetValue(setting.Key, out var value) ? value : Settings.Raw(setting.Key);
+
+    bool HasChanges(IEnumerable<SettingInfo> group) => group.Any(x => _edited.TryGetValue(x.Key, out var value) && value != Settings.Raw(x.Key));
+
+    void Edit(SettingInfo setting, string value) => _edited[setting.Key] = value;
+
+    void Reset(IEnumerable<SettingInfo> group) { foreach (var setting in group) _edited.Remove(setting.Key); }
+
+    async Task Save(IEnumerable<SettingInfo> group)
+    {
+        await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.SettingsManage)) throw ApiException.Forbidden("missing_permission");
+            foreach (var setting in group.Where(x => _edited.TryGetValue(x.Key, out var value) && value != Settings.Raw(x.Key)).ToList())
+            {
+                await Settings.SetAsync(setting.Key, _edited[setting.Key]);
+                await Audit.WriteAsync("setting.changed", setting.Key, _edited[setting.Key], actor: user);
+                _edited.Remove(setting.Key);
+            }
+        }, "Réglages enregistrés.");
+    }
+
+    async Task SetFeature(FeatureInfo feature, bool enabled)
+    {
+        if (!enabled && await Dialogs.ShowMessageBoxAsync($"Désactiver « {feature.Name} »", Consequence(feature.Key), yesText: "Désactiver", cancelText: "Annuler") != true)
+        {
+            StateHasChanged();
+            return;
+        }
+        await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.SettingsManage)) throw ApiException.Forbidden("missing_permission");
+            await Settings.SetFeatureAsync(feature.Key, enabled);
+            await Audit.WriteAsync(enabled ? "feature.enabled" : "feature.disabled", feature.Key, actor: user);
+        }, enabled ? "Fonctionnalité activée." : "Fonctionnalité désactivée.");
+    }
+
+    static string Consequence(string key) => key switch
+    {
+        Features.Cloud => "Désactivée: les requêtes en attente sont annulées; celles en cours se terminent; aucune nouvelle requête.",
+        Features.Sharing => "Désactivée: toutes les conversations partagées en direct sont fermées immédiatement.",
+        Features.Schedules => "Désactivée: aucune occurrence n’est lancée; les tâches et leurs horaires sont conservés.",
+        Features.Queue => "Désactivée: plus aucune limite de simultanéité ou de capacité (hors plafond de sécurité).",
+        Features.Providers => "Désactivée: le catalogue est fermé et le relais refuse les appels, y compris ceux des exécutions cloud.",
+        _ => ""
+    };
+}

@@ -1,0 +1,54 @@
+@* Role editor: permissions are grouped by feature set. *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField Immediate="true" @bind-Value="_name" Label="Nom du rôle" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(Existing?.IsSystem == true)" Class="mb-2" />
+        <MudTextField Immediate="true" @bind-Value="_description" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        @if (Existing?.IsSystem == true)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">Le rôle Administrator détient toutes les permissions et ne peut pas être modifié.</MudAlert>
+        }
+        else
+        {
+            @foreach (var group in Permissions.All.GroupBy(x => x.Group))
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-2">@GroupName(group.Key)</MudText>
+                @foreach (var permission in group)
+                {
+                    <div>
+                        <MudCheckBox T="bool" Value="@_selected.Contains(permission.Key)" ValueChanged="@(value => Toggle(permission.Key, value))" Color="Color.Primary" Dense="true" Label="@permission.Name" />
+                    </div>
+                }
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="@(Existing?.IsSystem == true)">Enregistrer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public RoleView? Existing { get; set; }
+
+    public sealed record Result(string Name, string Description, List<string> Permissions);
+
+    string _name = "", _description = "";
+    readonly HashSet<string> _selected = [];
+
+    protected override void OnInitialized()
+    {
+        if (Existing == null) return;
+        _name = Existing.Name;
+        _description = Existing.Description;
+        foreach (var permission in Existing.Permissions) _selected.Add(permission);
+    }
+
+    static string GroupName(string group) => group == "admin" ? "Administration" : Features.All.FirstOrDefault(x => x.Key == group)?.Name ?? group;
+
+    void Toggle(string key, bool on) { if (on) _selected.Add(key); else _selected.Remove(key); }
+
+    void Cancel() => MudDialog.Cancel();
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(new Result(_name, _description, _selected.ToList())));
+}

@@ -1,0 +1,443 @@
+@page "/projects/{Id:guid}"
+@attribute [Authorize]
+@implements IDisposable
+@using System.Text.Json
+@inject UiContext Ui
+@inject ProjectService ProjectsService
+@inject ProjectStore Store
+@inject ProjectFiles Files
+@inject RunService Runs
+@inject ProviderService Providers
+@inject ApprovalService Approvals
+@inject IDialogService Dialogs
+@inject IJSRuntime Js
+
+<PageTitle>@(_project?.Name ?? "Projet") · Monolith Harness Server</PageTitle>
+
+@if (_missing)
+{
+    <MudAlert Severity="Severity.Error">Projet introuvable, ou cette fonctionnalité n’est pas disponible pour vous.</MudAlert>
+    <MudButton Href="/projects" Variant="Variant.Text" Class="mt-2">Retour aux projets</MudButton>
+}
+else if (_project != null)
+{
+    <div class="d-flex align-center flex-wrap gap-2 mb-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/projects" aria-label="Retour aux projets" />
+        <MudText Typo="Typo.h4">@_project.Name</MudText>
+        <MudChip T="string" Size="Size.Small">@(_project.Access switch { "owner" => "Propriétaire", "run" => "Exécution", _ => "Lecture seule" })</MudChip>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@Display.Size(_project.FilesBytes) de fichiers · propriétaire @_project.OwnerEmail</MudText>
+    </div>
+
+    <MudTabs Elevation="0" Rounded="false" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Conversations">
+            <MudGrid>
+                <MudItem xs="12" md="3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Add" OnClick="NewChat" Disabled="@(!CanRun)" Class="mb-2">Nouvelle conversation</MudButton>
+                    <MudList T="int" SelectedValue="_chatId" SelectedValueChanged="SelectChat" Dense="true" Color="Color.Primary">
+                        @foreach (var chat in _chats)
+                        {
+                            <MudListItem T="int" Value="@chat.Id" Text="@chat.Title" />
+                        }
+                    </MudList>
+                    @if (_chats.Count == 0) { <MudText Typo="Typo.body2" Class="mud-text-secondary">Aucune conversation.</MudText> }
+                </MudItem>
+                <MudItem xs="12" md="9">
+                    @if (_chatId == 0)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">Choisissez une conversation, ou créez-en une.</MudAlert>
+                    }
+                    else
+                    {
+                        <div id="chat-scroll" class="mh-chat">
+                            @foreach (var message in _messages.Where(x => x.Content.Length > 0))
+                            {
+                                <div class="mh-msg @(message.Role)">@message.Content</div>
+                            }
+                            @if (_stream.Length > 0)
+                            {
+                                <div class="mh-msg assistant">@_stream</div>
+                            }
+                        </div>
+                        @if (_run != null && !RunStates.IsFinal(_run.State))
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                                <div class="d-flex align-center gap-3">
+                                    <span>@QueueAdmin.StateLabel(_run.State)@(_run.QueuePosition is { } rank ? $" · rang {rank}" : "")@(_status.Length > 0 ? " · " + _status : "")</span>
+                                    <MudSpacer />
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="CancelRun">Annuler la requête</MudButton>
+                                </div>
+                            </MudAlert>
+                        }
+                        else if (_run is { State: RunStates.Failed or RunStates.Cancelled })
+                        {
+                            <MudAlert Severity="@(_run.State == RunStates.Failed ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">
+                                @QueueAdmin.StateLabel(_run.State)@(_run.Error.Length > 0 ? ": " + _run.Error.Split('\n')[0] : "")
+                            </MudAlert>
+                        }
+                        @if (_run?.ChangeSummary is { Length: > 0 } changes && RunStates.IsFinal(_run.State))
+                        {
+                            <MudExpansionPanels Class="mb-2"><MudExpansionPanel Text="Modifications appliquées au projet"><pre class="mh-mono" style="white-space:pre-wrap;max-height:260px;overflow:auto">@changes</pre></MudExpansionPanel></MudExpansionPanels>
+                        }
+                        @foreach (var approval in _approvals)
+                        {
+                            <ApprovalCard Item="approval" OnDone="LoadApprovals" @key="approval.Id" />
+                        }
+                        @if (!CanRun)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">Accès en lecture seule: vous pouvez suivre cette conversation sans la modifier.</MudAlert>
+                        }
+                        else if (_catalog.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">Aucun provider n’est disponible pour vous. Demandez à un administrateur de vous donner accès à un provider partagé.</MudAlert>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-3 mb-2">
+                                <MudSelect T="Guid" Label="Provider" Value="_providerId" ValueChanged="ChangeProvider" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:240px">
+                                    @foreach (var provider in _catalog) { <MudSelectItem T="Guid" Value="@provider.Id">@provider.Name</MudSelectItem> }
+                                </MudSelect>
+                                <MudSelect T="string" Label="Modèle" @bind-Value="_model" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:260px">
+                                    @foreach (var model in CurrentModels) { <MudSelectItem T="string" Value="@model.Id">@model.Id</MudSelectItem> }
+                                </MudSelect>
+                            </div>
+                            <MudTextField @bind-Value="_text" Lines="3" Variant="Variant.Outlined" Label="Votre demande" Immediate="true" Disabled="Busy" />
+                            <div class="d-flex justify-end mt-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" Disabled="@(Busy || _text.Trim().Length == 0)" OnClick="Send">Envoyer</MudButton>
+                            </div>
+                        }
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Fichiers">
+            <div class="d-flex align-center flex-wrap gap-2 mb-2">
+                <div class="d-flex align-center flex-wrap">
+                    <MudLink OnClick="@(() => OpenDirectory(""))">Racine</MudLink>
+                    @foreach (var crumb in Crumbs)
+                    {
+                        <span class="mx-1">/</span>
+                        <MudLink OnClick="@(() => OpenDirectory(crumb.Path))">@crumb.Name</MudLink>
+                    }
+                </div>
+                <MudSpacer />
+                @if (CanRun)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreateNewFolder" OnClick="MakeFolder">Nouveau dossier</MudButton>
+                    <label class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" style="cursor:pointer;padding:6px 16px;border-radius:4px">
+                        Déposer des fichiers
+                        <InputFile OnChange="Upload" multiple style="display:none" />
+                    </label>
+                }
+            </div>
+            <div class="mh-table-wrap">
+                <MudTable Items="_entries" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm" RowsPerPage="50">
+                    <HeaderContent><MudTh>Nom</MudTh><MudTh>Taille</MudTh><MudTh>Modifié</MudTh><MudTh></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Nom">
+                            @if (context.IsDirectory) { <MudLink OnClick="@(() => OpenDirectory(context.Path))"><MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" /> @context.Name</MudLink> }
+                            else { <span><MudIcon Icon="@Icons.Material.Filled.InsertDriveFile" Size="Size.Small" /> @context.Name</span> }
+                        </MudTd>
+                        <MudTd DataLabel="Taille">@(context.IsDirectory ? "" : Display.Size(context.Size))</MudTd>
+                        <MudTd DataLabel="Modifié">@context.ModifiedUtc.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd>
+                            @if (!context.IsDirectory)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/api/projects/{Id}/files/content?path={Uri.EscapeDataString(context.Path)}")" Target="_blank">Télécharger</MudButton>
+                            }
+                            @if (CanRun)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => DeleteEntry(context))">Supprimer</MudButton>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText Class="pa-4">Dossier vide.</MudText></NoRecordsContent>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Membres">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Le propriétaire donne accès en lecture (suivre) ou en exécution (lancer des requêtes, modifier les fichiers).</MudText>
+            <div class="mh-table-wrap">
+                <MudTable Items="_members" Dense="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent><MudTh>Adresse e-mail</MudTh><MudTh>Accès</MudTh><MudTh></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="E-mail">@context.Email</MudTd>
+                        <MudTd DataLabel="Accès">@(context.Access == "run" ? "Exécution" : "Lecture")</MudTd>
+                        <MudTd>@if (_project.Access == "owner") { <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => RemoveMember(context))">Retirer</MudButton> }</MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText Class="pa-4">Aucun autre membre.</MudText></NoRecordsContent>
+                </MudTable>
+            </div>
+            @if (_project.Access == "owner")
+            {
+                <div class="d-flex flex-wrap gap-3 align-center mt-3 justify-end">
+                    <MudTextField Immediate="true" @bind-Value="_memberEmail" Label="Adresse e-mail du membre" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" />
+                    <MudSelect T="string" @bind-Value="_memberAccess" Label="Accès" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px">
+                        <MudSelectItem T="string" Value="@("read")">Lecture</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("run")">Exécution</MudSelectItem>
+                    </MudSelect>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_memberEmail.Trim().Length == 0)" OnClick="AddMember">Ajouter</MudButton>
+                </div>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "chat")] public int? ChatQuery { get; set; }
+
+    ProjectView? _project;
+    bool _missing;
+    int _tab;
+    // Conversations
+    List<ChatView> _chats = [];
+    List<MessageItem> _messages = [];
+    int _chatId;
+    string _text = "", _stream = "", _status = "", _model = "";
+    Guid _providerId;
+    List<CatalogProvider> _catalog = [];
+    RunView? _run;
+    List<ApprovalView> _approvals = [];
+    IDisposable? _runListener, _projectListener, _userListener;
+    bool _scroll;
+    // Files
+    string _dir = "";
+    List<FileEntry> _entries = [];
+    // Members
+    List<MemberView> _members = [];
+    string _memberEmail = "", _memberAccess = "read";
+
+    bool CanRun => _project?.Access is "owner" or "run";
+    bool Busy => _run != null && !RunStates.IsFinal(_run.State);
+    IEnumerable<ProviderModel> CurrentModels => _catalog.FirstOrDefault(x => x.Id == _providerId)?.Models ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ok = await Ui.TryAsync(async user =>
+        {
+            _project = (await ProjectsService.ListAsync(user)).FirstOrDefault(x => x.Id == Id);
+            if (_project == null) throw ApiException.NotFound();
+            _catalog = await Providers.CatalogAsync(user);
+            _chats = await Store.ChatsAsync(Id);
+            _members = await ProjectsService.MembersAsync(user, Id);
+            LoadFiles();
+        });
+        _missing = !ok || _project == null;
+        if (_missing) return;
+        if (_catalog.Count > 0) { _providerId = _catalog[0].Id; _model = _catalog[0].Models.FirstOrDefault()?.Id ?? ""; }
+        var user = await Ui.UserAsync();
+        _projectListener = Ui.Hub.Listen(RealtimeHub.ProjectTopic(Id), message => { if (message.Name == "run.state") _ = InvokeAsync(() => OnRunState(message.Data)); });
+        _userListener = Ui.Hub.Listen(RealtimeHub.UserTopic(user.RequireUserId()), message => { if (message.Name.StartsWith("approval.", StringComparison.Ordinal)) _ = InvokeAsync(async () => { await LoadApprovals(); StateHasChanged(); }); });
+        if (ChatQuery is { } chat && _chats.Any(x => x.Id == chat)) await SelectChat(chat);
+        else if (_chats.Count > 0) await SelectChat(_chats[0].Id);
+    }
+
+    // ---- Conversations ----
+
+    async Task SelectChat(int chat)
+    {
+        _chatId = chat;
+        _stream = _status = "";
+        _run = null;
+        _runListener?.Dispose();
+        await ReloadMessages();
+        await Ui.TryAsync(async user =>
+        {
+            var current = (await Runs.ListAsync(user, false, 200)).FirstOrDefault(x => x.ProjectId == Id && x.ChatId == chat && !RunStates.IsFinal(x.State))
+                ?? (await Runs.ListAsync(user, false, 20)).FirstOrDefault(x => x.ProjectId == Id && x.ChatId == chat);
+            if (current != null) Attach(current);
+        });
+        await LoadApprovals();
+    }
+
+    async Task NewChat()
+    {
+        var chat = await Ui.Try(async user =>
+        {
+            await ProjectsService.RequireAsync(user, Id, ProjectAccess.Run);
+            return await Store.CreateChatAsync(Id, null);
+        });
+        if (chat == null) return;
+        _chats = await Store.ChatsAsync(Id);
+        await SelectChat(chat.Id);
+    }
+
+    async Task ReloadMessages()
+    {
+        if (_chatId == 0) { _messages = []; return; }
+        _messages = await Store.MessagesAsync(Id, _chatId);
+        _scroll = true;
+    }
+
+    void ChangeProvider(Guid provider)
+    {
+        _providerId = provider;
+        _model = CurrentModels.FirstOrDefault()?.Id ?? "";
+    }
+
+    async Task Send()
+    {
+        var text = _text;
+        var ok = await Ui.TryAsync(async user =>
+        {
+            var run = await Runs.EnqueueAsync(user, Id, _chatId, text, _providerId, _model);
+            _text = "";
+            _stream = _status = "";
+            Attach(run);
+        });
+        if (ok) await ReloadMessages();
+    }
+
+    void Attach(RunView run)
+    {
+        _run = run;
+        _runListener?.Dispose();
+        if (RunStates.IsFinal(run.State)) return;
+        _runListener = Ui.Hub.Listen(RealtimeHub.RunTopic(run.Id), message => _ = InvokeAsync(() => OnRunEvent(message)));
+    }
+
+    async Task OnRunEvent(RealtimeMessage message)
+    {
+        switch (message.Name)
+        {
+            case "stream":
+                if (message.Data.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String) _stream = text.GetString() ?? "";
+                _scroll = true;
+                break;
+            case "message":
+            case "done":
+                _stream = "";
+                await ReloadMessages();
+                break;
+            case "status":
+                _status = message.Data.TryGetProperty("text", out var status) ? status.GetString() ?? "" : "";
+                break;
+            case "run.state":
+                await OnRunState(message.Data);
+                return;
+        }
+        StateHasChanged();
+    }
+
+    async Task OnRunState(JsonElement data)
+    {
+        var view = data.Deserialize<RunView>(RealtimeHub.Json);
+        if (view == null || view.ProjectId != Id) return;
+        if (view.ChatId == _chatId)
+        {
+            var wasFinal = _run == null || RunStates.IsFinal(_run.State);
+            if (_run == null || _run.Id == view.Id || wasFinal) { if (_run?.Id != view.Id) Attach(view); else _run = view; }
+            if (RunStates.IsFinal(view.State))
+            {
+                _runListener?.Dispose();
+                _stream = _status = "";
+                await ReloadMessages();
+                await Ui.TryAsync(async user => { _project = (await ProjectsService.ListAsync(user)).FirstOrDefault(x => x.Id == Id) ?? _project; LoadFiles(); });
+            }
+        }
+        await LoadApprovals();
+        StateHasChanged();
+    }
+
+    async Task CancelRun()
+    {
+        if (_run == null) return;
+        await Ui.TryAsync(user => Runs.CancelAsync(user, _run.Id), "Requête annulée.");
+    }
+
+    async Task LoadApprovals() =>
+        await Ui.TryAsync(async user => _approvals = (await Approvals.ListAsync(user.RequireUserId(), true)).Where(x => x.ProjectId == Id).ToList());
+
+    // ---- Files ----
+
+    void LoadFiles()
+    {
+        try { _entries = Files.List(Id, _dir); }
+        catch (ApiException) { _dir = ""; _entries = Files.List(Id, ""); }
+    }
+
+    IEnumerable<(string Name, string Path)> Crumbs
+    {
+        get
+        {
+            var accumulated = "";
+            foreach (var part in _dir.Split('/', StringSplitOptions.RemoveEmptyEntries))
+            {
+                accumulated = accumulated.Length == 0 ? part : accumulated + "/" + part;
+                yield return (part, accumulated);
+            }
+        }
+    }
+
+    void OpenDirectory(string path) { _dir = path; LoadFiles(); }
+
+    async Task MakeFolder()
+    {
+        var dialog = await Dialogs.ShowAsync<TextDialog>("Nouveau dossier", new DialogParameters<TextDialog> { { x => x.Label, "Nom du dossier" }, { x => x.Confirm, "Créer" } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string name }) return;
+        await Ui.TryAsync(async user =>
+        {
+            await ProjectsService.RequireAsync(user, Id, ProjectAccess.Run);
+            Files.CreateDirectory(Id, _dir.Length == 0 ? name : _dir + "/" + name);
+            LoadFiles();
+        });
+    }
+
+    async Task Upload(InputFileChangeEventArgs args)
+    {
+        foreach (var file in args.GetMultipleFiles(50))
+        {
+            var target = _dir.Length == 0 ? file.Name : _dir + "/" + file.Name;
+            await Ui.TryAsync(async user =>
+            {
+                await ProjectsService.RequireAsync(user, Id, ProjectAccess.Run);
+                await using var stream = file.OpenReadStream(ProjectFiles.MaxFileBytes);
+                await Files.WriteAsync(Id, target, stream, CancellationToken.None);
+            });
+        }
+        await Ui.TryAsync(async user => { _project = (await ProjectsService.ListAsync(user)).FirstOrDefault(x => x.Id == Id) ?? _project; LoadFiles(); }, "Fichiers déposés.");
+    }
+
+    async Task DeleteEntry(FileEntry entry)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer", entry.Path, yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        await Ui.TryAsync(async user =>
+        {
+            await ProjectsService.RequireAsync(user, Id, ProjectAccess.Run);
+            Files.Delete(Id, entry.Path);
+            LoadFiles();
+        });
+    }
+
+    // ---- Members ----
+
+    async Task AddMember()
+    {
+        var wanted = _members.Select(x => new MemberRequest(x.Email, x.Access)).Append(new MemberRequest(_memberEmail, _memberAccess)).ToList();
+        if (await Ui.TryAsync(async user => { await ProjectsService.SetMembersAsync(user, Id, wanted); _members = await ProjectsService.MembersAsync(user, Id); }, "Membre ajouté.")) _memberEmail = "";
+    }
+
+    async Task RemoveMember(MemberView member)
+    {
+        var wanted = _members.Where(x => x.UserId != member.UserId).Select(x => new MemberRequest(x.Email, x.Access)).ToList();
+        await Ui.TryAsync(async user => { await ProjectsService.SetMembersAsync(user, Id, wanted); _members = await ProjectsService.MembersAsync(user, Id); }, "Membre retiré.");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scroll) return;
+        _scroll = false;
+        try { await Js.InvokeVoidAsync("mhScrollToEnd", "chat-scroll"); } catch (JSException) { } catch (InvalidOperationException) { }
+    }
+
+
+    public void Dispose()
+    {
+        _runListener?.Dispose();
+        _projectListener?.Dispose();
+        _userListener?.Dispose();
+    }
+}

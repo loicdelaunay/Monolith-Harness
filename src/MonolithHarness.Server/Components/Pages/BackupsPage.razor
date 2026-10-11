@@ -1,0 +1,70 @@
+@page "/admin/backups"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject BackupService Backups
+@inject ServerPaths Paths
+@inject IDialogService Dialogs
+
+<PageTitle>Sauvegardes · Monolith Harness Server</PageTitle>
+
+<div class="d-flex align-center mb-2">
+    <MudText Typo="Typo.h4">Sauvegardes</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Backup" OnClick="Create">Créer une sauvegarde</MudButton>
+</div>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de gérer les sauvegardes.</MudAlert>
+}
+else
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+        Une sauvegarde contient la base du serveur (comptes, rôles, réglages, catalogue de providers, journal d’audit). Les fichiers et conversations des projets
+        se trouvent dans <span class="mh-mono">@Paths.Projects</span>: copiez ce dossier, serveur arrêté, pour les sauvegarder.
+        Restauration hors ligne: <span class="mh-mono">MonolithHarness restore --from &lt;fichier&gt;</span>.
+    </MudAlert>
+    <div class="mh-table-wrap">
+        <MudTable Items="_backups" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Fichier</MudTh><MudTh>Taille</MudTh><MudTh>Créée le</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Fichier"><span class="mh-mono">@context.Name</span></MudTd>
+                <MudTd DataLabel="Taille">@(context.Bytes / 1024) Ko</MudTd>
+                <MudTd DataLabel="Créée le">@context.CreatedUtc.ToLocalTime().ToString("G")</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/api/admin/backups/{context.Name}")" Target="_blank">Télécharger</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Delete(context))">Supprimer</MudButton>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Aucune sauvegarde.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
+}
+
+@code {
+    List<BackupInfo> _backups = [];
+    bool _denied;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load() =>
+        _denied = !await Ui.TryAsync(user =>
+        {
+            if (!Ui.Can(user, Permissions.BackupManage)) throw ApiException.Forbidden("missing_permission");
+            _backups = Backups.List();
+            return Task.CompletedTask;
+        });
+
+    async Task Create()
+    {
+        await Ui.TryAsync(user => Ui.Can(user, Permissions.BackupManage) ? Backups.CreateAsync() : throw ApiException.Forbidden("missing_permission"), "Sauvegarde créée.");
+        await Load();
+    }
+
+    async Task Delete(BackupInfo backup)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Supprimer la sauvegarde", backup.Name, yesText: "Supprimer", cancelText: "Annuler") != true) return;
+        await Ui.TryAsync(user => Ui.Can(user, Permissions.BackupManage) ? Backups.DeleteAsync(backup.Name) : throw ApiException.Forbidden("missing_permission"), "Sauvegarde supprimée.");
+        await Load();
+    }
+}

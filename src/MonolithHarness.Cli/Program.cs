@@ -7,6 +7,7 @@ try
     var options = CliOptions.Parse(args);
     if (options.Help) { Console.WriteLine(CliOptions.HelpText); return 0; }
     if (options.Version) { Console.WriteLine(MonolithHarness.Core.BrandingAssets.DefaultName + " CLI " + CliOptions.CurrentVersion); return 0; }
+    if (options.Server) return await ServerCommand.RunAsync(options);
     if (options.RenderDemo)
     {
         Console.Write(TerminalUi.DemoFrame(options.Theme));

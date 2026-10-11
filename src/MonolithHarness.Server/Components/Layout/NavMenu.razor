@@ -1,0 +1,41 @@
+@inject UiContext Ui
+
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Accueil</MudNavLink>
+    @if (Can(Permissions.CloudUse))
+    {
+        <MudNavLink Href="/projects" Icon="@Icons.Material.Filled.FolderOpen">Projets cloud</MudNavLink>
+        <MudNavLink Href="/runs" Icon="@Icons.Material.Filled.Queue">Requêtes</MudNavLink>
+        <MudNavLink Href="/approvals" Icon="@Icons.Material.Filled.GppMaybe">Approbations@(PendingApprovals > 0 ? $" ({PendingApprovals})" : "")</MudNavLink>
+    }
+    @if (Can(Permissions.SchedulesManage))
+    {
+        <MudNavLink Href="/schedules" Icon="@Icons.Material.Filled.Schedule">Tâches planifiées</MudNavLink>
+    }
+    @if (Can(Permissions.SharingHost) || Can(Permissions.SharingView))
+    {
+        <MudNavLink Href="/shares" Icon="@Icons.Material.Filled.Share">Partages</MudNavLink>
+    }
+    @if (AnyAdmin)
+    {
+        <MudDivider Class="my-2" />
+        <MudNavGroup Title="Administration" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
+            @if (Can(Permissions.UsersManage)) { <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People">Comptes</MudNavLink> }
+            @if (Can(Permissions.RolesManage)) { <MudNavLink Href="/admin/roles" Icon="@Icons.Material.Filled.Badge">Rôles</MudNavLink> }
+            @if (Can(Permissions.SettingsManage)) { <MudNavLink Href="/admin/settings" Icon="@Icons.Material.Filled.Tune">Fonctionnalités et réglages</MudNavLink> }
+            @if (Can(Permissions.ProvidersManage)) { <MudNavLink Href="/admin/providers" Icon="@Icons.Material.Filled.Hub">Providers</MudNavLink> }
+            @if (Can(Permissions.QueueManage)) { <MudNavLink Href="/admin/queue" Icon="@Icons.Material.Filled.ViewList">File d’attente</MudNavLink> }
+            @if (Can(Permissions.AuditRead)) { <MudNavLink Href="/admin/audit" Icon="@Icons.Material.Filled.History">Journal d’audit</MudNavLink> }
+            @if (Can(Permissions.BackupManage)) { <MudNavLink Href="/admin/backups" Icon="@Icons.Material.Filled.Backup">Sauvegardes</MudNavLink> }
+        </MudNavGroup>
+    }
+</MudNavMenu>
+
+@code {
+    [Parameter] public ClaimsPrincipal? User { get; set; }
+    [Parameter] public int PendingApprovals { get; set; }
+
+    bool Can(string permission) => Ui.Can(User, permission);
+
+    bool AnyAdmin => new[] { Permissions.UsersManage, Permissions.RolesManage, Permissions.SettingsManage, Permissions.AuditRead, Permissions.BackupManage, Permissions.ProvidersManage, Permissions.QueueManage }.Any(Can);
+}

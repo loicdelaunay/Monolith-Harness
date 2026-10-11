@@ -63,6 +63,7 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     readonly List<Task> operations = [];
     CliClient client = null!;
     WorkspaceSnapshot? workspace;
+    MonolithHarness.Core.Remote.ServerLinkData? serverLink;
     UiDialog? dialog;
     int chatId, providerId, pendingOperations, frame;
     bool quit, dirty = true, showDetails;
@@ -97,7 +98,8 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     async Task Refresh()
     {
         var snapshot = await client.Snapshot(lifetime.Token);
-        Post(() => { workspace = snapshot; RefreshSkillCompletion(); });
+        var link = client.ServerLink;
+        Post(() => { workspace = snapshot; serverLink = link; RefreshSkillCompletion(); });
     }
     public async Task<int> RunAsync()
     {
@@ -277,6 +279,9 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         chatId = id; RefreshSkillCompletion(); editor.Set(drafts.GetValueOrDefault(id, "")); var view = View(id); view.Loading = true;
         Work(async () =>
         {
+            // A cloud conversation lives on the server: bring the local copy up to date first (offline, the local copy is shown).
+            if (serverLink is { SignedIn: true } link && link.Chats.ContainsKey(id) && !Running(id))
+                try { await client.Call("server.chat.pull", new { chatId = id }, lifetime.Token); } catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException) { }
             var history = await client.History(id, lifetime.Token);
             var inbox = (await client.Call("inbox.list", new { chatId = id }, lifetime.Token))!.AsArray();
             Post(() =>

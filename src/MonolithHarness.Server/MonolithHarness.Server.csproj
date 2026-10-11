@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MonolithHarness.Server</AssemblyName>
+    <RootNamespace>MonolithHarness.Server</RootNamespace>
+    <Version>1.91.0</Version>
+    <AssemblyTitle>Monolith Harness Server</AssemblyTitle>
+    <Product>Monolith Harness</Product>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishTrimmed>false</PublishTrimmed>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <!-- The engine is hosted in worker processes; the web host keeps a single static-web-assets root. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../MonolithHarness.Core.Desktop/MonolithHarness.Core.Desktop.csproj" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" Version="9.9.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9"><PrivateAssets>all</PrivateAssets></PackageReference>
+  </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="MonolithHarness.Server.Tests" /></ItemGroup>
+  <ItemGroup><AssemblyMetadata Include="MonolithHarness.SingleFile" Value="$(PublishSingleFile)" /></ItemGroup>
+  <Import Project="../../build/MonolithLauncher.targets" />
+  <!-- Les symboles natifs de SkiaSharp (80 Mo) ne servent à rien dans le serveur publié. -->
+  <Target Name="DropNativeSymbols" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <NativeSymbolToDrop Include="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'libSkiaSharp.pdb'" />
+      <ResolvedFileToPublish Remove="@(NativeSymbolToDrop)" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,42 @@
+@* One text value (password, name, ...) or a read-only secret to copy. *@
+<MudDialog>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">@Message</MudText>
+        }
+        @if (ReadOnly)
+        {
+            <MudTextField Immediate="true" T="string" Value="@Value" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mh-mono" Label="@Label" />
+        }
+        else
+        {
+            <MudTextField Immediate="true" @bind-Value="_value" Label="@Label" InputType="@(Secret ? InputType.Password : InputType.Text)" Variant="Variant.Outlined" Margin="Margin.Dense" AutoFocus="true" />
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!ReadOnly)
+        {
+            <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit">@Confirm</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string Confirm { get; set; } = "Valider";
+    [Parameter] public bool Secret { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public string Value { get; set; } = "";
+
+    string _value = "";
+
+    protected override void OnInitialized() => _value = Value;
+
+    void Cancel() => MudDialog.Cancel();
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(ReadOnly ? Value : _value));
+}

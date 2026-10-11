@@ -1,0 +1,75 @@
+@page "/"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject IDbContextFactory<ServerDb> Factory
+@inject RunService Runs
+@inject RealtimeHub Hub
+@inject ServerPaths Paths
+@inject ServerOptions Options
+
+<PageTitle>Accueil · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Bonjour @_name</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Serveur @Api.ApiSupport.Version · données dans @Paths.Root</MudText>
+
+<MudGrid>
+    @foreach (var feature in Features.All)
+    {
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Class="pa-4" Outlined="true">
+                <div class="d-flex align-center">
+                    <MudText Typo="Typo.subtitle1">@feature.Name</MudText>
+                    <MudSpacer />
+                    <MudChip T="string" Size="Size.Small" Color="@(Ui.Enabled(feature.Key) ? Color.Success : Color.Default)">@(Ui.Enabled(feature.Key) ? "Activée" : "Désactivée")</MudChip>
+                </div>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">@feature.Description</MudText>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@if (_stats.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mt-6 mb-2">État du serveur</MudText>
+    <MudGrid>
+        @foreach (var (label, value) in _stats)
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.h5">@value</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@label</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+<MudAlert Severity="Severity.Info" Class="mt-6" Dense="true">
+    Écoute sur @(Options.Host):@Options.Port@(Options.HttpsPort is { } https ? $" et HTTPS {https}" : " (HTTP)").
+    API REST: <MudLink Href="/swagger" Target="_blank">/swagger</MudLink> · WebSocket: <span class="mh-mono">/ws</span>
+</MudAlert>
+
+@code {
+    string _name = "";
+    readonly List<(string Label, string Value)> _stats = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Ui.UserAsync();
+        _name = string.IsNullOrWhiteSpace(user.Identity?.Name) ? user.Email() : user.Identity!.Name!;
+        await using var db = await Factory.CreateDbContextAsync();
+        if (Ui.Can(user, Permissions.UsersManage))
+        {
+            _stats.Add(("Comptes", (await db.Users.CountAsync()).ToString()));
+            _stats.Add(("Connexions actives", (await db.Sessions.CountAsync(x => x.RevokedUtc == null && x.ExpiresUtc > DateTime.UtcNow && x.Kind != SessionKinds.Run)).ToString()));
+            _stats.Add(("WebSockets", Hub.ConnectionCount.ToString()));
+        }
+        if (Ui.Can(user, Permissions.QueueManage))
+        {
+            var queue = await Runs.OverviewAsync(user);
+            _stats.Add(("En attente", queue.Queued.ToString()));
+            _stats.Add(("En cours", queue.Running.ToString()));
+            _stats.Add(("En attente d’approbation", queue.AwaitingApproval.ToString()));
+        }
+    }
+}

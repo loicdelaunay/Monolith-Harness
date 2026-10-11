@@ -1,0 +1,40 @@
+@inject DirectoryService Directory
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            Seuls les utilisateurs et rôles listés peuvent utiliser ce provider. Il faut aussi la permission « providers.use ».
+        </MudText>
+        <MudSelect T="Guid" Label="Rôles autorisés" MultiSelection="true" @bind-SelectedValues="_roles" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+            @foreach (var role in _allRoles) { <MudSelectItem T="Guid" Value="@role.Id">@role.Name</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="Guid" Label="Utilisateurs autorisés" MultiSelection="true" @bind-SelectedValues="_users" Variant="Variant.Outlined" Margin="Margin.Dense">
+            @foreach (var user in _allUsers) { <MudSelectItem T="Guid" Value="@user.Id">@user.Email</MudSelectItem> }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit">Enregistrer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ProviderView Provider { get; set; } = default!;
+
+    List<RoleView> _allRoles = [];
+    List<UserView> _allUsers = [];
+    IReadOnlyCollection<Guid> _roles = new HashSet<Guid>(), _users = new HashSet<Guid>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allRoles = await Directory.ListRolesAsync();
+        _allUsers = await Directory.ListUsersAsync();
+        _roles = new HashSet<Guid>(Provider.Access.Where(x => x.Kind == SubjectKinds.Role).Select(x => x.Id));
+        _users = new HashSet<Guid>(Provider.Access.Where(x => x.Kind == SubjectKinds.User).Select(x => x.Id));
+    }
+
+    void Cancel() => MudDialog.Cancel();
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(_roles.Select(x => new AccessEntry(SubjectKinds.Role, x, "")).Concat(_users.Select(x => new AccessEntry(SubjectKinds.User, x, ""))).ToList()));
+}

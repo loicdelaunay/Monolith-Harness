@@ -618,10 +618,17 @@ public sealed partial class MainWindow
     async Task<Provider?> SaveProviderDraftsAsync(ProviderEditorState editor)
     {
         var entities = new Dictionary<ProviderDraft, Provider>();
+        // Providers shared by the server are managed in Settings > Server: the editor neither deletes them nor writes a stale token back.
+        var managed = ServerManagedProviders();
         foreach (var existing in db.Providers.Local.ToList())
-            if (!editor.Drafts.Any(x => x.Id == existing.Id)) db.Providers.Remove(existing);
+            if (!managed.Contains(existing.Id) && !editor.Drafts.Any(x => x.Id == existing.Id)) db.Providers.Remove(existing);
         foreach (var draft in editor.Drafts)
         {
+            if (draft.Id != 0 && managed.Contains(draft.Id))
+            {
+                if (db.Providers.Local.FirstOrDefault(x => x.Id == draft.Id) is { } shared) entities[draft] = shared;
+                continue;
+            }
             var entity = draft.Id == 0 ? null : db.Providers.Local.FirstOrDefault(x => x.Id == draft.Id);
             if (entity == null) { entity = new Provider(); db.Providers.Add(entity); }
             ApplyProviderDraft(draft, entity);

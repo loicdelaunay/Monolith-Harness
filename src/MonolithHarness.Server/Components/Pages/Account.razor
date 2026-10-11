@@ -1,0 +1,104 @@
+@page "/account"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject AccountService Accounts
+@inject SessionService Sessions
+@inject IDialogService Dialogs
+@inject AuthenticationStateProvider Auth
+
+<PageTitle>Mon compte · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Mon compte</MudText>
+
+@if (_pending)
+{
+    <MudAlert Severity="@(_enforced ? Severity.Error : Severity.Warning)" Class="mb-4">
+        @(_enforced ? "L’administrateur impose de changer ce mot de passe temporaire avant de continuer." : "Ce mot de passe est temporaire (initial ou fourni par un administrateur). Nous vous conseillons d’en choisir un nouveau.")
+    </MudAlert>
+}
+
+<MudGrid>
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-2">Mot de passe</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">@_email</MudText>
+            <MudTextField @bind-Value="_current" Label="Mot de passe actuel" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+            <MudTextField @bind-Value="_next" Label="Nouveau mot de passe" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="8 caractères minimum" Class="mb-2" />
+            <MudTextField @bind-Value="_confirm" Label="Confirmer le nouveau mot de passe" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Error="@(_confirm.Length > 0 && _confirm != _next)" ErrorText="Les mots de passe diffèrent" />
+            <div class="d-flex justify-end gap-3 mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _next.Length == 0 || _next != _confirm)" OnClick="ChangePassword">Changer le mot de passe</MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-2">Connexions actives</MudText>
+            <div class="mh-table-wrap">
+                <MudTable Items="_sessions" Dense="true" Hover="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>Appareil</MudTh><MudTh>Adresse</MudTh><MudTh>Dernière activité</MudTh><MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@(string.IsNullOrEmpty(context.Label) ? context.Kind : context.Label)@(context.Id == _current_session ? " (cette session)" : "")</MudTd>
+                        <MudTd>@context.Address</MudTd>
+                        <MudTd>@context.LastSeenUtc.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd>
+                            @if (context.Id != _current_session)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Revoke(context.Id))">Révoquer</MudButton>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+            <div class="d-flex justify-end gap-3 mt-4">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="RevokeOthers" Disabled="@(_sessions.Count < 2)">Révoquer les autres connexions</MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    string _email = "", _current = "", _next = "", _confirm = "";
+    bool _pending, _enforced, _busy;
+    Guid _current_session;
+    List<UserSession> _sessions = [];
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        await Ui.TryAsync(async user =>
+        {
+            var me = await Accounts.MeAsync(user.RequireUserId());
+            _email = me.Email;
+            _pending = me.PasswordChangePending;
+            _enforced = me.PasswordChangeRequired;
+            _current_session = user.SessionId() ?? Guid.Empty;
+            _sessions = await Sessions.ListAsync(user.RequireUserId());
+        });
+    }
+
+    async Task ChangePassword()
+    {
+        _busy = true;
+        var ok = await Ui.TryAsync(user => Accounts.ChangePasswordAsync(user.RequireUserId(), user.SessionId() ?? Guid.Empty, _current, _next, "web"), "Mot de passe modifié. Les autres connexions ont été fermées.");
+        _busy = false;
+        if (!ok) return;
+        _current = _next = _confirm = "";
+        await Load();
+    }
+
+    async Task Revoke(Guid id)
+    {
+        await Ui.TryAsync(user => Sessions.RevokeAsync(id, user.RequireUserId()), "Connexion révoquée.");
+        await Load();
+    }
+
+    async Task RevokeOthers()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Révoquer les autres connexions", "Tous vos autres appareils seront déconnectés.", yesText: "Révoquer", cancelText: "Annuler") != true) return;
+        await Ui.TryAsync(user => Sessions.RevokeAllAsync(user.RequireUserId(), user.SessionId()), "Autres connexions révoquées.");
+        await Load();
+    }
+}

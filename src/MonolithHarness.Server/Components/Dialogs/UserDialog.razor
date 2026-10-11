@@ -1,0 +1,51 @@
+@* Create or edit an account. Actions: bottom right, primary highlighted. *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField Immediate="true" @bind-Value="_email" Label="Adresse e-mail" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(Existing != null)" Class="mb-2" />
+        <MudTextField Immediate="true" @bind-Value="_name" Label="Nom affiché (facultatif)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+        @if (Existing == null)
+        {
+            <MudTextField Immediate="true" @bind-Value="_password" Label="Mot de passe initial" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          HelperText="8 caractères minimum. L’utilisateur pourra le changer à sa première connexion." Class="mb-2" />
+        }
+        <MudSelect T="Guid" Label="Rôles" MultiSelection="true" @bind-SelectedValues="_roles" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+            @foreach (var role in Roles)
+            {
+                <MudSelectItem T="Guid" Value="@role.Id">@role.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (Existing != null)
+        {
+            <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="Compte actif" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit">@(Existing == null ? "Créer le compte" : "Enregistrer")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public UserView? Existing { get; set; }
+    [Parameter] public List<RoleView> Roles { get; set; } = [];
+
+    public sealed record Result(string Email, string DisplayName, string Password, bool IsActive, List<Guid> RoleIds);
+
+    string _email = "", _name = "", _password = "";
+    bool _active = true;
+    IReadOnlyCollection<Guid> _roles = new HashSet<Guid>();
+
+    protected override void OnParametersSet()
+    {
+        if (Existing == null || _email.Length > 0) return;
+        _email = Existing.Email;
+        _name = Existing.DisplayName;
+        _active = Existing.IsActive;
+        _roles = new HashSet<Guid>(Existing.Roles.Select(x => x.Id));
+    }
+
+    void Cancel() => MudDialog.Cancel();
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(new Result(_email, _name, _password, _active, _roles.ToList())));
+}

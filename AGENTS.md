@@ -9,10 +9,11 @@
 - Après chaque mise à jour du logiciel (GUI, CLI ou moteur partagé), republier systématiquement **les deux interfaces**, même si la modification ne concerne directement qu’une seule interface.
 - Publier le CLI Windows dans `artifacts/CLI` avec `./publish-cli.ps1 -OutputDirectory artifacts/CLI`.
 - Publier aussi la GUI Windows dans `artifacts/GUI` avec `./publish.ps1 -OutputDirectory artifacts/GUI` (cible Uno Desktop par défaut). Une publication du CLI seul ne termine pas une mise à jour.
+- Publier aussi le serveur dans `artifacts/SERVER` avec `./publish-server.ps1 -OutputDirectory artifacts/SERVER` lorsque `src/MonolithHarness.Server`, la bibliothèque `Core.Remote` ou le moteur partagé change. Le lanceur s’appelle `MonolithHarness.exe`. Comme pour la GUI et le CLI, préserver les données de l’utilisateur déjà présentes (`database.sqlite`, `server.json`, `workspace/`) : ne jamais les supprimer ni les remplacer.
 - Le lanceur publié s’appelle `MonolithHarness.exe` sur Windows et `MonolithHarness` sur macOS/Linux, pour les deux interfaces dans leurs dossiers séparés. Les projets, namespaces, assemblies et ressources utilisent `MonolithHarness` ; limiter les anciens identifiants à la lecture des données et téléchargements historiques.
-- Vérifier la réussite des deux publications et l’alignement de leurs versions avant de terminer. Une modification uniquement documentaire ne nécessite pas de reconstruire les exécutables.
+- Vérifier la réussite des publications (GUI, CLI, et serveur lorsqu’il est concerné) et l’alignement de leurs versions avant de terminer. Une modification uniquement documentaire ne nécessite pas de reconstruire les exécutables.
 - `artifacts/TEMP` est réservé aux publications temporaires réalisées par l’IA pour ses tests. Utiliser un sous-dossier dédié à chaque test et supprimer les fichiers de publication créés une fois les tests terminés, même en cas d’échec.
-- Ne pas créer d’autres dossiers de publication dans `artifacts`. Avant tout nettoyage, vérifier que le chemin ciblé est bien dans `artifacts/TEMP` et supprimer uniquement les fichiers créés pour le test concerné ; préserver les autres fichiers et les données utilisateur.
+- Ne pas créer d’autres dossiers de publication dans `artifacts` que `GUI`, `CLI`, `SERVER` et `TEMP`. Avant tout nettoyage, vérifier que le chemin ciblé est bien dans `artifacts/TEMP` et supprimer uniquement les fichiers créés pour le test concerné ; préserver les autres fichiers et les données utilisateur.
 
 ## Releases GitHub
 

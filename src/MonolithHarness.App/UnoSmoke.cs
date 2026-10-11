@@ -31,6 +31,7 @@ public sealed partial class MainWindow
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_ASSET_SMOKE") == "1") { await SmokeAssetGenerator(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_THEME_SMOKE") == "1") { await SmokeThemes(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_UX_SMOKE") == "1") { await SmokeConversationEnhancements(output); return; }
+            if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_SERVER_SMOKE") == "1") { await SmokeServerIntegration(output); return; }
             static IEnumerable<FrameworkElement> Descendants(DependencyObject? parent)
             {
                 if(parent==null)yield break;

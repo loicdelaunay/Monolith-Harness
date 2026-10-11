@@ -9,7 +9,7 @@ using Markdig;
 
 namespace MonolithHarness.Core.Hosting;
 
-public sealed partial class HarnessService(string database, Func<string, JsonObject, CancellationToken, Task<JsonNode?>> host, Func<object, Task> emit, HarnessServiceOptions? hostOptions = null) : IAsyncDisposable
+public sealed partial class HarnessService(string database, Func<string, JsonObject, CancellationToken, Task<JsonNode?>> host, Func<object, Task> emitTarget, HarnessServiceOptions? hostOptions = null) : IAsyncDisposable
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     static readonly MarkdownPipeline Markdown = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
@@ -23,7 +23,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
     static bool B(JsonObject p, string name, bool fallback = false) => p[name]?.GetValue<bool>() ?? fallback;
     static JsonObject Obj(object value) => (JsonSerializer.SerializeToNode(value, Json) as JsonObject)!;
     HarnessDb Db() => new(database);
-    public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); }
+    public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); _ = ResumeSharesAsync(); }
     static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, p.AcpArgumentsJson, hasKey = p.ProtectedKey.Length > 0 };
     static string Html(string text)
     {
@@ -55,7 +55,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 return await DispatchTerminal(method, p, ct);
             case "context.details": return await ReadContext(I(p, "chatId"), I(p, "providerId"), ct);
             case "context.compact": return await CompactManually(p, ct);
-            case "question.answer": return AnswerQuestion(p);
+            case "question.answer": return AnswerCloudQuestion(p) ?? AnswerQuestion(p);
             case "snapshot":
                 var mcpConfigError = await SyncMcpFile(ct);
                 var snapshotState = await db.States.SingleAsync(ct);
@@ -70,7 +70,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                     mcpServers = (await db.McpServers.AsNoTracking().ToListAsync(ct)).Select(McpView),
                     state = snapshotState, templates = await db.Templates.ToListAsync(ct),
                     permissions = await db.PermissionGrants.ToListAsync(ct), skills = snapshotSkills.Select(skill => OperatingSystem.IsMacOS() ? skill with
-                    { FrenchDescription = skill.FrenchDescription.Replace("Windows", "macOS").Replace("PowerShell", "zsh"), EnglishDescription = skill.EnglishDescription.Replace("Windows", "macOS").Replace("PowerShell", "zsh") } : skill), running = runs.Keys,
+                    { FrenchDescription = skill.FrenchDescription.Replace("Windows", "macOS").Replace("PowerShell", "zsh"), EnglishDescription = skill.EnglishDescription.Replace("Windows", "macOS").Replace("PowerShell", "zsh") } : skill), running = runs.Keys.Concat(cloudRuns.Keys).Distinct(), server = ServerSummary(),
                     questions = questions.Select(x => new { id = x.Key, chatId = x.Value.ChatId, questions = x.Value.Questions }),
                     browserAccess = BrowserSkillAccess.Enabled(snapshotState.EnabledSkills), domAccess = BrowserSkillAccess.DomEnabled(snapshotState.EnabledSkills), skillsDirectory = CustomSkills.DefaultRoot };
             case "subagents": return await db.Subagents.AsNoTracking().Where(x=>x.ChatId==I(p,"chatId")).OrderBy(x=>x.CreatedUtc).ToListAsync(ct);
@@ -110,7 +110,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
             case "project.delete":
                 if (runs.Values.Any(x => x.Project.Id == I(p, "id"))) throw new InvalidOperationException("Stop this project's conversations before deleting it.");
                 foreach (var terminalChat in await db.Chats.Where(x => x.ProjectId == I(p, "id")).Select(x => x.Id).ToListAsync(ct)) await terminals.RemoveChatAsync(terminalChat);
-                db.Projects.Remove(await db.Projects.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); return true;
+                db.Projects.Remove(await db.Projects.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); ForgetServerLinks(projectId: I(p, "id")); return true;
             case "chat.save":
                 var chat = I(p, "id") == 0 ? new Chat { ProjectId = I(p, "projectId") } : await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct);
                 chat.Title = S(p, "title", "Nouvelle conversation");
@@ -119,7 +119,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
             case "chat.delete":
                 if (runs.ContainsKey(I(p, "id"))) throw new InvalidOperationException("Stop this conversation before deleting it.");
                 await terminals.RemoveChatAsync(I(p, "id"));
-                db.Chats.Remove(await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); return true;
+                db.Chats.Remove(await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); ForgetServerLinks(chatId: I(p, "id")); return true;
             case "sandbox.review": return await ReviewSandbox(p, ct);
             case "sandbox.apply": return await ApplySandbox(p, ct);
             case "sandbox.close": CloseSandboxReview(S(p, "token")); return true;
@@ -253,8 +253,9 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
                 permissionProject.Value = previewProject;
                 return await Preview(previewProject, S(p, "path"), ct, previewChat.Id);
             case "mcp.json.get": case "mcp.json.save": case "mcp.save": case "mcp.delete": case "mcp.toggle": case "mcp.test": return await DispatchMcp(method, p, ct);
-            case "send": return await Send(p, ct);
-            case "stop": if (runs.TryGetValue(I(p, "chatId"), out var running)) running.Cancellation.Cancel(); await terminals.StopChatAsync(I(p, "chatId")); return true;
+            case "send": return IsCloudChat(I(p, "chatId")) ? await SendCloud(p, ct) : await Send(p, ct);
+            case "stop": StopCloud(I(p, "chatId")); if (runs.TryGetValue(I(p, "chatId"), out var running)) running.Cancellation.Cancel(); await terminals.StopChatAsync(I(p, "chatId")); return true;
+            case var server when server.StartsWith("server.", StringComparison.Ordinal): return await DispatchServer(server, p, ct);
             default: throw new ArgumentException("Unknown method: " + method);
         }
     }
@@ -280,13 +281,14 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
         if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux()) return KeyVault.Decrypt(key);
         throw new InvalidOperationException("Ressaisissez cette clé API sur Mac : elle est protégée par Windows DPAPI.");
     }
-    public void CancelAll() { foreach (var run in runs.Values) run.Cancellation.Cancel(); }
+    public void CancelAll() { foreach (var run in runs.Values) run.Cancellation.Cancel(); foreach (var cloud in cloudRuns.Values) cloud.Cancel(); }
     public async ValueTask DisposeAsync()
     {
         artifactMaintenanceStop.Cancel();
         if (artifactMaintenance != null) await artifactMaintenance;
         artifactMaintenanceStop.Dispose();
         CancelAll(); terminals.Dispose(); http.Dispose();
+        if (serverConnection != null) await serverConnection.DisposeAsync();
         foreach (var process in servers) { try { if (!process.HasExited) process.Kill(true); } catch { } process.Dispose(); }
     }
 }

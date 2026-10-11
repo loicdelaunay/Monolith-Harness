@@ -27,6 +27,8 @@ public sealed class CliClient : IAsyncDisposable
         });
     }
     public HarnessDb OpenDb() => new(Database);
+    /// <summary>Link to the optional Monolith Harness Server: empty when the CLI is purely local.</summary>
+    public MonolithHarness.Core.Remote.ServerLinkData ServerLink => Service.ServerLink();
     public static JsonObject J(object value) => (JsonSerializer.SerializeToNode(value, HarnessService.Json) as JsonObject)!;
     public async Task<JsonNode?> Call(string method, object? value = null, CancellationToken ct = default) =>
         JsonSerializer.SerializeToNode(await Service.Dispatch(method, value == null ? [] : J(value), ct), HarnessService.Json);

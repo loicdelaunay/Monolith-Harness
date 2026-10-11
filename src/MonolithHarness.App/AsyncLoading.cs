@@ -147,6 +147,7 @@ public sealed partial class MainWindow
         title.Text = selected?.Title ?? T("Créez une conversation");
         RefreshNamingState();
         ToolTipService.SetToolTip(title, title.Text);
+        RefreshSharingIndicator();
         var displayedRun = ActiveRun;
         messages = displayedRun?.Messages ?? CreateMessagePanel();
         var panel = messages;
@@ -174,6 +175,7 @@ public sealed partial class MainWindow
             else
             {
                 RestoreConversationStatus();
+                if (selected != null) await PullCloudChatAsync(selected, ct);
                 var history = selected == null ? [] : await ReadStoreAsync(store =>
                 {
                     var items = store.Messages.AsNoTracking().Where(x => x.ChatId == selected.Id).OrderBy(x => x.Id).ToList();
