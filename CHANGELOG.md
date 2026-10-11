@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.90.1 — 2026-10-11
+
+- Desktop : badges de fichiers lisibles dans les thèmes clair et sombre, avec les icônes Material Icon Theme embarquées sous licence MIT.
+- Références : contexte des dossiers joints donné au modèle ; récupération non ambiguë des liens dont le nom du dossier racine était incorrect, sans modifier les autorisations des outils.
+- Clic droit : un seul menu de fichier ; aperçus natifs avec coloration syntaxique, numéros et plages de lignes, notamment pour Rust et GDScript.
+- Android : première distribution GitHub de la nouvelle application Flutter, signée avec le certificat durable.
+
+## 1.90.0 — 2026-10-11
+
+- Desktop : citations de fichiers dans les réponses sous forme de badges compacts, avec icône selon le type, nom et numéro ou plage de lignes ; chemin au survol et actions de fichier au clic droit.
+- Un clic ouvre l’aperçu natif sur la page contenant la référence, avec numéros de lignes et surbrillance de la ligne ou de la plage citée. Les liens Markdown acceptent `#L42`, `#L42-L57`, `:42` et `:42-57`.
+- Aperçu natif étendu aux fichiers de code et de configuration, avec les limites de taille et les protections de lecture existantes. Les modèles reçoivent les consignes de citation sans invention de lignes.
+
+## 1.89.0 — 2026-10-11
+
+- Android : retrait de l’ancien projet Uno `MonolithHarnessGui.Portable`, de Core.Mobile, des tests associés et de leur workflow de compilation. Flutter devient le projet Android actif ; aucune migration automatique des données de l’ancienne application.
+- Android : nouvelle application Flutter indépendante dans `src/MonolithHarness.App.Flutter`, avec les composants Material de Flutter, les couleurs Android, le logo vert et le nom Monolith.
+- Reprise des projets et discussions dans une sidebar réorganisable, du chat en streaming, des fournisseurs API, du raisonnement, des pièces jointes et documents privés, des skills, des autorisations et de la mémoire par portée.
+- Réponses Markdown avec images, cartes HTML natives et aperçu web isolé en plein écran ; Tailwind CSS et Chart.js embarqués et activables séparément.
+- Tests unitaires, responsive et scénario d’intégration sur Pixel pour les autorisations, l’autocomplétion, les fichiers et le rendu des réponses. L’installation Flutter possède ses propres données et conserve l’application Android Uno existante.
+
+## 1.88.1 — 2026-10-11
+
+- Desktop : correction de la compilation de la cible Windows native pour les aperçus HTML, tout en conservant leur fond thématisé sur Uno Desktop. GUI, CLI et Android gardent une version de distribution alignée.
+
 ## 1.88.0 — 2026-10-10
 
 - Desktop : stabilisation du cycle de vie des aperçus HTML lors des changements de fenêtre ; un seul aperçu externe par carte, réactivé aux clics suivants, et restauration de l’aperçu intégré à sa fermeture.

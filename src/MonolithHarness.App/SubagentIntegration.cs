@@ -151,7 +151,7 @@ public sealed partial class MainWindow
             if(message?["tool_calls"]!=null)transcript+="\n```json\n"+message["tool_calls"]!.ToJsonString()+"\n```\n";
         }
         var messageProject = chat == null || project == null ? project : ProjectResources.Effective(chat, project);
-        MarkdownRenderer.RenderTo(content,transcript,path=>OpenChatFileAsync(path,messageProject),path=>CreateChatFileMenu(path,messageProject));
+        MarkdownRenderer.RenderTo(content,transcript,path=>OpenChatItemAsync(path,messageProject),path=>CreateChatFileMenu(path,messageProject), filePath: path=>ResolveCitationPathAsync(path,messageProject));
         ScrollToBottom();
     }
     async Task LoadSubagents(int chatId)

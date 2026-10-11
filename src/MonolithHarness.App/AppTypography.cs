@@ -30,7 +30,7 @@ static class AppTypography
             if (scopes.TryGetValue(parent, out var scope)) { area = scope.Area; break; }
         Walk(root, area);
     }
-    static bool FixedFont(FontFamily font) => font.Source.Contains("MDL2", StringComparison.OrdinalIgnoreCase)
+    static bool FixedFont(FontFamily font) => font.Source.Contains("MaterialFileIcons", StringComparison.OrdinalIgnoreCase) || font.Source.Contains("MDL2", StringComparison.OrdinalIgnoreCase)
         || font.Source.Contains("Fluent Icons", StringComparison.OrdinalIgnoreCase)
         || font.Source.Contains("Consolas", StringComparison.OrdinalIgnoreCase)
         || font.Source.Contains("Cascadia", StringComparison.OrdinalIgnoreCase);

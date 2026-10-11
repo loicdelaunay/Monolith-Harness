@@ -7,7 +7,14 @@ namespace MonolithHarness.Core;
 public static class CodeHighlight
 {
     public record Token(string Text, string Color);
-    static readonly HashSet<string> Keywords = new("abstract async await as assert break case catch class const continue def default delete do else elif enum export extends false final finally fn for foreach from function if implements import in interface internal is let namespace new none null override package pass private protected public readonly return self static struct super switch this throw true try type typeof using var void while with yield".Split(' '), StringComparer.OrdinalIgnoreCase);
+    static readonly HashSet<string> Keywords = new("abstract async await as assert break case catch class const continue def default delete do else elif enum export extends false final finally fn for foreach from function if implements import in interface internal is let namespace new none null override package pass private protected public readonly return self static struct super switch this throw true try type typeof using var void while with yield func signal class_name onready preload match mut impl pub mod use trait unsafe move where crate".Split(' '), StringComparer.OrdinalIgnoreCase);
+    public static string LanguageForFile(string name) => Path.GetExtension(name).ToLowerInvariant() switch
+    {
+        ".cs" => "csharp", ".rs" => "rust", ".gd" => "gdscript", ".gdshader" => "glsl",
+        ".py" or ".pyi" => "python", ".ps1" or ".psm1" or ".psd1" => "powershell",
+        ".sh" or ".bash" => "bash", ".yaml" or ".yml" => "yaml", ".toml" => "toml",
+        ".tscn" or ".tres" or ".ini" => "toml", _ => Path.GetExtension(name).TrimStart('.')
+    };
     public static IEnumerable<Token> Tokens(string code, string language)
     {
         if (code.Length > 100000) { yield return new(code, "#dce6f5"); yield break; }

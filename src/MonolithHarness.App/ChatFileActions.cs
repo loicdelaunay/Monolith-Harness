@@ -30,22 +30,28 @@ public sealed partial class MainWindow
         if(new FileInfo(resolved).Length>ReplyImages.MaxBytes)throw new IOException("Image trop volumineuse (8 Mo maximum).");
         return await File.ReadAllBytesAsync(resolved,ct);
     }
+    Task<string?> ResolveCitationPathAsync(string requested, Project? messageProject) => Task.Run(() =>
+    {
+        try { return (string?)ResolveChatDiskPath(requested, messageProject); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { return null; }
+    });
     string ResolveChatDiskPath(string requested, Project? messageProject)
     {
         var path = LocalFileLinks.WithoutLocation(requested.Trim());
         if (path.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.IsFile) path = uri.LocalPath;
         if (path.StartsWith("~/", StringComparison.Ordinal))
             path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[2..]);
+        var sources = new SourceAccess(messageProject?.GetSourceFolders() ?? []);
         if (Path.IsPathFullyQualified(path))
         {
             var full = Path.GetFullPath(path);
             if (File.Exists(full) || Directory.Exists(full)) return full;
+            if (CitationPaths.RecoverMissingAbsolute(full, sources) is { } recovered) return recovered;
             throw new FileNotFoundException(T("Chemin introuvable sur le disque : ") + full);
         }
 
         // Manual OS actions resolve the message's roots, including generated files.
         // Reading in the embedded browser retains LocalPreview's separate access checks.
-        var sources = new SourceAccess(messageProject?.GetSourceFolders() ?? []);
         var normalized = path.Replace('/', Path.DirectorySeparatorChar);
         var candidates = new List<string>();
         foreach (var source in sources.Aliases)
@@ -84,7 +90,7 @@ public sealed partial class MainWindow
             menu.Items.Add(item);
         }
         if (resolved != null && FilePreviewDocument.Supports(resolved) && File.Exists(resolved))
-            Add("Preview", "\uE8A5", path => OpenFilePreviewAsync(path, messageProject));
+            Add("Preview", "\uE8A5", path => OpenFilePreviewAsync(path, messageProject, FileCitation.FromPath(requested)));
         Add("Ouvrir", "\uE8A7", path => OpenChatDiskItemAsync(path, false));
         Add("Ouvrir dans le navigateur", "\uE774", path => OpenChatFileAsync(path, messageProject));
         Add("Ouvrir le dossier du fichier", "\uE8B7", path => OpenChatDiskItemAsync(path, true));

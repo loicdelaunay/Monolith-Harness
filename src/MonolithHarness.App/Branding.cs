@@ -40,7 +40,17 @@ public sealed partial class MainWindow
         using var bitmap = SKBitmap.Decode(bytes) ?? throw new IOException("Logo invalide / Invalid logo.");
         var scale = Math.Min(1d, 256d / Math.Max(bitmap.Width, bitmap.Height));
         using var resized = bitmap.Resize(new SKImageInfo(Math.Max(1, (int)(bitmap.Width * scale)), Math.Max(1, (int)(bitmap.Height * scale))), new SKSamplingOptions(SKFilterMode.Linear));
-        using var image = SKImage.FromBitmap(resized); using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var rounded = new SKBitmap(new SKImageInfo(resized.Width, resized.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(rounded))
+        using (var outline = new SKPath())
+        {
+            canvas.Clear(SKColors.Transparent);
+            var radius = Math.Min(resized.Width, resized.Height) * .2f;
+            outline.AddRoundRect(new SKRect(0, 0, resized.Width, resized.Height), radius, radius);
+            canvas.ClipPath(outline, SKClipOperation.Intersect, antialias: true);
+            canvas.DrawBitmap(resized, 0, 0);
+        }
+        using var image = SKImage.FromBitmap(rounded); using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
     }
     static BitmapImage LogoImage(byte[] png)

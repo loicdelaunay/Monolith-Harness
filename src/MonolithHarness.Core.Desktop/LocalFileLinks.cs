@@ -7,10 +7,11 @@ namespace MonolithHarness.Core;
 public static class LocalFileLinks
 {
     public const string Prefix = "omh-file:";
-    static readonly Regex Paths = new(@"(?<![\w:/\\])(?:[A-Za-z]:[/\\]|\.{1,2}[/\\]|/)?(?:[\w.@-]+[/\\])*[\w@-][\w.@-]*\.(?:html?|pdf|md|markdown|txt|json|csv|cs|csproj|slnx?|ts|tsx|js|jsx|py|css|xaml|xml|yaml|yml|sql|svg|png|jpe?g|webp|gif|bmp|ico|docx?|xlsx?|pptx?|odt|ods|rtf|zip|7z|rar|tar|gz|exe|dll|bat|cmd|ps1|sh|ini|toml|lock|config|ohm|log|mp[34]|wav|ogg)(?![\w.])", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+    static readonly Regex Paths = new(@"(?<![\w:/\\])(?:[A-Za-z]:[/\\]|\.{1,2}[/\\]|/)?(?:[\w.@-]+[/\\])*[\w@-][\w.@-]*\.(?:html?|pdf|md|markdown|txt|jsonc?|csv|tsv|cs|csproj|slnx?|props|targets|ts|tsx|js|jsx|mjs|cjs|py|pyi|dart|gd|gdshader|tscn|tres|rs|go|java|kt|kts|c|h|cpp|hpp|cc|rb|swift|css|scss|sass|less|vue|svelte|razor|xaml|xml|yaml|yml|sql|gradle|tex|rst|svg|png|jpe?g|webp|gif|bmp|ico|docx?|xlsx?|pptx?|odt|ods|rtf|zip|7z|rar|tar|gz|exe|dll|bat|cmd|ps1|sh|ini|toml|lock|config|ohm|log|mp[34]|wav|ogg)(?![\w.])", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
     static readonly Regex ExplicitPaths = new("(?<![\\w:/\\\\])(?:[A-Za-z]:[/\\\\]|\\\\\\\\|\\.{1,2}[/\\\\]|~/|/(?=[\\w.])|[\\w.@-]+[/\\\\])[^\\s<>\"'|?*()\\[\\]{};,]*", RegexOptions.None, TimeSpan.FromMilliseconds(100));
     static readonly Regex QuotedPaths = new("[\"“'](?<path>(?:[A-Za-z]:[/\\\\]|\\\\\\\\|\\.{1,2}[/\\\\]|~/|/|[\\w.@-]+[/\\\\])[^\"“”'\\r\\n<>]+)[\"”']", RegexOptions.None, TimeSpan.FromMilliseconds(100));
-    static readonly Regex Location = new(@"(?::\d+(?::\d+)?|#L\d+(?:-L?\d+)?)$", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+    static readonly Regex Location = new(@"(?::\d+(?:-\d+|:\d+)?|#L\d+(?:-L?\d+)?)$", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+    static readonly Regex FollowingLocation = new(@"^(?::\d+(?:-\d+|:\d+)?|#L\d+(?:-L?\d+)?)(?![\w:-])", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
     public readonly record struct PathMatch(int Index, int Length, string Path);
 
     public static string WithoutLocation(string path) => Location.Replace(path, "");
@@ -19,11 +20,14 @@ public static class LocalFileLinks
         (Regex.IsMatch(value, @"^(?:[A-Za-z]:[/\\]|\\\\|\.{1,2}[/\\]|~/|/)") ||
          value is "." or ".." || Regex.IsMatch(value, @"^[\w.@-]+[/\\]") ||
          Paths.Match(value) is { Success: true, Index: 0 } match && match.Length == WithoutLocation(value).Length ||
-         value is "README" or "LICENSE" or "AGENTS.md");
+         WithoutLocation(value) is "README" or "LICENSE" or "AGENTS.md" or "Dockerfile" or "Makefile" or ".env" or ".gitignore");
 
     static PathMatch ExtendExistingAbsolutePath(string text, Match match, string value)
     {
-        var original = new PathMatch(match.Index, value.Length, WithoutLocation(value));
+        // Bare paths such as Service.cs#L42-L57 keep their location too.
+        var following = FollowingLocation.Match(text.Substring(match.Index + match.Length, Math.Min(64, text.Length - match.Index - match.Length)));
+        if (following.Success) value += following.Value;
+        var original = new PathMatch(match.Index, value.Length, value);
         if (!Path.IsPathFullyQualified(value) || value.StartsWith(@"\\") || match.Index + match.Length >= text.Length || !char.IsWhiteSpace(text[match.Index + match.Length])) return original;
         var end = Math.Min(text.Length, match.Index + 512);
         var delimiter = text.IndexOfAny(['\r', '\n', '<', '>', '"', '\'', '|', '?', '*', ')', ']', '}', ';'], match.Index);
@@ -37,7 +41,7 @@ public static class LocalFileLinks
             var candidate = text[match.Index..index].TrimEnd().TrimEnd('.', ',', ':', '!', '?');
             var path = WithoutLocation(candidate);
             attempts++;
-            if (File.Exists(path) || Directory.Exists(path)) return new(match.Index, candidate.Length, path);
+            if (File.Exists(path) || Directory.Exists(path)) return new(match.Index, candidate.Length, candidate);
         }
         return original;
     }
@@ -46,12 +50,12 @@ public static class LocalFileLinks
     {
         var trimmed = text.Trim();
         if (wholePath && trimmed.Length > 0 && LooksLikePath(trimmed))
-            return [new(text.IndexOf(trimmed, StringComparison.Ordinal), trimmed.Length, WithoutLocation(trimmed))];
+            return [new(text.IndexOf(trimmed, StringComparison.Ordinal), trimmed.Length, trimmed)];
         var found = new List<PathMatch>();
         foreach (Match match in QuotedPaths.Matches(text))
         {
             var group = match.Groups["path"];
-            found.Add(new(group.Index, group.Length, WithoutLocation(group.Value)));
+            found.Add(new(group.Index, group.Length, group.Value));
         }
         foreach (var regex in new[] { ExplicitPaths, Paths })
         foreach (Match match in regex.Matches(text))
@@ -70,11 +74,12 @@ public static class LocalFileLinks
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
         if (url.StartsWith(Prefix, StringComparison.Ordinal)) return Uri.UnescapeDataString(url[Prefix.Length..]);
-        if (Regex.IsMatch(url, @"^[A-Za-z]:[/\\]") || url.StartsWith(@"\\") || url.StartsWith('/') && !url.StartsWith("//")) return WithoutLocation(Uri.UnescapeDataString(url));
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri)) return uri.IsFile ? WithoutLocation(uri.LocalPath) : null;
+        if (Regex.IsMatch(url, @"^[A-Za-z]:[/\\]") || url.StartsWith(@"\\") || url.StartsWith('/') && !url.StartsWith("//")) return Uri.UnescapeDataString(url);
+        var path = WithoutLocation(url);
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri)) return uri.IsFile ? uri.LocalPath + url[path.Length..] : null;
         if (url.StartsWith('#') || url.StartsWith("//")) return null;
         var decoded = Uri.UnescapeDataString(url);
-        return LooksLikePath(decoded) ? WithoutLocation(decoded) : null;
+        return LooksLikePath(decoded) ? decoded : null;
     }
     public static void Decorate(MarkdownDocument document)
     {

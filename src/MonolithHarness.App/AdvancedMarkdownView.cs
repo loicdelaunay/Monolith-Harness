@@ -9,6 +9,9 @@ internal sealed class AdvancedMarkdownView : UserControl
 {
     Microsoft.UI.Xaml.Controls.WebView2 view = new();
     readonly Func<string, Task>? openFile;
+    readonly Func<string, MenuFlyout>? fileMenu;
+    readonly Func<string, Task<string?>>? filePath;
+    readonly Dictionary<string, string> resolvedPaths = [];
     string markdown = "", searchQuery = "";
     bool starting, ready, painting, again;
     int revision;
@@ -19,10 +22,10 @@ internal sealed class AdvancedMarkdownView : UserControl
     internal bool HasSelection { get; private set; }
     static readonly Lazy<string> document = new(BuildDocument);
     static readonly Lazy<string[]> libraries = new(() => new[] { "katex.min.js", "auto-render.min.js", "mermaid.min.js", "visuals.js" }.Select(Resource).ToArray());
-    internal AdvancedMarkdownView(Func<string, Task>? openFile)
+    internal AdvancedMarkdownView(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null, Func<string, Task<string?>>? filePath = null)
     {
         MarkdownRenderer.RegisterVisual(this);
-        this.openFile = openFile; Height = 160; HorizontalAlignment = HorizontalAlignment.Stretch;
+        this.openFile = openFile; this.fileMenu = fileMenu; this.filePath = filePath; Height = 160; HorizontalAlignment = HorizontalAlignment.Stretch;
         Content = view;
         Loaded += (_, _) => Begin(); SizeChanged += (_, _) => Begin();
         Unloaded += (_, _) =>
@@ -33,7 +36,7 @@ internal sealed class AdvancedMarkdownView : UserControl
 #else
             view.Dispose();
 #endif
-            view = new(); Content = view;
+            view = new(); Content = view; resolvedPaths.Clear();
         };
     }
     internal void Update(string text) { markdown = text; Paint(); }
@@ -76,11 +79,29 @@ internal sealed class AdvancedMarkdownView : UserControl
                         var height = Math.Clamp(data.GetProperty("height").GetDouble(), 48, 50000);
                         if (Math.Abs(Height - height) > 1) Height = height;
                     }
-                    else if (data.GetProperty("kind").GetString() == "link" && openFile != null)
+                    else if (kind == "file-tooltip" && filePath != null)
                     {
                         var url = data.GetProperty("url").GetString() ?? "";
-                        url = LocalFileLinks.PathFromUrl(url) ?? url;
-                        if (url.Length > 0 && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is "file" or "http" or "https" || Path.IsPathRooted(url))) await openFile(url);
+                        if (LocalFileLinks.PathFromUrl(url) is { } requested)
+                        {
+                            if (!resolvedPaths.TryGetValue(requested, out var fullPath))
+                            {
+                                fullPath = await filePath(requested);
+                                if (fullPath != null) { if (resolvedPaths.Count >= 128) resolvedPaths.Clear(); resolvedPaths[requested] = fullPath; }
+                            }
+                            if (fullPath != null && version == revision)
+                                await current.ExecuteScriptAsync($"markdownVisuals.fileTooltip({JsonSerializer.Serialize(url)},{JsonSerializer.Serialize((FileCitation.FromPath(requested) with { Path = fullPath }).Tooltip(UiText.Language == "fr"))})");
+                        }
+                    }
+                    else if (kind == "file-menu" && fileMenu != null && LocalFileLinks.PathFromUrl(data.GetProperty("url").GetString()) is { } menuPath)
+                        fileMenu(menuPath).ShowAt(current, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions {
+                            Position = new Windows.Foundation.Point(data.GetProperty("x").GetDouble(), data.GetProperty("y").GetDouble()) });
+                    else if (kind == "link")
+                    {
+                        var url = data.GetProperty("url").GetString() ?? "";
+                        if (LocalFileLinks.PathFromUrl(url) is { } local && openFile != null) await openFile(local);
+                        else if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "mailto")
+                            await Windows.System.Launcher.LaunchUriAsync(uri);
                     }
                 }
                 catch (Exception ex) { AppLog.Write(AppLogLevel.Warning, "markdown.message", ex); }
@@ -127,7 +148,7 @@ internal sealed class AdvancedMarkdownView : UserControl
                 var text = markdown;
                 if (paintedMarkdown == text && paintedOptions == options) continue;
                 var colors = new { text = options.Foreground, background = "transparent", dark = options.Dark, palette = JsonSerializer.Deserialize<JsonElement>(options.Palette) };
-                await view.ExecuteScriptAsync($"document.documentElement.lang={JsonSerializer.Serialize(options.Language)};markdownVisuals.set({JsonSerializer.Serialize(MarkdownDisplay.Html(text, options.Math))},{JsonSerializer.Serialize(colors)},{options.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)},{options.LineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture)},{JsonSerializer.Serialize(new { mermaid = options.Mermaid, math = options.Math })})");
+                await view.ExecuteScriptAsync($"document.documentElement.lang={JsonSerializer.Serialize(options.Language)};markdownVisuals.set({JsonSerializer.Serialize(MarkdownDisplay.Html(text, options.Math, fileBadges: true))},{JsonSerializer.Serialize(colors)},{options.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)},{options.LineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture)},{JsonSerializer.Serialize(new { mermaid = options.Mermaid, math = options.Math })})");
                 if (version == revision) { paintedMarkdown = text; paintedOptions = options; await view.ExecuteScriptAsync($"markdownVisuals.search({JsonSerializer.Serialize(searchQuery)})"); }
             } while (again && version == revision);
         }

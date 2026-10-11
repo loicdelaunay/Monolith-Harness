@@ -661,6 +661,7 @@ public sealed partial class MainWindow : Window
         public string CurrentText { get; private set; } = "";
         public Func<string, Task>? OpenFile { get; init; }
         public Func<string, MenuFlyout>? FileMenu { get; init; }
+        public Func<string, Task<string?>>? FilePath { get; init; }
         public Func<string,CancellationToken,Task<byte[]?>>? ReadImage {get;init;}
         public TextBlock Duration { get; init; } = null!;
         public Func<bool> CanPaint { get; init; } = () => true;
@@ -724,7 +725,7 @@ public sealed partial class MainWindow : Window
         void RenderContent(string text)
         {
             if (Container is { } card) card.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
-            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu,ReadImage);
+            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu,ReadImage,FilePath);
             ContentRendered?.Invoke(BodyContainer);
         }
 
@@ -821,6 +822,7 @@ public sealed partial class MainWindow : Window
             ShowReasoningDetails = () => state.ShowReasoningDetails,
             OpenFile = path => OpenChatItemAsync(path, messageProject),
             FileMenu = path => CreateChatFileMenu(path, messageProject),
+            FilePath = path => ResolveCitationPathAsync(path, messageProject),
             ReadImage=ReplyImageReader(messageProject),
             ThinkingCard = thinkingCard,
             ThinkingHeaderBtn = thinkingHeaderBtn,
@@ -1216,7 +1218,7 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(text))
         {
             var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
-            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject),ReplyImageReader(messageProject));
+            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject),ReplyImageReader(messageProject), path => ResolveCitationPathAsync(path, messageProject));
         }
         if (attachments != null && attachments.Count > 0)
         {
@@ -2296,6 +2298,7 @@ public sealed partial class MainWindow : Window
         if (provider.IsAcp) systemPrompt = AcpSystemPrompt(run);
         else systemPrompt += await agent.InitializeAsync(ct);
         if (provider.IsAcp && run.Chat.ExecutionMode == "propose") systemPrompt += AgentPolicy.Prompt("propose", "disabled");
+        systemPrompt += CitationPaths.Prompt(sourceFolders);
         systemPrompt += await InformationSkill.PromptAsync(run, ct);
         systemPrompt += ResourceAccessPolicy.Prompt(run.Chat);
         systemPrompt += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, sourceFolders, run.Project.Id);

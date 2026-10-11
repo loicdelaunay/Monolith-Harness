@@ -1,4 +1,4 @@
-"""Publish validated GUI/CLI artifacts using the runner's repository-scoped GitHub token."""
+"""Publish validated GUI/CLI/Flutter Android artifacts using the runner's repository-scoped GitHub token."""
 
 import hashlib
 import json
@@ -96,7 +96,21 @@ def main():
         assets = sorted(output.iterdir())
         channels.append((channel, tag if channel == "GUI" else f"cli-{tag}", assets))
 
-    # Both drafts exist and both uploads pass validation before either becomes public.
+    android_source = root / "artifacts/TEMP/downloaded-packages/MonolithHarness-Android-preview"
+    android_name = f"MonolithHarness-Flutter-{tag}-android-arm64.apk"
+    android_apk = android_source / android_name
+    declared_android = (android_source / "SHA256SUMS-android.txt").read_text().strip().split(None, 1)
+    if declared_android != [digest(android_apk), android_name]:
+        raise RuntimeError("Android APK checksum mismatch.")
+    with zipfile.ZipFile(android_apk) as apk:
+        if "AndroidManifest.xml" not in apk.namelist() or "classes.dex" not in apk.namelist():
+            raise RuntimeError("Android archive is not an APK.")
+    android_output = work / "Android"; android_output.mkdir()
+    shutil.copyfile(android_apk, android_output / android_name)
+    (android_output / "SHA256SUMS.txt").write_text(f"{digest(android_apk)}  {android_name}\n", encoding="ascii")
+    channels.append(("Flutter Android", f"android-{tag}", sorted(android_output.iterdir())))
+
+    # Every draft and upload must pass validation before any release becomes public.
     for channel, release_tag, assets in channels:
         probe = gh("release", "view", release_tag, "--json", "isDraft,apiUrl", allow_failure=True)
         if not probe.returncode:
@@ -118,9 +132,10 @@ def main():
             if item["state"] != "uploaded" or item["size"] != path.stat().st_size or item.get("digest") != f"sha256:{digest(path)}":
                 raise RuntimeError(f"Remote asset verification failed: {path.name}")
         print(f"Validated draft {release_tag}: {len(assets)} assets", flush=True)
+    gh("release", "edit", f"android-{tag}", "--draft=false", "--latest=false")
     gh("release", "edit", f"cli-{tag}", "--draft=false", "--latest=false")
     gh("release", "edit", tag, "--draft=false", "--latest=true")
-    print(f"Published GUI and CLI {version}", flush=True)
+    print(f"Published GUI, CLI and Flutter Android {version}", flush=True)
 
 
 if __name__ == "__main__":

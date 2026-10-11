@@ -1,0 +1,12 @@
+{
+  "serial": "HA1JMHG0",
+  "model": "Lenovo TB-J706F",
+  "android": "11",
+  "size": "Physical size: 1600x2560",
+  "density": "Physical density: 320",
+  "rotation": {
+    "accelerometer_rotation": "1",
+    "user_rotation": "3"
+  },
+  "fontScale": "1.0"
+}

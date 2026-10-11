@@ -137,7 +137,9 @@
     });
   }
   mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
-  window.markdownVisuals = { render, search, resolveCache(id, svg) { const resolve = requests.get(id); if (resolve) { requests.delete(id); resolve(svg); } },
+  window.markdownVisuals = { render, search,
+    fileTooltip(url, path) { for (const link of document.querySelectorAll('a.file-citation')) if (link.getAttribute('href') === url) link.title = path; },
+    resolveCache(id, svg) { const resolve = requests.get(id); if (resolve) { requests.delete(id); resolve(svg); } },
     async set(html, colors, fontSize, lineHeight, enabled = {}) {
       const root = document.getElementById('markdown');
       const signature = JSON.stringify([colors, fontSize, lineHeight, enabled, document.documentElement.lang]);
@@ -145,6 +147,7 @@
       if (previous?.html === html && previous.signature === signature) { reportSize(); return; }
       documents.set(root, { html, signature });
       document.documentElement.style.colorScheme = colors.dark ? 'dark' : 'light';
+      document.documentElement.dataset.theme = colors.dark ? 'dark' : 'light';
       document.body.style.color = colors.text; document.body.style.background = colors.background;
       document.body.style.fontSize = fontSize + 'px'; document.body.style.lineHeight = lineHeight + 'px';
       root.innerHTML = html; await render(root, colors.dark, colors.palette || {}, enabled); search(searchQuery); reportSize();
@@ -154,6 +157,14 @@
   document.addEventListener('click', event => {
     const link = event.target.closest('a'); if (!link) return;
     if (document.getElementById('markdown')) { event.preventDefault(); window.chrome?.webview?.postMessage({ kind: 'link', url: link.getAttribute('href') }); }
+  });
+  document.addEventListener('mouseover', event => {
+    const link = event.target.closest('a.file-citation'); if (!link || link.dataset.tooltipRequested) return;
+    link.dataset.tooltipRequested = 'true'; window.chrome?.webview?.postMessage({ kind: 'file-tooltip', url: link.getAttribute('href') });
+  });
+  document.addEventListener('contextmenu', event => {
+    const link = event.target.closest('a.file-citation'); if (!link) return;
+    event.preventDefault(); window.chrome?.webview?.postMessage({ kind: 'file-menu', url: link.getAttribute('href'), x: event.clientX, y: event.clientY });
   });
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(reportSize).observe(document.body);
 })();

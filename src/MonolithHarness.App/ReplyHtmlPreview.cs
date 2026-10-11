@@ -95,7 +95,11 @@ internal sealed class ReplyHtmlPreview : UserControl
             var page = ReplyWebDocument.SandboxedShell(true, palette.Dark, channel, palette.Background);
             var script = await Task.Run(() => artifact.PreviewLoadScript(true, palette.Dark, rendering, channel), token);
             if (!ReferenceEquals(lifetime, operation)) return;
-            var current = new Microsoft.UI.Xaml.Controls.WebView2 { Background = FluentDesign.Card }; view = current;
+            var current = new Microsoft.UI.Xaml.Controls.WebView2(); view = current;
+#if !WINDOWS
+            // Uno exposes Background; native WinUI paints the themed HTML shell instead.
+            current.Background = FluentDesign.Card;
+#endif
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             current.Loaded += (_, _) => ready.TrySetResult();
             host.Children.Clear(); host.Children.Add(current);

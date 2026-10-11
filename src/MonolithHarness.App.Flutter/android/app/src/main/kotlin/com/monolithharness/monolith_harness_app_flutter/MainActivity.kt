@@ -1,0 +1,5 @@
+package com.monolithharness.monolith_harness_app_flutter
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

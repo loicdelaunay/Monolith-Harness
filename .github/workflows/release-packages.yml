@@ -68,9 +68,63 @@ jobs:
           path: artifacts/TEMP/release-packages/CLI/*
           if-no-files-found: error
           compression-level: 0
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - name: Build durable signed Flutter APK
+        working-directory: src/MonolithHarness.App.Flutter
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          MONOLITH_REQUIRE_RELEASE_SIGNING: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" && -n "$ANDROID_STORE_PASSWORD" ]] || { echo 'Android signing configuration is incomplete.'; exit 1; }
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/monolith-android.keystore"
+          trap 'rm -f -- "$ANDROID_KEYSTORE_PATH"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          flutter build apk --release --target-platform android-arm64
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          [[ -n "$signer" ]]
+          "$signer" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee "$RUNNER_TEMP/apk-certificate.txt"
+          fingerprint="$(cat ../../build/AndroidSigningCertificate.sha256)"
+          grep -Fx "Signer #1 certificate SHA-256 digest: $fingerprint" "$RUNNER_TEMP/apk-certificate.txt"
+      - name: Package APK and checksum
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, shutil, re
+          project=Path('src/MonolithHarness.App.Flutter')
+          version=re.search(r'^version: ([^+]+)',(project/'pubspec.yaml').read_text(),re.M)[1]
+          output=Path('artifacts/TEMP/android-download');output.mkdir(parents=True)
+          apk=output/f'MonolithHarness-Flutter-v{version}-android-arm64.apk'
+          shutil.copyfile(project/'build/app/outputs/flutter-apk/app-release.apk',apk)
+          with apk.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
+          (output/'SHA256SUMS-android.txt').write_text(f'{digest}  {apk.name}\n',encoding='ascii')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MonolithHarness-Android-preview
+          path: artifacts/TEMP/android-download/*
+          if-no-files-found: error
+          compression-level: 0
   releases:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [desktop, fedora]
+    needs: [desktop, fedora, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -79,7 +133,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/TEMP/downloaded-packages
-      - name: Prepare and publish both releases
+      - name: Prepare and publish all three releases
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

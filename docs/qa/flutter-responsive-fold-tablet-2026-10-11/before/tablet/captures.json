@@ -1,0 +1,57 @@
+[
+  {
+    "step": "welcome_portrait",
+    "file": "01-welcome_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "chat_portrait",
+    "file": "02-chat_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "sidebar_portrait",
+    "file": "03-sidebar_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "models_portrait",
+    "file": "04-models_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "settings_portrait",
+    "file": "05-settings_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "general_portrait",
+    "file": "06-general_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "provider_portrait",
+    "file": "07-provider_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "attachments_portrait",
+    "file": "08-attachments_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "keyboard_portrait",
+    "file": "09-keyboard_portrait.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "chat_landscape",
+    "file": "10-chat_landscape.png",
+    "size": "Physical size: 1600x2560"
+  },
+  {
+    "step": "settings_landscape",
+    "file": "11-settings_landscape.png",
+    "size": "Physical size: 1600x2560"
+  }
+]

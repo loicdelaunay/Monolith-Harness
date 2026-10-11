@@ -10,7 +10,7 @@ Add-Type -AssemblyName System.Drawing
 $brandRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SourceLogo) { $SourceLogo = Join-Path $brandRoot 'src/MonolithHarness.App/Assets/logo.png' }
 if (-not $CliSourceLogo) { $CliSourceLogo = Join-Path $brandRoot 'src/MonolithHarness.Cli/Assets/logo.png' }
-if (-not $AndroidSourceLogo) { $AndroidSourceLogo = Join-Path $brandRoot 'src/MonolithHarnessGui.Portable/Assets/logo.png' }
+if (-not $AndroidSourceLogo) { $AndroidSourceLogo = Join-Path $brandRoot 'src/MonolithHarness.App.Flutter/assets/logo.png' }
 function Export-BrandPng([int]$Size) {
     $bitmap = [Drawing.Bitmap]::new($Size, $Size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
@@ -20,7 +20,31 @@ function Export-BrandPng([int]$Size) {
         $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
         $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-        $graphics.DrawImage($logoImage, [Drawing.Rectangle]::new(0, 0, $Size, $Size))
+        $scaled = [Drawing.Bitmap]::new($Size, $Size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $scaledGraphics = [Drawing.Graphics]::FromImage($scaled)
+        $outline = [Drawing.Drawing2D.GraphicsPath]::new()
+        $texture = $null
+        try {
+            # Keep the dark tile opaque; only the outside of the rounded outline is transparent.
+            $scaledGraphics.Clear([Drawing.Color]::FromArgb(255, 22, 24, 29))
+            $scaledGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $scaledGraphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+            $scaledGraphics.DrawImage($logoImage, [Drawing.Rectangle]::new(0, 0, $Size, $Size))
+            # Keep the same 20% corner radius in source PNGs and every native icon frame.
+            $diameter = [single]($Size * 0.4)
+            $offset = [single]($Size - $diameter)
+            $outline.AddArc(0, 0, $diameter, $diameter, 180, 90)
+            $outline.AddArc($offset, 0, $diameter, $diameter, 270, 90)
+            $outline.AddArc($offset, $offset, $diameter, $diameter, 0, 90)
+            $outline.AddArc(0, $offset, $diameter, $diameter, 90, 90)
+            $outline.CloseFigure()
+            $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $texture = [Drawing.TextureBrush]::new($scaled, [Drawing.Drawing2D.WrapMode]::Clamp)
+            $graphics.FillPath($texture, $outline)
+        } finally {
+            if ($null -ne $texture) { $texture.Dispose() }
+            $outline.Dispose(); $scaledGraphics.Dispose(); $scaled.Dispose()
+        }
         $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
         return ,$stream.ToArray()
     } finally { $stream.Dispose(); $graphics.Dispose(); $bitmap.Dispose() }
@@ -38,7 +62,8 @@ function Export-BrandSet([string]$Source, [string[]]$Folders, [int[]]$PngSizes, 
 try {
     if ($logoImage.Width -ne $logoImage.Height) { throw 'Use a square source logo to avoid distortion.' }
     foreach ($size in @(16,20,24,32,40,48,64,128,256,512,1024)) { $frames[$size] = Export-BrandPng $size }
-    # Copy the selected variant exactly; only icon dimensions are resampled.
+    # Persist rounded transparent corners in the source artwork too.
+    $sourceBytes = Export-BrandPng $logoImage.Width
     foreach ($folder in $Folders) {
         New-Item -ItemType Directory -Path $folder -Force | Out-Null
         [IO.File]::WriteAllBytes((Join-Path $folder 'logo.png'), $sourceBytes)
@@ -84,6 +109,6 @@ if ($Target -in @('All','CLI')) {
     Export-BrandSet $CliSourceLogo @((Join-Path $brandRoot 'src/MonolithHarness.Cli/Assets')) @(32,256) $true $false
 }
 if ($Target -in @('All','Android')) {
-    Export-BrandSet $AndroidSourceLogo @((Join-Path $brandRoot 'src/MonolithHarnessGui.Portable/Assets')) @(32,256) $false $false
+    Export-BrandSet $AndroidSourceLogo @((Join-Path $brandRoot 'src/MonolithHarness.App.Flutter/assets')) @(32,256) $false $false
 }
 Write-Host "Brand assets exported ($Target): desktop cyan, CLI orange, Android green."

@@ -1,4 +1,4 @@
-# Réponses avec images et HTML — 1.88.0
+# Réponses avec images et HTML — 1.88.1
 
 ## GUI et Android
 

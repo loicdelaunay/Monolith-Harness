@@ -32,7 +32,7 @@ The skill uses existing capabilities: attach your project sources and enable the
 
 Launch `artifacts\GUI\MonolithHarness.exe`, then **Settings → Providers**. Each connection has its own card, key, URL and catalog. **Test connection** detects models, selects them all and automatically saves the provider. **Refresh models** preserves existing choices; manual edits are committed with **Save**. The chat picker groups checked models from all connections and automatically switches providers. Multiple connections of the same type stay independent. For APIs without `/models`, a model can be entered manually in the editor and selected in the card.
 
-**Tools → Preview** opens local images, TXT and Markdown in the right workspace pane, with **Raw** and **Preview** tabs. Click a compatible file or image in the chat to view it; the file context menu keeps the OS and browser actions. See [file preview](file-preview.md) for formats, pagination and rendering limits.
+**Tools → Preview** opens local images, text, Markdown and source code in the right workspace pane, with **Raw** and **Preview** tabs. Click a compatible file or image in the chat to view it; the file context menu keeps the OS and browser actions. Local references in replies appear as file badges with a type icon, path on hover and optional line or inclusive line range; clicking opens the cited code with line numbers and highlighting. See [file preview](file-preview.md) for citation formats, pagination and rendering limits.
 
 **Scheduled tasks**, within a project, creates a CRON schedule with a picker, instruction, model, thinking, resources, skills and a choice of fresh conversation or continued history. Tasks run while the application is open; they do not wake the PC.
 
@@ -151,6 +151,8 @@ dotnet ef migrations add MigrationName --project src/MonolithHarness.Core --outp
 | `tests/MonolithHarness.Tests` | Offline test executable without API keys |
 
 ## Validation and limitations
+
+Historical validation: the [Windows v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0) passed 473 offline .NET checks and an application UI smoke scenario. The macOS target was not included. These results describe that release, rather than validation of the current downloads.
 
 Tests cover Unicode/CRLF streaming, fragmented tool calls, provider usage, truncated streams, cancellation, URLs, source protections, repeated migrations, image persistence, cascading deletes and key encryption. API errors are displayed without logging keys.
 

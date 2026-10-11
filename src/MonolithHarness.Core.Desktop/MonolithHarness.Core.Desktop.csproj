@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup><EmbeddedResource Include="Models/minilm_multilingual/*" /><EmbeddedResource Include="Models/command_guard/manifest.json" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Benchmarks/*" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Assets/FileIcons/*" LogicalName="MonolithHarness.FileIcons.%(Filename)%(Extension)" /></ItemGroup>
   <Target Name="ValidateBundledEmbeddingModel" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
     <!-- Match the pinned weights in Models/minilm_multilingual/README.md before embedding them. -->
     <Error Condition="!Exists('$(MSBuildProjectDirectory)/Models/minilm_multilingual/model.onnx')"

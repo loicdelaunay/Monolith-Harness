@@ -16,13 +16,13 @@ The default logo is a white architectural monolith on charcoal, selected on 2026
 | --- | --- | --- |
 | Desktop GUI / historical Electron host | Cyan/blue | `src/MonolithHarness.App/Assets/logo.png` / `desktop/ui/logo.png` |
 | CLI | Orange | `src/MonolithHarness.Cli/Assets/logo.png` |
-| Android | Green | `src/MonolithHarnessGui.Portable/Assets/logo.png` |
+| Android | Green | `src/MonolithHarness.App.Flutter/assets/logo.png` |
 
 ![Desktop logo](images/branding/desktop.png) ![CLI logo](images/branding/cli.png) ![Android logo](images/branding/android.png)
 
-The orange and green images are precise edits of the selected artwork: the white monolith, dark background and composition remain the same. Each host owns its source image. The CLI's native Windows ICO and PNG previews use orange; its character mark uses an orange accent with the active terminal foreground. Terminal interface themes continue to control the rest of the UI. Android uses its own green source for density/adaptive launcher and startup imagery via Uno.Resizetizer. Desktop/Electron keep cyan. Custom desktop logos continue to take precedence. [Artwork prompts](logo-monolith-prompt.md).
+The orange and green images are precise edits of the selected artwork: the white monolith, dark background and composition remain the same. Each host owns its source image. The CLI's native Windows ICO and PNG previews use orange; its character mark uses an orange accent with the active terminal foreground. Terminal interface themes continue to control the rest of the UI. Android uses its own green source for density/adaptive launcher and startup imagery via `flutter_launcher_icons`. Desktop/Electron keep cyan. Custom desktop logos continue to take precedence. [Artwork prompts](logo-monolith-prompt.md).
 
-Export all variants on Windows with `./build/update-branding-assets.ps1`. To regenerate a single host, pass `-Target Desktop`, `-Target CLI` or `-Target Android`. Optional `-SourceLogo`, `-CliSourceLogo` and `-AndroidSourceLogo` replace only the respective source. The exporter resizes existing artwork and packages native icons; it does not recolor or redesign it.
+Export all variants on Windows with `./build/update-branding-assets.ps1`. To regenerate a single host, pass `-Target Desktop`, `-Target CLI` or `-Target Android`. After exporting Android artwork, regenerate its launcher with `dart run flutter_launcher_icons` from `src/MonolithHarness.App.Flutter`. Optional `-SourceLogo`, `-CliSourceLogo` and `-AndroidSourceLogo` replace only the respective source. The exporter stores a 20% corner radius with transparent outer corners directly in each source PNG, resizes that rounded artwork and packages native icons with the same outline. It preserves each host's accent color.
 
 ## Portable storage
 

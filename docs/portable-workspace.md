@@ -2,6 +2,8 @@
 
 GUI and CLI keep application-managed folders together in `workspace/`, beside the actual launcher. Selecting another SQLite profile with CLI `--database` places its workspace beside that database. Copy the complete portable folder after closing all instances to retain conversations and resources.
 
+Use a writable directory rather than a read-only location such as `Program Files`. In a fresh folder, the application creates a database with the required schema and starter settings; it does not import old conversations from AppData. EF Core applies database migrations on startup.
+
 ```text
 MonolithHarness.exe                 # MonolithHarness on Linux
 database.sqlite

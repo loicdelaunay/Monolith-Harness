@@ -1,0 +1,72 @@
+[
+  {
+    "step": "welcome_portrait",
+    "file": "01-welcome_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "chat_portrait",
+    "file": "02-chat_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "sidebar_portrait",
+    "file": "03-sidebar_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "models_portrait",
+    "file": "04-models_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "settings_portrait",
+    "file": "05-settings_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "general_portrait",
+    "file": "06-general_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "provider_portrait",
+    "file": "07-provider_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "attachments_portrait",
+    "file": "08-attachments_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "keyboard_portrait",
+    "file": "09-keyboard_portrait.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "chat_landscape",
+    "file": "10-chat_landscape.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "settings_landscape",
+    "file": "11-settings_landscape.png",
+    "size": "Physical size: 2076x2152"
+  },
+  {
+    "step": "chat_fold_closed",
+    "file": "12-chat_fold_closed.png",
+    "size": "Physical size: 1080x2424"
+  },
+  {
+    "step": "settings_fold_closed",
+    "file": "13-settings_fold_closed.png",
+    "size": "Physical size: 1080x2424"
+  },
+  {
+    "step": "chat_fold_reopened",
+    "file": "14-chat_fold_reopened.png",
+    "size": "Physical size: 2076x2152"
+  }
+]

@@ -4,18 +4,45 @@
 
 <h1 align="center">Monolith Harness</h1>
 
-**Monolith Harness** publishes both interfaces as **MonolithHarness.exe** on Windows or **MonolithHarness** on Linux. Current desktop downloads are **1.88.0**; portable data remains compatible with existing workspaces.
 
-<p align="center"><strong>Your AI workspace in one portable executable — GUI or CLI.</strong></p>
+<p align="center"><strong>Your portable AI workspace — desktop, terminal and Android.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.88.0">Download GUI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.88.0">Download CLI</a>
-  · <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0">Download Android APK (preview)</a>
   · <a href="#quick-start">Quick start</a>
-  · <a href="#build-from-source">Build from source</a>
+  · <a href="#platforms-and-building">Build from source</a>
   · <a href="docs/guide.md">User guide</a>
 </p>
+
+<table>
+  <tr>
+    <th align="center" width="33%">Desktop GUI</th>
+    <th align="center" width="33%">CLI</th>
+    <th align="center" width="33%">Android preview</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/images/branding/desktop.png" alt="Desktop GUI logo" width="80">
+      <br><br>
+      Windows / Linux
+      <br><br>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.90.1"><strong>Download GUI</strong></a>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/images/branding/cli.png" alt="CLI logo" width="80">
+      <br><br>
+      Windows / Linux
+      <br><br>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.90.1"><strong>Download CLI</strong></a>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/images/branding/android.png" alt="Android logo" width="80">
+      <br><br>
+      Android ARM64
+      <br><br>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.90.1"><strong>Download APK</strong></a>
+    </td>
+  </tr>
+</table>
 
 **Tired of powerful AI harnesses that need a stack of configuration and external services before the first conversation? What if a portable EXE handled the workspace?**
 
@@ -23,103 +50,94 @@
 >
 > **Why build it this way?** I needed something straightforward enough to use at work, without a stack of extra services. And I thought it would be nice to share it, too. :)
 
-Monolith Harness brings projects, concurrent chats, agents, sources, tools, and settings into one application. The Windows and Linux downloads ship as self-contained executables. Put one in a writable folder, connect a model provider, and start working. Its SQLite database and application-managed resources live beside the executable, so you can move the workspace by copying the folder after closing the app.
-
-> **Available in GUI and CLI modes.** Choose the desktop workspace or the keyboard-driven terminal experience. Both use the same .NET agent engine, portable storage, projects, and conversations. [GUI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.88.0) · [CLI download](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.88.0) · [CLI guide](docs/cli.md)
-
-**Make it yours:** customize the desktop **theme, displayed application name, and logo/icon** in Settings. Keep the custom image beside the executable with a relative path to retain it when moving the folder. The CLI has its own color themes, including green/amber CRT and neon styles, with live previews; terminal fonts and CRT effects use an optional host-terminal profile.
-
-## Desktop, CLI and Android
-
-<table>
-  <tr><th>Desktop GUI</th><th>CLI</th><th>Android preview</th></tr>
-  <tr>
-    <td align="center"><img src="docs/images/branding/desktop.png" alt="White monolith with a cyan accent" width="80"><br>Cyan · Windows / Linux</td>
-    <td align="center"><img src="docs/images/branding/cli.png" alt="White monolith with an orange accent" width="80"><br>Orange · Windows / Linux</td>
-    <td align="center"><img src="docs/images/branding/android.png" alt="White monolith with a green accent" width="80"><br>Green · Android ARM64</td>
-  </tr>
-</table>
-
-**Monolith on Android** shares the API conversation engine through Core and Core.Mobile, with an Android-only UI and private app storage. It has a project/chat sidebar, Material 3 styling, model selection in the header, a compact expanding composer, native Markdown and grouped tool summaries. Settings include providers, skills, permissions and scoped memory. The global tool policy offers **Refuse all / Ask all / Allow all**; Ask all is the default.
-
-Mobile skills include summarization, planning, code review, configurable date/time/system information, public HTTPS web research, imported text documents, memory and Create web app. Replies can display images and HTML/CSS cards; tapping a web app opens its isolated fullscreen preview with optional bundled Tailwind CSS and Chart.js. Local models, desktop commands/control, MCP, proposal review, Mermaid rendering and desktop/mobile synchronization are not included. The signed APK is an **Android 8+ ARM64 preview**, distributed separately from the desktop downloads. See the [Android guide](docs/android-portable.md) for installation, signing and limits.
+Monolith Harness lets you work with AI agents on your projects and run several conversations at once. The Windows and Linux downloads are self-contained: extract the app, connect a model provider, and start working.
 
 ## Take a look
 
-![Monolith Harness project conversations and chat interface, captured with synthetic demo data](docs/images/readme/chat.png)
+<sub>Current desktop and Android source builds, shown with demo data. See the <a href="docs/images/readme/README.md">capture notes</a> for versions and scope.</sub>
 
-<sub>GUI source build 1.29.1, captured with synthetic demo data and the previous logo. Project chats, model choice, response speed, context usage, and the composer stay in view.</sub>
+![Monolith Harness project conversations and chat interface](docs/images/readme/chat.png)
+
+<sub>Desktop workspace with project conversations and the current composer.</sub>
 
 <table>
   <tr>
     <td width="50%">
-      <a href="docs/images/readme/workflows.png"><img src="docs/images/readme/workflows.png" alt="Tools and work modes menu" width="100%"></a><br>
-      <sub>Attach sources, select Plan or Execution, configure subagents, and toggle skills.</sub>
+      <a href="docs/images/readme/workflows.png"><img src="docs/images/readme/workflows.png" alt="Conversation subagent settings" width="100%"></a><br>
+      <sub>Configure subagents and Git worktree isolation.</sub>
     </td>
     <td width="50%">
       <a href="docs/images/readme/settings.png"><img src="docs/images/readme/settings.png" alt="Application settings" width="100%"></a><br>
-      <sub>Language, themes, providers, permissions, MCP, and more in one settings window.</sub>
+      <sub>Search settings and configure model providers.</sub>
     </td>
   </tr>
 </table>
 
 ### Terminal interface
 
-The CLI offers the same conversation workflow with its own terminal themes. These images are rendered from the built-in offline demo in source build 1.29.1 with synthetic content and the previous logo; no API request was made.
+The CLI offers the same conversation workflow with its own terminal themes.
 
 <table>
   <tr>
     <td width="50%">
       <a href="docs/images/readme/cli-neon.png"><img src="docs/images/readme/cli-neon.png" alt="Monolith Harness CLI conversation in Neon Synthwave theme" width="100%"></a><br>
-      <sub>Neon Synthwave — conversation, tool activity and composer.</sub>
+      <sub>Neon Synthwave theme.</sub>
     </td>
     <td width="50%">
       <a href="docs/images/readme/cli-crt.png"><img src="docs/images/readme/cli-crt.png" alt="Monolith Harness CLI conversation in CRT Green theme" width="100%"></a><br>
-      <sub>CRT Green — the same workflow in a retro terminal palette.</sub>
+      <sub>CRT Green theme.</sub>
     </td>
   </tr>
 </table>
 
 <details>
-<summary>See the two-level memory settings</summary>
+<summary>See chat attachments</summary>
 
-![Conversation and shared memory settings](docs/images/readme/memory.png)
+![Conversation source folders, documents and image attachments](docs/images/readme/composer.png)
 
 </details>
 
-## New in the current downloads
+### Android source preview
 
-- **Rich replies on GUI and Android:** Markdown images, HTML/CSS previews and source access. Complete HTML documents stay in one card, including replies already saved in history. [Rich reply guide](docs/reponses-riches.md).
-- **Local web libraries:** Tailwind CSS 4.3.3 and Chart.js 4.5.1 are bundled for isolated HTML previews, with separate switches and no CDN. Android adds the **Create web app** skill and fullscreen web apps.
-- **Desktop chat settings:** a dedicated Chat tab, search across all settings, separate WebView permissions for chat and tools, optional inline HTML preview, application-following Tailwind theme and optional dynamic preview height. Preview windows reuse their instance and restore the inline card when closed.
+The Flutter Android app has its own local data and a touch interface. These captures show the current source preview; the APK linked above is the separately published Uno preview. See the [Flutter guide](docs/flutter-android.md) for builds and limits.
 
-- **Platform logos:** cyan for the desktop app, orange for the CLI executable and terminal mark, green for the Android launcher/startup icon. [Branding guide](docs/branding.md).
-- **Android preview:** settings and skills, projects/chat sidebar, permissions for every tool call, native Markdown, grouped tool activity and a compact composer with header model selection. [Android release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0).
-- **Separate platform engines:** Core contains neutral conversation/provider contracts; Core.Desktop retains desktop tools and native dependencies; Core.Mobile owns Android storage/tools. Windows and Linux publications retain their existing desktop composition.
+<table>
+  <tr>
+    <td align="center" valign="top" width="25%">
+      <a href="docs/images/readme/android-chat.png"><img src="docs/images/readme/android-chat.png" alt="Android conversation with a web app card" width="180"></a><br>
+      <sub>Chat and attached documents.</sub>
+    </td>
+    <td align="center" valign="top" width="25%">
+      <a href="docs/images/readme/android-sidebar.png"><img src="docs/images/readme/android-sidebar.png" alt="Android project and conversation sidebar" width="180"></a><br>
+      <sub>Projects and conversations.</sub>
+    </td>
+    <td align="center" valign="top" width="25%">
+      <a href="docs/images/readme/android-permissions.png"><img src="docs/images/readme/android-permissions.png" alt="Android tool approval settings" width="180"></a><br>
+      <sub>Tool approvals.</sub>
+    </td>
+    <td align="center" valign="top" width="25%">
+      <a href="docs/images/readme/android-html.png"><img src="docs/images/readme/android-html.png" alt="Android fullscreen web app with an interactive chart" width="180"></a><br>
+      <sub>Fullscreen web apps.</sub>
+    </td>
+  </tr>
+</table>
 
-- **Chat / Agent modes** are saved per conversation. Chat offers optional **Web research** (on by default) and **Python script execution** (off by default), without project, terminal, MCP or subagent tools. Its configuration button is now to the right of the mode switch.
-- **Update target:** choose **Latest** or pin the GUI to an available release from Settings → About. Automatic checks and installs follow the saved version.
-- A **compact model and thinking selector** sits beside Stop and Send, with independently toggleable context usage and token speed. **Provider errors** retain useful upstream details and suggested retry delays, with credentials redacted.
-- **Automatic command approvals** use the optional local LANCET Nano model. Installation is managed in Settings → Permissions; manual installation and an existing configured local/API validator are also available. An API validator receives the commands to evaluate. Flagged or unsupported commands require one-time approval; **More info** explains their impact using the conversation model, with readable Markdown and a copyable command. Project permission rules still apply.
-- **Dashboard** replaces Consumption with **Consumption** and **Speed** tabs. Review token usage and recorded model throughput with shared date, provider, model, activity and project filters, charts, call details and CSV exports.
-- **Subagent task progress** shows completed versus declared tasks and the current task in the GUI and CLI. Each agent maintains its own plan; unknown plans remain indeterminate. An accent **Parent conversation** button stays fixed above the subagent view.
-- **Smart web research** saves downloaded pages as tool artifacts. The model searches and reads relevant passages instead of filling the context with the entire response. **Legacy** retains inline responses; older Partial/Full preferences remain compatible.
-- **Automatic artifact cleanup**, enabled by default after **seven days without use**, preserves active conversations and leaves source files and conversation documents intact.
-- The standard **context fallback is 256,000 tokens**. Reported model capacities and custom per-model limits still take priority.
-- Provider settings now have a responsive header and a working Back action. Model retry notices use a **four-second grace period** showing thinking before exposing a persistent retry.
+## Changelog
 
 See the [changelog](CHANGELOG.md) for additions, improvements and fixes in the current releases.
 
 ## Built-in skills — one click to enable
 
-The built-in skills and their tool implementations are written in **.NET / C# and compiled into the executable**. This keeps the core toolset fast, simple and standalone, with permission checks and Plan/Proposal/Execution restrictions for controlled access. Enable a skill with **one click** in the GUI, or toggle it through `/skills` in the CLI. Some skills also need a provider or host permission configured before use.
+Enable skills in **Settings → Skills**, or through `/skills` in the CLI. The desktop tools are built into the application; some require a configured provider or host permission. Android has a smaller toolset, listed below.
 
 | Skill | What it gives the agent |
 | --- | --- |
+| **Information** | Supply fresh date, time and selected host or conversation information. Each category can be enabled separately. |
+| **Image generation** | Generate and save images through a dedicated local model or an image API provider, after approval. See [local models and images](docs/local-models-and-images.md). |
 | **Complete design** | Guide a project from discovery questions and ideas through technology/visual choices, optional subagents, implementation, tests and visual verification. |
 | **Source exploration** | List and read project files, including focused line ranges. |
-| **GIT** | Inspect repositories, stage selected files, commit and synchronize branches with approvals. See [GIT and FILE INDEX](docs/git-file-index.md). |
-| **FILE INDEX** | Create a portable `index.ohm` with file/folder descriptions, search and browse it, and keep it current as files change. See [GIT and FILE INDEX](docs/git-file-index.md). |
+| **Git** | Inspect repositories, stage selected files, commit and synchronize branches with approvals. See [Git and File Index](docs/git-file-index.md). |
+| **File Index** | Create a portable `index.ohm` with file/folder descriptions, search and browse it, and keep it current as files change. See [Git and File Index](docs/git-file-index.md). |
 | **Source editing** | Create, write and edit files in attached sources. |
 | **Code search glob/grep** | Find files and text with line numbers. |
 | **Multi-file patch with diff** | Preview and apply changes across multiple files. |
@@ -130,8 +148,9 @@ The built-in skills and their tool implementations are written in **.NET / C# an
 | **Memory · Shared** | Reuse project, general and user knowledge across conversations. |
 | **Bypass image AI** | Ask a dedicated vision model to describe images or identify components and coordinates. |
 | **Asset generator** | Draw vector or pixel-art assets on an editable layered canvas, align with guides, animate timed frames, and export SVG, animated SVG, GIF, PNG sequences or static images. See [Asset generator](docs/asset-generator.md). |
-| **Web research** | Fetch pages/APIs directly with a configurable .NET HTTP client, without a browser. Optional browser/DOM skills add rendered-page reading and interaction. See [HTTP tools](docs/web-http.md). |
-| **AI browser access / DOM access** | Persist the embedded browser's AI access and interaction choices with the other skills. |
+| **Web research** | Search and read pages or APIs. Smart mode stores results as artifacts for focused reading; Legacy mode returns them inline. See [HTTP tools](docs/web-http.md). |
+| **AI browser access** | Open and read pages in the embedded browser when Web research is enabled. |
+| **AI DOM access and interaction** | Inspect rendered pages and interact with their elements; requires browser access and the relevant permissions. |
 | **Application management** | List open application windows and their position and size. |
 | **Mouse control** | Click, scroll or drag using screen, window or browser coordinates. |
 | **Keyboard control** | Send text and key combinations to the supported desktop/browser host. |
@@ -141,24 +160,39 @@ The built-in skills and their tool implementations are written in **.NET / C# an
 | **Summarization** | Produce concise summaries of useful context. |
 | **Automatic skill creation** | Save reusable `SKILL.md` procedures globally or under `.omh-ai/skills` in a project. |
 
-Custom `SKILL.md` procedures extend these compiled tools. Browser/desktop control depends on the GUI host; the CLI can use browser automation through MCP and filters unavailable desktop tools. Optional integrations keep their own prerequisites. Enabling a skill does not override permissions or provide a security sandbox; [container sandboxing](docs/sandbox.md) is a separate option.
+The table describes the desktop skill catalog. Embedded browser and desktop controls require the GUI host; the CLI filters those tools and can use browser automation through MCP. Custom `SKILL.md` procedures extend the available tools. Enabling a skill does not override permissions; [container sandboxing](docs/sandbox.md) is a separate option.
+
+**Android skills** use the phone's private conversation data, without desktop terminals or MCP:
+
+| Skill | Mobile behavior |
+| --- | --- |
+| **Summarization** | Summarize facts, decisions and next steps. |
+| **Planning** | Break a task into actionable steps. |
+| **Code review** | Review supplied code and identify concrete issues. |
+| **Information** | Read enabled date, time, Android and language information. |
+| **Web research** | Search and read public HTTPS pages, with source URLs. |
+| **Files** | Read, search and edit private copies of imported text documents; export them back to Android manually. |
+| **Memory** | Search and save conversation or project memories, with shared memory enabled separately. |
+| **Create web app** | Generate a self-contained HTML/CSS/JavaScript app and open its isolated fullscreen preview. |
+
+See the [Flutter Android guide](docs/flutter-android.md) and [published Android preview guide](docs/android-portable.md) for configuration and platform limits.
 
 ## What is inside
 
 | Area | Capabilities |
 | --- | --- |
-| **Models and providers** | Add as many OpenAI-compatible v1 or DeepSeek connections as you need, select their available models, connect OpenCode, or build a composed model with an orchestrator and specialized subagents. |
-| **Projects and conversations** | Attach source folders to a project, run several chats at once, queue or steer messages while an agent works, fork or resume from an earlier message, and export a conversation to Markdown. |
-| **Agent tools** | An integrated browser with controlled DOM and JavaScript access, multiple asynchronous terminals, source search and editing, a read-only Git diff viewer, file navigation, screenshots, mouse and keyboard controls, and bundled Python for scripts. |
-| **Control and extensions** | Per-conversation Plan, Proposal and Execution modes, optional container sandbox, scoped approval dialogs, configurable skills, project instructions from AGENTS.md, custom SKILL.md files, and MCP servers. |
-| **Context that lasts** | Live token and speed indicators, context compaction, conversation and shared memory, semantic search with a bundled multilingual embedding model or an OpenAI-compatible embedding API, and an optional vision-model bridge. |
-| **Desktop workflow** | Scheduled project tasks, structured agent checklists and questions, English/French UI, light/dark themes, custom app name and logo, and keyboard-friendly chat. |
+| **Models and providers** | Connect OpenAI-compatible or DeepSeek providers, use OpenCode, or coordinate specialized models with an orchestrator. |
+| **Projects and conversations** | Work on attached sources in concurrent chats. Queue messages, branch from earlier replies, or export a conversation. |
+| **Agent tools** | Agents can work with files, terminals and an embedded browser. The skill table above describes the available tools. |
+| **Control and extensions** | Choose an agent mode and approval policy. Extend the workflow with project instructions, custom skills and MCP servers. |
+| **Context that lasts** | Keep useful context through compaction and memory. Search sources with local or API embeddings. |
+| **Desktop workflow** | Schedule project tasks and customize the English/French interface. See the [user guide](docs/guide.md) for details. |
 
 Plan mode blocks modifying tools at the application boundary. The optional sandbox uses Docker or Podman and keeps a copy of approved sources separate from the real project until changes are reviewed. Permissions still apply to sensitive actions. See the [agent modes](docs/agent-modes.md) and [sandbox guide](docs/sandbox.md) for their exact boundaries.
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.88.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.88.0) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.90.1), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v1.90.1) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its portable resources under <code>workspace/</code> beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
@@ -169,19 +203,19 @@ The integrated browser uses the system Web engine: Edge WebView2 on Windows, Web
 
 ## Portable data and privacy
 
-Monolith Harness keeps <code>database.sqlite</code> and <code>MCP.json</code> beside the executable and groups its resource folders under <code>workspace/</code>, including skills, models, browser profiles, scripts and logs. Startup moves existing managed folders and updates their saved paths; collisions retain both copies. External project folders keep their selected locations. In a fresh folder, it creates a new database with the required schema and starter settings, without importing old conversations from AppData. EF Core applies database migrations on startup. Do not place the app in a read-only directory such as <code>Program Files</code>. Close all instances before copying the folder to another machine.
+Monolith Harness keeps <code>database.sqlite</code> and <code>MCP.json</code> beside the executable, with managed resources under <code>workspace/</code>. Close all instances before copying the complete portable folder. Attached project folders stay in their original locations.
 
-Conversations without a project folder can create and edit files in their own <code>workspace/conversations/chat-&lt;id&gt;/</code>. The GUI identifies it as **Workspace**; source tools and terminals use it automatically in both interfaces. Files survive restarting, switching chats and deleting a chat. Plan mode and tool approvals still apply. See [portable workspaces and migration](docs/portable-workspace.md).
+Conversations without an attached project folder get their own working directory. Files remain available after restarting or deleting the chat. See [portable workspaces and migration](docs/portable-workspace.md) for folder locations and upgrade behavior.
 
 API keys use Windows DPAPI, the macOS Keychain or, on Linux, AES-GCM with an owner-only `.linux-key` file beside SQLite. On Linux, keep the entire portable folder private and copy the key with the database; anyone who can read both can recover the API keys. Windows/macOS keys are tied to the OS account and need re-entry when moving accounts or systems. The rest of SQLite is **not encrypted**. Only content used for a request is sent to its selected model provider; attaching a source folder does not upload the whole folder automatically.
 
-The bundled RAG embedding model runs locally and supports French and English. Its model file is part of the app release. Source clones use **Git LFS** to retrieve that file.
+The bundled RAG embedding model runs locally and supports French and English.
 
 ## Platforms and building
 
 ### Terminal workspace
 
-Monolith Harness also includes a [modern CLI](docs/cli.md) with a responsive full-screen interface, searchable commands, concurrent chats, approvals, agent questions, tools and streaming context indicators. It uses the same engine and SQLite data as the desktop app.
+The [CLI](docs/cli.md) provides a full-screen terminal workspace and supports headless automation. It uses the same engine and SQLite data as the desktop app.
 
 ~~~powershell
 dotnet run --project src/MonolithHarness.Cli -- "E:\Projects\MyProject"
@@ -200,7 +234,7 @@ For a Windows source build, install the .NET 10 SDK and Git LFS. The native WinU
 ~~~powershell
 git clone https://github.com/loicdelaunay/Monolith-Harness.git
 cd Monolith-Harness
-git checkout v1.88.0
+git checkout v1.90.1
 git lfs pull
 dotnet run --project tests/MonolithHarness.Tests -c Release
 .\publish.ps1 -OutputDirectory artifacts\GUI
@@ -208,13 +242,13 @@ dotnet run --project tests/MonolithHarness.Tests -c Release
 
 Publications use `artifacts/GUI` and `artifacts/CLI`. Temporary test publications belong under `artifacts/TEMP` and should be removed after testing. Add `-NativeWinUI` to the GUI publish command to select the native WinUI target. On a Mac with the .NET 10 SDK and Xcode command-line tools, use <code>bash ./publish-macos.sh arm64</code> or <code>x64</code>; signing and notarization are separate steps.
 
-The [Windows v1.0.0 release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v1.0.0) passed 473 offline .NET checks and an application UI smoke scenario. The macOS target is not included in that runtime validation.
-
 ### Android application
 
-Install the APK from the [Android preview release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.88.0) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
+Install the APK from the [Android preview release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v1.90.1) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
 
-For source builds, use tag `v1.88.0` or branch `main`, .NET 10 with the Android workload, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/android-portable.md).
+The newer [Flutter source preview](docs/flutter-android.md) builds separately and coexists with the Uno app. Its projects, conversations and provider keys are not transferred automatically.
+
+For source builds, use tag `v1.90.1` or branch `main`, Flutter 3.47.1, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/flutter-android.md).
 
 ## More documentation
 
@@ -226,9 +260,9 @@ Monolith Harness is available under the [MIT license](LICENSE).
 
 ## Feature comparison
 
-Monolith Harness combines a portable project workspace with dedicated visual tools: formatted translation and proofreading, model benchmarks, an asset canvas, local multilingual RAG, memory inspection, and usage charts. The table highlights that combination alongside the strengths of other harnesses.
+The table compares Monolith Harness with other agent workspaces. It focuses on built-in workflows; extensions and integrations may offer additional capabilities.
 
-**Scope:** Monolith Harness 1.48.1, Pi's coding agent, OpenCode's CLI/desktop app, Hermes Agent/Desktop, and **LangChain Deep Agents + Deep Agents Code**. Sources inspected on **2026-10-02**; the exact source revisions and limitations are in the [comparison notes](docs/feature-comparison.md).
+The comparison reflects a documented snapshot. Reviewed versions, source revisions and limitations are recorded in the [comparison notes](docs/feature-comparison.md).
 
 **✅** Built in, with normal provider/tool configuration. **⚠️** Partial support, an extension/integration, an experimental feature, or a different workflow; the cell states the difference. **❌** No matching built-in workflow documented in the inspected sources. Extensions and custom code can change these results.
 
@@ -237,15 +271,18 @@ Monolith Harness combines a portable project workspace with dedicated visual too
 | Multiple model providers and local endpoints | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Interactive terminal + headless automation | ✅ | ✅ | ✅ | ✅ | ✅ Code |
 | Desktop GUI with projects and concurrent chats | ✅ | ❌ Terminal / SDK | ✅ Desktop | ✅ Desktop | ❌ Terminal / SDK |
+| Android app with a touch interface | ✅ Preview, separate data | ❌ | ❌ No official APK documented | ⚠️ Termux TUI | ❌ SDK / custom client |
 | Custom skills and MCP tools | ✅ | ✅ | ✅ | ✅ | ✅ Code |
 | Subagents and parallel delegation | ✅ | ⚠️ Example extension | ✅ | ✅ | ✅ |
 | Curated memory across conversations | ✅ Conversation + shared | ⚠️ Context files / extensions | ⚠️ Instructions / plugins | ✅ Memory + session search | ✅ Code / SDK backends |
 | Scheduled agent tasks | ✅ While app is open | ⚠️ External automation | ⚠️ External automation | ✅ Cron / gateway | ⚠️ Talon alpha |
 | Telegram / Discord / WhatsApp gateway | ❌ | ❌ | ❌ | ✅ | ⚠️ Talon alpha |
+| Container or remote execution sandbox | ✅ Optional Docker / Podman | ⚠️ External setup | ⚠️ External setup | ✅ Several backends | ✅ Code remote backends |
 | **Portable GUI + CLI workspace with data beside the launcher** | ✅ | ❌ CLI only | ⚠️ Separate data paths | ⚠️ Separate Hermes home | ❌ Python / SDK setup |
 | **Conversation/shared memory editor and database viewer** | ✅ | ❌ | ❌ | ⚠️ Different memory UI / files | ⚠️ Memory files / backends |
 | **Embedded multilingual semantic source search without an embedding API** | ✅ Local CPU RAG | ⚠️ Add integration | ⚠️ Add integration | ⚠️ Optional memory providers | ⚠️ Configure retrieval |
 | **Formatted translator and proofreader windows** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Inline HTML cards and isolated fullscreen web apps** | ✅ GUI / Android | ⚠️ Extension / external preview | ⚠️ External browser workflow | ⚠️ Desktop side-pane previews | ⚠️ Custom / MCP tools |
 | **Model benchmark UI with generated interactive-app checks** | ✅ | ❌ | ❌ | ❌ | ⚠️ Separate evaluation tooling |
 | **Editable vector / pixel-art canvas, animation and GIF export** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **AI-generated detector UI for text, documents and web pages** | ✅ Model / SlopTotal | ❌ | ❌ | ❌ | ❌ |
@@ -253,6 +290,7 @@ Monolith Harness combines a portable project workspace with dedicated visual too
 | **Embedded browser with independent tabs per conversation** | ✅ | ⚠️ MCP / extensions | ⚠️ MCP browser tools | ⚠️ Previews / browser backends | ⚠️ Custom / MCP tools |
 | **GUI GGUF import, Hugging Face downloads and engine management** | ✅ Beta | ⚠️ External llama.cpp router | ⚠️ Local endpoints | ⚠️ Canary / local flag | ⚠️ Local endpoints |
 | **Local Stable Diffusion checkpoint import and managed image engine** | ✅ Beta | ⚠️ Add integration | ⚠️ Add integration | ⚠️ Image providers / skills | ⚠️ Add tools |
-| **GUI updates: off / notify / install, startup + two-hour checks** | ✅ Windows install | ❌ No desktop GUI | ⚠️ Different updater | ⚠️ Package-specific updates | ❌ No desktop GUI |
+| **Image generation through a configured provider** | ✅ Dedicated skill | ⚠️ Extension / MCP | ⚠️ Custom tool / MCP | ✅ Image tool | ⚠️ Custom tool / MCP |
+| **Desktop application update controls** | ✅ Windows install | ❌ No desktop GUI | ✅ Auto / notify settings | ✅ Package-specific updates | ❌ No desktop GUI |
 
-Local chat/image models and their runtimes download separately. SlopTotal needs a local or remote service; detector scores are indicators, and the benchmark is a local protocol rather than an official leaderboard. Scheduled Monolith tasks require the app to remain open. See the [comparison notes and official sources](docs/feature-comparison.md) for each qualification.
+Monolith's desktop and mobile capabilities have different scopes; Android has no desktop tools, local models or MCP. Local chat/image models and their runtimes download separately. SlopTotal needs a separate service, and its scores are indicators. Scheduled Monolith tasks require the app to remain open. This is a documentation comparison, not a performance benchmark; see the [comparison notes and official sources](docs/feature-comparison.md) for qualifications.

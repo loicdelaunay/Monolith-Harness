@@ -23,6 +23,9 @@ public sealed partial class MainWindow
     ComboBox previewZoom = null!;
     FilePreviewDocument? previewDocument;
     Project? previewProject;
+    FileCitation? previewCitation;
+    FilePreviewLines? previewLines;
+    (int Start, int Length)? previewCitedRange;
     List<(int Start, int Length)> previewPages = [];
     CancellationTokenSource? previewRequest, previewPageRequest;
     int previewRevision, previewPageRevision, previewPageIndex;
@@ -78,7 +81,7 @@ public sealed partial class MainWindow
     }
     void ResetFilePreview()
     {
-        CancelFilePreview(); previewDocument = null; previewProject = null; previewPages.Clear(); previewImage = null;
+        CancelFilePreview(); previewDocument = null; previewProject = null; previewCitation = null; previewLines = null; previewCitedRange = null; previewPages.Clear(); previewImage = null;
         previewName.Text = ""; previewLocation.Text = ""; previewInfo.Text = "";
         previewName.Visibility = previewLocation.Visibility = previewInfo.Visibility = Visibility.Collapsed;
         previewRaw.Text = ""; previewRendered.Children.Clear();
@@ -101,17 +104,17 @@ public sealed partial class MainWindow
         {
             var path = await Task.Run(() => ResolveChatDiskPath(requested, messageProject));
             if (previewClosed || owner != chat?.Id) return;
-            if (FilePreviewDocument.Supports(path) && !Directory.Exists(path)) await OpenFilePreviewAsync(path, messageProject);
+            if (FilePreviewDocument.Supports(path) && !Directory.Exists(path)) await OpenFilePreviewAsync(path, messageProject, FileCitation.FromPath(requested));
             else await OpenChatFileAsync(path, messageProject);
         }
         catch (Exception ex) { ShowStatus(ex.Message, StatusKind.Error); }
     }
-    Task OpenFilePreviewAsync(string path, Project? sourceProject) => LoadFilePreviewAsync(
-        ct => Task.Run(() => FilePreviewDocument.ReadAsync(path, ct), ct), Path.GetFileName(path), path, sourceProject);
+    Task OpenFilePreviewAsync(string path, Project? sourceProject, FileCitation? citation = null) => LoadFilePreviewAsync(
+        ct => Task.Run(() => FilePreviewDocument.ReadAsync(path, ct), ct), Path.GetFileName(path), path, sourceProject, citation);
     Task OpenAttachmentPreviewAsync(byte[] bytes, string mime, string name) => LoadFilePreviewAsync(
         ct => Task.Run(() => FilePreviewDocument.FromBytes(name, mime, bytes, ct), ct), name, null, project);
 
-    async Task LoadFilePreviewAsync(Func<CancellationToken, Task<FilePreviewDocument>> load, string name, string? path, Project? sourceProject)
+    async Task LoadFilePreviewAsync(Func<CancellationToken, Task<FilePreviewDocument>> load, string name, string? path, Project? sourceProject, FileCitation? citation = null)
     {
         await ShowToolAsync(PreviewToolIndex);
         CancelFilePreview();
@@ -122,17 +125,32 @@ public sealed partial class MainWindow
         previewName.Text = name; previewLocation.Text = path ?? WorkflowText("Pièce jointe du chat", "Chat attachment");
         ToolTipService.SetToolTip(previewLocation, previewLocation.Text);
         previewInfo.Text = WorkflowText("Chargement…", "Loading…"); previewLoading.Visibility = Visibility.Visible;
-        previewDocument = null; previewProject = sourceProject; previewImage = null; previewPages.Clear();
+        previewDocument = null; previewProject = sourceProject; previewCitation = citation; previewLines = null; previewCitedRange = null; previewImage = null; previewPages.Clear();
         previewRendered.Children.Clear(); previewRaw.Text = ""; previewPageIndex = 0; previewTabs.SelectedIndex = 1;
         UpdateFilePreviewActions();
         try
         {
             var document = await load(ct);
             var pages = await Task.Run(document.Pages, ct);
+            var lines = document.Text == null ? null : await Task.Run(() => new FilePreviewLines(document.Text), ct);
+            (int Start, int Length)? citedRange = null;
+            string? citationWarning = null;
+            if (lines != null && citation?.StartLine is { } first)
+            {
+                try { citedRange = lines.Range(first, citation.EndLine ?? first); }
+                catch (IOException ex) { citationWarning = ex.Message; }
+            }
             if (ct.IsCancellationRequested || previewClosed || revision != previewRevision) return;
-            previewDocument = document; previewPages = pages;
+            previewDocument = document; previewPages = pages; previewLines = lines; previewCitedRange = citedRange;
+            if (citedRange is { } selected)
+            {
+                previewPageIndex = Math.Max(0, pages.FindLastIndex(page => page.Start <= selected.Start));
+                previewTabs.SelectedIndex = 1;
+            }
+            if (citationWarning != null) ShowStatus(citationWarning, StatusKind.Notice);
             previewInfo.Text = $"{document.Mime} · {document.Bytes.Length / 1024d:N1} " + WorkflowText("Ko", "KB") +
-                (document.IsImage ? $" · {document.Width:N0} × {document.Height:N0} px" : " · " + document.EncodingName);
+                (document.IsImage ? $" · {document.Width:N0} × {document.Height:N0} px" : " · " + document.EncodingName) +
+                (citedRange != null ? " · " + citation!.LineLabel(UiText.Language == "fr") : "");
             ToolTipService.SetToolTip(previewInfo, document.ModifiedUtc is { } date
                 ? WorkflowText("Dernière modification : ", "Last modified: ") + date.ToLocalTime().ToString("g") : previewInfo.Text);
             if (document.Path != null) previewDiskActions.Flyout = CreateChatFileMenu(document.Path, sourceProject);
@@ -154,7 +172,7 @@ public sealed partial class MainWindow
     async Task RefreshFilePreviewAsync()
     {
         if (previewDocument is not { } document) return;
-        if (document.Path != null) await OpenFilePreviewAsync(document.Path, previewProject);
+        if (document.Path != null) await OpenFilePreviewAsync(document.Path, previewProject, previewCitation);
         else await OpenAttachmentPreviewAsync(document.Bytes, document.Mime, document.Name);
     }
     async Task ChangePreviewPageAsync(int offset)
@@ -177,6 +195,12 @@ public sealed partial class MainWindow
             var raw = await Task.Run(() => document.RawPage(page), ct);
             ct.ThrowIfCancellationRequested();
             previewRaw.Text = raw;
+            if (previewCitedRange is { } cited)
+            {
+                var selectionStart = Math.Clamp(cited.Start - page.Start, 0, raw.Length);
+                var selectionEnd = (int)Math.Clamp((long)cited.Start + cited.Length - page.Start, selectionStart, raw.Length);
+                previewRaw.Select(selectionStart, selectionEnd - selectionStart);
+            }
             if (document.IsImage && previewImage != null) return;
             previewRendered.Children.Clear(); previewImage = null; previewScroll.ChangeView(0, 0, null);
             previewScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -185,6 +209,8 @@ public sealed partial class MainWindow
                 var image = await PreviewImageAsync(document.ImagePng!, ct);
                 ct.ThrowIfCancellationRequested(); previewImage = image; previewRendered.Children.Add(image); ResizePreviewImage();
             }
+            else if (previewCitedRange != null || !document.IsMarkdown && previewLines != null)
+                await RenderCitedSourceAsync(raw, page, revision, document.Name, ct);
             else if (document.IsMarkdown)
             {
                 string Relative(string requested) => ResolveFilePreviewLink(requested, document, sourceProject);
@@ -196,7 +222,7 @@ public sealed partial class MainWindow
                         try { path = Relative(requested); } catch { path = requested; }
                         return CreateChatFileMenu(path, sourceProject);
                     },
-                    url => LoadMarkdownPreviewImageAsync(document, url, ct), ct);
+                    url => LoadMarkdownPreviewImageAsync(document, url, ct), ct, requested => Task.Run(() => (string?)Relative(requested)));
             }
             else previewRendered.Children.Add(new TextBlock { Text = document.Text!.Substring(page.Start, page.Length), IsTextSelectionEnabled = true,
                 FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Primary });
@@ -214,15 +240,79 @@ public sealed partial class MainWindow
             if (!previewClosed && revision == previewPageRevision) { previewLoading.Visibility = Visibility.Collapsed; UpdateFilePreviewActions(); }
         }
     }
+    async Task RenderCitedSourceAsync(string raw, (int Start, int Length) page, int revision, string name, CancellationToken ct)
+    {
+        var lines = previewLines!;
+        // Normalize only the displayed copy; file offsets and Raw remain unmodified.
+        var visible = raw.Replace("\r\n", "\n").Replace('\r', '\n');
+        var firstLine = lines.LineAt(page.Start);
+        var count = new FilePreviewLines(raw).Count;
+        var numbers = string.Join('\n', Enumerable.Range(firstLine, count));
+        const double lineHeight = 20;
+        TextBlock Source(string text) => new() { Text = text, IsTextSelectionEnabled = true, TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new FontFamily("Cascadia Code, Consolas"), FontSize = 13, LineHeight = lineHeight,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight, Foreground = FluentDesign.Primary };
+        var gutter = Source(numbers); gutter.Foreground = FluentDesign.Secondary; gutter.IsTextSelectionEnabled = false;
+        var tokens = await Task.Run(() =>
+        {
+            try { return CodeHighlight.Tokens(visible, CodeHighlight.LanguageForFile(name)).ToArray(); }
+            catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { return [new CodeHighlight.Token(visible, "#dce6f5")]; }
+        }, ct);
+        ct.ThrowIfCancellationRequested();
+        if (previewClosed || revision != previewPageRevision) return;
+        var source = Source("");
+        foreach (var token in tokens)
+            source.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = token.Text, Foreground = FluentDesign.Adapt(
+                Convert.ToByte(token.Color.Substring(1, 2), 16), Convert.ToByte(token.Color.Substring(3, 2), 16), Convert.ToByte(token.Color.Substring(5, 2), 16)) });
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        grid.Children.Add(gutter); Grid.SetColumn(source, 1); grid.Children.Add(source);
+        previewRendered.Children.Add(grid);
+        previewScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+        if (previewCitedRange == null || previewCitation?.StartLine is not { } first) return;
+        var last = previewCitation.EndLine ?? first;
+        var visibleLines = new FilePreviewLines(visible);
+        int from = Math.Max(1, first - firstLine + 1), to = Math.Min(count, last - firstLine + 1);
+        if (from > to) return;
+        void Highlight(TextBlock block, FilePreviewLines map)
+        {
+            var range = map.Range(from, to);
+            if (range.Length <= 0) return;
+            void Add(int start, int length, Microsoft.UI.Xaml.Media.Brush foreground)
+            {
+                if (length <= 0) return;
+                var highlight = new Microsoft.UI.Xaml.Documents.TextHighlighter { Background = FluentDesign.Resource("ControlSelectedBrush"), Foreground = foreground };
+                highlight.Ranges.Add(new Microsoft.UI.Xaml.Documents.TextRange { StartIndex = start, Length = length });
+                block.TextHighlighters.Add(highlight);
+            }
+            if (block != source) { Add(range.Start, range.Length, block.Foreground); return; }
+            int offset = 0;
+            foreach (var inline in source.Inlines.OfType<Microsoft.UI.Xaml.Documents.Run>())
+            {
+                int start = Math.Max(offset, range.Start), end = Math.Min(offset + inline.Text.Length, range.Start + range.Length);
+                Add(start, end - start, inline.Foreground);
+                offset += inline.Text.Length;
+            }
+        }
+        Highlight(source, visibleLines); Highlight(gutter, new FilePreviewLines(numbers));
+        var targetOffset = Math.Max(0, (from - 4) * lineHeight);
+        source.Loaded += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!previewClosed && revision == previewPageRevision)
+                previewScroll.ChangeView(0, targetOffset, null, true);
+        });
+    }
     string ResolveFilePreviewLink(string requested, FilePreviewDocument document, Project? sourceProject)
     {
-        var path = LocalFileLinks.WithoutLocation(requested);
+        var reference = FileCitation.FromPath(requested);
+        var path = reference.Path;
         if (!Path.IsPathFullyQualified(path) && !path.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && document.Path != null)
         {
             var relative = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(document.Path)!, path.Replace('/', Path.DirectorySeparatorChar)));
-            if (File.Exists(relative) || Directory.Exists(relative)) return relative;
+            if (File.Exists(relative) || Directory.Exists(relative)) return relative + reference.Suffix;
         }
-        return ResolveChatDiskPath(path, sourceProject);
+        return ResolveChatDiskPath(path, sourceProject) + reference.Suffix;
     }
     async Task<FrameworkElement?> LoadMarkdownPreviewImageAsync(FilePreviewDocument document, string url, CancellationToken ct)
     {

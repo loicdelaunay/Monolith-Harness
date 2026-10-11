@@ -39,6 +39,7 @@ public sealed class MarkdownRenderer
         public bool UsingPlainText;
         public Func<string, Task>? OpenFile;
         public Func<string, MenuFlyout>? FileMenu;
+        public Func<string, Task<string?>>? FilePath;
         public Func<string,CancellationToken,Task<byte[]?>>? LocalImage;
     }
     sealed class TextFlowState
@@ -77,19 +78,20 @@ public sealed class MarkdownRenderer
         renderedPanels.RemoveAll(x => !x.TryGetTarget(out _));
         foreach (var reference in renderedPanels.ToArray())
             if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state))
-                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu,state.LocalImage);
+                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu,state.LocalImage,state.FilePath);
     }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
     MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true) { this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages; }
-    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null)
+    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null, Func<string, Task<string?>>? filePath = null)
     {
         markdown ??= "";
         if (!states.TryGetValue(container, out var state))
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
-        state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;state.LocalImage=localImage;
+        state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;state.LocalImage=localImage; state.FilePath=filePath;
         try
         {
             RenderBlocks(container, markdown, openFile, fileMenu, state);
+            FileCitationBadges.Apply(container);
             state.UsingPlainText = false;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -114,7 +116,7 @@ public sealed class MarkdownRenderer
         if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
         {
             var view = container.Children.Count == 1 ? container.Children[0] as AdvancedMarkdownView : null;
-            if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile); container.Children.Add(view); }
+            if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile, fileMenu, state.FilePath); container.Children.Add(view); }
             view.Update(markdown); state.Keys.Clear(); state.Density = ChatDensity.Id; return;
         }
         var groups = GroupTextBlocks(blocks).ToList();
@@ -132,7 +134,7 @@ public sealed class MarkdownRenderer
             StackPanel blockPanel;
             if(group.Any(b=>PreviewNodes(b).Any(n=>RenderMath && n is MathBlock or MathInline || RenderMermaid && n is FencedCodeBlock code && code.Info=="mermaid")))
             {
-                blockPanel=new StackPanel();var visual=new AdvancedMarkdownView(openFile);blockPanel.Children.Add(visual);visual.Update(SourceText(markdown,group[0].Span.Start,group[^1].Span.End));
+                blockPanel=new StackPanel();var visual=new AdvancedMarkdownView(openFile, fileMenu, state.FilePath);blockPanel.Children.Add(visual);visual.Update(SourceText(markdown,group[0].Span.Start,group[^1].Span.End));
                 foreach(var image in group.SelectMany(PreviewNodes).OfType<LinkInline>().Where(x=>x.IsImage).Take(12))blockPanel.Children.Add(new ReplyImageView(image.Url??"",image.Title??"Image",FluentDesign.Secondary,true,state.LocalImage));
             }
             else if (CanJoinText(group[0]))
@@ -156,7 +158,7 @@ public sealed class MarkdownRenderer
                 blockPanel = new StackPanel { Spacing = 4 };
                 if (renderer.RenderBlock(group[0]) is { } element) blockPanel.Children.Add(element);
             }
-            if (fileMenu != null) ChatPathMenus.Attach(blockPanel, fileMenu);
+            if (fileMenu != null) ChatPathMenus.Attach(blockPanel, fileMenu, state.FilePath);
             replacements.Add(blockPanel);
         }
         for (int i = 0; i < replacements.Count; i++)
@@ -209,13 +211,13 @@ public sealed class MarkdownRenderer
     }
     /// <summary>Paginated file rendering with cancellation and UI yields between blocks.</summary>
     public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,
-        Func<string, MenuFlyout> fileMenu, Func<string, Task<FrameworkElement?>> imagePreview, CancellationToken ct)
+        Func<string, MenuFlyout> fileMenu, Func<string, Task<FrameworkElement?>> imagePreview, CancellationToken ct, Func<string, Task<string?>>? filePath = null)
     {
         var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown, RenderMath), ct);
         ct.ThrowIfCancellationRequested();
         if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
         {
-            var visual = new AdvancedMarkdownView(openFile); target.Children.Add(visual); visual.Update(markdown); return;
+            var visual = new AdvancedMarkdownView(openFile, fileMenu, filePath); target.Children.Add(visual); visual.Update(markdown); return;
         }
         var renderer = new MarkdownRenderer(openFile, fileMenu,displayImages:false);
         int imageCount = 0, blockCount = 0;
@@ -240,7 +242,8 @@ public sealed class MarkdownRenderer
                 renderer.AppendText(block, text, 0); panel.Children.Add(text);
             }
             else if (renderer.RenderBlock(block) is { } element) panel.Children.Add(element);
-            ChatPathMenus.Attach(panel, fileMenu);
+            FileCitationBadges.Apply(panel);
+            ChatPathMenus.Attach(panel, fileMenu, filePath);
             target.Children.Add(panel);
             foreach (var link in nodes.OfType<LinkInline>().Where(x => x.IsImage && !string.IsNullOrWhiteSpace(x.Url)))
             {
@@ -826,6 +829,10 @@ public sealed class MarkdownRenderer
                         Foreground = Brush(145, 160, 185)
                     });
                 }
+                else if (FileCitation.FromUrl(link.Url) is { } citation)
+                {
+                    target.Add(FileCitationBadges.Create(citation, openFile));
+                }
                 else
                 {
                     var hyperlink = new Hyperlink
@@ -851,6 +858,11 @@ public sealed class MarkdownRenderer
                 break;
 
             case AutolinkInline autolink:
+                if (FileCitation.FromUrl(autolink.Url) is { } autoCitation)
+                {
+                    target.Add(FileCitationBadges.Create(autoCitation, openFile));
+                    break;
+                }
                 var autoHyperlink = new Hyperlink
                 {
                     Foreground = Brush(120, 175, 255),

@@ -1,0 +1,12 @@
+{
+  "serial": "46171FDKD000CE",
+  "model": "Pixel 9 Pro Fold",
+  "android": "17",
+  "size": "Physical size: 2076x2152",
+  "density": "Physical density: 390",
+  "rotation": {
+    "accelerometer_rotation": "1",
+    "user_rotation": "0"
+  },
+  "fontScale": "1.0"
+}

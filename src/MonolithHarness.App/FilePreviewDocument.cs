@@ -10,11 +10,18 @@ internal sealed record FilePreviewDocument(string Name, string? Path, string Mim
 {
     internal const int MaxImageBytes = 32 * 1024 * 1024, MaxTextBytes = 2 * 1024 * 1024;
     internal const int TextPageLength = 40_000, BinaryPageLength = 1024;
-    internal static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico", ".txt", ".md", ".markdown"];
+    static readonly string[] textExtensions = [".txt", ".md", ".markdown", ".cs", ".csproj", ".sln", ".slnx", ".props", ".targets",
+        ".json", ".jsonc", ".xml", ".xaml", ".yaml", ".yml", ".toml", ".ini", ".config", ".log", ".csv", ".tsv", ".sql",
+        ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".pyi", ".dart", ".rs", ".gd", ".gdshader", ".tscn", ".tres", ".go", ".java", ".kt", ".kts",
+        ".c", ".h", ".cpp", ".hpp", ".cc", ".rb", ".swift", ".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte",
+        ".razor", ".svg", ".ps1", ".psm1", ".psd1", ".sh", ".bash", ".bat", ".cmd", ".gradle", ".lock", ".gitignore", ".env", ".tex", ".rst"];
+    internal static readonly string[] Extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico", ..textExtensions];
+    static bool TextFile(string name) => textExtensions.Contains(System.IO.Path.GetExtension(name), StringComparer.OrdinalIgnoreCase) ||
+        System.IO.Path.GetFileName(name) is "README" or "LICENSE" or "Dockerfile" or "Makefile";
     internal bool IsImage => ImagePng != null;
     internal bool IsMarkdown => System.IO.Path.GetExtension(Name).Equals(".md", StringComparison.OrdinalIgnoreCase) ||
         System.IO.Path.GetExtension(Name).Equals(".markdown", StringComparison.OrdinalIgnoreCase) || Mime.StartsWith("text/markdown", StringComparison.OrdinalIgnoreCase);
-    internal static bool Supports(string name, string? mime = null) => Extensions.Contains(System.IO.Path.GetExtension(name), StringComparer.OrdinalIgnoreCase) ||
+    internal static bool Supports(string name, string? mime = null) => Extensions.Contains(System.IO.Path.GetExtension(name), StringComparer.OrdinalIgnoreCase) || TextFile(name) ||
         mime?.Split(';')[0].Trim().ToLowerInvariant() is "text/plain" or "text/markdown" or "image/png" or "image/jpeg" or "image/webp" or "image/gif" or "image/bmp" or "image/x-icon" or "image/vnd.microsoft.icon";
 
     internal static async Task<FilePreviewDocument> ReadAsync(string path, CancellationToken ct, int imageEdge = 2048)
@@ -24,7 +31,7 @@ internal sealed record FilePreviewDocument(string Name, string? Path, string Mim
         var folder = System.IO.Path.GetDirectoryName(path)!;
         path = LocalPreview.ResolveResource(folder, Uri.EscapeDataString(System.IO.Path.GetFileName(path)));
         if (Directory.Exists(path)) throw new IOException("Choisissez un fichier / Select a file.");
-        var text = System.IO.Path.GetExtension(path).ToLowerInvariant() is ".txt" or ".md" or ".markdown";
+        var text = TextFile(path);
         var limit = text ? MaxTextBytes : MaxImageBytes;
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
         if (stream.Length > limit) throw TooLarge(text);
@@ -38,7 +45,7 @@ internal sealed record FilePreviewDocument(string Name, string? Path, string Mim
         }
         ct.ThrowIfCancellationRequested();
         var mime = System.IO.Path.GetExtension(path).ToLowerInvariant() switch
-        { ".md" or ".markdown" => "text/markdown", ".bmp" => "image/bmp", _ => LocalPreview.Mime(path).Split(';')[0] };
+        { ".md" or ".markdown" => "text/markdown", ".bmp" => "image/bmp", _ => text ? "text/plain" : LocalPreview.Mime(path).Split(';')[0] };
         return FromBytes(System.IO.Path.GetFileName(path), mime, output.ToArray(), ct, path, File.GetLastWriteTimeUtc(path), imageEdge);
     }
 
@@ -47,7 +54,7 @@ internal sealed record FilePreviewDocument(string Name, string? Path, string Mim
     {
         if (!Supports(name, mime)) throw new IOException("Format non compatible avec Preview / Unsupported Preview format.");
         ct.ThrowIfCancellationRequested();
-        var text = System.IO.Path.GetExtension(name).ToLowerInvariant() is ".txt" or ".md" or ".markdown" || mime.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
+        var text = TextFile(name) || mime.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
         if (bytes.Length > (text ? MaxTextBytes : MaxImageBytes)) throw TooLarge(text);
         if (text)
         {
