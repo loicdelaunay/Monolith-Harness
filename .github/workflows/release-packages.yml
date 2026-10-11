@@ -101,7 +101,8 @@ jobs:
           [[ -n "$signer" ]]
           "$signer" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee "$RUNNER_TEMP/apk-certificate.txt"
           fingerprint="$(cat ../../build/AndroidSigningCertificate.sha256)"
-          grep -Fx "Signer #1 certificate SHA-256 digest: $fingerprint" "$RUNNER_TEMP/apk-certificate.txt"
+          certificate="$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-certificate.txt" | tr -d '\r' | sort -u)"
+          [[ "$certificate" == "$fingerprint" ]]
       - name: Package APK and checksum
         shell: bash
         run: |
