@@ -12,6 +12,15 @@ public sealed record RunView(Guid Id, Guid ProjectId, int ChatId, Guid Requester
 
 public sealed record QueueOverview(int Queued, int Running, int AwaitingApproval, int MaxConcurrentRuns, int MaxConcurrentUsers, bool LimitsEnabled, IReadOnlyList<RunView> Items);
 
+/// <summary>The place a relayed provider call holds in the queue while it runs; release it when the call is over.</summary>
+public sealed class RelaySlot(Guid id, ActiveRun active)
+{
+    public Guid Id { get; } = id;
+    public ActiveRun Active { get; } = active;
+    /// <summary>Cancelled when an administrator cancels the request from the queue.</summary>
+    public CancellationToken Cancelled => Active.Cancellation.Token;
+}
+
 /// <summary>A started run the server can still cancel. The executor owns the worker behind it.</summary>
 public sealed class ActiveRun
 {
@@ -22,9 +31,34 @@ public sealed class ActiveRun
 
 /// <summary>Requests of cloud projects: validation, queue, fair scheduling order, states and notifications.</summary>
 public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsService settings, ProjectService projects, ProviderService providers, ProjectStore store,
-    AccessService access, AccountService accounts, RealtimeHub hub, AuditService audit)
+    AccessService access, AccountService accounts, RealtimeHub hub, AuditService audit, SyncSignals signals)
 {
     const int HardCeiling = 64;
+    /// <summary>Source of the entries made by calls of local conversations through the provider relay.</summary>
+    public const string RelaySource = "relay";
+
+    /// <summary>
+    /// One call of a local conversation through the provider relay. Relay entries live in memory only (they last as long as the call) but
+    /// compete with cloud requests for the same capacity, in the same fair order.
+    /// </summary>
+    sealed class RelayEntry
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public long Sequence { get; set; }
+        public Guid UserId { get; init; }
+        public Guid ProviderId { get; init; }
+        public string Model { get; init; } = "";
+        public DateTime CreatedUtc { get; } = DateTime.UtcNow;
+        public DateTime? StartedUtc { get; set; }
+        public string State { get; set; } = RunStates.Queued;
+        public ActiveRun? Active { get; set; }
+        public TaskCompletionSource<ActiveRun> Grant { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>The same shape as a stored request, so that fair ordering and limits treat both kinds alike. Never saved.</summary>
+        public RunRequest AsRequest() => new() { Id = Id, Sequence = Sequence, RequesterId = UserId, Source = RelaySource, ProviderId = ProviderId, Model = Model, State = State, CreatedUtc = CreatedUtc, StartedUtc = StartedUtc };
+    }
+
+    readonly ConcurrentDictionary<Guid, RelayEntry> relays = new();
     readonly ConcurrentDictionary<Guid, ActiveRun> active = new();
     readonly object sequenceLock = new();
     long sequence;
@@ -95,6 +129,7 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
         await db.SaveChangesAsync();
         var view = await ViewAsync(run.Id);
         Publish(view);
+        await signals.ProjectAsync(projectId, "chats", chatId);
         WorkAvailable?.Invoke();
         return view;
     }
@@ -113,7 +148,7 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
         var userId = user.RequireUserId();
         await using var db = await factory.CreateDbContextAsync();
         var query = db.Runs.AsNoTracking().AsQueryable();
-        if (all) access.Require(user, Permissions.QueueManage);
+        if (all) access.RequireQueueManage(user);
         else query = query.Where(x => x.RequesterId == userId);
         var rows = await query.OrderByDescending(x => x.Sequence).Take(Math.Clamp(take, 1, 500)).ToListAsync();
         return await ToViews(db, rows);
@@ -121,16 +156,19 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
 
     public async Task<QueueOverview> OverviewAsync(ClaimsPrincipal user)
     {
-        access.Require(user, Permissions.QueueManage);
+        access.RequireQueueManage(user);
         await using var db = await factory.CreateDbContextAsync();
         var open = await db.Runs.AsNoTracking().Where(x => x.State == RunStates.Queued || x.State == RunStates.Running || x.State == RunStates.AwaitingApproval).OrderBy(x => x.Sequence).ToListAsync();
-        return new QueueOverview(open.Count(x => x.State == RunStates.Queued), open.Count(x => x.State == RunStates.Running), open.Count(x => x.State == RunStates.AwaitingApproval),
-            settings.Int(SettingKeys.MaxConcurrentRuns), settings.Int(SettingKeys.MaxConcurrentUsers), settings.FeatureEnabled(Features.Queue), await ToViews(db, open));
+        var items = await ToViews(db, open);
+        var relayed = await RelayViews(db, relays.Values.OrderBy(x => x.Sequence).ToList());
+        var all = items.Concat(relayed).ToList();
+        return new QueueOverview(all.Count(x => x.State == RunStates.Queued), all.Count(x => x.State == RunStates.Running), all.Count(x => x.State == RunStates.AwaitingApproval),
+            settings.Int(SettingKeys.MaxConcurrentRuns), settings.Int(SettingKeys.MaxConcurrentUsers), settings.FeatureEnabled(Features.Queue), all);
     }
 
     async Task EnsureCanSee(ClaimsPrincipal user, RunView view)
     {
-        if (view.RequesterId == user.UserId() || access.Can(user, Permissions.QueueManage)) return;
+        if (view.RequesterId == user.UserId() || access.CanManageQueue(user)) return;
         // Project members may follow the progress of the project's requests.
         try { await projects.RequireAsync(user, view.ProjectId, ProjectAccess.Read); }
         catch (ApiException) { throw ApiException.NotFound("Request not found."); }
@@ -154,9 +192,21 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
     async Task<Dictionary<Guid, int>> QueuePositions(ServerDb db)
     {
         var running = await db.Runs.AsNoTracking().Where(x => x.State == RunStates.Running || x.State == RunStates.AwaitingApproval).Select(x => x.RequesterId).ToListAsync();
+        running.AddRange(relays.Values.Where(x => x.State == RunStates.Running).Select(x => x.UserId));
         var queued = await db.Runs.AsNoTracking().Where(x => x.State == RunStates.Queued).OrderBy(x => x.Sequence).ToListAsync();
+        queued.AddRange(relays.Values.Where(x => x.State == RunStates.Queued).Select(x => x.AsRequest()));
         var order = FairOrder(queued, running);
         return order.Select((run, index) => (run.Id, Position: index + 1)).ToDictionary(x => x.Id, x => x.Position);
+    }
+
+    async Task<List<RunView>> RelayViews(ServerDb db, List<RelayEntry> entries)
+    {
+        if (entries.Count == 0) return [];
+        var emails = await db.Users.AsNoTracking().Where(x => entries.Select(r => r.UserId).Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Email);
+        var names = await db.Providers.AsNoTracking().Where(x => entries.Select(r => r.ProviderId).Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Name);
+        var positions = entries.Any(x => x.State == RunStates.Queued) ? await QueuePositions(db) : [];
+        return entries.Select(x => new RunView(x.Id, Guid.Empty, 0, x.UserId, emails.GetValueOrDefault(x.UserId, ""), RelaySource, x.ProviderId, x.Model,
+            "Conversation locale · " + names.GetValueOrDefault(x.ProviderId, "provider"), x.State, positions.TryGetValue(x.Id, out var position) ? position : null, x.CreatedUtc, x.StartedUtc, null, "", "")).ToList();
     }
 
     /// <summary>
@@ -183,10 +233,14 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
     /// <summary>Queued requests that may start now under the configured limits, in fair order.</summary>
     public async Task<List<RunRequest>> NextToStartAsync()
     {
-        if (!settings.FeatureEnabled(Features.Cloud)) return [];
+        // Cloud requests wait while the cloud feature is off; relayed calls of local conversations do not depend on it.
+        var cloud = settings.FeatureEnabled(Features.Cloud);
         await using var db = await factory.CreateDbContextAsync();
         var running = await db.Runs.AsNoTracking().Where(x => x.State == RunStates.Running || x.State == RunStates.AwaitingApproval).ToListAsync();
-        var queued = await db.Runs.AsNoTracking().Where(x => x.State == RunStates.Queued).OrderBy(x => x.Sequence).ToListAsync();
+        running.AddRange(relays.Values.Where(x => x.State == RunStates.Running).Select(x => x.AsRequest()));
+        var queued = cloud ? await db.Runs.AsNoTracking().Where(x => x.State == RunStates.Queued).OrderBy(x => x.Sequence).ToListAsync() : [];
+        queued.AddRange(relays.Values.Where(x => x.State == RunStates.Queued).Select(x => x.AsRequest()));
+        queued = queued.OrderBy(x => x.Sequence).ToList();
         if (queued.Count == 0) return [];
         var limited = settings.FeatureEnabled(Features.Queue);
         var maxRuns = limited ? settings.Int(SettingKeys.MaxConcurrentRuns) : HardCeiling;
@@ -241,6 +295,7 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
             {
                 active.TryRemove(id, out _);
                 if (Finished is { } handler) await handler(run);
+                await signals.ProjectAsync(run.ProjectId, "chats", run.ChatId);
             }
         }
         Publish(await ViewAsync(id));
@@ -249,9 +304,10 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
 
     public async Task<RunView> CancelAsync(ClaimsPrincipal user, Guid id)
     {
+        if (relays.TryGetValue(id, out var relay)) return await CancelRelayAsync(user, relay);
         var view = await ViewAsync(id);
         var userId = user.RequireUserId();
-        if (view.RequesterId != userId && !access.Can(user, Permissions.QueueManage)) throw ApiException.NotFound("Request not found.");
+        if (view.RequesterId != userId && !access.CanManageQueue(user)) throw ApiException.NotFound("Request not found.");
         if (RunStates.IsFinal(view.State)) return view;
         if (active.TryGetValue(id, out var running)) running.Cancel($"Cancelled by {user.Email()}.");
         else await SetStateAsync(id, RunStates.Cancelled, $"Cancelled by {user.Email()}.");
@@ -265,6 +321,106 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
         await using var db = await factory.CreateDbContextAsync();
         var ids = await db.Runs.Where(x => x.State == RunStates.Queued).Select(x => x.Id).ToListAsync();
         foreach (var id in ids) await SetStateAsync(id, RunStates.Cancelled, reason);
+    }
+
+    // ---- Relayed calls of local conversations ----
+
+    /// <summary>
+    /// Admission of one call of a local conversation (a Desktop, CLI or Android chat using a shared provider) through the relay. The call
+    /// waits here, in fair order, until the limits of the queue let it start; the slot is released with <see cref="ReleaseRelayAsync"/>.
+    /// With the queue feature off the limits are not applied, but the call still shows as running.
+    /// </summary>
+    public async Task<RelaySlot> AcquireRelayAsync(Guid userId, Guid providerId, string model, CancellationToken ct)
+    {
+        if (settings.FeatureEnabled(Features.Queue))
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var waiting = await db.Runs.CountAsync(x => x.State == RunStates.Queued, ct) + relays.Values.Count(x => x.State == RunStates.Queued);
+            if (waiting >= settings.Int(SettingKeys.MaxQueueLength)) throw new ApiException(503, "queue_full", "The queue is full. Try again later.");
+            var mine = await db.Runs.CountAsync(x => x.State == RunStates.Queued && x.RequesterId == userId, ct) + relays.Values.Count(x => x.State == RunStates.Queued && x.UserId == userId);
+            if (mine >= settings.Int(SettingKeys.MaxQueuedPerUser)) throw new ApiException(429, "too_many_queued", "You have too many requests waiting.");
+        }
+        var entry = new RelayEntry { UserId = userId, ProviderId = providerId, Model = model };
+        lock (sequenceLock) entry.Sequence = ++sequence;
+        relays[entry.Id] = entry;
+        await PublishRelayAsync(entry);
+        WorkAvailable?.Invoke();
+        try
+        {
+            var active = await entry.Grant.Task.WaitAsync(TimeSpan.FromSeconds(settings.Int(SettingKeys.RelayWaitSeconds)), ct);
+            return new RelaySlot(entry.Id, active);
+        }
+        catch (TimeoutException)
+        {
+            await FinishRelayAsync(entry, RunStates.Cancelled);
+            throw new ApiException(503, "queue_timeout", "The request waited too long in the queue. Try again later.");
+        }
+        catch (OperationCanceledException)
+        {
+            await FinishRelayAsync(entry, RunStates.Cancelled);
+            throw;
+        }
+    }
+
+    public Task ReleaseRelayAsync(RelaySlot slot, bool failed = false) =>
+        relays.TryGetValue(slot.Id, out var entry) ? FinishRelayAsync(entry, failed ? RunStates.Failed : RunStates.Completed) : Task.CompletedTask;
+
+    /// <summary>Called by the dispatcher when the limits allow this call to start.</summary>
+    public async Task BeginRelayAsync(Guid id)
+    {
+        if (!relays.TryGetValue(id, out var entry)) return;
+        lock (entry)
+        {
+            if (entry.State != RunStates.Queued) return;
+            entry.State = RunStates.Running;
+            entry.StartedUtc = DateTime.UtcNow;
+            entry.Active = new ActiveRun();
+            active[id] = entry.Active;
+        }
+        entry.Grant.TrySetResult(entry.Active!);
+        await PublishRelayAsync(entry);
+    }
+
+    async Task FinishRelayAsync(RelayEntry entry, string state)
+    {
+        if (!relays.TryRemove(entry.Id, out _)) return;
+        active.TryRemove(entry.Id, out _);
+        entry.State = state;
+        entry.Grant.TrySetCanceled();
+        await PublishRelayAsync(entry);
+        WorkAvailable?.Invoke();
+    }
+
+    async Task<RunView> CancelRelayAsync(ClaimsPrincipal user, RelayEntry entry)
+    {
+        if (entry.UserId != user.RequireUserId() && !access.CanManageQueue(user)) throw ApiException.NotFound("Request not found.");
+        var reason = $"Cancelled by {user.Email()}.";
+        await using var db = await factory.CreateDbContextAsync();
+        var view = (await RelayViews(db, [entry]))[0];
+        if (entry.Active is { } running && entry.State == RunStates.Running) running.Cancel(reason);
+        else
+        {
+            // Still waiting: the call that holds the HTTP request open is released with an error.
+            entry.Grant.TrySetException(new ApiException(409, "cancelled", reason));
+            await FinishRelayAsync(entry, RunStates.Cancelled);
+        }
+        await audit.WriteAsync("run.cancelled", entry.Id.ToString(), view.State);
+        return view with { State = RunStates.Cancelled };
+    }
+
+    async Task PublishRelayAsync(RelayEntry entry)
+    {
+        try
+        {
+            await using var db = await factory.CreateDbContextAsync();
+            var view = (await RelayViews(db, [entry]))[0];
+            hub.PublishToUser(entry.UserId, "run.state", view);
+            hub.Publish(RealtimeHub.QueueTopic, "run.state", view);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or ObjectDisposedException)
+        {
+            // A missed notification only delays the refresh of the queue page.
+        }
     }
 
     void Publish(RunView view)

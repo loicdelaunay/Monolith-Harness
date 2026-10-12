@@ -1,4 +1,7 @@
 @using System.Globalization
+@inject UiContext Ui
+@inject ProviderService Providers
+
 <MudDialog>
     <DialogContent>
         <MudTextField Immediate="true" @bind-Value="_name" Label="Nom" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
@@ -10,7 +13,16 @@
         {
             <MudCheckBox T="bool" @bind-Value="_clearSecret" Dense="true" Color="Color.Primary" Label="Supprimer la clé enregistrée" />
         }
-        <MudTextField Immediate="true" @bind-Value="_models" Label="Modèles proposés" Lines="5" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mh-mono"
+        <div class="d-flex flex-wrap gap-2 align-center mt-2">
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.NetworkCheck" Disabled="@(_busy || _url.Trim().Length == 0)" OnClick="Test">Tester la connexion</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ManageSearch" Disabled="@(_busy || _url.Trim().Length == 0)" OnClick="Detect">Détecter les modèles</MudButton>
+            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" aria-label="Appel du provider en cours" /> }
+        </div>
+        @if (_probe != null)
+        {
+            <MudAlert Severity="@(_probe.Ok ? Severity.Success : Severity.Error)" Dense="true" Variant="Variant.Outlined" Class="mt-2">@_probe.Message</MudAlert>
+        }
+        <MudTextField Immediate="true" @bind-Value="_models" Label="Modèles proposés" ShrinkLabel="true" Lines="5" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mh-mono"
                       HelperText="Un modèle par ligne: identifiant ; contexte (jetons) ; images (oui/non). Exemple: gpt-4.1-mini ; 128000 ; oui" />
         <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="Provider activé" />
         <MudSwitch T="bool" @bind-Value="_local" Color="Color.Primary" Label="Utilisable aussi par les exécutions locales des clients (relais)" />
@@ -28,7 +40,8 @@
     public sealed record Result(string Name, string BaseUrl, string? Secret, List<ProviderModel> Models, bool Enabled, bool AllowLocalUse);
 
     string _name = "", _url = "", _secret = "", _models = "";
-    bool _enabled = true, _local, _clearSecret;
+    bool _enabled = true, _local, _clearSecret, _busy;
+    ProviderProbe? _probe;
 
     protected override void OnInitialized()
     {
@@ -47,6 +60,42 @@
         var images = parts.Length > 2 && parts[2].ToLowerInvariant() is "oui" or "yes" or "true" or "1";
         return new ProviderModel(parts[0], context, images);
     }).ToList();
+
+    // The typed key is used when there is one; otherwise the stored key of the provider being edited (never shown, never sent to the browser).
+    string? ProbeSecret => _clearSecret ? "" : string.IsNullOrEmpty(_secret) ? (Existing == null ? "" : null) : _secret;
+
+    async Task<ProviderProbe?> Probe()
+    {
+        _busy = true;
+        try
+        {
+            _probe = await Ui.Try(user =>
+            {
+                if (!Ui.Can(user, Permissions.ProvidersManage)) throw ApiException.Forbidden("missing_permission");
+                return Providers.ProbeAsync(_url, ProbeSecret, Existing?.Id);
+            });
+            return _probe;
+        }
+        finally { _busy = false; }
+    }
+
+    Task Test() => Probe();
+
+    /// <summary>Adds the models the provider publishes to the list; models already listed keep the values typed here.</summary>
+    async Task Detect()
+    {
+        if (await Probe() is not { Ok: true, Models.Count: > 0 } probe) return;
+        var known = Parse(_models).Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+        var added = probe.Models.Where(x => !known.Contains(x.Id)).ToList();
+        if (added.Count > 0)
+            _models = string.Join('\n', new[] { _models.TrimEnd() }.Where(x => x.Length > 0).Concat(added.Select(x => $"{x.Id} ; {x.ContextLimit} ; {(x.SupportsImages ? "oui" : "non")}")));
+        _probe = probe with
+        {
+            Message = added.Count == 0
+                ? $"{probe.Models.Count} modèle(s) détecté(s) · tous figurent déjà dans la liste."
+                : $"{probe.Models.Count} modèle(s) détecté(s) · {added.Count} ajouté(s) à la liste (vérifiez le contexte et les images avant d’enregistrer)."
+        };
+    }
 
     void Cancel() => MudDialog.Cancel();
 

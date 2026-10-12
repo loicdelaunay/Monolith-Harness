@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.94.0 — 2026-10-12
+
+- Conversations cloud : chaque bulle utilisateur affiche l'avatar et le nom de qui l'a envoyée (initiales sur une couleur propre au compte), sur le Desktop et sur les pages du serveur.
+- Renommage : renommer une conversation cloud se répercute chez tous les membres du projet, et un renommage fait sur l'appareil (à la main ou par le nommage automatique) est envoyé au serveur. Renommer une conversation partagée renomme aussi le partage pour ses spectateurs.
+- Suivi en direct : une requête lancée par un autre membre (ou depuis un autre appareil) dans une conversation cloud s'affiche en quasi temps réel, avec la réflexion et le texte en cours d'écriture (au plus toutes les 500 ms) puis les messages complets, sans recharger la conversation.
+- Conversations partagées : la fenêtre du spectateur redessine la conversation comme l'hôte la voit (réflexion, cartes d'outils avec leurs arguments et leurs durées, outils en cours, avatar de l'expéditeur, texte au fil de l'écriture) au lieu d'un simple texte. Corrige aussi l'abandon silencieux des messages dont certains champs étaient vides.
+- Hôte : une pastille en haut de la conversation partagée indique en direct le nombre de spectateurs ; un clic ouvre la gestion du partage. Le CLI l'affiche aussi dans son en-tête, et suit les conversations cloud modifiées ailleurs.
+- Serveur : la page de suivi d'un partage et la conversation d'un projet montrent la réflexion, les outils, l'auteur et le nombre de spectateurs ; `PATCH /api/projects/{id}/chats/{chatId}` renomme une conversation.
+
+## 1.93.0 — 2026-10-12
+
+- Desktop : bascule **Local / Cloud** au-dessus des projets quand un serveur est configuré. La vue Cloud liste les projets cloud, les conversations partagées avec le compte, les conversations publiques et un bouton « Rejoindre avec un code » ; les conversations partagées se suivent en direct dans leur propre fenêtre, avec un champ pour commenter.
+- Synchronisation automatique avec le serveur (Desktop et CLI) : providers partagés, projets cloud, conversations et conversations partagées apparaissent, changent et disparaissent sans passer par les Réglages. Réglages › Serveur : resynchronisation complète Jamais / 1 minute / 5 minutes (par défaut) / 1 heure / 1 jour, et « Synchroniser maintenant ». Supprimer un projet ou une conversation cloud depuis un client la supprime aussi sur le serveur.
+- Desktop : une puce d'état de la connexion au serveur remplace « Tâches planifiées » dans la barre latérale (déplacé dans le menu Outils). Un badge info, avertissement ou erreur signale les problèmes de synchronisation ; un clic ouvre les informations de connexion, les problèmes et les événements récents.
+- Partage de conversation : un code unique (XXXXX-XXXXX) à transmettre, à saisir dans l'application ou sur la page Partages du serveur ; l'hôte peut le copier, le renouveler, le désactiver, inviter des comptes ou rendre la conversation publique. Le CLI ajoute `server join <code>`, `server shares` et la gestion de la synchronisation dans `/server`.
+- Serveur : la file d'attente prend maintenant en compte les appels des conversations locales qui utilisent un provider partagé (relais), qui contournaient jusqu'ici les limites et la liste. Ils sont visibles et annulables dans Administration › File d'attente, même quand les limites sont désactivées.
+- Serveur : le dialogue « Ajouter un provider » a les boutons « Tester la connexion » et « Détecter les modèles » (ajout des modèles publiés, avec contexte et images quand le provider les donne) ; les projets cloud ont un bouton « Ajouter des membres » avec recherche et sélection multiple des comptes enregistrés.
+- Android : pas encore de connexion au serveur (portage prévu).
+
+## 1.92.0 — 2026-10-12
+
+- Desktop : le HTML des messages utilisateur reste affiché comme du code, sans créer d’aperçu ; les réponses de l’IA conservent leurs options de rendu.
+- Raisonnement : hauteur limitée à 360 px et adaptée aux petites fenêtres, défilement interne et commande de réduction toujours accessible.
+- Exports : cause de fin observée, `finish_reason`, marqueur de fin du flux, erreurs HTTP, annulations, limite d’étapes et tentatives de relance enregistrés pour les nouvelles générations. Les motifs internes non fournis par le modèle ne sont pas inventés.
+- Paramètres › Chat : option désactivée par défaut pour poursuivre les réponses tronquées par la limite de sortie ou les réponses vides, au maximum deux fois ; les refus et les annulations ne sont pas relancés par cette option.
+- Saisie : autocomplétion regroupée, recherche limitée au token près du curseur et catalogue de skills mis en cache ; réduction des scans et allocations pour les longs brouillons.
+- Fichiers cités : contour natif discret, coins arrondis, survol et couleurs adaptés au thème ; sélection, ouverture et menu contextuel conservés.
+- Propositions : carte de revue épinglée au-dessus de la saisie, conservée pendant le défilement du chat et masquée après validation.
+- Paramètres › Apparence : affichage facultatif du débit global au-dessus de Tâches planifiées et Outils, basé sur les deux dernières secondes et incluant les requêtes concurrentes des sous-agents ; désactivé par défaut.
+- Pièces jointes : menu au clic droit pour les aperçus, l’ouverture des fichiers/dossiers dans l’explorateur et le retrait de la conversation.
+- Zone de saisie : retrait des signes d’approximation des indicateurs compacts de contexte et de débit ; informations d’estimation conservées dans les infobulles.
+- GUI, CLI et Server : version locale alignée sur 1.92.0 ; nouvelles métadonnées de fin conservées dans l’historique sans les envoyer aux fournisseurs de modèles.
+
 ## 1.91.0 — 2026-10-11
 
 - Nouveau : Monolith Harness Server (`src/MonolithHarness.Server`), un exécutable autonome avec interface web, API REST/OpenAPI, WebSocket, comptes et rôles, exécutions cloud isolées, tâches planifiées, file d’attente, providers partagés et partage en direct. Publié dans `artifacts/SERVER`.

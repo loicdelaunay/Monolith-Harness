@@ -177,7 +177,7 @@ public sealed class RealtimeGateway(RealtimeHub hub, ShareService shares, Projec
                 await shares.SubscribeAsync(connection, id);
                 break;
             case "queue":
-                access.Require(user, Permissions.QueueManage);
+                access.RequireQueueManage(user);
                 hub.Subscribe(connection, topic);
                 break;
             case "server":

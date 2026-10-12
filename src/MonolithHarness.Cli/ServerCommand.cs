@@ -10,11 +10,14 @@ public static class ServerCommand
     const string Usage = """
         MonolithHarness server <command> [options]
 
-          status                         Connection, account and shared providers
+          status                         Connection, account, synchronization state and problems
           connect <url> [--allow-http]   Check and store the server address (HTTPS expected; --allow-http accepts plain HTTP)
           login <e-mail>                 Sign in (password: prompt, --password-stdin, or MONOLITH_SERVER_PASSWORD)
           logout                         Sign out and remove the server's providers
-          sync                           Refresh the providers shared by the server
+          sync                           Synchronize now (providers, cloud projects, shared conversations)
+          interval <never|1|5|60|1440>   Minutes between two complete resynchronizations (default 5; live changes always apply)
+          shares                         Conversations shared with the account (and the public ones)
+          join <code>                    Follow a shared conversation from its sharing code and print what the host shows
           projects                       Cloud projects of the account
           open <name|id>                 Mirror a cloud project locally
           new <name>                     Create a cloud project
@@ -59,7 +62,27 @@ public static class ServerCommand
                 case "logout": return Print(json, await client.Call("server.logout", ct: ct), Describe);
                 case "forget": return Print(json, await client.Call("server.disconnect", ct: ct), Describe);
                 case "sync":
-                    return Print(json, await client.Call("server.sync", ct: ct), node => string.Join('\n', node!.AsArray().Select(x => $"{x!["name"]} · {x["model"]}")));
+                {
+                    var done = await client.Call("server.sync.now", ct: ct);
+                    return Print(json, done, node => DescribeSync(node!["state"]));
+                }
+                case "interval":
+                {
+                    if (rest.Count != 1) throw new ArgumentException("Usage: server interval <never|1|5|60|1440>");
+                    var minutes = rest[0].ToLowerInvariant() is "never" or "0" ? 0 : int.TryParse(rest[0], out var value) ? value : -1;
+                    if (minutes is not (0 or 1 or 5 or 60 or 1440)) throw new ArgumentException("Choose never, 1, 5, 60 or 1440 minutes.");
+                    return Print(json, await client.Call("server.sync.interval", new { minutes }, ct), node => "Full resynchronization: " + (node!["minutes"]!.GetValue<int>() == 0 ? "never (live changes still apply)" : "every " + node["minutes"] + " min"));
+                }
+                case "shares":
+                {
+                    var mine = (await client.Call("server.shares", ct: ct))!.AsArray().Where(x => x!["isHost"]?.GetValue<bool>() != true && x["revokedUtc"] is null);
+                    var open = (await client.Call("server.shares.public", ct: ct))!.AsArray();
+                    var all = new JsonArray(mine.Select(x => (JsonNode?)x!.DeepClone()).Concat(open.Select(x => (JsonNode?)x!.DeepClone())).ToArray());
+                    return Print(json, all, node => node!.AsArray().Count == 0 ? "No conversation is shared with this account." : string.Join('\n', node.AsArray().Select(x => $"{x!["id"]}  {x["title"]}  ({x["hostEmail"]}){(x["live"]?.GetValue<bool>() == true ? "  live" : "")}{(x["isPublic"]?.GetValue<bool>() == true ? "  public" : "")}")));
+                }
+                case "join":
+                    if (rest.Count == 0) throw new ArgumentException("Usage: server join <code>");
+                    return Print(json, await client.Call("server.share.join", new { code = string.Join("", rest) }, ct), DescribeShare);
                 case "projects":
                     return Print(json, await client.Call("server.projects", ct: ct), node => string.Join('\n', node!.AsArray().Select(x => $"{x!["id"]}  {x["name"]}  ({x["access"]}){(x["localProjectId"] is null ? "" : "  [local]")}")));
                 case "open":
@@ -82,6 +105,27 @@ public static class ServerCommand
     {
         Console.WriteLine(json ? node?.ToJsonString() ?? "null" : text(node));
         return 0;
+    }
+
+    /// <summary>What a shared conversation shows right now (read-only), as plain text.</summary>
+    static string DescribeShare(JsonNode? node)
+    {
+        var lines = new List<string> { $"{node?["title"]} · {node?["share"]?["hostEmail"]} · " + (node?["closed"] is { } closed && closed.ToString().Length > 0 ? closed.ToString() : node?["online"]?.GetValue<bool>() == true ? "live" : "host offline") };
+        foreach (var message in node?["messages"]?.AsArray() ?? []) lines.Add($"\n[{message!["role"]}] {message["content"]}");
+        foreach (var comment in node?["comments"]?.AsArray() ?? []) lines.Add($"\n💬 {comment!["author"]}: {comment["text"]}");
+        return string.Join('\n', lines);
+    }
+
+    static string DescribeSync(JsonNode? state)
+    {
+        if (state == null) return "";
+        var lines = new List<string>
+        {
+            $"State: {state["state"]}{(state["realtime"]?.GetValue<bool>() == true ? " · real time on" : "")} · last sync: {(state["lastSyncUtc"] is { } last ? DateTime.Parse(last.ToString()).ToLocalTime().ToString("g") : "never")} · full resync every {(state["minutes"]?.GetValue<int>() == 0 ? "— (never)" : state["minutes"] + " min")}",
+            $"{state["providers"]} provider(s) · {state["projects"]} cloud project(s) · {state["sharedWithMe"]} shared with you · {state["publicShares"]} public"
+        };
+        foreach (var issue in state["issues"]?.AsArray() ?? []) lines.Add($"  [{issue!["level"]}] {issue["area"]}: {issue["message"]}");
+        return string.Join('\n', lines);
     }
 
     static string Describe(JsonNode? node)

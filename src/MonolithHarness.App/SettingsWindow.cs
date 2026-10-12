@@ -8,11 +8,24 @@ public sealed partial class MainWindow
 {
     Window? settingsWindow;
     SettingsNavigation? settingsNavigation;
-    int settingsProviderTab = -1, settingsPermissionTab = -1;
-    bool providersRequested, permissionsRequested;
+    int settingsProviderTab = -1, settingsPermissionTab = -1, settingsServerTab = -1;
+    bool providersRequested, permissionsRequested, serverRequested;
     bool editingSettings;
 
     Task Settings() => Settings(showProviders: false);
+
+    /// <summary>Opens the settings window on its Server page (connection, account, synchronization).</summary>
+    async Task OpenServerSettingsAsync()
+    {
+        serverRequested = true;
+        if (settingsNavigation != null && settingsServerTab >= 0)
+        {
+            settingsNavigation.SelectedIndex = settingsServerTab; serverRequested = false;
+            settingsWindow?.Activate();
+            return;
+        }
+        await Settings();
+    }
 
     async Task Settings(bool showProviders, bool showPermissions = false)
     {
@@ -52,7 +65,7 @@ public sealed partial class MainWindow
         window.Closed += (_, _) =>
         {
             if (!ReferenceEquals(settingsWindow, window)) return;
-            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; settingsPermissionTab = -1; providersRequested = false; permissionsRequested = false;
+            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; settingsPermissionTab = -1; settingsServerTab = -1; providersRequested = false; permissionsRequested = false; serverRequested = false;
         };
         window.Content = new Border
         {

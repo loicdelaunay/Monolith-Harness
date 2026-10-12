@@ -32,7 +32,8 @@ public sealed partial class TerminalUi
             if (chat != null && !link.Chats.ContainsKey(chat.Id) && !link.Projects.ContainsKey(chat.ProjectId))
                 choices.Add(shared ? new("invite", L("Inviter un spectateur", "Invite a viewer")) : new("share", L("Partager cette conversation en direct", "Share this conversation live"), L("Les outils restent sur cet appareil", "Tools stay on this device")));
             if (shared) choices.Add(new("unshare", L("Arrêter le partage", "Stop sharing")));
-            choices.Add(new("sync", L("Synchroniser les providers", "Sync providers"), L("Catalogue du serveur", "Server catalog")));
+            choices.Add(new("join", L("Rejoindre avec un code", "Join with a code"), L("Suivre une conversation partagée", "Follow a shared conversation")));
+            choices.Add(new("sync", L("Synchronisation", "Synchronization"), L("État, problèmes, fréquence", "State, problems, frequency")));
             choices.Add(new("password", L("Changer le mot de passe", "Change password")));
             choices.Add(new("logout", L("Se déconnecter", "Sign out")));
             choices.Add(new("forget", L("Oublier ce serveur", "Forget this server")));
@@ -62,12 +63,8 @@ public sealed partial class TerminalUi
                 Post(() => notice = L("Invitation envoyée : ", "Invitation sent: ") + email.Trim());
                 break;
             }
-            case "sync":
-            {
-                var providers = (await client.Call("server.sync", ct: lifetime.Token))!.AsArray();
-                await Refresh(); Post(() => notice = L($"{providers.Count} provider(s) du serveur synchronisé(s)", $"{providers.Count} server provider(s) synced"));
-                break;
-            }
+            case "sync": await ServerSyncMenu(); break;
+            case "join": await ServerJoin(); break;
             case "password": await ServerPassword(); break;
             case "logout":
                 await client.Call("server.logout", ct: lifetime.Token); await Refresh(); Post(() => notice = L("Déconnecté du serveur", "Signed out of the server"));
@@ -162,8 +159,51 @@ public sealed partial class TerminalUi
     async Task ServerShare()
     {
         if (CurrentChat is not { } chat) return;
-        await client.Call("server.share.start", new { chatId = chat.Id }, lifetime.Token);
+        var publicChoice = await Prompt(L("Visibilité", "Visibility"), L("Privée : seules les personnes ayant le code ou invitées la suivent. Publique : tous les comptes la voient dans leur liste.", "Private: only people with the code or invited follow it. Public: every account sees it in their list."),
+            [new("private", L("Privée (code ou invitation)", "Private (code or invitation)")), new("public", L("Publique (listée pour tous)", "Public (listed for everybody)"))]);
+        if (publicChoice == null) return;
+        var started = (await client.Call("server.share.start", new { chatId = chat.Id, isPublic = publicChoice == "public" }, lifetime.Token))!;
         await Refresh();
         Post(() => notice = L("Partage en direct démarré · /server pour inviter", "Live sharing started · /server to invite"));
+        await Show(L("Code de partage", "Sharing code"), Str(started, "code") + "\n\n" + L("Transmettez ce code : la personne le saisit dans Cloud › Rejoindre avec un code (GUI) ou `server join` (CLI). `/server` pour le renouveler ou inviter.", "Hand this code over: the person enters it in Cloud › Join with a code (GUI) or `server join` (CLI)."));
+    }
+
+    async Task ServerJoin()
+    {
+        var code = await Prompt(L("Code de partage", "Sharing code"), L("Le code transmis par l'hôte, par exemple K7QD4-M9X2R.", "The code the host gave you, for example K7QD4-M9X2R."));
+        if (string.IsNullOrWhiteSpace(code)) return;
+        JsonNode content;
+        try { content = (await client.Call("server.share.join", new { code = code.Trim() }, lifetime.Token))!; }
+        catch (InvalidOperationException ex) when (ex.InnerException is ServerException problem)
+        { await Show(L("Rejoindre", "Join"), problem.Code == "invalid_share_code" ? L("Ce code est invalide ou n'est plus actif.", "This code is invalid or no longer active.") : problem.Message); return; }
+        var lines = new List<string> { $"{Str(content, "title")} · {Str(content["share"], "hostEmail")}" + (Flag(content, "online") ? " · live" : " · " + L("hôte hors ligne", "host offline")), "" };
+        foreach (var message in content["messages"]?.AsArray() ?? []) lines.Add($"[{Str(message, "role")}] {Str(message, "content")}\n");
+        if (lines.Count == 2) lines.Add(L("Aucun contenu pour le moment : il n'est disponible que lorsque l'appareil de l'hôte est connecté.", "No content yet: it is only available while the host's device is connected."));
+        await Show(L("Conversation partagée (lecture seule)", "Shared conversation (read-only)"), string.Join('\n', lines));
+        await Refresh();
+    }
+
+    async Task ServerSyncMenu()
+    {
+        while (true)
+        {
+            var state = (await client.Call("server.sync.status", ct: lifetime.Token))!;
+            var minutes = state["minutes"]?.GetValue<int>() ?? 5;
+            var body = $"{Str(state, "state")}{(Flag(state, "realtime") ? " · " + L("temps réel actif", "real time on") : "")}\n"
+                + L("Dernière synchronisation : ", "Last synchronization: ") + (state["lastSyncUtc"] is { } last ? DateTime.Parse(last.ToString()).ToLocalTime().ToString("g") : L("jamais", "never")) + "\n"
+                + L("Resynchronisation complète : ", "Full resync: ") + (minutes == 0 ? L("jamais", "never") : minutes + " min") + "\n"
+                + L($"{state["providers"]} provider(s) · {state["projects"]} projet(s) cloud · {state["sharedWithMe"]} partagée(s) avec vous", $"{state["providers"]} provider(s) · {state["projects"]} cloud project(s) · {state["sharedWithMe"]} shared with you");
+            foreach (var issue in state["issues"]?.AsArray() ?? []) body += $"\n[{Str(issue, "level")}] {Str(issue, "area")} : {Str(issue, "message")}";
+            var action = await Prompt(L("Synchronisation", "Synchronization"), body, [new("now", L("Synchroniser maintenant", "Sync now")), new("interval", L("Changer la fréquence", "Change the frequency")), new("clear", L("Effacer les problèmes", "Clear the problems")), new("back", L("Retour", "Back"))]);
+            if (action is null or "back") return;
+            if (action == "now") { await client.Call("server.sync.now", ct: lifetime.Token); await Refresh(); }
+            else if (action == "clear") await client.Call("server.sync.clear", ct: lifetime.Token);
+            else
+            {
+                var choice = await Prompt(L("Resynchronisation complète", "Full resynchronization"), L("Les changements du serveur arrivent toujours en direct ; ceci n'est qu'un filet de sécurité.", "Server changes always arrive live; this is only a safety net."),
+                    [new("0", L("Jamais", "Never")), new("1", "1 min"), new("5", L("5 min (par défaut)", "5 min (default)")), new("60", L("1 heure", "1 hour")), new("1440", L("1 jour", "1 day"))]);
+                if (choice != null) await client.Call("server.sync.interval", new { minutes = int.Parse(choice) }, lifetime.Token);
+            }
+        }
     }
 }

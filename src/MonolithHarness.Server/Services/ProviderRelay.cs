@@ -10,7 +10,7 @@ namespace MonolithHarness.Server.Services;
 /// Relays authorized OpenAI-compatible calls to the upstream provider, adding the secret on the server side.
 /// Clients (and cloud workers, with a run-scoped token) only ever hold a Monolith session, never the provider key.
 /// </summary>
-public sealed class ProviderRelay(ProviderService providers, AccessService access, SettingsService settings, IDbContextFactory<ServerDb> factory, AuditService audit, IHttpClientFactory clients)
+public sealed class ProviderRelay(ProviderService providers, AccessService access, SettingsService settings, IDbContextFactory<ServerDb> factory, AuditService audit, IHttpClientFactory clients, RunService runs)
 {
     public const string ClientName = "provider-relay";
     static readonly HashSet<string> PostPaths = ["chat/completions", "embeddings"];
@@ -54,12 +54,19 @@ public sealed class ProviderRelay(ProviderService providers, AccessService acces
         if (!models.Any(x => x.Id == model)) throw ApiException.Forbidden("model_not_allowed", "This model is not offered by the provider.");
         await providers.EnsureAccessAsync(userId, provider.Id);
 
+        // A call of a local conversation takes its place in the queue like a cloud request (cloud runs were admitted when they started).
+        RelaySlot? slot = !isRun && path == "chat/completions" ? await runs.AcquireRelayAsync(userId, provider.Id, model, http.RequestAborted) : null;
+        var failed = true;
+        try
+        {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted, slot?.Cancelled ?? CancellationToken.None);
+        var cancel = linked.Token;
         calls.AddOrUpdate(providerId, 1, (_, count) => count + 1);
         using var request = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl + "/" + path) { Content = new ByteArrayContent(body) };
         request.Content.Headers.ContentType = new("application/json");
         if (providers.Secret(provider) is { Length: > 0 } secret) request.Headers.Authorization = new("Bearer", secret);
         HttpResponseMessage upstream;
-        try { upstream = await clients.CreateClient(ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, http.RequestAborted); }
+        try { upstream = await clients.CreateClient(ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel); }
         catch (HttpRequestException ex)
         {
             await audit.WriteAsync("provider.relay_failed", provider.Name, ex.Message, false);
@@ -69,16 +76,24 @@ public sealed class ProviderRelay(ProviderService providers, AccessService acces
         {
             http.Response.StatusCode = (int)upstream.StatusCode;
             if (upstream.Content.Headers.ContentType is { } type) http.Response.ContentType = type.ToString();
-            await using var stream = await upstream.Content.ReadAsStreamAsync(http.RequestAborted);
+            await using var stream = await upstream.Content.ReadAsStreamAsync(cancel);
             var chunk = new byte[8192];
             int read;
             // Flush every chunk so streamed (SSE) tokens reach the client immediately.
-            while ((read = await stream.ReadAsync(chunk, http.RequestAborted)) > 0)
+            while ((read = await stream.ReadAsync(chunk, cancel)) > 0)
             {
-                await http.Response.Body.WriteAsync(chunk.AsMemory(0, read), http.RequestAborted);
-                await http.Response.Body.FlushAsync(http.RequestAborted);
+                await http.Response.Body.WriteAsync(chunk.AsMemory(0, read), cancel);
+                await http.Response.Body.FlushAsync(cancel);
             }
+            failed = !upstream.IsSuccessStatusCode;
         }
+        }
+        catch (OperationCanceledException) when (slot is { } cancelled && cancelled.Cancelled.IsCancellationRequested && !http.RequestAborted.IsCancellationRequested)
+        {
+            // An administrator cancelled the call from the queue: before the first byte it is reported as such, after it the stream just stops.
+            if (!http.Response.HasStarted) throw new ApiException(409, "cancelled", "The request was cancelled by an administrator.");
+        }
+        finally { if (slot != null) await runs.ReleaseRelayAsync(slot, failed); }
     }
 
     async Task EnsureRunActive(System.Security.Claims.ClaimsPrincipal user)

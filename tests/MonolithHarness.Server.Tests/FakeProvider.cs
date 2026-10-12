@@ -12,6 +12,8 @@ sealed class FakeProvider : IAsyncDisposable
     WebApplication app = null!;
     public string BaseUrl { get; private set; } = "";
     public ConcurrentQueue<Received> Requests { get; } = new();
+    /// <summary>Authorization header of each call to the model list.</summary>
+    public ConcurrentQueue<string> ModelListAuthorizations { get; } = new();
     /// <summary>Decides the reply to each chat completion; the default answers with a short text.</summary>
     public Func<JsonObject, Reply> Handler { get; set; } = _ => Reply.Text("OK");
 
@@ -29,7 +31,18 @@ sealed class FakeProvider : IAsyncDisposable
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         provider.app = builder.Build();
         provider.app.MapPost("/v1/chat/completions", provider.Complete);
-        provider.app.MapGet("/v1/models", () => Results.Json(new { data = new[] { new { id = "fake-model" } } }));
+        provider.app.MapGet("/v1/models", (HttpContext http) =>
+        {
+            provider.ModelListAuthorizations.Enqueue(http.Request.Headers.Authorization.ToString());
+            return Results.Json(new { data = new[] { new { id = "fake-model" } } });
+        });
+        // Catalogs of other providers: rich metadata (context length, image input), an array of names and a refused key.
+        provider.app.MapGet("/rich/models", () => Results.Json(new { data = new object[] {
+            new { id = "vision-model", architecture = new { input_modalities = new[] { "text", "image" } }, top_provider = new { context_length = 200000 } },
+            new { id = "text-model", context_length = 32768 }, new { id = "plain-model" } } }));
+        provider.app.MapGet("/names/models", () => Results.Json(new { models = new[] { new { name = "llama3:8b" }, new { name = "qwen2.5:7b" } } }));
+        provider.app.MapGet("/denied/models", () => Results.Json(new { error = "no" }, statusCode: 401));
+        provider.app.MapGet("/empty/models", () => Results.Json(new { hello = "world" }));
         await provider.app.StartAsync();
         provider.BaseUrl = provider.app.Urls.First().TrimEnd('/') + "/v1";
         return provider;

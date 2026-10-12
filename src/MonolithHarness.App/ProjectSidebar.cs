@@ -89,8 +89,10 @@ public sealed partial class MainWindow
         projectNavigation.Children.Clear(); independentChatRows.Clear(); projectBadgeHosts.Clear();
         attentionSidebarRows.Clear(); attentionSidebarSignature = ""; attentionNavigation.Children.Clear();
         projectNavigation.Children.Add(attentionNavigation);
-        var items = (projects.ItemsSource as IEnumerable<Project> ?? []).ToList();
-        var summaries = navigationChats.Select(CurrentSidebarChat).ToList();
+        // With a server configured the sidebar shows one view at a time: Local or Cloud.
+        var items = (projects.ItemsSource as IEnumerable<Project> ?? []).Where(x => InSidebarView(x.Id)).ToList();
+        var summaries = navigationChats.Where(x => InSidebarView(x.ProjectId)).Select(CurrentSidebarChat).ToList();
+        if (ServerLink.Configured) projectNavigation.Children.Add(BuildViewToggle());
         var pinned = SidebarOrder(summaries.Where(x => x.IsPinned && MatchesSidebarSearch(x)).OrderBy(x => x.Id), false, x => x.Id).ToList();
         if (pinned.Count > 0)
         {
@@ -101,7 +103,7 @@ public sealed partial class MainWindow
         var heading = new Grid { Margin = new(8, pinned.Count > 0 ? 16 : 4, 0, 6) };
         heading.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         for (int i = 0; i < 3; i++) heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var label = Label(WorkflowText("Projets", "Projects"), 12); label.Foreground = FluentDesign.Secondary;
+        var label = Label(CloudView ? WorkflowText("Projets cloud", "Cloud projects") : WorkflowText("Projets", "Projects"), 12); label.Foreground = FluentDesign.Secondary;
         label.VerticalAlignment = VerticalAlignment.Center; heading.Children.Add(label);
         var bell = BuildNotificationBell(); Grid.SetColumn(bell, 1); heading.Children.Add(bell);
         var search = Action("", () =>
@@ -114,11 +116,12 @@ public sealed partial class MainWindow
         FluentDesign.IconButton(search, "\uE721", WorkflowText("Filtrer les conversations", "Filter conversations"), false);
         search.Width = search.Height = 30; search.Padding = new(0); search.BorderThickness = new(0); search.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         Grid.SetColumn(search, 2); heading.Children.Add(search);
-        var addProject = Action("", NewProject); FluentDesign.IconButton(addProject, "\uE8F4", WorkflowText("Nouveau projet", "New project"), false);
+        var addProject = Action("", CloudView ? NewCloudProjectAsync : NewProject); FluentDesign.IconButton(addProject, "\uE8F4", CloudView ? WorkflowText("Nouveau projet cloud", "New cloud project") : WorkflowText("Nouveau projet", "New project"), false);
         addProject.Width = addProject.Height = 30; addProject.Padding = new(0); addProject.BorderThickness = new(0); addProject.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         Grid.SetColumn(addProject, 3); heading.Children.Add(addProject);
         projectNavigation.Children.Add(heading);
         foreach (var owner in SidebarOrder(items.OrderBy(x => x.IsInbox), true, x => x.Id)) AddGroup(owner, owner.IsInbox);
+        if (CloudView) AddCloudSections(projectNavigation);
 
         void AddGroup(Project owner, bool standalone)
         {

@@ -29,6 +29,7 @@ public static class ConversationExport
     {
         string L(string fr, string en) => state.Language == "en" ? en : fr;
         var b = new StringBuilder();
+        var history = messages.ToList();
         void Setting(string label, object? value) => b.AppendLine($"- **{label}** : {value}");
         b.AppendLine("# " + chat.Title).AppendLine();
         Setting(L("Projet", "Project"), project.Name);
@@ -62,6 +63,7 @@ public static class ConversationExport
         Setting(L("Accès hors pièces jointes", "Access outside attachments"), chat.AllowOutsideResources);
         Setting(L("Autorisations", "Permissions"), state.PermissionMode);
         Setting(L("Continuation automatique", "Auto-continue"), state.AutoContinue);
+        Setting(L("Relance des fins prématurées", "Resume premature endings"), features.RecoverPrematureCompletion);
         Setting("Skills", state.EnabledSkills);
         Setting(L("Accès navigateur / DOM", "Browser / DOM access"), $"{browser} / {dom}");
         Setting(L("Sources associées", "Attached sources"), string.Join(", ", ProjectResources.For(chat, project)));
@@ -69,9 +71,14 @@ public static class ConversationExport
         if (project.PermissionProfileJson.Length > 0) Setting("permission.json (profil importé / imported profile)", project.PermissionProfileJson);
         foreach (var server in servers)
             Setting("MCP", $"{server.Name} · {server.Transport} · {L("activé", "enabled")}={server.Enabled}");
+        b.AppendLine().AppendLine("## " + L("Fin de la génération", "Generation ending")).AppendLine();
+        var lastAssistant = history.LastOrDefault(item => item.Role == "assistant");
+        var ending = lastAssistant == null ? null : GenerationTermination.Read(lastAssistant);
+        Setting(L("Statut", "Status"), running ? L("En cours", "In progress") : lastAssistant?.State ?? L("Pas de réponse", "No response"));
+        Setting(L("Cause observée", "Observed cause"), running ? L("La génération est encore en cours.", "Generation is still running.") : (ending ?? new()).Describe(state.Language != "en"));
         b.AppendLine().AppendLine("## " + L("Échanges", "Conversation")).AppendLine();
         if (running) b.AppendLine("> " + L("Génération en cours : instantané partiel, sans arrêter l’agent.", "Generation in progress: partial snapshot; the agent continues running.")).AppendLine();
-        foreach (var message in messages)
+        foreach (var message in history)
         {
             var live = message.State != "complete" && progress?.MessageId == message.Id ? progress.Update : null;
             b.AppendLine($"### #{message.Id} — {message.Role}").AppendLine();
@@ -80,6 +87,22 @@ public static class ConversationExport
             Setting(L("Durée (s)", "Duration (s)"), (live?.Seconds ?? message.Seconds).ToString("0.###", CultureInfo.InvariantCulture));
             JsonObject? wire = null;
             try { if (!string.IsNullOrWhiteSpace(message.WireJson)) wire = JsonNode.Parse(message.WireJson) as JsonObject; } catch (System.Text.Json.JsonException) { }
+            if (message.Role == "assistant")
+            {
+                var end = live?.Termination ?? GenerationTermination.Read(message);
+                Setting(L("Cause de fin", "Ending cause"), (end ?? new()).Describe(state.Language != "en"));
+                if (end != null)
+                {
+                    Setting("finish_reason", end.ProviderReason.Length > 0 ? end.ProviderReason : L("Non communiqué", "Not supplied"));
+                    Setting(L("Marqueur de fin du flux reçu", "Stream end marker received"), end.StreamCompleted?.ToString() ?? L("Non communiqué", "Not supplied"));
+                    Setting(L("Nouvelles tentatives réseau", "Network retries"), end.RetryAttempts);
+                    Setting(L("Continuations après fin prématurée", "Continuations after premature ending"), end.ResumeAttempts);
+                    if (end.Detail.Length > 0) Setting(L("Détail de l’arrêt", "Ending details"), end.Detail.Replace("\n", " ").Replace("\r", " "));
+                    if (end.ErrorType.Length > 0) Setting(L("Type d’erreur", "Error type"), end.ErrorType);
+                    if (end.HttpStatus.HasValue) Setting(L("Statut HTTP", "HTTP status"), end.HttpStatus.Value);
+                    foreach (var previous in end.PreviousEndings ?? []) Setting(L("Fin avant continuation", "Ending before continuation"), previous.Describe(state.Language != "en") + (previous.ProviderReason.Length > 0 ? " · " + previous.ProviderReason : ""));
+                }
+            }
             var reasoning = live?.Reasoning ?? wire?["reasoning_content"]?.ToString() ?? wire?["reasoning"]?.ToString();
             if (!string.IsNullOrEmpty(reasoning)) b.AppendLine().AppendLine("#### " + L("Raisonnement", "Reasoning")).AppendLine().AppendLine(reasoning);
             b.AppendLine().AppendLine(live?.Text ?? message.Content).AppendLine();

@@ -17,10 +17,12 @@ public sealed partial class MainWindow
         var row = new Grid { ColumnSpacing = 6 };
         row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var scheduled = Action(WorkflowText("Tâches planifiées", "Scheduled tasks"), ShowScheduledTasks);
-        scheduled.FontSize = 12; scheduled.Padding = new(8, 8, 8, 8);
-        scheduled.HorizontalAlignment = HorizontalAlignment.Stretch;
+        // The server connection chip takes the place of the former "Scheduled tasks" button, which moved into the Tools menu.
+        var serverState = BuildServerChip();
         var menu = new MenuFlyout();
+        var scheduled = new MenuFlyoutItem { Text = WorkflowText("Tâches planifiées", "Scheduled tasks"), Icon = FluentDesign.Icon("") };
+        scheduled.Click += async (_, _) => await Guard(ShowScheduledTasks);
+        menu.Items.Add(scheduled); menu.Items.Add(new MenuFlyoutSeparator());
         foreach (var kind in Enum.GetValues<ModelToolKind>())
         {
             var item = new MenuFlyoutItem { Text = ModelToolsWindow.TitleFor(kind), Icon = FluentDesign.Icon(kind switch
@@ -34,7 +36,7 @@ public sealed partial class MainWindow
         detector.Click += async (_, _) => await Guard(ShowAiDetectorAsync); menu.Items.Add(detector);
         var tools = new DropDownButton { Content = WorkflowText("Outils", "Tools"), Flyout = menu, FontSize = 12, Padding = new(8, 8, 8, 8) };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tools, WorkflowText("Outils dédiés", "Dedicated tools"));
-        row.Children.Add(scheduled); Grid.SetColumn(tools, 1); row.Children.Add(tools);
+        row.Children.Add(serverState); Grid.SetColumn(tools, 1); row.Children.Add(tools);
         Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); };
         return row;
     }

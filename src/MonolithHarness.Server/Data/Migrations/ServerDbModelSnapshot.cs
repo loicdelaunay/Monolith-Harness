@@ -213,6 +213,29 @@ namespace MonolithHarness.Server.Data.Migrations
                     b.ToTable("Schedules");
                 });
 
+            modelBuilder.Entity("MonolithHarness.Server.Data.MessageAuthor", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MessageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ChatId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ProjectId", "MessageId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ProjectId", "ChatId");
+
+                    b.ToTable("MessageAuthors");
+                });
+
             modelBuilder.Entity("MonolithHarness.Server.Data.ProjectMember", b =>
                 {
                     b.Property<Guid>("ProjectId")
@@ -457,11 +480,17 @@ namespace MonolithHarness.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Code")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("HostId")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("RevokedUtc")
                         .HasColumnType("TEXT");
@@ -472,7 +501,12 @@ namespace MonolithHarness.Server.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.HasIndex("HostId");
+
+                    b.HasIndex("IsPublic");
 
                     b.ToTable("Shares");
                 });
@@ -655,6 +689,21 @@ namespace MonolithHarness.Server.Data.Migrations
                     b.HasOne("MonolithHarness.Server.Data.CloudProject", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MonolithHarness.Server.Data.MessageAuthor", b =>
+                {
+                    b.HasOne("MonolithHarness.Server.Data.CloudProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MonolithHarness.Server.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

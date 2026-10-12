@@ -19,6 +19,23 @@ public sealed partial class MainWindow
         var label = WorkflowText("Retirer ", "Remove ") + name;
         ToolTipService.SetToolTip(tile.RemoveButton, label);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile.RemoveButton, label);
+        // One flyout on the preview button; in-memory attachments have no disk actions.
+        var onDisk = Path.IsPathFullyQualified(location) && (File.Exists(location) || Directory.Exists(location));
+        var menu = onDisk ? CreateChatFileMenu(location, project) : new MenuFlyout();
+        if (onDisk && Directory.Exists(location) && menu.Items.LastOrDefault() is MenuFlyoutItem explore)
+            explore.Text = WorkflowText("Ouvrir dans l’explorateur", "Open in file manager");
+        if (menu.Items.Count == 0)
+        {
+            var preview = new MenuFlyoutItem { Text = WorkflowText("Aperçu", "Preview"), Icon = new FontIcon { Glyph = "\uE8A7" } };
+            preview.Click += async (_, _) => await Guard(open); menu.Items.Add(preview);
+        }
+        if (remove != null)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var detach = new MenuFlyoutItem { Text = WorkflowText("Retirer la pièce jointe", "Remove attachment"), Icon = new FontIcon { Glyph = "\uE711" } };
+            detach.Click += async (_, _) => await Guard(remove); menu.Items.Add(detach);
+        }
+        tile.PreviewButton.ContextFlyout = menu;
         return tile;
     }
     static bool IsImagePreviewPath(string path) => File.Exists(path) && Path.GetExtension(path).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".webp" or ".bmp" or ".gif";

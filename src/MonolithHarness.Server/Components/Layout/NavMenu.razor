@@ -35,7 +35,7 @@
     [Parameter] public ClaimsPrincipal? User { get; set; }
     [Parameter] public int PendingApprovals { get; set; }
 
-    bool Can(string permission) => Ui.Can(User, permission);
+    bool Can(string permission) => permission == Permissions.QueueManage ? Ui.CanManageQueue(User) : Ui.Can(User, permission);
 
     bool AnyAdmin => new[] { Permissions.UsersManage, Permissions.RolesManage, Permissions.SettingsManage, Permissions.AuditRead, Permissions.BackupManage, Permissions.ProvidersManage, Permissions.QueueManage }.Any(Can);
 }

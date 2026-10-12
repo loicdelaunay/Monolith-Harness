@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
@@ -11,13 +12,17 @@ public sealed record ProviderModel(string Id, int ContextLimit = 128000, bool Su
 
 public sealed record AccessEntry(string Kind, Guid Id, string Name);
 
+/// <summary>Outcome of testing a provider: reachability, status, latency and the models it publishes.</summary>
+public sealed record ProviderProbe(bool Ok, int Status, long Milliseconds, string Message, IReadOnlyList<ProviderModel> Models);
+
 public sealed record ProviderView(Guid Id, string Name, string BaseUrl, bool HasSecret, IReadOnlyList<ProviderModel> Models, bool IsEnabled, bool AllowLocalUse, IReadOnlyList<AccessEntry> Access);
 
 /// <summary>What a client receives: models and relay path, never the upstream address or the secret.</summary>
 public sealed record CatalogProvider(Guid Id, string Name, IReadOnlyList<ProviderModel> Models, bool AllowLocalUse, string RelayPath);
 
 /// <summary>Administrator-managed catalog of shared providers. Secrets stay on the server, encrypted with Data Protection.</summary>
-public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataProtectionProvider protection, AccessService access, SettingsService settings, AuditService audit)
+public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataProtectionProvider protection, AccessService access, SettingsService settings, AuditService audit,
+    IHttpClientFactory clients, SyncSignals signals)
 {
     readonly IDataProtector protector = protection.CreateProtector("MonolithHarness.Server.ProviderSecrets.v1");
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -46,6 +51,7 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         db.Providers.Add(provider);
         await db.SaveChangesAsync();
         await audit.WriteAsync("provider.created", provider.Name, provider.BaseUrl);
+        signals.Providers();
         return (await ListAsync()).First(x => x.Id == provider.Id);
     }
 
@@ -61,6 +67,7 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         if (await db.Providers.AnyAsync(x => x.Name == provider.Name && x.Id != id)) throw ApiException.Conflict("provider_exists", "A provider with this name already exists.");
         await db.SaveChangesAsync();
         await audit.WriteAsync("provider.updated", provider.Name, $"enabled={provider.IsEnabled}; localUse={provider.AllowLocalUse}; secretChanged={secret != null}");
+        signals.Providers();
         return (await ListAsync()).First(x => x.Id == id);
     }
 
@@ -71,6 +78,7 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         db.Providers.Remove(provider);
         await db.SaveChangesAsync();
         await audit.WriteAsync("provider.deleted", provider.Name);
+        signals.Providers();
     }
 
     public async Task SetAccessAsync(Guid id, IEnumerable<AccessEntry> entries)
@@ -85,7 +93,120 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         db.ProviderAccesses.AddRange(wanted.Select(x => new ProviderAccess { ProviderId = id, SubjectKind = x.Kind, SubjectId = x.Id }));
         await db.SaveChangesAsync();
         await audit.WriteAsync("provider.access_changed", provider.Name, $"{wanted.Count} entries");
+        signals.Providers();
     }
+
+    // ---- Test and detection ----
+
+    /// <summary>
+    /// Calls the provider's model list (<c>GET {base}/models</c>) with the given or stored key. Used by the administration dialog to
+    /// check the address and the key and to propose the models the provider offers. The key never leaves the server.
+    /// </summary>
+    /// <param name="secret">null: use the stored key of <paramref name="existing"/>; otherwise exactly this key (empty: none).</param>
+    public async Task<ProviderProbe> ProbeAsync(string? baseUrl, string? secret, Guid? existing, CancellationToken ct = default)
+    {
+        if (!Uri.TryCreate((baseUrl ?? "").Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query))
+            throw ApiException.BadRequest("invalid_provider", "The base URL must be an absolute http(s) address without credentials or query.");
+        var key = secret ?? "";
+        if (secret == null && existing is { } id)
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            if (await db.Providers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct) is { } stored) key = Secret(stored);
+        }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        var clock = Stopwatch.StartNew();
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri.ToString().TrimEnd('/') + "/models");
+        request.Headers.Accept.ParseAdd("application/json");
+        if (key.Length > 0) request.Headers.Authorization = new("Bearer", key);
+        try
+        {
+            using var response = await clients.CreateClient(ProviderRelay.ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            var status = (int)response.StatusCode;
+            if (!response.IsSuccessStatusCode)
+                return new(false, status, clock.ElapsedMilliseconds, status switch
+                {
+                    401 or 403 => $"Clé d’API refusée par le provider (HTTP {status}).",
+                    404 => "Liste des modèles introuvable (HTTP 404): l’adresse est peut-être incorrecte, ou le provider ne publie pas ses modèles. Saisissez-les à la main.",
+                    >= 300 and < 400 => $"Le provider redirige (HTTP {status}): utilisez l’adresse finale de l’API.",
+                    _ => $"Le provider a répondu HTTP {status}."
+                }, []);
+            await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var limited = new MemoryStream();
+            var chunk = new byte[16384];
+            int read;
+            while ((read = await body.ReadAsync(chunk, timeout.Token)) > 0)
+            {
+                if (limited.Length + read > 8 * 1024 * 1024) return new(false, status, clock.ElapsedMilliseconds, "La liste des modèles est trop volumineuse.", []);
+                limited.Write(chunk, 0, read);
+            }
+            var models = ParseCatalog(limited.ToArray());
+            var elapsed = clock.ElapsedMilliseconds;
+            return models.Count == 0
+                ? new(true, status, elapsed, $"Provider joignable en {elapsed} ms, mais aucun modèle n’a été reconnu dans sa réponse. Saisissez-les à la main.", [])
+                : new(true, status, elapsed, $"Provider joignable en {elapsed} ms · {models.Count} modèle(s) détecté(s).", models);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(false, 0, clock.ElapsedMilliseconds, "Le provider n’a pas répondu dans les 15 secondes.", []); }
+        catch (HttpRequestException ex) { return new(false, 0, clock.ElapsedMilliseconds, "Provider injoignable: " + (ex.InnerException?.Message ?? ex.Message), []); }
+    }
+
+    static readonly string[] ContextKeys = ["context_length", "context_window", "max_context_length", "max_model_len", "context_size", "n_ctx_train", "max_input_tokens"];
+
+    /// <summary>
+    /// Reads the model list of an OpenAI-compatible provider ({"data":[{"id":...}]}, also {"models":[...]} or a bare array) and, when
+    /// the provider publishes them, the context length and image support of each model.
+    /// </summary>
+    public static List<ProviderModel> ParseCatalog(byte[] json)
+    {
+        var models = new List<ProviderModel>();
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var list = root.ValueKind == JsonValueKind.Array ? root
+                : root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array ? data
+                : root.ValueKind == JsonValueKind.Object && root.TryGetProperty("models", out var named) && named.ValueKind == JsonValueKind.Array ? named
+                : default;
+            if (list.ValueKind != JsonValueKind.Array) return models;
+            foreach (var item in list.EnumerateArray())
+            {
+                string? id = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+                if (item.ValueKind == JsonValueKind.Object)
+                    foreach (var name in new[] { "id", "name", "model" })
+                        if (id == null && item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String) id = value.GetString();
+                if (string.IsNullOrWhiteSpace(id) || id.Length > 200) continue;
+                models.Add(new ProviderModel(id.Trim(), ContextOf(item), VisionOf(item)));
+            }
+        }
+        catch (JsonException) { }
+        return models.DistinctBy(x => x.Id).OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase).Take(500).ToList();
+    }
+
+    static int ContextOf(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object) return 128000;
+        foreach (var holder in new[] { item, Child(item, "top_provider"), Child(item, "meta"), Child(item, "capabilities") })
+            foreach (var key in ContextKeys)
+                if (holder.ValueKind == JsonValueKind.Object && holder.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var tokens) && tokens >= 1024)
+                    return tokens;
+        return 128000;
+    }
+
+    static bool VisionOf(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object) return false;
+        var architecture = Child(item, "architecture");
+        foreach (var modalities in new[] { Child(item, "input_modalities"), Child(item, "modalities"), Child(architecture, "input_modalities") })
+            if (modalities.ValueKind == JsonValueKind.Array && modalities.EnumerateArray().Any(x => x.ValueKind == JsonValueKind.String && x.GetString()!.Equals("image", StringComparison.OrdinalIgnoreCase)))
+                return true;
+        foreach (var flags in new[] { Child(item, "capabilities"), item })
+            foreach (var name in new[] { "vision", "supports_vision", "image_input" })
+                if (flags.ValueKind == JsonValueKind.Object && flags.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True) return true;
+        return false;
+    }
+
+    static JsonElement Child(JsonElement parent, string name) =>
+        parent.ValueKind == JsonValueKind.Object && parent.TryGetProperty(name, out var value) ? value : default;
 
     // ---- Use ----
 

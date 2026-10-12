@@ -683,6 +683,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
             active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
 
             active.WireJson = completion.Message.ToJsonString(); active.State = "complete";
+            GenerationTermination.Save(active, completion.Termination ?? new());
 
             run.Tracker?.Complete(completion.Seconds, completion.OutputTokens ?? ContextWindow.EstimateText(active.Content));
 
@@ -732,6 +733,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
                 ex is OperationCanceledException ? StatusKind.Notice : StatusKind.Error);
 
             AppLog.Write(ex is OperationCanceledException ? AppLogLevel.Information : AppLogLevel.Error, "opencode.failed", ex, run.Chat.Id);
+            if (active != null) GenerationTermination.Save(active, GenerationTermination.Failure(ex, GenerationTermination.Latest(active, run.ExportProgress?.Update), password, ct.IsCancellationRequested));
 
             if (active != null && assistantUi != null) assistantUi.UpdateContent(active.Content + T("\n[Réponse interrompue]"));
 

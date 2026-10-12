@@ -10,10 +10,12 @@ public sealed partial class MainWindow
     readonly Dictionary<int, ProposalReviewWindow> proposalReviewWindows = [];
     readonly Dictionary<int, TaskCompletionSource<bool>> proposalCommits = [];
     readonly HashSet<int> proposalReviewLoading = [];
+    readonly Border pinnedProposals = new() { Visibility = Visibility.Collapsed };
 
     void AddProposalReviewButton(StackPanel host, int ownerId, ProposalBatch batch, IReadOnlyList<ProposalDiff> diffs)
     {
-        var button = host.Children.OfType<Button>().FirstOrDefault(item => Equals(item.Tag, "proposal-review"));
+        if (chat?.Id != ownerId) return;
+        var button = pinnedProposals.Child as Button;
         if (button == null)
         {
             button = Action("", () => ReviewFileProposalsAsync(ownerId));
@@ -21,8 +23,9 @@ public sealed partial class MainWindow
             button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
             button.Padding = new(16, 12, 16, 12); button.MinHeight = 56; button.CornerRadius = new(10);
             button.Background = FluentDesign.Card; button.BorderBrush = FluentDesign.Resource("ControlStrokeColorDefaultBrush"); button.BorderThickness = new(1);
-            button.Margin = new(0, 8, 0, 8); host.Children.Add(button);
+            button.Margin = new(0, 4, 0, 4); pinnedProposals.Child = button;
         }
+        pinnedProposals.Visibility = Visibility.Visible;
         var content = new Grid { ColumnSpacing = 16 };
         content.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); content.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var summary = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
@@ -82,6 +85,7 @@ public sealed partial class MainWindow
                     ShowStatus(WorkflowText($"Revue terminée · {accepted} blocs appliqués", $"Review finished · {accepted} blocks applied"));
                     if (chat?.Id == ownerId)
                     {
+                        pinnedProposals.Child = null; pinnedProposals.Visibility = Visibility.Collapsed;
                         foreach (var button in messages.Children.OfType<Button>().Where(item => Equals(item.Tag, "proposal-review")).ToArray()) messages.Children.Remove(button);
                         try { await RefreshGitAsync(CancellationToken.None); }
                         catch (Exception ex) { AppLog.Write(AppLogLevel.Warning, "proposals.git_refresh_failed", ex); }

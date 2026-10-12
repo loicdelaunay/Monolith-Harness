@@ -22,7 +22,7 @@ public sealed partial class MainWindow
                 foreach (var child in Descendants(VisualTreeHelper.GetChild(parent, i))) yield return child;
         }
         var menu = Descendants(root).OfType<DropDownButton>().Single(b => b.Content?.ToString() == "Outils");
-        if (menu.Flyout is not MenuFlyout flyout || flyout.Items.Count != 3) throw new Exception("Dedicated tools menu is missing.");
+        if (menu.Flyout is not MenuFlyout flyout || flyout.Items.Count != Enum.GetValues<ModelToolKind>().Length + 4) throw new Exception("Dedicated tools menu is missing.");
         await Capture(root, Path.Combine(output, "tools-menu-location.png"));
         foreach (var kind in Enum.GetValues<ModelToolKind>())
         {

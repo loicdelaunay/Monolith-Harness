@@ -7,6 +7,9 @@
 <PageTitle>File d’attente · Monolith Harness Server</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-2">File d’attente</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+    Les requêtes des projets cloud et les appels des conversations locales qui utilisent un provider partagé (Desktop, CLI, Android) passent par cette file, dans le même ordre équitable.
+</MudText>
 
 @if (_denied)
 {
@@ -30,7 +33,7 @@ else if (_overview != null)
                 <MudTd DataLabel="Rang">@(context.QueuePosition?.ToString() ?? "—")</MudTd>
                 <MudTd DataLabel="État"><MudChip T="string" Size="Size.Small" Color="@StateColor(context.State)">@StateLabel(context.State)</MudChip></MudTd>
                 <MudTd DataLabel="Utilisateur">@context.Requester</MudTd>
-                <MudTd DataLabel="Origine">@(context.Source == "schedule" ? "Planifiée" : "Interactive")</MudTd>
+                <MudTd DataLabel="Origine">@(context.Source switch { "schedule" => "Planifiée", "relay" => "Conversation locale", _ => "Interactive" })</MudTd>
                 <MudTd DataLabel="Modèle">@context.Model</MudTd>
                 <MudTd DataLabel="Demande">@context.Prompt</MudTd>
                 <MudTd DataLabel="Depuis">@context.CreatedUtc.ToLocalTime().ToString("T")</MudTd>

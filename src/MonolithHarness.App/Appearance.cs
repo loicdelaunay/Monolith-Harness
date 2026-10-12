@@ -26,6 +26,7 @@ public sealed partial class MainWindow
         TextZoom.Set(config.FontZoomPercent);
         ApplyTheme(config.Theme);
         ApplyBranding();
+        ConfigureGlobalTokenSpeed(config.ShowGlobalTokenSpeed);
         RefreshComposerModelSummary();
         QueueMessageVirtualization(); RefreshChatTextHighlights();
     }
@@ -82,7 +83,7 @@ public sealed partial class MainWindow
     void RefreshComposerMetrics()
     {
         composerContextRing.Update(contextBar.Value / 100d);
-        composerContextText.Text = contextPercentText.Text;
+        composerContextText.Text = contextPercentText.Text.Replace(" ~", "").Replace("≈ ", "");
         RefreshRecentComposerSpeed();
         composerContextText.Foreground = FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
         composerSpeedText.Foreground = FluentDesign.Secondary;

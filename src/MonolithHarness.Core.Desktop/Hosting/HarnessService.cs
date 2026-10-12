@@ -44,7 +44,11 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
             case "chat.favorite":
                 await db.Chats.Where(c => c.Id == I(p, "id")).ExecuteUpdateAsync(set => set.SetProperty(c => c.IsFavorite, B(p, "favorite")), ct); return true;
             case "chat.autoname":
-                return await ConversationNaming.RenameAsync(database, I(p, "id"), http, Decrypt, false, ct);
+            {
+                var named = await ConversationNaming.RenameAsync(database, I(p, "id"), http, Decrypt, false, ct);
+                if (named is string title && title.Length > 0) OnTitleChanged(I(p, "id"), title);
+                return named;
+            }
             case "inbox.list":return await Inbox(p,ct);
             case "inbox.move":return await MoveInbox(p,ct);
             case "inbox.add":return await AddInbox(p,ct);
@@ -110,15 +114,21 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
             case "project.delete":
                 if (runs.Values.Any(x => x.Project.Id == I(p, "id"))) throw new InvalidOperationException("Stop this project's conversations before deleting it.");
                 foreach (var terminalChat in await db.Chats.Where(x => x.ProjectId == I(p, "id")).Select(x => x.Id).ToListAsync(ct)) await terminals.RemoveChatAsync(terminalChat);
+                // A cloud project is deleted on the server first: otherwise the next synchronization would bring it back.
+                await MonolithHarness.Core.Remote.ServerSync.DeleteProjectOnServerAsync(Server, I(p, "id"), ct);
                 db.Projects.Remove(await db.Projects.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); ForgetServerLinks(projectId: I(p, "id")); return true;
             case "chat.save":
                 var chat = I(p, "id") == 0 ? new Chat { ProjectId = I(p, "projectId") } : await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct);
                 chat.Title = S(p, "title", "Nouvelle conversation");
                 if (chat.Id == 0) db.Chats.Add(chat);
-                await db.SaveChangesAsync(ct); return new { chat.Id };
+                await db.SaveChangesAsync(ct);
+                // A rename reaches the server (cloud conversation) and the viewers (shared conversation).
+                if (I(p, "id") != 0) OnTitleChanged(chat.Id, chat.Title);
+                return new { chat.Id };
             case "chat.delete":
                 if (runs.ContainsKey(I(p, "id"))) throw new InvalidOperationException("Stop this conversation before deleting it.");
                 await terminals.RemoveChatAsync(I(p, "id"));
+                await MonolithHarness.Core.Remote.ServerSync.DeleteChatOnServerAsync(Server, I(p, "id"), ct);
                 db.Chats.Remove(await db.Chats.SingleAsync(x => x.Id == I(p, "id"), ct)); await db.SaveChangesAsync(ct); ForgetServerLinks(chatId: I(p, "id")); return true;
             case "sandbox.review": return await ReviewSandbox(p, ct);
             case "sandbox.apply": return await ApplySandbox(p, ct);
@@ -288,6 +298,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
         if (artifactMaintenance != null) await artifactMaintenance;
         artifactMaintenanceStop.Dispose();
         CancelAll(); terminals.Dispose(); http.Dispose();
+        if (syncService != null) await syncService.DisposeAsync();
         if (serverConnection != null) await serverConnection.DisposeAsync();
         foreach (var process in servers) { try { if (!process.HasExited) process.Kill(true); } catch { } process.Dispose(); }
     }

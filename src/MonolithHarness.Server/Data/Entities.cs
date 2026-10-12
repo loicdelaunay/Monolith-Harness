@@ -243,6 +243,19 @@ public sealed class SharedConversation
     public string ClientConversationId { get; set; } = "";
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? RevokedUtc { get; set; }
+    /// <summary>Secret code (10 symbols, normalized) that lets someone follow the conversation; null when turned off.</summary>
+    public string? Code { get; set; }
+    /// <summary>Public conversations are listed to every signed-in user allowed to follow conversations.</summary>
+    public bool IsPublic { get; set; }
+}
+
+/// <summary>Who sent a user message of a cloud conversation (the messages themselves live in the project's engine database).</summary>
+public sealed class MessageAuthor
+{
+    public Guid ProjectId { get; set; }
+    public int MessageId { get; set; }
+    public int ChatId { get; set; }
+    public Guid UserId { get; set; }
 }
 
 public sealed class ShareParticipant

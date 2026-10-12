@@ -12,6 +12,10 @@ public sealed class CloudChatLink
 {
     public string ServerProjectId { get; set; } = "";
     public int ServerChatId { get; set; }
+    /// <summary>The server's update stamp of the conversation when its messages were last pulled: a different stamp means new content.</summary>
+    public DateTime? PulledUtc { get; set; }
+    /// <summary>The title the server had at the last synchronization (to tell a server rename from a local one).</summary>
+    public string? ServerTitle { get; set; }
 }
 
 /// <summary>
@@ -24,6 +28,9 @@ public sealed class ServerLinkData
     /// <summary>The "accept HTTP" option: lets a non-local server be reached without TLS.</summary>
     public bool AllowHttp { get; set; }
     public string Email { get; set; } = "";
+    /// <summary>The account's id and display name (shown next to what it writes in a shared project).</summary>
+    public string UserId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
     /// <summary>The session token protected like provider keys, as Base64.</summary>
     public string ProtectedToken { get; set; } = "";
     public DateTime? TokenExpiresUtc { get; set; }
@@ -37,6 +44,10 @@ public sealed class ServerLinkData
     public Dictionary<int, CloudChatLink> Chats { get; set; } = [];
     /// <summary>Local chat id → shared conversation id (the "local shared" mode).</summary>
     public Dictionary<int, string> Shares { get; set; } = [];
+    /// <summary>Minutes between two complete resynchronizations with the server; 0 = never (changes still arrive live). Default 5.</summary>
+    public int SyncMinutes { get; set; } = 5;
+    /// <summary>The sidebar shows the server's projects and shared conversations instead of the local ones.</summary>
+    public bool CloudView { get; set; }
 
     public bool Configured => Url.Length > 0;
     public bool SignedIn => ProtectedToken.Length > 0;

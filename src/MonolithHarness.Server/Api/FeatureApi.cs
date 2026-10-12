@@ -14,7 +14,11 @@ public sealed record ChatRequest(string? Title);
 public sealed record SendRequest(string? Text, Guid ProviderId, string? Model);
 public sealed record DecisionRequest(string? Choice);
 public sealed record AnswerRequest(bool Cancelled, List<List<string>>? Answers);
-public sealed record ShareRequest(string? Title, string? ClientConversationId);
+public sealed record ShareRequest(string? Title, string? ClientConversationId, bool? IsPublic);
+public sealed record JoinRequest(string? Code);
+public sealed record CommentRequest(string? Text);
+public sealed record ShareSettingsRequest(bool? IsPublic);
+public sealed record ProbeRequest(string? BaseUrl, string? Secret, Guid? ProviderId);
 public sealed record InviteRequest(string? Email);
 
 public static class FeatureApi
@@ -22,6 +26,7 @@ public static class FeatureApi
     public static void MapFeatureApi(this IEndpointRouteBuilder app)
     {
         MapProviders(app);
+        MapDirectory(app);
         MapProjects(app.MapGroup("/api/projects").WithTags("Cloud projects").RequireAuthorization());
         MapRuns(app);
         MapSchedules(app.MapGroup("/api/schedules").WithTags("Scheduled tasks").RequireAuthorization());
@@ -62,6 +67,11 @@ public static class FeatureApi
             await service.DeleteAsync(id);
             return Results.NoContent();
         });
+        admin.MapPost("/probe", async (ProbeRequest request, ClaimsPrincipal user, AccessService access, ProviderService service, HttpContext http) =>
+        {
+            access.Require(user, Permissions.ProvidersManage);
+            return await service.ProbeAsync(request.BaseUrl, request.Secret, request.ProviderId, http.RequestAborted);
+        }).WithSummary("Tests a provider address and key (GET /models) and returns the models it publishes. Omit 'secret' to use the stored key of 'providerId'.");
         admin.MapPut("/{id:guid}/access", async (Guid id, AccessRequest request, ClaimsPrincipal user, AccessService access, ProviderService service) =>
         {
             access.Require(user, Permissions.ProvidersManage);
@@ -69,6 +79,16 @@ public static class FeatureApi
             return Results.NoContent();
         }).WithSummary("Users and roles allowed to use the provider (kind 'user' or 'role').");
     }
+
+    // ---- Directory ----
+
+    /// <summary>Lets anybody who can invite (project owners, share hosts) look up active accounts by e-mail or name.</summary>
+    static void MapDirectory(IEndpointRouteBuilder app) =>
+        app.MapGet("/api/users/search", async ([FromQuery] string? query, [FromQuery] int? take, ClaimsPrincipal user, AccessService access, DirectoryService directory) =>
+        {
+            if (!access.Can(user, Permissions.CloudUse) && !access.Can(user, Permissions.SharingHost)) throw ApiException.Forbidden("missing_permission", "Searching accounts needs the cloud or sharing permission.");
+            return await directory.SearchActiveAsync(user.RequireUserId(), query, take ?? 20);
+        }).WithTags("Directory").RequireAuthorization().WithSummary("Active accounts matching a text (e-mail or display name), to pick members or viewers.");
 
     // ---- Cloud projects ----
 
@@ -137,6 +157,12 @@ public static class FeatureApi
             await service.RequireAsync(user, id, ProjectAccess.Run);
             return Results.Created($"/api/projects/{id}/chats", await store.CreateChatAsync(id, request.Title));
         });
+        projects.MapPatch("/{id:guid}/chats/{chatId:int}", async (Guid id, int chatId, ChatRequest request, ClaimsPrincipal user, ProjectService service, ProjectStore store) =>
+        {
+            await service.RequireAsync(user, id, ProjectAccess.Run);
+            await store.RenameChatAsync(id, chatId, request.Title);
+            return Results.NoContent();
+        }).WithSummary("Renames a conversation: every member of the project sees the new title.");
         projects.MapDelete("/{id:guid}/chats/{chatId:int}", async (Guid id, int chatId, ClaimsPrincipal user, ProjectService service, ProjectStore store, RunService runs) =>
         {
             await service.RequireAsync(user, id, ProjectAccess.Run);
@@ -197,9 +223,25 @@ public static class FeatureApi
     static void MapShares(RouteGroupBuilder shares)
     {
         shares.MapGet("", async (ClaimsPrincipal user, ShareService service) => await service.ListAsync(user));
-        shares.MapPost("", async (ShareRequest request, ClaimsPrincipal user, ShareService service) => Results.Created("/api/shares", await service.CreateAsync(user, request.Title, request.ClientConversationId)))
+        shares.MapPost("", async (ShareRequest request, ClaimsPrincipal user, ShareService service) => Results.Created("/api/shares", await service.CreateAsync(user, request.Title, request.ClientConversationId, request.IsPublic ?? false)))
             .WithSummary("Declares a local conversation as shared. The device then attaches its bridge over the WebSocket.");
         shares.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal user, ShareService service) => await service.GetAsync(user, id));
+        shares.MapGet("/public", async (ClaimsPrincipal user, ShareService service) => await service.ListPublicAsync(user))
+            .WithSummary("Shared conversations their host made public.");
+        shares.MapPost("/join", async (JoinRequest request, ClaimsPrincipal user, ShareService service) => await service.JoinAsync(user, request.Code))
+            .WithSummary("Follows a shared conversation from its sharing code (attempts are limited).");
+        shares.MapPatch("/{id:guid}", async (Guid id, ShareSettingsRequest request, ClaimsPrincipal user, ShareService service) =>
+            request.IsPublic is { } isPublic ? await service.SetPublicAsync(user, id, isPublic) : await service.GetAsync(user, id))
+            .WithSummary("Host only: makes the conversation public or private.");
+        shares.MapPost("/{id:guid}/comments", async (Guid id, CommentRequest request, ClaimsPrincipal user, ShareService service) =>
+        {
+            await service.CommentAsync(user, id, request.Text);
+            return Results.NoContent();
+        }).WithSummary("Adds a comment to a followed conversation (shown to everybody and sent to the host device).");
+        shares.MapPost("/{id:guid}/code", async (Guid id, ClaimsPrincipal user, ShareService service) => await service.RegenerateCodeAsync(user, id))
+            .WithSummary("Host only: generates a new sharing code; the previous one stops working.");
+        shares.MapDelete("/{id:guid}/code", async (Guid id, ClaimsPrincipal user, ShareService service) => await service.DisableCodeAsync(user, id))
+            .WithSummary("Host only: turns the sharing code off.");
         shares.MapPost("/{id:guid}/participants", async (Guid id, InviteRequest request, ClaimsPrincipal user, ShareService service) => await service.InviteAsync(user, id, request.Email));
         shares.MapDelete("/{id:guid}/participants/{userId:guid}", async (Guid id, Guid userId, ClaimsPrincipal user, ShareService service) =>
         {

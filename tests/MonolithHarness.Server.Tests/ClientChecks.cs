@@ -207,6 +207,34 @@ static class ClientChecks
             check(await WaitFor(() => Events(x => x["event"]?.ToString() == "share.comment" && x["text"]!.ToString() == "Bravo !" && x["author"]!.ToString() == "vic@example.com").Count == 1, 10000), "Le commentaire d’un spectateur revient à l’hôte, rien de plus");
             check((await server.Get($"/api/shares/{shareId}", corToken)).Body.GetProperty("participants").GetArrayLength() == 1, "L’invitation est enregistrée côté serveur");
 
+            // The code to hand out, public conversations, joining and reading from a terminal
+            var code = started["code"]!.GetValue<string>();
+            check(code.Length == 11 && !started["isPublic"]!.GetValue<bool>(), "Démarrer un partage donne un code à transmettre; privé par défaut");
+            check((await Call("server.share.info", new() { ["chatId"] = localChat }))!["code"]!.GetValue<string>() == code, "L’hôte relit son code");
+            var renewed = await Call("server.share.code", new() { ["chatId"] = localChat, ["action"] = "new" });
+            check(renewed!["code"]!.GetValue<string>() != code, "L’hôte génère un nouveau code");
+            var currentCode = renewed["code"]!.GetValue<string>();
+            var content = await Call("server.share.join", new() { ["code"] = currentCode.ToLowerInvariant() });
+            check(content!["messages"]!.AsArray().Count >= 2 && content["share"]!["title"]!.GetValue<string>() == "Ma session locale", "Un code donne le contenu de la conversation partagée, lisible depuis un terminal");
+            await Call("server.share.public", new() { ["chatId"] = localChat, ["isPublic"] = true });
+            check((await Call("server.shares.public"))!.AsArray().Count == 0 && (await server.Get("/api/shares/public", vicToken)).Body.GetArrayLength() == 1, "Une conversation publique est listée pour les autres comptes (pas pour son hôte)");
+            await Call("server.share.public", new() { ["chatId"] = localChat, ["isPublic"] = false });
+            await Call("server.share.code", new() { ["chatId"] = localChat, ["action"] = "off" });
+            check((await Fails("server.share.join", new() { ["code"] = currentCode })).Length > 0, "Un code désactivé est refusé");
+
+            // Automatic synchronization of the engine host
+            var syncState = await Call("server.sync.start");
+            check(syncState!["state"]!.GetValue<string>() is "Connecting" or "Online", "Le moteur démarre la synchronisation automatique du lien");
+            check(await WaitFor(() => Events(x => x["event"]?.ToString() == "server.state" && x["state"]?["state"]?.ToString() == "Online").Count > 0, 20000), "L’état de la connexion est annoncé à l’interface (événement server.state)");
+            var interval = await Call("server.sync.interval", new() { ["minutes"] = 60 });
+            check(interval!["minutes"]!.GetValue<int>() == 60 && (await Call("server.sync.status"))!["minutes"]!.GetValue<int>() == 60, "La fréquence de resynchronisation se règle et se mémorise");
+            await Call("server.sync.interval", new() { ["minutes"] = 5 });
+            var manual = await Call("server.sync.now");
+            check(manual!["state"]!["lastSyncUtc"] != null && manual["state"]!["issues"]!.AsArray().All(x => x!["level"]!.ToString() != "Error"), "Synchroniser maintenant réussit sans erreur");
+            var remoteName = "Créé ailleurs " + Guid.NewGuid().ToString("N")[..6];
+            await server.Post("/api/projects", new { name = remoteName }, corToken);
+            check(await WaitFor(() => Events(x => x["event"]?.ToString() == "server.changed").Count > 0, 20000) && (await Call("snapshot"))!["projects"]!.AsArray().Any(x => x!["name"]!.ToString() == remoteName), "Un projet cloud créé ailleurs apparaît dans l’espace de travail sans rien demander");
+
             // Restart of the application: the bridge attaches again by itself
             await service.DisposeAsync();
             check(await viewer.WaitAsync(x => WsClient.Str(x, "name") == "bridge" && !x.GetProperty("data").GetProperty("online").GetBoolean()) != null, "Fermer l’application met le partage hors ligne");

@@ -64,6 +64,8 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     CliClient client = null!;
     WorkspaceSnapshot? workspace;
     MonolithHarness.Core.Remote.ServerLinkData? serverLink;
+    JsonNode? serverState;
+    readonly Dictionary<int, int> shareViewers = [];
     UiDialog? dialog;
     int chatId, providerId, pendingOperations, frame;
     bool quit, dirty = true, showDetails;
@@ -109,6 +111,8 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         Work(async () =>
         {
             var initial = await client.Initialize(options, lifetime.Token);
+            // With a server, providers, cloud projects and shared conversations follow it by themselves while this terminal is open.
+            try { serverState = (await client.Call("server.sync.start", ct: lifetime.Token)); } catch (InvalidOperationException) { }
             Post(() => { workspace = initial.Snapshot; providerId = initial.ProviderId; notice = L("Prêt · / pour les commandes", "Ready · / for commands"); SwitchChat(initial.ChatId); });
             if (FeatureSettings.Read(initial.Snapshot.State.FeaturesJson).CliCheckUpdates) await CheckStartupUpdate();
         });
@@ -200,6 +204,14 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         switch (S(data, "event"))
         {
             case "chat.renamed": Work(Refresh); break;
+            case "server.state": serverState = data["state"]; break;
+            case "server.changed":
+                Work(Refresh);
+                // A conversation changed elsewhere (another member, another device): show what the server has now.
+                if (data["changes"]?["messages"] is JsonArray changedMessages && changedMessages.Any(x => x?.GetValue<int>() == chatId) && !Running(chatId)) ReloadChat(chatId);
+                break;
+            case "share.viewers": shareViewers[id] = I(data, "count"); break;
+            case "server.remote.end": view.Messages.Remove(-1); view.Reasoning.Remove(-1); view.Thinking = false; view.Status = ""; break;
             case "started":
                 view.ContextRequest = null;
                 view.Status = L("Le modèle réfléchit…", "Thinking…"); view.Notice = ""; view.Thinking = true;
@@ -293,6 +305,24 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
                     try { view.Reasoning[item.Id] = S(JsonNode.Parse(string.IsNullOrWhiteSpace(item.WireJson) ? "{}" : item.WireJson), "reasoning_content"); } catch (JsonException) { }
                 }
                 view.Inbox = inbox; view.Loading = false;
+            });
+        });
+    }
+    /// <summary>Reads the conversation again and replaces what is shown (messages that changed on the server included).</summary>
+    void ReloadChat(int id)
+    {
+        var view = View(id);
+        Work(async () =>
+        {
+            var history = await client.History(id, lifetime.Token);
+            Post(() =>
+            {
+                view.Messages.Remove(-1); view.Reasoning.Remove(-1);
+                foreach (var item in history)
+                {
+                    view.Messages[item.Id] = item;
+                    try { view.Reasoning[item.Id] = S(JsonNode.Parse(string.IsNullOrWhiteSpace(item.WireJson) ? "{}" : item.WireJson), "reasoning_content"); } catch (JsonException) { }
+                }
             });
         });
     }

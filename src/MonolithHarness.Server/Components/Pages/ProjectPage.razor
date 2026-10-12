@@ -50,9 +50,19 @@ else if (_project != null)
                     else
                     {
                         <div id="chat-scroll" class="mh-chat">
-                            @foreach (var message in _messages.Where(x => x.Content.Length > 0))
+                            @foreach (var message in _messages.Where(x => x.Content.Length > 0 || x.Reasoning.Length > 0))
                             {
-                                <div class="mh-msg @(message.Role)">@message.Content</div>
+                                <div class="mh-msg @(message.Role)">
+                                    @if (message.Role == "user" && message.AuthorEmail is { Length: > 0 } author)
+                                    {
+                                        <div class="mh-author"><AccountAvatar Email="@author" Name="@message.AuthorName" Size="22" /><span>@(string.IsNullOrWhiteSpace(message.AuthorName) ? author : message.AuthorName)</span></div>
+                                    }
+                                    @if (message.Reasoning.Length > 0)
+                                    {
+                                        <details class="mh-details"><summary>Réflexion</summary><div>@message.Reasoning</div></details>
+                                    }
+                                    @message.Content
+                                </div>
                             }
                             @if (_stream.Length > 0)
                             {
@@ -172,13 +182,8 @@ else if (_project != null)
             </div>
             @if (_project.Access == "owner")
             {
-                <div class="d-flex flex-wrap gap-3 align-center mt-3 justify-end">
-                    <MudTextField Immediate="true" @bind-Value="_memberEmail" Label="Adresse e-mail du membre" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" />
-                    <MudSelect T="string" @bind-Value="_memberAccess" Label="Accès" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px">
-                        <MudSelectItem T="string" Value="@("read")">Lecture</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("run")">Exécution</MudSelectItem>
-                    </MudSelect>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_memberEmail.Trim().Length == 0)" OnClick="AddMember">Ajouter</MudButton>
+                <div class="d-flex justify-end mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="AddMembers">Ajouter des membres</MudButton>
                 </div>
             }
         </MudTabPanel>
@@ -208,7 +213,6 @@ else if (_project != null)
     List<FileEntry> _entries = [];
     // Members
     List<MemberView> _members = [];
-    string _memberEmail = "", _memberAccess = "read";
 
     bool CanRun => _project?.Access is "owner" or "run";
     bool Busy => _run != null && !RunStates.IsFinal(_run.State);
@@ -414,10 +418,14 @@ else if (_project != null)
 
     // ---- Members ----
 
-    async Task AddMember()
+    async Task AddMembers()
     {
-        var wanted = _members.Select(x => new MemberRequest(x.Email, x.Access)).Append(new MemberRequest(_memberEmail, _memberAccess)).ToList();
-        if (await Ui.TryAsync(async user => { await ProjectsService.SetMembersAsync(user, Id, wanted); _members = await ProjectsService.MembersAsync(user, Id); }, "Membre ajouté.")) _memberEmail = "";
+        var excluded = _members.Select(x => x.UserId).Append(_project!.OwnerId).ToList();
+        var dialog = await Dialogs.ShowAsync<MembersDialog>("Ajouter des membres", new DialogParameters<MembersDialog> { { x => x.Excluded, excluded } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: MembersDialog.Result picked } || picked.Emails.Count == 0) return;
+        var wanted = _members.Select(x => new MemberRequest(x.Email, x.Access)).Concat(picked.Emails.Select(email => new MemberRequest(email, picked.Access))).ToList();
+        await Ui.TryAsync(async user => { await ProjectsService.SetMembersAsync(user, Id, wanted); _members = await ProjectsService.MembersAsync(user, Id); },
+            picked.Emails.Count == 1 ? "Membre ajouté." : $"{picked.Emails.Count} membres ajoutés.");
     }
 
     async Task RemoveMember(MemberView member)

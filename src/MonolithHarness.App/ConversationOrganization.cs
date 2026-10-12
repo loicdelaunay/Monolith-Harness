@@ -36,6 +36,7 @@ public sealed partial class MainWindow
             if (item != null) { item.Title = name; if (db.Entry(item).State != EntityState.Detached) db.Entry(item).Property(c => c.Title).OriginalValue = name; }
             if (conversationRuns.TryGetValue(id, out var run)) { run.Chat.Title = name; run.Db.Entry(run.Chat).Property(c => c.Title).OriginalValue = name; }
             if (chat?.Id == id) { chat.Title = name; title.Text = name; }
+            OnChatTitleChanged(id, name);
             ApplyChatSearch(chat?.Id);
             for (int i = 0; i < chatNotices.Count; i++) if (chatNotices[i].ChatId == id) chatNotices[i] = chatNotices[i] with { Title = name };
         }

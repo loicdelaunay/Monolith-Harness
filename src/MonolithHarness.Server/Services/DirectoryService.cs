@@ -6,12 +6,15 @@ namespace MonolithHarness.Server.Services;
 
 public sealed record RoleRef(Guid Id, string Name);
 
+/// <summary>An active account as proposed by the member picker: enough to recognize it, nothing else.</summary>
+public sealed record UserSuggestion(Guid Id, string Email, string DisplayName);
+
 public sealed record UserView(Guid Id, string Email, string DisplayName, bool IsActive, bool PasswordChangePending, DateTime CreatedUtc, DateTime? LastLoginUtc, IReadOnlyList<RoleRef> Roles);
 
 public sealed record RoleView(Guid Id, string Name, string Description, bool IsSystem, IReadOnlyList<string> Permissions, int Members);
 
 /// <summary>Administrator operations on accounts and roles.</summary>
-public sealed class DirectoryService(IDbContextFactory<ServerDb> factory, AccountService accounts, SessionService sessions, AuditService audit)
+public sealed class DirectoryService(IDbContextFactory<ServerDb> factory, AccountService accounts, SessionService sessions, AuditService audit, SyncSignals signals)
 {
     // ---- Users ----
 
@@ -20,6 +23,17 @@ public sealed class DirectoryService(IDbContextFactory<ServerDb> factory, Accoun
         await using var db = await factory.CreateDbContextAsync();
         var users = await db.Users.AsNoTracking().Include(x => x.Roles).ThenInclude(x => x.Role).OrderBy(x => x.Email).ToListAsync();
         return users.Select(ToView).ToList();
+    }
+
+    /// <summary>Active accounts (other than the requester) whose e-mail or name contains the text, for member and viewer pickers.</summary>
+    public async Task<List<UserSuggestion>> SearchActiveAsync(Guid requester, string? query, int take)
+    {
+        var text = (query ?? "").Trim().ToLowerInvariant();
+        if (text.Length > 100) text = text[..100];
+        await using var db = await factory.CreateDbContextAsync();
+        var users = db.Users.AsNoTracking().Where(x => x.IsActive && x.Id != requester);
+        if (text.Length > 0) users = users.Where(x => x.Email.Contains(text) || x.DisplayName.ToLower().Contains(text));
+        return await users.OrderBy(x => x.Email).Take(Math.Clamp(take, 1, 200)).Select(x => new UserSuggestion(x.Id, x.Email, x.DisplayName)).ToListAsync();
     }
 
     public async Task<UserView> GetUserAsync(Guid id)
@@ -67,6 +81,8 @@ public sealed class DirectoryService(IDbContextFactory<ServerDb> factory, Accoun
         await db.SaveChangesAsync();
         if (!user.IsActive) await sessions.RevokeAllAsync(id);
         await audit.WriteAsync("user.updated", user.Email, $"active={user.IsActive}; roles={string.Join(", ", user.Roles.Select(x => x.Role?.Name))}");
+        // What an account may reach (providers, shares, projects) depends on its roles.
+        signals.Providers(); signals.PublicShares();
         return await GetUserAsync(id);
     }
 
@@ -139,6 +155,7 @@ public sealed class DirectoryService(IDbContextFactory<ServerDb> factory, Accoun
         if (permissions != null && !role.IsSystem) role.Permissions = Join(permissions);
         await db.SaveChangesAsync();
         await audit.WriteAsync("role.updated", role.Name, role.Permissions);
+        signals.Providers(); signals.PublicShares();
         return ToView(role);
     }
 

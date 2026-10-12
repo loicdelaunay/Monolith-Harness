@@ -18,18 +18,23 @@ public sealed record ServerProvider(Guid Id, string Name, List<ServerModel> Mode
 
 public sealed record ServerProject(Guid Id, string Name, string OwnerEmail, string Access, long FilesBytes);
 
-public sealed record ServerChat(int Id, string Title);
+public sealed record ServerChat(int Id, string Title, DateTime? UpdatedUtc = null);
 
+/// <summary>A message of a cloud conversation. <see cref="Wire"/> carries the tool calls / call id needed to draw tool cards; the author is known for user messages.</summary>
 public sealed record ServerMessage(int Id, string Role, string Content, string State, DateTime? CompletedUtc, int? InputTokens, int? OutputTokens,
-    int? CachedInputTokens = null, double Seconds = 0, string Reasoning = "");
+    int? CachedInputTokens = null, double Seconds = 0, string Reasoning = "", Guid? AuthorId = null, string? AuthorEmail = null, string? AuthorName = null, string? Wire = null);
 
-public sealed record ServerRun(Guid Id, Guid ProjectId, int ChatId, string State, int? QueuePosition, string Error, string ChangeSummary);
+public sealed record ServerRun(Guid Id, Guid ProjectId, int ChatId, string State, int? QueuePosition, string Error, string ChangeSummary, Guid? RequesterId = null, string? Requester = null, string? Source = null);
 
 public sealed record ServerApproval(Guid Id, Guid RunId, Guid ProjectId, string Kind, string Title, string Details, string Command, JsonElement? Questions, bool OneTimeOnly, string State);
 
 public sealed record ServerParticipant(Guid UserId, string Email, DateTime? LeftUtc);
 
-public sealed record ServerShare(Guid Id, string Title, string ClientConversationId, string HostEmail, bool IsHost, bool Live, DateTime? RevokedUtc, List<ServerParticipant> Participants);
+/// <summary>A shared conversation. <see cref="Code"/> is only filled for the host; <see cref="Joined"/> tells a viewer who joined (by invitation or code) from one who only sees a public conversation.</summary>
+public sealed record ServerShare(Guid Id, string Title, string ClientConversationId, string HostEmail, bool IsHost, bool Live, DateTime? RevokedUtc, List<ServerParticipant> Participants,
+    string? Code = null, bool IsPublic = false, bool Joined = false);
+
+public sealed record ServerUserSuggestion(Guid Id, string Email, string DisplayName);
 
 /// <summary>Typed REST client of the Monolith Harness Server. Errors surface as <see cref="ServerException"/> with the server's stable codes.</summary>
 public sealed class ServerApi
@@ -76,6 +81,16 @@ public sealed class ServerApi
 
     public Task<List<ServerChat>> ChatsAsync(Guid project, CancellationToken ct = default) => GetAsync<List<ServerChat>>($"api/projects/{project}/chats", ct);
 
+    /// <summary>Replaces the members of a project (owner only); access is "read" or "run".</summary>
+    public Task SetMembersAsync(Guid project, IEnumerable<(string Email, string Access)> members, CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Put, $"api/projects/{project}/members", new { members = members.Select(x => new { email = x.Email, access = x.Access }).ToList() }, ct);
+
+    public Task DeleteProjectAsync(Guid project, CancellationToken ct = default) => SendAsync(HttpMethod.Delete, $"api/projects/{project}", null, ct);
+
+    public Task DeleteChatAsync(Guid project, int chat, CancellationToken ct = default) => SendAsync(HttpMethod.Delete, $"api/projects/{project}/chats/{chat}", null, ct);
+
+    public Task RenameChatAsync(Guid project, int chat, string title, CancellationToken ct = default) => SendAsync(HttpMethod.Patch, $"api/projects/{project}/chats/{chat}", new { title }, ct);
+
     public Task<ServerChat> CreateChatAsync(Guid project, string title, CancellationToken ct = default) =>
         SendAsync<ServerChat>(HttpMethod.Post, $"api/projects/{project}/chats", new { title }, ct);
 
@@ -101,8 +116,29 @@ public sealed class ServerApi
 
     public Task<List<ServerShare>> SharesAsync(CancellationToken ct = default) => GetAsync<List<ServerShare>>("api/shares", ct);
 
-    public Task<ServerShare> CreateShareAsync(string title, string clientConversationId, CancellationToken ct = default) =>
-        SendAsync<ServerShare>(HttpMethod.Post, "api/shares", new { title, clientConversationId }, ct);
+    public Task<ServerShare> CreateShareAsync(string title, string clientConversationId, CancellationToken ct = default, bool isPublic = false) =>
+        SendAsync<ServerShare>(HttpMethod.Post, "api/shares", new { title, clientConversationId, isPublic }, ct);
+
+    public Task<ServerShare> ShareAsync(Guid share, CancellationToken ct = default) => GetAsync<ServerShare>($"api/shares/{share}", ct);
+
+    /// <summary>Conversations their host made public (the ones the account already follows are included).</summary>
+    public Task<List<ServerShare>> PublicSharesAsync(CancellationToken ct = default) => GetAsync<List<ServerShare>>("api/shares/public", ct);
+
+    /// <summary>Follows a conversation from its sharing code (any case, separators optional).</summary>
+    public Task<ServerShare> JoinShareAsync(string code, CancellationToken ct = default) => SendAsync<ServerShare>(HttpMethod.Post, "api/shares/join", new { code }, ct);
+
+    public Task<ServerShare> SetSharePublicAsync(Guid share, bool isPublic, CancellationToken ct = default) => SendAsync<ServerShare>(HttpMethod.Patch, $"api/shares/{share}", new { isPublic }, ct);
+
+    public Task<ServerShare> NewShareCodeAsync(Guid share, CancellationToken ct = default) => SendAsync<ServerShare>(HttpMethod.Post, $"api/shares/{share}/code", new { }, ct);
+
+    public Task<ServerShare> DisableShareCodeAsync(Guid share, CancellationToken ct = default) => SendAsync<ServerShare>(HttpMethod.Delete, $"api/shares/{share}/code", null, ct);
+
+    public Task LeaveShareAsync(Guid share, CancellationToken ct = default) => SendAsync(HttpMethod.Post, $"api/shares/{share}/leave", new { }, ct);
+
+    public Task CommentShareAsync(Guid share, string text, CancellationToken ct = default) => SendAsync(HttpMethod.Post, $"api/shares/{share}/comments", new { text }, ct);
+
+    /// <summary>Active accounts matching a text (e-mail or name), to pick people to invite.</summary>
+    public Task<List<ServerUserSuggestion>> SearchUsersAsync(string query, CancellationToken ct = default) => GetAsync<List<ServerUserSuggestion>>("api/users/search?query=" + Uri.EscapeDataString(query), ct);
 
     public Task InviteAsync(Guid share, string email, CancellationToken ct = default) =>
         SendAsync(HttpMethod.Post, $"api/shares/{share}/participants", new { email }, ct);

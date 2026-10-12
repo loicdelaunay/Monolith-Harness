@@ -174,6 +174,7 @@ public sealed partial class MainWindow : Window
         settingsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         settingsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
         foot.Children.Add(BuildGuiUpdateButton());
+        foot.Children.Add(BuildGlobalTokenSpeed());
         foot.Children.Add(BuildDedicatedToolsRow());
         foot.Children.Add(settingsButton);
         Grid.SetRow(foot, 3); panel.Children.Add(foot);
@@ -222,6 +223,7 @@ public sealed partial class MainWindow : Window
         var titleHost = new Grid();
         titleHost.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); titleHost.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         titleHost.Children.Add(namingSpinner); Grid.SetColumn(title, 1); titleHost.Children.Add(title);
+        titleHost.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); var sharedChip = BuildSharingChip(); Grid.SetColumn(sharedChip, 2); titleHost.Children.Add(sharedChip);
         Grid.SetColumn(titleHost, 1); header.Children.Add(titleHost);
         var toolsButton = Action("Outils", ToggleBrowser);
         var headerActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -259,6 +261,7 @@ public sealed partial class MainWindow : Window
         var composePanel = new StackPanel { Spacing = 4 };
         composePanel.Children.Add(pinnedTasks);
         composePanel.Children.Add(goalLabel);
+        composePanel.Children.Add(pinnedProposals);
         composePanel.Children.Add(BuildSlashSuggestions());
         composePanel.Children.Add(BuildInbox());
         composePanel.Children.Add(BuildComposerSurface());
@@ -515,6 +518,7 @@ public sealed partial class MainWindow : Window
         conversationRetentionTimer.Start(); await MaintainConversationsAsync();
         StartUpdateCheck();
         _ = ResumeSharesAsync();
+        StartServerSync();
         if(Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE") is {Length:>0} smoke)
             DispatcherQueue.TryEnqueue(async () => await UnoSmokeAsync(smoke));
     }
@@ -561,7 +565,7 @@ public sealed partial class MainWindow : Window
             if (item.Role == "tasks") { RenderTasks(item.Content, messages); }
             else if (item.Role == "user")
             {
-                actionCard = AddMessage("user", item.Content, item.Attachments, messages, sourceProject);
+                actionCard = AddMessage("user", item.Content, item.Attachments, messages, sourceProject, MonolithHarness.Core.Remote.ServerSync.AuthorOf(item));
             }
             else if (item.Role == "assistant")
             {
@@ -1208,7 +1212,7 @@ public sealed partial class MainWindow : Window
         return ui;
     }
 
-    Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null, Project? sourceProject = null)
+    Border AddMessage(string role, string text, IReadOnlyList<Attachment>? attachments = null, StackPanel? target = null, Project? sourceProject = null, MonolithHarness.Core.Remote.ServerAuthor? author = null)
     {
         var originalHost = target ?? messages;
         if (role == "user") BeginVirtualTurn(originalHost);
@@ -1219,7 +1223,7 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(text))
         {
             var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
-            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject),ReplyImageReader(messageProject), path => ResolveCitationPathAsync(path, messageProject));
+            MarkdownRenderer.RenderTo(bodyContainer, text, path => OpenChatItemAsync(path, messageProject), path => CreateChatFileMenu(path, messageProject),ReplyImageReader(messageProject), path => ResolveCitationPathAsync(path, messageProject), displayHtml: role != "user");
         }
         if (attachments != null && attachments.Count > 0)
         {
@@ -1235,6 +1239,8 @@ public sealed partial class MainWindow : Window
         roleLabel.VerticalAlignment = VerticalAlignment.Center;
         if (role == "user") stack.Tag = "user-bubble";
         else stack.Children.Add(new Border { MinHeight = 30, Child = roleLabel });
+        // In a shared project each user bubble says who sent it.
+        if (role == "user" && author != null) stack.Children.Add(BuildAuthorHeader(author));
         stack.Children.Add(bodyContainer);
         var card = FluentDesign.MessageSurface(stack, role);
         if (role == "user") ConfigureUserBubble(card, target);
@@ -1271,8 +1277,12 @@ public sealed partial class MainWindow : Window
         if (result == ContentDialogResult.Secondary && await Confirm(T("Supprimer le projet et toutes ses conversations ? Les fichiers sources restent sur le disque.")))
         {
             if (conversationRuns.Values.Any(x => x.Project.Id == project.Id)) throw new InvalidOperationException(T("Arrêtez les conversations en cours avant de supprimer leur projet."));
+            // A cloud project is deleted on the server first (owner only): otherwise the next synchronization would bring it back.
+            try { await MonolithHarness.Core.Remote.ServerSync.DeleteProjectOnServerAsync(Server, project.Id); }
+            catch (MonolithHarness.Core.Remote.ServerException ex) { ShowStatus(ex.Message, StatusKind.Error); return; }
             foreach (var terminalChat in await db.Chats.Where(x => x.ProjectId == project.Id).Select(x => x.Id).ToListAsync()) { await terminals.RemoveChatAsync(terminalChat); CloseConversationBrowser(terminalChat); }
             db.Projects.Remove(project);
+            MonolithHarness.Core.Remote.ServerSync.Forget(Server, projectId: project.Id); InvalidateServerLink();
         }
         else if (result != ContentDialogResult.Primary) return;
         await db.SaveChangesAsync();
@@ -1296,6 +1306,7 @@ public sealed partial class MainWindow : Window
         target.Title = newTitle.Trim();
         state.ChatId = target.Id;
         await db.SaveChangesAsync();
+        OnChatTitleChanged(target.Id, target.Title);
         await SelectProject();
     }
     async Task ArchiveChatsAsync(IReadOnlyList<Chat> targets, bool archive)
@@ -1314,8 +1325,12 @@ public sealed partial class MainWindow : Window
             ? WorkflowText("Supprimer cette conversation et ses images ?", "Delete this conversation and its images?")
             : WorkflowText($"Supprimer {targets.Count} conversations et leurs images ?", $"Delete {targets.Count} conversations and their images?");
         if (!await Confirm(question)) return;
+        // Cloud conversations are deleted on the server first: otherwise the next synchronization would bring them back.
+        try { foreach (var target in targets) await MonolithHarness.Core.Remote.ServerSync.DeleteChatOnServerAsync(Server, target.Id); }
+        catch (MonolithHarness.Core.Remote.ServerException ex) { ShowStatus(ex.Message, StatusKind.Error); return; }
         foreach (var target in targets)
         {
+            MonolithHarness.Core.Remote.ServerSync.Forget(Server, chatId: target.Id);
             await terminals.RemoveChatAsync(target.Id);
             CloseConversationBrowser(target.Id);
             conversationDrafts.Remove(target.Id);
@@ -1435,6 +1450,9 @@ public sealed partial class MainWindow : Window
             WorkflowText("Copie locale pour les graphiques interactifs dans les aperçus WebView du chat. Aucun CDN nécessaire.", "Local copy for interactive charts in chat WebView previews. No CDN required."), renderChartJs));
         var showComposerSpeed = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerSpeed };
         var showComposerContext = new ToggleSwitch { IsOn = markdownFeatures.ShowComposerContext };
+        var recoverPrematureCompletion = new ToggleSwitch { IsOn = markdownFeatures.RecoverPrematureCompletion };
+        chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Détecter et relancer les fins prématurées", "Detect and resume premature endings"),
+            WorkflowText("Tente de poursuivre une réponse tronquée par la limite du modèle ou une réponse vide, au maximum deux fois. Désactivé par défaut ; les tentatives peuvent consommer des tokens supplémentaires. La cause est conservée dans l’export.", "Try to continue a response truncated by the model limit or an empty response, at most twice. Disabled by default; attempts may consume additional tokens. The cause is included in the export."), recoverPrematureCompletion));
         chatSettings.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le débit", "Show token speed"),
             WorkflowText("Affiche les tokens par seconde à côté du modèle, dans la zone de saisie.",
                 "Show tokens per second beside the model in the composer."), showComposerSpeed));
@@ -1563,11 +1581,12 @@ public sealed partial class MainWindow : Window
         var permissionTab = tabs.Add(T("Autorisations"),permissionPanel, "\uE72E");
         tabs.Add(WorkflowText("Navigateur", "Browser"),features.Browser, "\uE774");
         tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
-        tabs.Add(WorkflowText("Serveur", "Server"), BuildServerSettings(loadingWindow), "\uE753");
+        var serverTab = tabs.Add(WorkflowText("Serveur", "Server"), BuildServerSettings(loadingWindow), "\uE753");
         tabs.Add(WorkflowText("Test", "Test"), BuildModelTestSettings(loadingWindow), "\uE9D9");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
-        settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab;
+        settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab; settingsServerTab = serverTab;
+        if (serverRequested) { tabs.SelectedIndex = serverTab; serverRequested = false; }
         if (providersRequested) { tabs.SelectedIndex = providerTab; providersRequested = false; }
         if (permissionsRequested) { tabs.SelectedIndex = permissionTab; permissionsRequested = false; }
         if (!await ShowSettingsWindowAsync(loadingWindow, tabs, () =>
@@ -1618,6 +1637,7 @@ public sealed partial class MainWindow : Window
         savedFeatures.AllowWebViewInTools = toolWebViews.IsOn;
         savedFeatures.AllowWebViewInChat = chatWebViews.IsOn;
         savedFeatures.PreviewHtmlInline = previewHtmlInline.IsOn;
+        savedFeatures.RecoverPrematureCompletion = recoverPrematureCompletion.IsOn;
         savedFeatures.DynamicHtmlHeight = dynamicHtmlHeight.IsOn;
         savedFeatures.TailwindFollowApplicationTheme = followTailwindTheme.IsOn;
         savedFeatures.RenderTailwind = renderTailwind.IsOn; savedFeatures.RenderChartJs = renderChartJs.IsOn;
@@ -2337,7 +2357,12 @@ public sealed partial class MainWindow : Window
                 wire = await VisionFor(run).PrepareAsync(wire, ct);
                 if (round > 0 && round % 12 == 0)
                 {
-                    if (!(run.IsScheduled ? run.Options.AutoContinue : state.AutoContinue)) { SetRunStatus(run, T("Limite de 12 étapes atteinte. Envoyez « continue » pour poursuivre."), StatusKind.Error); break; }
+                    if (!(run.IsScheduled ? run.Options.AutoContinue : state.AutoContinue))
+                    {
+                        var previous = db.Messages.Local.LastOrDefault(item => item.ChatId == chat.Id && item.Role == "assistant");
+                        if (previous != null) { GenerationTermination.Save(previous, (GenerationTermination.Read(previous) ?? new()) with { Kind = "step_limit" }); await db.SaveChangesAsync(ct); }
+                        SetRunStatus(run, T("Limite de 12 étapes atteinte. Envoyez « continue » pour poursuivre."), StatusKind.Error); break;
+                    }
                     SetRunStatus(run, T("Continuation automatique…"));
                 }
                 for (int i = definitions.Count - 1; i >= 0; i--)
@@ -2362,12 +2387,13 @@ public sealed partial class MainWindow : Window
                 {
                     if (update.Retry is { } retry)
                     {
+                        if (update.Termination != null) GenerationTermination.Save(active, update.Termination);
                         ShowModelRetry(run, retry, assistantUi, ct);
                         assistantUi.UpdateThinking("", isComplete: false); run.Tracker = new GenerationSpeedTracker(); lastPaint = DateTime.MinValue;
                         return;
                     }
                     ModelProgress(run, update);
-                    SetRunStatus(run, T("Le modèle réfléchit…"));
+                    SetRunStatus(run, update.ResumeAttempt > 0 ? WorkflowText($"Poursuite de la réponse · {update.ResumeAttempt}/2…", $"Continuing the response · {update.ResumeAttempt}/2…") : T("Le modèle réfléchit…"));
                     if (update.CompatibilityNotice.Length > 0) { active.CompatibilityNotice = update.CompatibilityNotice; compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible; }
                     run.ExportProgress = new(active.Id, update);
                     active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
@@ -2387,6 +2413,8 @@ public sealed partial class MainWindow : Window
                     ContextRequestProgressed(run, progress);
                 }, requireNoReasoning: ConversationModes.IsChat(run.Chat.InteractionMode) && run.Options.ThinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase), acp: provider.IsAcp ? AcpOptions(run) : null);
                 active.Content = completion.Message["content"]?.GetValue<string>() ?? "";
+                active.WireJson = completion.Message.ToJsonString();
+                GenerationTermination.Save(active, completion.Termination ?? new());
                 CancelModelRetryFeedback(run); run.ContextRequest = null; run.WaitingForModel = false; RefreshModelActivity();
                 active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
                 var finalTokens = completion.OutputTokens ?? Math.Ceiling((active.Content.Length + (completion.Message["reasoning_content"]?.GetValue<string>()?.Length ?? 0)) / 4.0);
@@ -2415,6 +2443,7 @@ public sealed partial class MainWindow : Window
                         var ownsToolQueue = !AgentRuntime.Handles(toolName) && !TerminalHub.Handles(toolName) && !RagTools.Handles(toolName) && !VisionBridge.Handles(toolName) && !PythonTools.Handles(toolName);
                         bool acquiredToolQueue = false;
                         var runningTool = BeginToolActivity(run, toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}");
+                        ShareToolStarted(chat, call["id"]?.GetValue<string>() ?? "", toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}");
                         try
                         {
                             if (!TerminalHub.IsBoundedWait(toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}"))
@@ -2474,6 +2503,7 @@ public sealed partial class MainWindow : Window
                         ScrollRunToBottom(run);
                     }
                 active.State = "complete"; active.WireJson = completion.Message.ToJsonString();
+                GenerationTermination.Save(active, completion.Termination ?? new());
                 db.Messages.AddRange(toolResults); await db.SaveChangesAsync();
                 ShareMessage(chat, active); foreach (var shared in toolResults) ShareMessage(chat, shared);
                 AddHistoryActions(active, assistantUi.Container);
@@ -2482,12 +2512,17 @@ public sealed partial class MainWindow : Window
                 var persistedHistory = await LoadContextHistoryAsync(run, ct);
                 if (!provider.IsAcp) persistedHistory = await AutoCompactHistoryAsync(run, persistedHistory, systemPrompt, definitions, secret, ct);
                 wire = ComposeWire(systemPrompt, ConversationModes.History(persistedHistory, run.Chat));
-                if (toolResults.Count == 0 && steered.Count==0) { SetRunStatus(run, T("Réponse terminée · historique enregistré."), StatusKind.Notice); active = null; break; }
+                if (toolResults.Count == 0 && steered.Count==0)
+                {
+                    SetRunStatus(run, completion.Termination is { CanResume: true } ending ? ending.Describe(run.Options.Language != "en") : T("Réponse terminée · historique enregistré."), StatusKind.Notice);
+                    active = null; break;
+                }
                 active = null;
             }
         }
         catch (Exception ex)
         {
+            if (active != null) GenerationTermination.Save(active, GenerationTermination.Failure(ex, GenerationTermination.Latest(active, run.ExportProgress?.Update), secret, ct.IsCancellationRequested));
             if (active != null && run.Tracker != null)
             {
                 var partialTokens = active.OutputTokens ?? Math.Ceiling(active.Content.Length / 4.0);

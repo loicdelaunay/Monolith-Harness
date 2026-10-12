@@ -25,6 +25,43 @@ public sealed partial class HarnessService
     readonly Lazy<ServerConnection> serverLink = new(() => new ServerConnection(new ServerLinkStore(ServerLinkStore.PathFor(database)), KeyVault.Encrypt, KeyVault.Decrypt));
     ShareBridge? shareBridge;
     Func<object, Task>? emitTee;
+    ServerSyncService? syncService;
+
+    /// <summary>Automatic synchronization with the server. Created on demand; it only runs once started (see <c>server.sync.start</c>).</summary>
+    ServerSyncService Sync => syncService ??= CreateSync();
+
+    ServerSyncService CreateSync()
+    {
+        var service = new ServerSyncService(Server, () => Db()) { IsChatBusy = chatId => cloudRuns.ContainsKey(chatId) || runs.ContainsKey(chatId) };
+        service.StateChanged += state => _ = EmitQuietly(new { @event = "server.state", state = SyncView(state) });
+        service.Changed += changes => EmitQuietly(new { @event = "server.changed", changes = ChangesView(changes) });
+        service.RemoteRunProgress += progress => EmitQuietly(RemoteView(progress));
+        return service;
+    }
+
+    async Task EmitQuietly(object value)
+    {
+        try { await emitTarget(value); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLog.Write(AppLogLevel.Information, "server.sync_event_skipped", ex); }
+    }
+
+    /// <summary>The synchronization state as a host shows it: names instead of numbers, and the last events.</summary>
+    public static object SyncView(SyncSnapshot s) => new
+    {
+        state = s.State.ToString(), s.Syncing, s.Realtime, s.LastSyncUtc, s.NextSyncUtc, minutes = s.SyncMinutes, s.ServerName, s.ServerVersion, s.Url, s.Email,
+        s.Providers, s.Projects, s.SharedWithMe, s.PublicShares, worst = s.Worst?.ToString(),
+        issues = s.Issues.Select(x => new { x.Key, level = x.Level.ToString(), x.Area, x.Message, x.SinceUtc, x.LastUtc, x.Count }).ToList(),
+        log = s.Log.Take(30).Select(x => new { x.TimeUtc, level = x.Level.ToString(), x.Area, x.Message }).ToList()
+    };
+
+    /// <summary>A request sent from elsewhere, as the events a local generation would emit (the streaming message has the id -1 until the real ones arrive).</summary>
+    static object RemoteView(RemoteProgress p) => p.Finished
+        ? new { @event = "server.remote.end", chatId = p.LocalChatId }
+        : p.Text.Length > 0 || p.Reasoning.Length > 0
+            ? new { @event = "stream", chatId = p.LocalChatId, messageId = -1, text = p.Text, reasoning = p.Reasoning, remote = true, requester = p.Requester }
+            : (object)new { @event = "status", chatId = p.LocalChatId, text = $"{p.Requester} · " + (p.State == "queued" ? "en attente sur le serveur / queued" : "requête en cours / request running") };
+
+    static object ChangesView(SyncChanges c) => new { c.Providers, c.Projects, c.RemovedProjects, c.Chats, c.RemovedChats, c.Messages, c.Shares };
 
     ServerConnection? serverConnection => serverLink.IsValueCreated ? serverLink.Value : null;
     ServerConnection Server => serverLink.Value;
@@ -36,6 +73,10 @@ public sealed partial class HarnessService
     async Task EmitAndShareAsync(object value)
     {
         await emitTarget(value);
+        // A conversation renamed (by the naming model) goes to the server and to the viewers of a shared conversation.
+        if (value.GetType().GetProperty("event")?.GetValue(value) as string == "chat.renamed"
+            && value.GetType().GetProperty("chatId")?.GetValue(value) is int renamedChat && value.GetType().GetProperty("title")?.GetValue(value) is string newTitle)
+            OnTitleChanged(renamedChat, newTitle);
         if (sharedChats.IsEmpty) return;
         try
         {
@@ -43,11 +84,40 @@ public sealed partial class HarnessService
                 || !sharedChats.TryGetValue(chatId, out var share) || node["event"]?.GetValue<string>() is not { } name) return;
             node.Remove("event");
             node.Remove("html");
+            // A message goes as the viewers draw it (reasoning, tool calls, timings, sender), read back from the conversation.
+            if (name == "message" && node["message"]?["id"] is JsonValue messageId && messageId.TryGetValue<int>(out var id))
+            {
+                await using var db = Db();
+                if (await db.Messages.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id) is { } stored)
+                {
+                    await Bridge.ForwardAsync(share, "message", new { chatId, message = ShareContent.Of(stored, ServerSync.CurrentAuthor(Server.Link)) });
+                    return;
+                }
+            }
             if (node["message"] is JsonObject message) { message.Remove("html"); message.Remove("attachments"); }
             await Bridge.ForwardAsync(share, name, node);
         }
         catch (Exception ex) when (ex is not OperationCanceledException) { AppLog.Write(AppLogLevel.Warning, "server.share_forward_failed", ex); }
     }
+
+    /// <summary>A conversation title changed here: a cloud conversation is renamed on the server, a shared one is renamed for its viewers.</summary>
+    void OnTitleChanged(int chatId, string title)
+    {
+        try
+        {
+            if (Server.Link.Chats.ContainsKey(chatId)) Sync.RequestPush(chatId);
+            if (sharedChats.TryGetValue(chatId, out var share)) _ = ForwardSafely(share, "title", new { title });
+        }
+        catch (Exception ex) when (ex is ServerException or InvalidOperationException or IOException) { AppLog.Write(AppLogLevel.Information, "server.title_skipped", ex); }
+    }
+
+    async Task ForwardSafely(Guid share, string name, object data)
+    {
+        try { await Bridge.ForwardAsync(share, name, data); }
+        catch (Exception ex) when (ex is ServerException or InvalidOperationException) { AppLog.Write(AppLogLevel.Information, "server.share_forward_skipped", ex); }
+    }
+
+    Task OnShareViewers(int chatId, int count) => EmitQuietly(new { @event = "share.viewers", chatId, count });
 
     // The host callbacks are constructor parameters: nested helper classes reach them through these members.
     Task<JsonNode?> HostCall(string method, JsonObject parameters, CancellationToken ct) => host(method, parameters, ct);
@@ -251,6 +321,7 @@ public sealed partial class HarnessService
                 try { await using var db = Db(); await ServerSync.SyncProvidersAsync(db, Server, ct); }
                 catch (ServerException ex) { syncError = ex.Message; }
                 _ = ResumeSharesAsync();
+                Sync.LinkChanged(); Sync.Start();
                 return new { login.PasswordChangeSuggested, login.PasswordChangeRequired, syncError, status = await StatusView(ct) };
             }
             case "server.password":
@@ -263,6 +334,7 @@ public sealed partial class HarnessService
                 await Server.LogoutAsync(ct);
                 await using var db = Db();
                 await ServerSync.RemoveProvidersAsync(db, Server, ct);
+                Sync.LinkChanged();
                 return await StatusView(ct);
             }
             case "server.disconnect":
@@ -271,6 +343,7 @@ public sealed partial class HarnessService
                 if (Server.SignedIn) { await Server.LogoutAsync(ct); await using var db = Db(); await ServerSync.RemoveProvidersAsync(db, Server, ct); }
                 sharedChats.Clear();
                 Server.Store.Update(l => { l.Url = ""; l.Email = ""; l.ProtectedToken = ""; l.TokenExpiresUtc = null; l.ServerName = ""; l.ServerVersion = ""; l.Providers.Clear(); l.Projects.Clear(); l.Chats.Clear(); l.Shares.Clear(); });
+                Sync.LinkChanged();
                 return await StatusView(ct);
             }
             case "server.sync":
@@ -309,7 +382,46 @@ public sealed partial class HarnessService
                 var chat = await db.Chats.SingleAsync(x => x.Id == I(p, "chatId"), ct);
                 return new { changed = (await ServerSync.PullChatAsync(db, Server, chat, ct)).Count };
             }
-            case "server.share.start": return await StartShare(I(p, "chatId"), S(p, "title"), ct);
+            case "server.sync.start":
+                if (Server.Link is { Configured: true, SignedIn: true }) Sync.Start();
+                return SyncView(Sync.Snapshot);
+            case "server.sync.status": return SyncView(Sync.Snapshot);
+            case "server.sync.now":
+            {
+                var changes = await Sync.SyncNowAsync(ct);
+                return new { changes = ChangesView(changes), state = SyncView(Sync.Snapshot) };
+            }
+            case "server.sync.interval":
+                Sync.SetMinutes(I(p, "minutes"));
+                return SyncView(Sync.Snapshot);
+            case "server.sync.clear":
+                Sync.ClearIssues();
+                return SyncView(Sync.Snapshot);
+            case "server.share.start": return await StartShare(I(p, "chatId"), S(p, "title"), B(p, "isPublic"), ct);
+            case "server.share.info":
+            {
+                if (!sharedChats.TryGetValue(I(p, "chatId"), out var shared)) throw new InvalidOperationException("Cette conversation n'est pas partagée / This conversation is not shared.");
+                return await Server.Api.ShareAsync(shared, ct);
+            }
+            case "server.share.public":
+            {
+                if (!sharedChats.TryGetValue(I(p, "chatId"), out var shared)) throw new InvalidOperationException("Cette conversation n'est pas partagée / This conversation is not shared.");
+                return await Server.Api.SetSharePublicAsync(shared, B(p, "isPublic"), ct);
+            }
+            case "server.share.code":
+            {
+                if (!sharedChats.TryGetValue(I(p, "chatId"), out var shared)) throw new InvalidOperationException("Cette conversation n'est pas partagée / This conversation is not shared.");
+                return S(p, "action") == "off" ? await Server.Api.DisableShareCodeAsync(shared, ct) : await Server.Api.NewShareCodeAsync(shared, ct);
+            }
+            case "server.share.join": return await ReadSharedConversation(await Server.Api.JoinShareAsync(S(p, "code"), ct), ct);
+            case "server.share.view": return await ReadSharedConversation(await Server.Api.ShareAsync(Guid.Parse(S(p, "id")), ct), ct);
+            case "server.share.comment":
+                await Server.Api.CommentShareAsync(Guid.Parse(S(p, "id")), S(p, "text"), ct);
+                return true;
+            case "server.share.leave":
+                await Server.Api.LeaveShareAsync(Guid.Parse(S(p, "id")), ct);
+                return true;
+            case "server.shares.public": return await Server.Api.PublicSharesAsync(ct);
             case "server.share.stop":
             {
                 var chatId = I(p, "chatId");
@@ -337,24 +449,35 @@ public sealed partial class HarnessService
 
     // ---- Local shared conversations ----
 
-    async Task<object> StartShare(int chatId, string title, CancellationToken ct)
+    /// <summary>The current content of a shared conversation (waits briefly for the host's snapshot): for reading once from a terminal.</summary>
+    async Task<object> ReadSharedConversation(ServerShare share, CancellationToken ct)
+    {
+        using var viewer = await ShareViewer.OpenAsync(Server, share);
+        for (var waited = 0; waited < 4000 && viewer.Messages.Count == 0 && viewer.ClosedReason == null; waited += 100) await Task.Delay(100, ct);
+        return new
+        {
+            share = new { share.Id, share.Title, share.HostEmail, share.IsPublic }, title = viewer.Title, online = viewer.Online, closed = viewer.ClosedReason,
+            messages = viewer.Messages.Select(x => new { x.Role, x.Content }).ToList(), comments = viewer.Comments.Select(x => new { x.Author, x.Text, x.TimeUtc }).ToList()
+        };
+    }
+
+    async Task<object> StartShare(int chatId, string title, bool isPublic, CancellationToken ct)
     {
         if (sharedChats.ContainsKey(chatId)) throw new InvalidOperationException("Cette conversation est déjà partagée / This conversation is already shared.");
         string name;
         await using (var db = Db()) name = string.IsNullOrWhiteSpace(title) ? (await db.Chats.AsNoTracking().SingleAsync(x => x.Id == chatId, ct)).Title : title.Trim();
-        var share = await Bridge.StartAsync(name, chatId.ToString(), () => ShareSnapshot(chatId), comment => OnShareComment(chatId, comment), ct);
+        var share = await Bridge.StartAsync(name, chatId.ToString(), () => ShareSnapshot(chatId), comment => OnShareComment(chatId, comment), ct, isPublic, count => OnShareViewers(chatId, count));
         sharedChats[chatId] = share.Id;
         Server.Store.Update(l => l.Shares[chatId] = share.Id.ToString());
-        return new { shareId = share.Id, title = share.Title };
+        return new { shareId = share.Id, title = share.Title, code = share.Code, isPublic = share.IsPublic };
     }
 
     async Task<object> ShareSnapshot(int chatId)
     {
         await using var db = Db();
         var chat = await db.Chats.AsNoTracking().SingleAsync(x => x.Id == chatId);
-        var messages = await db.Messages.AsNoTracking().Where(x => x.ChatId == chatId && x.State == "complete").OrderBy(x => x.Id)
-            .Select(x => new { x.Id, x.Role, x.Content }).ToListAsync();
-        return new { title = chat.Title, messages };
+        var history = await db.Messages.AsNoTracking().Where(x => x.ChatId == chatId).OrderBy(x => x.Id).ToListAsync();
+        return ShareContent.Snapshot(chat.Title, history, ServerSync.CurrentAuthor(Server.Link));
     }
 
     /// <summary>A viewer's comment is shown to the host; it never reaches the model or the tools.</summary>
@@ -374,7 +497,7 @@ public sealed partial class HarnessService
                 if (!Guid.TryParse(id, out var share) || !live.Contains(share)) { Server.Store.Update(l => l.Shares.Remove(chatId)); continue; }
                 sharedChats[chatId] = share;
                 var chat = chatId;
-                await Bridge.AttachAsync(share, () => ShareSnapshot(chat), comment => OnShareComment(chat, comment));
+                await Bridge.AttachAsync(share, () => ShareSnapshot(chat), comment => OnShareComment(chat, comment), count => OnShareViewers(chat, count));
             }
         }
         catch (Exception ex) when (ex is ServerException or InvalidOperationException) { AppLog.Write(AppLogLevel.Information, "server.share_resume_skipped", ex); }

@@ -12,7 +12,11 @@ public sealed partial class MainWindow
     { public override string ToString() => "/" + Name + " " + Arguments + "  ·  " + Description; }
     readonly ListView slashChoices = new() { MaxHeight = 210, SelectionMode = ListViewSelectionMode.Single, IsItemClickEnabled = true };
     readonly Border slashSuggestions = new() { Background = FluentDesign.Card, BorderBrush = FluentDesign.Stroke, BorderThickness = new(1), CornerRadius = new(8), Visibility = Visibility.Collapsed };
-    bool slashDismissed, completingSlash, slashRefreshQueued, slashShowingHelp;
+    bool slashDismissed, completingSlash, slashShowingHelp;
+    readonly DispatcherTimer slashRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
+    SlashChoice[]? cachedSlashCatalog;
+    DateTime slashCatalogAt;
+    string slashCatalogScope = "";
     SkillInvocation.CompletionToken? currentSlashToken;
     string slashDraft = "";
     SlashChoice[] CommandSlashCatalog() =>
@@ -32,14 +36,23 @@ public sealed partial class MainWindow
         new("stop", "", WorkflowText("Arrêter cette génération", "Stop this generation")),
         new("help", "", WorkflowText("Afficher les commandes", "Show commands"))
     ];
-    SlashChoice[] SlashCatalog() => [.. CommandSlashCatalog(), .. Skills.Available(project?.GetSourceFolders(), project?.Id ?? 0)
+    SlashChoice[] ReadSlashCatalog() => [.. CommandSlashCatalog(), .. Skills.Available(project?.GetSourceFolders(), project?.Id ?? 0)
         .Where(s => !CommandSlashCatalog().Any(c => c.Name.Equals(s.Id, StringComparison.OrdinalIgnoreCase)))
         .Select(s => new SlashChoice(s.Id, "", WorkflowText("Skill · ", "Skill · ") + WorkflowText(s.FrenchName, s.EnglishName)
             + (ChatInteraction && s.Id is not ("web" or "python") ? WorkflowText(" · Mode Agent", " · Agent mode") : "")
             + (!Skills.Enabled(state.EnabledSkills, s.Id) ? WorkflowText(" · Désactivé", " · Disabled") : ""), IsSkill: true))];
+    SlashChoice[] SlashCatalog()
+    {
+        var scope = $"{project?.Id}|{ChatInteraction}|{state.EnabledSkills}";
+        if (cachedSlashCatalog != null && scope == slashCatalogScope && DateTime.UtcNow - slashCatalogAt < TimeSpan.FromSeconds(2)) return cachedSlashCatalog;
+        slashCatalogScope = scope; slashCatalogAt = DateTime.UtcNow;
+        return cachedSlashCatalog = ReadSlashCatalog();
+    }
     UIElement BuildSlashSuggestions()
     {
         slashSuggestions.Child = slashChoices;
+        slashRefreshTimer.Tick += (_, _) => { slashRefreshTimer.Stop(); RefreshSlashSuggestions(); };
+        Closed += (_, _) => slashRefreshTimer.Stop();
         composer.TextChanged += (_, _) =>
         {
             if (completingSlash) return;
@@ -54,9 +67,7 @@ public sealed partial class MainWindow
     {
         // TextChanged can precede the native editor's caret update, especially after paste.
         // Coalesce both events and read the final caret once they have finished.
-        if (slashRefreshQueued) return;
-        slashRefreshQueued = true;
-        if (!DispatcherQueue.TryEnqueue(() => { slashRefreshQueued = false; RefreshSlashSuggestions(); })) slashRefreshQueued = false;
+        slashRefreshTimer.Stop(); slashRefreshTimer.Start();
     }
     void RefreshSlashSuggestions(bool all = false)
     {
@@ -113,6 +124,8 @@ public sealed partial class MainWindow
     }
     bool HandleSlashKey(KeyRoutedEventArgs e)
     {
+        if (e.Key is not (VirtualKey.Escape or VirtualKey.Up or VirtualKey.Down or VirtualKey.Enter or VirtualKey.Tab)) return false;
+        slashRefreshTimer.Stop();
         // Finish pending caret updates before deciding whether Enter completes or sends.
         RefreshSlashSuggestions();
         if (slashSuggestions.Visibility != Visibility.Visible) return false;

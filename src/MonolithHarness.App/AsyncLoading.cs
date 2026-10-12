@@ -143,6 +143,7 @@ public sealed partial class MainWindow
         conversationLoading = true;
         conversationReady = false;
         pinnedTasks.Child = null; pinnedTasks.Visibility = Visibility.Collapsed;
+        pinnedProposals.Child = null; pinnedProposals.Visibility = Visibility.Collapsed;
         inboxPanel.Children.Clear();
         title.Text = selected?.Title ?? T("Créez une conversation");
         RefreshNamingState();

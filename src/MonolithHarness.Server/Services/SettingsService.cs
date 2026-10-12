@@ -16,6 +16,7 @@ public static class SettingKeys
     public const string MaxRunsPerProvider = "queue.maxRunsPerProvider";
     public const string MaxQueuedPerUser = "queue.maxQueuedPerUser";
     public const string MaxQueueLength = "queue.maxQueueLength";
+    public const string RelayWaitSeconds = "queue.relayWaitSeconds";
     public const string TimeoutSeconds = "execution.timeoutSeconds";
     public const string MemoryMb = "execution.memoryMb";
     public const string CpuSeconds = "execution.cpuSeconds";
@@ -48,6 +49,7 @@ public sealed class SettingsService(IDbContextFactory<ServerDb> factory)
         new(SettingKeys.MaxRunsPerProvider, "Files d’attente", "Exécutions simultanées par provider (0 = illimité)", "int", "0", 0, 1000),
         new(SettingKeys.MaxQueuedPerUser, "Files d’attente", "Requêtes en attente par utilisateur", "int", "10", 1, 10000),
         new(SettingKeys.MaxQueueLength, "Files d’attente", "Longueur maximale de la file", "int", "100", 1, 100000),
+        new(SettingKeys.RelayWaitSeconds, "Files d’attente", "Attente maximale d’un appel d’une conversation locale (relais), en secondes", "int", "300", 5, 3600),
         new(SettingKeys.TimeoutSeconds, "Isolation et limites", "Durée maximale d’une exécution (secondes)", "int", "1800", 30, 86400),
         new(SettingKeys.MemoryMb, "Isolation et limites", "Mémoire maximale d’un worker (Mo)", "int", "2048", 128, 262144),
         new(SettingKeys.CpuSeconds, "Isolation et limites", "Temps CPU maximal d’un worker (secondes)", "int", "1800", 10, 86400),

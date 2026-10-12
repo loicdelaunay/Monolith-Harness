@@ -139,6 +139,7 @@ public sealed class CloudRunExecutor(ServerPaths paths, WorkerLauncher launcher,
 
         var clock = new ActiveClock();
         var holder = new Holder();
+        var firstNewMessage = await store.MaxMessageIdAsync(project.Id, run.ChatId);
         using var stopWatchdog = new CancellationTokenSource();
         Task watchdog = Task.CompletedTask;
         try
@@ -174,6 +175,8 @@ public sealed class CloudRunExecutor(ServerPaths paths, WorkerLauncher launcher,
         }
         finally
         {
+            // The user message of this request belongs to whoever sent it (a safety net: the message event normally records it first).
+            try { await store.FillAuthorsAsync(project.Id, run.ChatId, firstNewMessage, run.RequesterId); } catch (Exception ex) { log.LogWarning(ex, "Message authors were not recorded"); }
             stopWatchdog.Cancel();
             try { await watchdog; } catch (Exception) { }
             if (holder.Worker is { } worker)
@@ -245,6 +248,10 @@ public sealed class CloudRunExecutor(ServerPaths paths, WorkerLauncher launcher,
                 try { await holder.Worker!.CallAsync("question.answer", answer, CancellationToken.None); } catch (Exception ex) { log.LogWarning(ex, "Question answer was not accepted"); }
             }, CancellationToken.None);
         }
+        // The sender of a user message is recorded before clients hear about it, so that they can show who wrote it.
+        if (name == "message" && message["message"] is JsonObject sent && sent["role"]?.GetValue<string>() == "user" && sent["id"] is JsonValue sentId && sentId.TryGetValue<int>(out var messageId))
+            try { store.RecordAuthorAsync(run.ProjectId, run.ChatId, messageId, run.RequesterId).GetAwaiter().GetResult(); }
+            catch (Exception ex) { log.LogWarning(ex, "Message author was not recorded"); }
         hub.Publish(RealtimeHub.RunTopic(run.Id), name, message);
     }
 

@@ -10,12 +10,15 @@ public record GenerationUpdate(string Text, string Reasoning, int? InputTokens, 
 {
     public string CompatibilityNotice { get; init; } = "";
     public RetryProgress? Retry { get; init; }
+    public GenerationTermination? Termination { get; init; }
+    public int ResumeAttempt { get; init; }
     public bool HasModelOutput { get; init; }
     public int? CachedInputTokens { get; init; }
     public double TokensPerSecond => (OutputTokens ?? Math.Ceiling((Text.Length + Reasoning.Length) / 4d)) / Math.Max(.1, Seconds);
 }
 public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens, double Seconds)
 {
+    public GenerationTermination? Termination { get; init; }
     internal CompletionUsage? Usage { get; init; }
     public int? CachedInputTokens { get; init; }
 }
@@ -88,10 +91,49 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
     {
         if (provider.IsAcp) return platform.TrackAsync(provider, ContextWindow.Estimate(messages),
             progress => platform.PromptExternalAsync(provider, messages, progress, ct, reasoningEffort, acp), update);
-        var inputEstimate = ContextWindow.Estimate(messages) + ContextWindow.Estimate(tools);
-        return RequestRetry.RunAsync(() => platform.TrackAsync(provider, inputEstimate,
-            progress => StreamOnceAsync(provider, key, messages, tools, progress, ct, requireNoReasoning ? "none" : reasoningEffort, inputEstimate, requestProgress, requireNoReasoning), update), retrySettings, ct,
-            retry => update(new("", "", null, null, 0) { Retry = retry }));
+        return StreamWithRecoveryAsync(provider, key, messages, tools, update, ct, reasoningEffort, retrySettings, requestProgress, requireNoReasoning);
+    }
+
+    async Task<Completion> StreamWithRecoveryAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
+        Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort, IRetrySettings? settings,
+        Action<ContextRequestProgress>? requestProgress, bool requireNoReasoning)
+    {
+        var requestMessages = (JsonArray)messages.DeepClone();
+        var endings = new List<GenerationTermination>();
+        string prefix = "", thinkingPrefix = "";
+        double elapsed = 0;
+        int? previousOutput = 0;
+        int retries = 0;
+        var maximum = settings is ICompletionRecoverySettings { RecoverPrematureCompletion: true } ? 2 : 0;
+        for (int attempt = 0; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var estimate = ContextWindow.Estimate(requestMessages) + ContextWindow.Estimate(tools);
+            var result = await RequestRetry.RunAsync(() => platform.TrackAsync(provider, estimate,
+                progress => StreamOnceAsync(provider, key, requestMessages, tools, progress, ct, requireNoReasoning ? "none" : reasoningEffort, estimate, requestProgress, requireNoReasoning),
+                value => update(value with { Text = prefix + value.Text, Reasoning = thinkingPrefix + value.Reasoning,
+                    Seconds = elapsed + value.Seconds, OutputTokens = previousOutput.HasValue && value.OutputTokens.HasValue ? previousOutput + value.OutputTokens : null,
+                    ResumeAttempt = attempt, Termination = (value.Termination ?? new GenerationTermination { Kind = "streaming" }) with { ResumeAttempts = attempt, RetryAttempts = retries, PreviousEndings = [.. endings] } })),
+                settings, ct, retry => { retries++; update(new(prefix, thinkingPrefix, null, previousOutput, elapsed) { Retry = retry, ResumeAttempt = attempt,
+                    Termination = new() { Kind = "retrying", RetryAttempts = retries, ResumeAttempts = attempt, PreviousEndings = [.. endings] } }); });
+            var part = result.Message["content"]?.ToString() ?? "";
+            var end = result.Termination ?? new GenerationTermination();
+            bool calls = result.Message["tool_calls"] is JsonArray { Count: > 0 };
+            var combined = (JsonObject)result.Message.DeepClone();
+            combined["content"] = prefix + part;
+            var reasoning = result.Message["reasoning_content"]?.ToString() ?? "";
+            if (thinkingPrefix.Length > 0 || reasoning.Length > 0) combined["reasoning_content"] = thinkingPrefix + reasoning;
+            var totalOutput = previousOutput.HasValue && result.OutputTokens.HasValue ? previousOutput + result.OutputTokens : null;
+            if (attempt >= maximum || !end.CanResume || calls)
+                return result with { Message = combined, Seconds = elapsed + result.Seconds, OutputTokens = totalOutput,
+                    Termination = end with { ResumeAttempts = attempt, RetryAttempts = retries, PreviousEndings = [.. endings] } };
+            // Continue only the model response. No previous tool is executed again.
+            endings.Add(end); elapsed += result.Seconds; previousOutput = totalOutput;
+            prefix += part + (part.Length > 0 ? "\n\n" : "");
+            thinkingPrefix += reasoning + (reasoning.Length > 0 ? "\n" : "");
+            if (part.Length > 0) requestMessages.Add(result.Message.DeepClone());
+            requestMessages.Add(new JsonObject { ["role"] = "user", ["content"] = "The previous response ended prematurely. Continue from where it stopped without repeating previous text or completed actions. Finish the response to the original request. If the task is already finished, say so briefly. Existing tool permissions still apply." });
+        }
     }
 
     async Task<Completion> StreamOnceAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
@@ -149,11 +191,11 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
     }
     public static async Task<Completion> ParseStreamAsync(TextReader reader, Action<GenerationUpdate> update, CancellationToken ct)
     {
-        var text = new StringBuilder(); var reasoning = new StringBuilder();
+        var text = new StringBuilder(); var reasoning = new StringBuilder(); var refusal = new StringBuilder();
         var reasoningDetails = new JsonArray(); var extraContent = new JsonObject();
         var calls = new SortedDictionary<int, JsonObject>();
         int? input = null, output = null, cachedInput = null;
-        var timer = new Stopwatch(); bool finished = false;
+        var timer = new Stopwatch(); bool finished = false; string? finishReason = null;
         var eventData = new StringBuilder();
         void Consume(string data)
         {
@@ -170,12 +212,15 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             cachedInput = TokenCache.Read(chunk["usageMetadata"]) ?? cachedInput;
             if (chunk["choices"] is JsonArray choices && choices.Count > 0)
             {
+                if (choices[0]?["finish_reason"] is JsonValue reason && reason.TryGetValue<string>(out var reportedReason)) finishReason = reportedReason;
                 var delta = choices[0]?["delta"];
                 if (delta != null)
                 {
                     if (!timer.IsRunning) timer.Start();
                     var content = SplitContent(delta["content"]);
                     text.Append(content.Text);
+                    var refused = delta["refusal"]?.ToString() ?? "";
+                    if (refused.Length > 0) { refusal.Append(refused); text.Append(refused); hasModelOutput = true; }
                     var reasoningText = delta["reasoning_content"]?.GetValue<string>() ?? delta["reasoning"]?.GetValue<string>() ?? content.Thinking;
                     reasoning.Append(reasoningText);
                     if (delta["reasoning_details"] is JsonArray details)
@@ -206,7 +251,8 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
                 }
             }
             update(new(text.ToString(), reasoning.ToString(), input, output, timer.Elapsed.TotalSeconds)
-            { HasModelOutput = hasModelOutput, CachedInputTokens = cachedInput });
+            { HasModelOutput = hasModelOutput, CachedInputTokens = cachedInput,
+                Termination = finishReason == null ? null : GenerationTermination.Observe(finishReason, true, text.ToString(), calls.Count > 0) with { StreamCompleted = null } });
         }
         while (await reader.ReadLineAsync(ct) is { } line)
         {
@@ -218,13 +264,21 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             else if (line.StartsWith("data:")) eventData.AppendLine(line[5..].TrimStart());
         }
         if (eventData.Length > 0) Consume(eventData.ToString().TrimEnd('\r', '\n'));
-        if (!finished) throw new IOException("Flux interrompu avant la fin : réponse partielle conservée.");
+        if (!finished)
+        {
+            update(new(text.ToString(), reasoning.ToString(), input, output, timer.Elapsed.TotalSeconds) { CachedInputTokens = cachedInput,
+                Termination = GenerationTermination.Observe(finishReason, false, text.ToString(), calls.Count > 0) });
+            throw new IOException("Flux interrompu avant la fin : réponse partielle conservée.");
+        }
         var message = new JsonObject { ["role"] = "assistant", ["content"] = text.ToString() };
         if (reasoning.Length > 0) message["reasoning_content"] = reasoning.ToString();
+        if (refusal.Length > 0) message["refusal"] = refusal.ToString();
         if (reasoningDetails.Count > 0) message["reasoning_details"] = reasoningDetails;
         if (extraContent.Count > 0) message["extra_content"] = extraContent;
         if (calls.Count > 0) message["tool_calls"] = new JsonArray(calls.Values.Select(x => (JsonNode)x).ToArray());
-        return new(message, input, output, timer.Elapsed.TotalSeconds) { CachedInputTokens = cachedInput };
+        return new(message, input, output, timer.Elapsed.TotalSeconds) { CachedInputTokens = cachedInput,
+            Termination = refusal.Length > 0 ? GenerationTermination.Observe(finishReason, true, text.ToString(), calls.Count > 0) with { Kind = "blocked" }
+                : GenerationTermination.Observe(finishReason, true, text.ToString(), calls.Count > 0) };
     }
     static void MergeMetadata(JsonObject destination, JsonObject source)
     {
@@ -276,7 +330,12 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
     // just to count tokens wastes memory and stalls UI refreshes.
     internal static JsonObject ToWire(Message message, bool includeImageData)
     {
-        if (message.WireJson.Length > 0) return JsonNode.Parse(message.WireJson)!.AsObject();
+        if (message.WireJson.Length > 0)
+        {
+            var wire = JsonNode.Parse(message.WireJson)!.AsObject();
+            wire.Remove(GenerationTermination.MetadataKey);
+            return wire;
+        }
         if (AgentHandoff.IsLegacyReport(message)) return AgentHandoff.Input(message.Content[AgentHandoff.ReportPrefix.Length..]);
         if (message.Attachments.Count == 0) return new JsonObject { ["role"] = message.Role, ["content"] = message.Content };
         var content = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = message.Content } };

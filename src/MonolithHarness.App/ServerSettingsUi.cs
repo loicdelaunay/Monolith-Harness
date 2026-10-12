@@ -11,7 +11,8 @@ public sealed partial class MainWindow
 {
     /// <summary>
     /// Réglages › Serveur: the optional connection to a Monolith Harness Server. Each action applies immediately (like a connection test),
-    /// independently of the window's Save button. The password is never stored; only an encrypted session token is.
+    /// independently of the window's Save button. The password is never stored; only an encrypted session token is. Providers, cloud
+    /// projects and shared conversations are not picked here: they follow the server by themselves (see the Cloud view of the sidebar).
     /// </summary>
     StackPanel BuildServerSettings(Window owner)
     {
@@ -26,20 +27,20 @@ public sealed partial class MainWindow
         var signIn = new Button { Content = T("Se connecter"), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         var signOut = new Button { Content = T("Se déconnecter") };
         var accountStatus = Label("", 13);
-        var sync = new Button { Content = WorkflowText("Synchroniser les providers", "Sync providers"), HorizontalAlignment = HorizontalAlignment.Right };
-        var providerStatus = Label("", 13);
         var current = new PasswordBox { PlaceholderText = WorkflowText("Mot de passe actuel", "Current password") };
         var next = new PasswordBox { PlaceholderText = WorkflowText("Nouveau mot de passe (8 caractères minimum)", "New password (8 characters minimum)") };
         var change = new Button { Content = WorkflowText("Changer le mot de passe", "Change password"), HorizontalAlignment = HorizontalAlignment.Right };
         var passwordStatus = Label("", 13);
-        var projectList = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 220 };
-        var refreshProjects = new Button { Content = WorkflowText("Actualiser", "Refresh") };
-        var openProject = new Button { Content = WorkflowText("Ouvrir en mode cloud", "Open in cloud mode"), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
-        var newProject = new TextBox { PlaceholderText = WorkflowText("Nom du nouveau projet cloud", "New cloud project name"), MinWidth = 260 };
-        var createProject = new Button { Content = WorkflowText("Créer", "Create") };
-        var projectStatus = Label("", 13);
         var forget = new Button { Content = WorkflowText("Oublier ce serveur", "Forget this server"), HorizontalAlignment = HorizontalAlignment.Right };
-        var remoteProjects = new List<ServerProject>();
+
+        // Synchronization: how often a complete resync runs (changes themselves arrive live), and a button to run one now.
+        var intervals = ServerSyncService.IntervalChoices;
+        var interval = new ComboBox { ItemsSource = intervals.Select(IntervalLabel).ToList(), SelectedIndex = Array.IndexOf(intervals, link.SyncMinutes) is var known and >= 0 ? known : Array.IndexOf(intervals, ServerSyncService.DefaultMinutes), MinWidth = 220 };
+        var syncNow = new Button { Content = WorkflowText("Synchroniser maintenant", "Sync now"), HorizontalAlignment = HorizontalAlignment.Right };
+        var syncStatus = Label("", 13);
+        var syncInfo = Label(WorkflowText(
+            "Les providers partagés, les projets cloud et les conversations partagées apparaissent, changent et disparaissent tout seuls dès que le serveur les modifie : il n'y a rien à choisir ici. La resynchronisation complète est un filet de sécurité ; elle s'ajoute aux mises à jour en direct.",
+            "Shared providers, cloud projects and shared conversations appear, change and disappear by themselves as soon as the server changes them: there is nothing to pick here. The full resynchronization is a safety net; it comes on top of the live updates."), 12);
 
         panel.Children.Add(Label(WorkflowText(
             "Connexion facultative à un serveur Monolith Harness: providers partagés dont les clés restent sur le serveur, projets cloud (le moteur et les outils s'exécutent sur le serveur) et partage en direct d'une conversation locale. Sans serveur, l'application reste entièrement locale.",
@@ -55,19 +56,13 @@ public sealed partial class MainWindow
         account.Children.Add(accountActions); account.Children.Add(accountStatus);
         panel.Children.Add(account);
         var signedInArea = new StackPanel { Spacing = 14 };
-        var providerArea = new StackPanel { Spacing = 8 };
-        providerArea.Children.Add(Label(WorkflowText("Providers partagés", "Shared providers"), 16));
-        providerArea.Children.Add(Label(WorkflowText("Le catalogue du serveur apparaît comme des fournisseurs « · serveur » (utilisables aussi en local) ou « · cloud » (projets cloud seulement). Seul un jeton de session est conservé ici, jamais la clé du provider.",
-            "The server catalog appears as providers “· server” (usable locally too) or “· cloud” (cloud projects only). Only a session token is kept here, never the provider's key."), 12));
-        providerArea.Children.Add(sync); providerArea.Children.Add(providerStatus);
-        signedInArea.Children.Add(providerArea);
-        var cloud = new StackPanel { Spacing = 8 };
-        cloud.Children.Add(Label(WorkflowText("Projets cloud", "Cloud projects"), 16));
-        cloud.Children.Add(projectList);
-        var cloudActions = Row(refreshProjects, openProject); cloudActions.HorizontalAlignment = HorizontalAlignment.Right;
-        cloud.Children.Add(cloudActions);
-        cloud.Children.Add(Row(newProject, createProject)); cloud.Children.Add(projectStatus);
-        signedInArea.Children.Add(cloud);
+        var syncArea = new StackPanel { Spacing = 8 };
+        syncArea.Children.Add(Label(WorkflowText("Synchronisation", "Synchronization"), 16));
+        syncArea.Children.Add(syncInfo);
+        syncArea.Children.Add(FluentDesign.Setting(WorkflowText("Resynchronisation complète", "Full resynchronization"),
+            WorkflowText("Par défaut toutes les 5 minutes. « Jamais » ne garde que les mises à jour en direct.", "Every 5 minutes by default. \"Never\" keeps only the live updates."), interval));
+        syncArea.Children.Add(syncNow); syncArea.Children.Add(syncStatus);
+        signedInArea.Children.Add(syncArea);
         var passwordArea = new StackPanel { Spacing = 8 };
         passwordArea.Children.Add(Label(T("Mot de passe"), 16));
         passwordArea.Children.Add(current); passwordArea.Children.Add(next); passwordArea.Children.Add(change); passwordArea.Children.Add(passwordStatus);
@@ -86,9 +81,11 @@ public sealed partial class MainWindow
             signOut.Visibility = signed ? Visibility.Visible : Visibility.Collapsed;
             email.IsEnabled = password.IsEnabled = !signed;
             forget.Visibility = l.Configured ? Visibility.Visible : Visibility.Collapsed;
-            openProject.IsEnabled = projectList.SelectedItem != null;
             accountStatus.Text = signed ? WorkflowText("Connecté en tant que ", "Signed in as ") + l.Email : "";
             status.Text = l.Configured ? $"{l.ServerName} {l.ServerVersion} · {l.Url}" : "";
+            var snapshot = serverSync?.Snapshot;
+            syncStatus.Text = snapshot == null ? "" : WorkflowText("Dernière synchronisation : ", "Last synchronization: ") + Ago(snapshot.LastSyncUtc)
+                + WorkflowText($" · {snapshot.Providers} provider(s) · {snapshot.Projects} projet(s) cloud", $" · {snapshot.Providers} provider(s) · {snapshot.Projects} cloud project(s)");
         }
         async Task Guarded(Func<Task> action, TextBlock target)
         {
@@ -99,18 +96,11 @@ public sealed partial class MainWindow
             catch (InvalidOperationException ex) { target.Text = ex.Message; }
             finally { busy = false; Refresh(); }
         }
-        async Task LoadProjects()
-        {
-            remoteProjects = await Server.Api.ProjectsAsync();
-            var linked = Server.Link.Projects.Values.Select(x => x.ServerProjectId).ToHashSet();
-            projectList.ItemsSource = remoteProjects.Select(x => $"{x.Name} — {x.OwnerEmail} · {x.Access}{(linked.Contains(x.Id.ToString()) ? " · ☁" : "")}").ToList();
-            projectStatus.Text = remoteProjects.Count == 0 ? WorkflowText("Aucun projet cloud. Créez-en un.", "No cloud project. Create one.") : "";
-        }
 
         connect.Click += async (_, _) => await Guarded(async () =>
         {
             var info = await Server.ConnectAsync(url.Text, allowHttp.IsOn);
-            InvalidateServerLink();
+            ServerLinkChanged();
             status.Text = $"{info.Name} {info.Version} — " + WorkflowText("serveur joignable.", "server reachable.");
         }, status);
         signIn.Click += async (_, _) => await Guarded(async () =>
@@ -125,7 +115,8 @@ public sealed partial class MainWindow
             if (login.PasswordChangeSuggested)
                 passwordStatus.Text = WorkflowText("Votre mot de passe est temporaire: choisissez-en un nouveau ci-dessous.", "Your password is temporary: choose a new one below.");
             _ = ResumeSharesAsync();
-            await LoadProjects();
+            // Cloud projects and shared conversations come next, by themselves.
+            ServerLinkChanged();
         }, accountStatus);
         signOut.Click += async (_, _) => await Guarded(async () =>
         {
@@ -135,43 +126,31 @@ public sealed partial class MainWindow
             await Server.LogoutAsync();
             await ServerSync.RemoveProvidersAsync(db, Server);
             await RefreshAfterServerChangeAsync();
-            projectList.ItemsSource = null;
+            ServerLinkChanged();
             accountStatus.Text = WorkflowText("Déconnecté.", "Signed out.");
         }, accountStatus);
-        sync.Click += async (_, _) => await Guarded(async () =>
+        interval.SelectionChanged += (_, _) =>
+        {
+            if (interval.SelectedIndex < 0 || interval.SelectedIndex >= intervals.Length) return;
+            if (intervals[interval.SelectedIndex] == Sync.Minutes) return;
+            Sync.SetMinutes(intervals[interval.SelectedIndex]);
+            Refresh();
+        };
+        syncNow.Click += async (_, _) => await Guarded(async () =>
         {
             ServerManagedProviders();
-            var synced = await ServerSync.SyncProvidersAsync(db, Server);
-            await RefreshAfterServerChangeAsync();
-            providerStatus.Text = WorkflowText($"{synced.Count} provider(s) synchronisé(s).", $"{synced.Count} provider(s) synced.");
-        }, providerStatus);
+            await Sync.SyncNowAsync();
+            var snapshot = Sync.Snapshot;
+            syncStatus.Text = snapshot.Worst is { } level && snapshot.Issues.FirstOrDefault() is { } first
+                ? $"{LevelName(level)} : {first.Message}"
+                : WorkflowText("Synchronisation terminée.", "Synchronization complete.");
+        }, syncStatus);
         change.Click += async (_, _) => await Guarded(async () =>
         {
             await Server.Api.ChangePasswordAsync(current.Password, next.Password);
             current.Password = next.Password = "";
             passwordStatus.Text = WorkflowText("Mot de passe modifié (vos autres connexions ont été fermées).", "Password changed (your other sessions were closed).");
         }, passwordStatus);
-        refreshProjects.Click += async (_, _) => await Guarded(LoadProjects, projectStatus);
-        projectList.SelectionChanged += (_, _) => openProject.IsEnabled = projectList.SelectedIndex >= 0;
-        openProject.Click += async (_, _) => await Guarded(async () =>
-        {
-            if (projectList.SelectedIndex < 0 || projectList.SelectedIndex >= remoteProjects.Count) return;
-            var bound = await ServerSync.BindProjectAsync(db, Server, remoteProjects[projectList.SelectedIndex]);
-            await db.SaveChangesAsync();
-            await RefreshAfterServerChangeAsync();
-            await LoadProjects();
-            projectStatus.Text = WorkflowText($"« {bound.Name} » est dans la liste des projets: ses requêtes s'exécutent sur le serveur.", $"“{bound.Name}” is in the project list: its requests run on the server.");
-        }, projectStatus);
-        createProject.Click += async (_, _) => await Guarded(async () =>
-        {
-            if (string.IsNullOrWhiteSpace(newProject.Text)) return;
-            var created = await ServerSync.CreateProjectAsync(db, Server, newProject.Text.Trim());
-            await db.SaveChangesAsync();
-            newProject.Text = "";
-            await RefreshAfterServerChangeAsync();
-            await LoadProjects();
-            projectStatus.Text = WorkflowText($"Projet cloud « {created.Name} » créé.", $"Cloud project “{created.Name}” created.");
-        }, projectStatus);
         forget.Click += async (_, _) => await Guarded(async () =>
         {
             if (conversationRuns.Count > 0) throw new InvalidOperationException(WorkflowText("Terminez les conversations en cours.", "Finish running conversations."));
@@ -185,14 +164,14 @@ public sealed partial class MainWindow
             ServerManagedProviders();
             if (Server.SignedIn) { foreach (var chatId in sharedChats.Keys.ToList()) if (sharedChats.Remove(chatId, out var share)) await Bridge.Detach(share); await Server.LogoutAsync(); }
             await ServerSync.RemoveProvidersAsync(db, Server);
-            Server.Store.Update(l => { l.Url = ""; l.Email = ""; l.ProtectedToken = ""; l.TokenExpiresUtc = null; l.ServerName = ""; l.ServerVersion = ""; l.Providers.Clear(); l.Projects.Clear(); l.Chats.Clear(); l.Shares.Clear(); });
+            Server.Store.Update(l => { l.Url = ""; l.Email = ""; l.ProtectedToken = ""; l.TokenExpiresUtc = null; l.ServerName = ""; l.ServerVersion = ""; l.Providers.Clear(); l.Projects.Clear(); l.Chats.Clear(); l.Shares.Clear(); l.CloudView = false; });
             await RefreshAfterServerChangeAsync();
-            url.Text = ""; email.Text = ""; projectList.ItemsSource = null;
+            ServerLinkChanged();
+            url.Text = ""; email.Text = "";
             status.Text = WorkflowText("Serveur oublié: l'application est entièrement locale.", "Server forgotten: the application is fully local.");
         }, status);
 
         Refresh();
-        if (link.SignedIn) _ = Guarded(LoadProjects, projectStatus);
         return panel;
     }
 }

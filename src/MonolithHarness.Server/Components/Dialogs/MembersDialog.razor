@@ -1,0 +1,97 @@
+@* Picks registered accounts to add to a cloud project: a search field over the active accounts and a multi-selection. *@
+@inject UiContext Ui
+@inject DirectoryService Directory
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Recherchez des comptes du serveur (adresse e-mail ou nom) et cochez ceux à ajouter au projet.
+        </MudText>
+        <MudTextField T="string" Value="_query" ValueChanged="OnQuery" Immediate="true" DebounceInterval="250" Label="Rechercher un compte" Placeholder="nom ou adresse e-mail"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" AutoFocus="true" Class="mb-2" />
+        @if (_selected.Count > 0)
+        {
+            <div class="d-flex flex-wrap gap-1 mb-2" aria-label="Comptes sélectionnés">
+                @foreach (var user in _selected.Values.OrderBy(x => x.Email))
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" OnClose="@(() => Toggle(user, false))">@user.Email</MudChip>
+                }
+            </div>
+        }
+        <div class="mh-picker" role="listbox" aria-multiselectable="true">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Size="Size.Small" />
+            }
+            @foreach (var user in _results)
+            {
+                var chosen = _selected.ContainsKey(user.Id);
+                <div class="mh-picker-row" role="option" aria-selected="@(chosen ? "true" : "false")" @onclick="@(() => Toggle(user, !chosen))">
+                    <MudCheckBox T="bool" Value="chosen" ValueChanged="@(value => Toggle(user, value))" Dense="true" Color="Color.Primary" />
+                    <div class="mh-picker-text">
+                        <MudText Typo="Typo.body2">@user.Email</MudText>
+                        @if (user.DisplayName.Length > 0 && !user.DisplayName.Equals(user.Email, StringComparison.OrdinalIgnoreCase))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@user.DisplayName</MudText>
+                        }
+                    </div>
+                </div>
+            }
+            @if (!_loading && _results.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary pa-3">@(_query.Trim().Length == 0 ? "Aucun autre compte disponible." : "Aucun compte ne correspond à cette recherche.")</MudText>
+            }
+        </div>
+        <MudSelect T="string" @bind-Value="_access" Label="Accès accordé" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3"
+                   HelperText="Lecture: suivre le projet. Exécution: lancer des requêtes et modifier les fichiers.">
+            <MudSelectItem T="string" Value="@("read")">Lecture</MudSelectItem>
+            <MudSelectItem T="string" Value="@("run")">Exécution</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_selected.Count == 0)" OnClick="Submit">@(_selected.Count == 0 ? "Ajouter" : $"Ajouter ({_selected.Count})")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    /// <summary>Accounts already in the project (and its owner): they are not proposed again.</summary>
+    [Parameter] public IReadOnlyCollection<Guid> Excluded { get; set; } = [];
+
+    public sealed record Result(List<string> Emails, string Access);
+
+    string _query = "", _access = "read";
+    bool _loading;
+    int _generation;
+    List<UserSuggestion> _results = [];
+    readonly Dictionary<Guid, UserSuggestion> _selected = [];
+
+    protected override Task OnInitializedAsync() => Search();
+
+    Task OnQuery(string value)
+    {
+        _query = value ?? "";
+        return Search();
+    }
+
+    async Task Search()
+    {
+        // Only the latest search may paint its results.
+        var generation = ++_generation;
+        _loading = true;
+        var found = await Ui.Try(user => Directory.SearchActiveAsync(user.RequireUserId(), _query, 50)) ?? [];
+        if (generation != _generation) return;
+        _results = found.Where(x => !Excluded.Contains(x.Id)).ToList();
+        _loading = false;
+    }
+
+    void Toggle(UserSuggestion user, bool chosen)
+    {
+        if (chosen) _selected[user.Id] = user; else _selected.Remove(user.Id);
+    }
+
+    void Cancel() => MudDialog.Cancel();
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(new Result(_selected.Values.Select(x => x.Email).ToList(), _access)));
+}

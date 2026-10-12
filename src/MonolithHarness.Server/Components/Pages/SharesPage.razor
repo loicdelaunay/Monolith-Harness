@@ -4,13 +4,17 @@
 @inject UiContext Ui
 @inject ShareService Shares
 @inject IDialogService Dialogs
+@inject IJSRuntime Js
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 <PageTitle>Partages · Monolith Harness Server</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-2">Conversations partagées</MudText>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
     Le partage se déclare depuis l’application (Desktop, CLI, Android): la conversation et ses outils restent sur l’appareil de l’hôte, qui transmet au serveur l’affichage en temps réel.
-    Les spectateurs peuvent lire et commenter, rien de plus. Le serveur ne garde aucun historique quand l’appareil se déconnecte.
+    Chaque partage a un code à transmettre : quiconque le saisit (ici ou dans l’application) peut suivre la conversation. Les spectateurs peuvent lire et commenter, rien de plus.
+    Le serveur ne garde aucun historique quand l’appareil se déconnecte.
 </MudText>
 
 @if (!Ui.Enabled(Features.Sharing))
@@ -19,10 +23,19 @@
 }
 else
 {
+    <MudPaper Outlined="true" Class="pa-3 mb-6">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Rejoindre avec un code</MudText>
+        <div class="d-flex flex-wrap gap-3 align-start">
+            <MudTextField T="string" @bind-Value="_code" Immediate="true" Label="Code de partage" Placeholder="XXXXX-XXXXX" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Style="max-width:260px" Class="mh-mono" MaxLength="20" OnKeyDown="@(e => { if (e.Key == "Enter") return Join(); return Task.CompletedTask; })" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_code.Trim().Length == 0)" OnClick="Join">Rejoindre</MudButton>
+        </div>
+    </MudPaper>
+
     <MudText Typo="Typo.h6" Class="mb-2">Que je partage</MudText>
     <div class="mh-table-wrap mb-6">
         <MudTable Items="_hosted" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
-            <HeaderContent><MudTh>Conversation</MudTh><MudTh>État</MudTh><MudTh>Spectateurs</MudTh><MudTh></MudTh></HeaderContent>
+            <HeaderContent><MudTh>Conversation</MudTh><MudTh>État</MudTh><MudTh>Code</MudTh><MudTh>Visibilité</MudTh><MudTh>Spectateurs</MudTh><MudTh></MudTh></HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Conversation"><MudLink Href="@($"/shares/{context.Id}")">@context.Title</MudLink></MudTd>
                 <MudTd DataLabel="État">
@@ -30,12 +43,32 @@ else
                     else if (context.Live) { <MudChip T="string" Size="Size.Small" Color="Color.Success">En direct</MudChip> }
                     else { <MudChip T="string" Size="Size.Small">Appareil hors ligne</MudChip> }
                 </MudTd>
-                <MudTd DataLabel="Spectateurs">@string.Join(", ", context.Participants.Where(x => x.LeftUtc == null).Select(x => x.Email))</MudTd>
+                <MudTd DataLabel="Code">
+                    @if (context.RevokedUtc != null) { <span>—</span> }
+                    else if (context.Code is { } sharingCode)
+                    {
+                        <span class="mh-code">@sharingCode</span>
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" aria-label="Copier le code" OnClick="@(() => Copy(sharingCode))" />
+                    }
+                    else { <MudText Typo="Typo.caption" Class="mud-text-secondary">Désactivé</MudText> }
+                </MudTd>
+                <MudTd DataLabel="Visibilité">
+                    @if (context.RevokedUtc == null)
+                    {
+                        <MudSwitch T="bool" Value="context.IsPublic" ValueChanged="@(value => SetPublic(context, value))" Color="Color.Primary" Label="@(context.IsPublic ? "Publique" : "Privée")" />
+                    }
+                </MudTd>
+                <MudTd DataLabel="Spectateurs">@if (context.Live) { <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Visibility" aria-label="Spectateurs en direct">@context.Viewers en direct</MudChip> } @string.Join(", ", context.Participants.Where(x => x.LeftUtc == null).Select(x => x.Email))</MudTd>
                 <MudTd>
                     @if (context.RevokedUtc == null)
                     {
-                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Invite(context))">Inviter</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Revoke(context))">Révoquer</MudButton>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                            <MudMenuItem OnClick="@(() => Invite(context))">Inviter un compte…</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => NewCode(context))">@(context.Code == null ? "Générer un code" : "Nouveau code")</MudMenuItem>
+                            @if (context.Code != null) { <MudMenuItem OnClick="@(() => DisableCode(context))">Désactiver le code</MudMenuItem> }
+                            <MudDivider />
+                            <MudMenuItem OnClick="@(() => Revoke(context))">Révoquer le partage</MudMenuItem>
+                        </MudMenu>
                     }
                 </MudTd>
             </RowTemplate>
@@ -44,7 +77,7 @@ else
     </div>
 
     <MudText Typo="Typo.h6" Class="mb-2">Partagées avec moi</MudText>
-    <div class="mh-table-wrap">
+    <div class="mh-table-wrap mb-6">
         <MudTable Items="_invited" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
             <HeaderContent><MudTh>Conversation</MudTh><MudTh>Hôte</MudTh><MudTh>État</MudTh><MudTh></MudTh></HeaderContent>
             <RowTemplate>
@@ -59,11 +92,26 @@ else
             <NoRecordsContent><MudText Class="pa-4">Personne ne partage de conversation avec vous.</MudText></NoRecordsContent>
         </MudTable>
     </div>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Conversations publiques</MudText>
+    <div class="mh-table-wrap">
+        <MudTable Items="_public" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+            <HeaderContent><MudTh>Conversation</MudTh><MudTh>Hôte</MudTh><MudTh>État</MudTh><MudTh></MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Conversation"><MudLink Href="@($"/shares/{context.Id}")">@context.Title</MudLink></MudTd>
+                <MudTd DataLabel="Hôte">@context.HostEmail</MudTd>
+                <MudTd DataLabel="État">@(context.Live ? "En direct" : "Appareil hors ligne")</MudTd>
+                <MudTd><MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"/shares/{context.Id}")">Suivre</MudButton></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Aucune conversation publique pour le moment.</MudText></NoRecordsContent>
+        </MudTable>
+    </div>
 }
 
 @code {
-    List<ShareView> _hosted = [], _invited = [];
-    IDisposable? _listener;
+    List<ShareView> _hosted = [], _invited = [], _public = [];
+    string _code = "";
+    IDisposable? _listener, _serverListener;
 
     protected override async Task OnInitializedAsync()
     {
@@ -71,7 +119,12 @@ else
         var user = await Ui.UserAsync();
         _listener = Ui.Hub.Listen(RealtimeHub.UserTopic(user.RequireUserId()), message =>
         {
-            if (message.Name.StartsWith("share.", StringComparison.Ordinal)) _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+            if (message.Name.StartsWith("share.", StringComparison.Ordinal) || message.Name == SyncSignals.Event) _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+        });
+        // Public conversations appear and disappear for everybody.
+        _serverListener = Ui.Hub.Listen(RealtimeHub.ServerTopic, message =>
+        {
+            if (message.Name == SyncSignals.Event) _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
         });
     }
 
@@ -83,7 +136,40 @@ else
             var all = await Shares.ListAsync(user);
             _hosted = all.Where(x => x.IsHost).ToList();
             _invited = all.Where(x => !x.IsHost).ToList();
+            _public = Ui.Can(user, Permissions.SharingView) ? (await Shares.ListPublicAsync(user)).Where(x => _invited.All(i => i.Id != x.Id)).ToList() : [];
         });
+    }
+
+    async Task Join()
+    {
+        var code = _code;
+        var joined = await Ui.Try(user => Shares.JoinAsync(user, code), "Vous suivez maintenant cette conversation.");
+        if (joined == null) return;
+        _code = "";
+        Navigation.NavigateTo($"/shares/{joined.Id}");
+    }
+
+    async Task Copy(string code)
+    {
+        if (await Js.InvokeAsync<bool>("mhCopy", code)) Snackbar.Add("Code copié.", Severity.Success);
+        else Snackbar.Add("Copie impossible: sélectionnez le code et copiez-le à la main.", Severity.Warning);
+    }
+
+    async Task SetPublic(ShareView share, bool isPublic)
+    {
+        if (await Ui.TryAsync(user => Shares.SetPublicAsync(user, share.Id, isPublic), isPublic ? "Conversation visible par tous les comptes." : "Conversation de nouveau privée.")) await Load();
+    }
+
+    async Task NewCode(ShareView share)
+    {
+        if (share.Code != null && await Dialogs.ShowMessageBoxAsync("Nouveau code", "L’ancien code cessera de fonctionner. Les personnes qui ont déjà rejoint la conversation la gardent.", yesText: "Générer", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => Shares.RegenerateCodeAsync(user, share.Id), "Nouveau code généré.")) await Load();
+    }
+
+    async Task DisableCode(ShareView share)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Désactiver le code", "Plus personne ne pourra rejoindre la conversation avec ce code. Vous pourrez en générer un nouveau.", yesText: "Désactiver", cancelText: "Annuler") != true) return;
+        if (await Ui.TryAsync(user => Shares.DisableCodeAsync(user, share.Id), "Code désactivé.")) await Load();
     }
 
     async Task Invite(ShareView share)
@@ -104,5 +190,9 @@ else
         if (await Ui.TryAsync(user => Shares.LeaveAsync(user, share.Id), "Vous avez quitté la discussion.")) await Load();
     }
 
-    public void Dispose() => _listener?.Dispose();
+    public void Dispose()
+    {
+        _listener?.Dispose();
+        _serverListener?.Dispose();
+    }
 }

@@ -38,6 +38,7 @@ public sealed partial class HarnessService
         Message? active = null;
         string error = "";
         string completionStatus = "";
+        string secret = "";
         Task namingTask = Task.CompletedTask;
         async Task NameAutomaticallyAsync()
         {
@@ -53,7 +54,7 @@ public sealed partial class HarnessService
             AppLog.Write(AppLogLevel.Information, "generation.started", chatId: chat.Id);
             await emit(new{@event="started",chatId=chat.Id});
             await run.PrepareSandboxAsync(ct);
-            var secret = await Decrypt(provider.ProtectedKey, ct);
+            secret = await Decrypt(provider.ProtectedKey, ct);
             var history = await History(run, ct);
             var user = new Message { ChatId = chat.Id, Content = text, Attachments = run.Images };
             await ConversationInbox.SubmitAsync(run,user,ct); history.Add(user);
@@ -96,7 +97,11 @@ public sealed partial class HarnessService
                 {
                     await using var current = Db();
                     if (!await current.States.Select(x => x.AutoContinue).SingleAsync(ct))
-                    { completionStatus = "12 étapes atteintes / 12 steps reached. Send continue to proceed."; await emit(new { @event = "status", chatId = chat.Id, text = completionStatus }); break; }
+                    {
+                        var previous = run.Db.Messages.Local.LastOrDefault(message => message.ChatId == chat.Id && message.Role == "assistant");
+                        if (previous != null) { GenerationTermination.Save(previous, (GenerationTermination.Read(previous) ?? new()) with { Kind = "step_limit" }); await run.Db.SaveChangesAsync(ct); }
+                        completionStatus = "12 étapes atteintes / 12 steps reached. Send continue to proceed."; await emit(new { @event = "status", chatId = chat.Id, text = completionStatus }); break;
+                    }
                     await emit(new { @event = "status", chatId = chat.Id, text = "Continuation automatique / Auto-continue…" });
                 }
                 if (!provider.IsExternalAgent)
@@ -144,6 +149,7 @@ public sealed partial class HarnessService
                 lastUpdate = DateTime.MinValue;
                 Update(new GenerationUpdate(active.Content, completion.Message["reasoning_content"]?.GetValue<string>() ?? "", completion.InputTokens, completion.OutputTokens, completion.Seconds) { CachedInputTokens = completion.CachedInputTokens });
                 active.WireJson = completion.Message.ToJsonString(); active.InputTokens = completion.InputTokens; active.OutputTokens = completion.OutputTokens; active.CachedInputTokens = completion.CachedInputTokens; active.Seconds = completion.Seconds; active.CompletedUtc = DateTime.UtcNow;
+                GenerationTermination.Save(active, completion.Termination ?? new());
                 if (provider.IsExternalAgent) active.State = "complete";
                 await emit(new { @event = "message", chatId = chat.Id, message = MessageView(active) });
                 var results = new List<Message>();
@@ -203,6 +209,7 @@ public sealed partial class HarnessService
         }
         catch (Exception ex)
         {
+            if (active != null) GenerationTermination.Save(active, GenerationTermination.Failure(ex, GenerationTermination.Latest(active, run.ExportProgress?.Update), secret, ct.IsCancellationRequested));
             AppLog.Write(ex is OperationCanceledException ? AppLogLevel.Information : AppLogLevel.Error, "generation.failed", ex, chat.Id);
             error = ex is OperationCanceledException ? "Génération arrêtée / Generation stopped" : ex.Message;
             if (active != null && ex is not OperationCanceledException)

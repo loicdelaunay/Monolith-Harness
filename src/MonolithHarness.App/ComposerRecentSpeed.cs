@@ -9,16 +9,20 @@ public sealed partial class MainWindow
     readonly DispatcherTimer composerSpeedTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     readonly Dictionary<int, (double Rate, bool Estimated)> recentComposerSpeeds = [];
     bool composerSpeedInitialized;
-    void ObserveComposerSpeed(ConversationRun run, GenerationUpdate update)
+    void EnsureComposerSpeedTimer()
     {
         if (!composerSpeedInitialized)
         {
             composerSpeedInitialized = true;
-            composerSpeedTimer.Tick += (_, _) => RefreshRecentComposerSpeed();
+            composerSpeedTimer.Tick += (_, _) => { RefreshGlobalTokenSpeed(); RefreshRecentComposerSpeed(); };
             Closed += (_, _) => composerSpeedTimer.Stop();
         }
+    }
+    void ObserveComposerSpeed(ConversationRun run, GenerationUpdate update)
+    {
+        EnsureComposerSpeedTimer();
         run.RecentSpeed.Observe(run.Tracker, update);
-        if (IsVisible(run) && composerSpeedIndicator.Visibility == Visibility.Visible && !composerSpeedTimer.IsEnabled) composerSpeedTimer.Start();
+        if ((globalTokenSpeedEnabled || IsVisible(run) && composerSpeedIndicator.Visibility == Visibility.Visible) && !composerSpeedTimer.IsEnabled) composerSpeedTimer.Start();
     }
     void SaveRecentComposerSpeed(ConversationRun run)
     {
@@ -28,9 +32,12 @@ public sealed partial class MainWindow
     {
         var value = selectedSubagent == null ? ActiveRun?.RecentSpeed.Read() : null;
         if (selectedSubagent == null && value == null && chat != null && recentComposerSpeeds.TryGetValue(chat.Id, out var previous)) value = previous;
-        composerSpeedText.Text = value is { } speed ? $"⚡ {(speed.Estimated ? "≈ " : "")}{speed.Rate:F1} tok/s" : "⚡ — tok/s";
-        if (ActiveRun == null || selectedSubagent != null || composerSpeedIndicator.Visibility != Visibility.Visible) composerSpeedTimer.Stop();
-        else if (composerSpeedInitialized && !composerSpeedTimer.IsEnabled) composerSpeedTimer.Start();
+        composerSpeedText.Text = value is { } speed ? $"⚡ {speed.Rate:F1} tok/s" : "⚡ — tok/s";
+        if (!globalTokenSpeedEnabled)
+        {
+            if (ActiveRun == null || selectedSubagent != null || composerSpeedIndicator.Visibility != Visibility.Visible) { composerSpeedTimer.Stop(); return; }
+        }
+        if (composerSpeedInitialized && !composerSpeedTimer.IsEnabled) composerSpeedTimer.Start();
     }
     sealed class RecentTokenSpeed
     {

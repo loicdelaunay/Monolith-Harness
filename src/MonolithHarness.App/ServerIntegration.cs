@@ -95,7 +95,7 @@ public sealed partial class MainWindow
         MarkRunSubmitted(run);
         await RefreshInboxAsync();
         if (!hadHistory) ClearMessagePanel(run.Messages);
-        AddHistoryActions(user, AddMessage("user", user.Content, user.Attachments, run.Messages, run.Project));
+        AddHistoryActions(user, AddMessage("user", user.Content, user.Attachments, run.Messages, run.Project, ServerSync.CurrentAuthor(ServerLink)));
         ScrollRunToBottom(run);
         ShareMessage(chat, user);
         var sink = new CloudUiSink(this, run);
@@ -125,6 +125,7 @@ public sealed partial class MainWindow
     {
         AssistantMessageUi? streaming;
         int streamingCloudId;
+        readonly System.Diagnostics.Stopwatch streamingClock = new();
 
         public Task StateAsync(ServerRun state) => owner.RunOnUiAsync(() =>
         {
@@ -146,8 +147,10 @@ public sealed partial class MainWindow
             {
                 streaming = owner.AddAssistantMessage("", target: run.Messages, sourceProject: run.Project);
                 streamingCloudId = cloudId;
+                streamingClock.Restart(); run.Tracker = new GenerationSpeedTracker();
             }
             var reasoning = Text("reasoning"); var text = Text("text");
+            owner.ObserveComposerSpeed(run, new GenerationUpdate(text, reasoning, null, null, streamingClock.Elapsed.TotalSeconds));
             if (reasoning.Length > 0) streaming.UpdateThinking(reasoning, isComplete: text.Length > 0, streaming: true);
             streaming.UpdateContent(text, streaming: true);
             owner.SetRunStatus(run, owner.WorkflowText("Le modèle réfléchit…", "The model is thinking…"));
@@ -169,6 +172,7 @@ public sealed partial class MainWindow
             owner.ClearMessagePanel(run.Messages);
             owner.RenderHistory(all, run.Messages, run.Project);
             streaming = null;
+            run.Tracker = null; streamingClock.Stop(); owner.RefreshGlobalTokenSpeed();
             owner.ScrollRunToBottom(run);
             foreach (var message in changed.Where(x => x.State == "complete")) owner.ShareMessage(run.Chat, message);
         }
@@ -231,7 +235,14 @@ public sealed partial class MainWindow
     void ShareMessage(Chat target, Message message)
     {
         if (!sharedChats.TryGetValue(target.Id, out var share)) return;
-        _ = ForwardSafely(share, "message", new { chatId = target.Id, message = new { message.Id, message.Role, message.Content, message.State } });
+        _ = ForwardSafely(share, "message", new { chatId = target.Id, message = ShareContent.Of(message, ServerSync.CurrentAuthor(ServerLink)) });
+    }
+
+    /// <summary>A tool starts: viewers see its card running until the result arrives.</summary>
+    void ShareToolStarted(Chat target, string callId, string name, string arguments)
+    {
+        if (!sharedChats.TryGetValue(target.Id, out var share)) return;
+        _ = ForwardSafely(share, "tool", new { chatId = target.Id, id = callId, name, arguments = arguments.Length > 4000 ? arguments[..4000] + "…" : arguments });
     }
 
     void ShareStream(Chat target, int messageId, string text, string reasoning)
@@ -249,16 +260,16 @@ public sealed partial class MainWindow
     async Task<object> ShareSnapshotAsync(int chatId)
     {
         var stored = await ReadStoreAsync(store => (Chat: store.Chats.AsNoTracking().Single(x => x.Id == chatId),
-            Messages: store.Messages.AsNoTracking().Where(x => x.ChatId == chatId && x.State == "complete").OrderBy(x => x.Id).Select(x => new { x.Id, x.Role, x.Content }).ToList()));
-        return new { title = stored.Chat.Title, messages = stored.Messages };
+            Messages: store.Messages.AsNoTracking().Where(x => x.ChatId == chatId).OrderBy(x => x.Id).ToList()));
+        return ShareContent.Snapshot(stored.Chat.Title, stored.Messages, ServerSync.CurrentAuthor(ServerLink));
     }
 
     Task OnShareCommentAsync(int chatId, ShareComment comment) =>
         RunOnUiAsync(() => { ShowStatus($"💬 {comment.Author} : {comment.Text}", StatusKind.Notice, chatId); return Task.CompletedTask; });
 
-    async Task<Guid> StartShareAsync(Chat target)
+    async Task<Guid> StartShareAsync(Chat target, bool isPublic = false)
     {
-        var share = await Bridge.StartAsync(target.Title, target.Id.ToString(), () => ShareSnapshotAsync(target.Id), comment => OnShareCommentAsync(target.Id, comment));
+        var share = await Bridge.StartAsync(target.Title, target.Id.ToString(), () => ShareSnapshotAsync(target.Id), comment => OnShareCommentAsync(target.Id, comment), isPublic: isPublic, onViewers: count => OnShareViewersAsync(target.Id, count));
         sharedChats[target.Id] = share.Id;
         Server.Store.Update(l => l.Shares[target.Id] = share.Id.ToString());
         InvalidateServerLink();
@@ -286,51 +297,99 @@ public sealed partial class MainWindow
                 if (!Guid.TryParse(id, out var share) || !live.Contains(share)) { Server.Store.Update(l => l.Shares.Remove(chatId)); continue; }
                 sharedChats[chatId] = share;
                 var chat = chatId;
-                await Bridge.AttachAsync(share, () => ShareSnapshotAsync(chat), comment => OnShareCommentAsync(chat, comment));
+                await Bridge.AttachAsync(share, () => ShareSnapshotAsync(chat), comment => OnShareCommentAsync(chat, comment), count => OnShareViewersAsync(chat, count));
             }
             InvalidateServerLink();
         }
         catch (Exception ex) when (ex is ServerException or InvalidOperationException) { AppLog.Write(AppLogLevel.Information, "server.share_resume_skipped", ex); }
     }
 
-    /// <summary>The dialog of a conversation's sharing: start, invite a viewer, stop.</summary>
+    /// <summary>The dialog of a conversation's sharing: start (public or not), the code to hand out, invite a viewer, stop.</summary>
     async Task ManageShareAsync(Chat target)
     {
         if (!ServerLink.SignedIn) { ShowStatus(WorkflowText("Connectez-vous au serveur dans Réglages › Serveur.", "Sign in to the server in Settings › Server."), StatusKind.Notice); return; }
         if (IsCloudChat(target)) { ShowStatus(WorkflowText("Une conversation cloud est déjà sur le serveur.", "A cloud conversation is already on the server."), StatusKind.Notice); return; }
-        var shared = sharedChats.ContainsKey(target.Id);
-        var panel = new StackPanel { Spacing = 10, MinWidth = 380 };
+        var shared = sharedChats.TryGetValue(target.Id, out var shareId);
+        ServerShare? details = null;
+        if (shared)
+            try { details = await Server.Api.ShareAsync(shareId); }
+            catch (ServerException ex) { ShowStatus(ex.Message, StatusKind.Error); return; }
+        var panel = new StackPanel { Spacing = 12, MinWidth = 420 };
         panel.Children.Add(Label(shared
             ? WorkflowText("Cette conversation est suivie en direct. Les outils restent sur cet appareil; les spectateurs lisent et commentent, rien de plus. Le serveur ne garde aucun historique quand cet appareil se déconnecte.",
                 "This conversation is followed live. Tools stay on this device; viewers can read and comment, nothing more. The server keeps no history when this device disconnects.")
-            : WorkflowText("Les personnes autorisées pourront suivre cette conversation en direct. La conversation et ses outils restent sur cet appareil.",
-                "Authorized people will be able to follow this conversation live. The conversation and its tools stay on this device."), 13));
-        var email = new TextBox { Header = WorkflowText("Inviter un compte du serveur (adresse e-mail)", "Invite a server account (e-mail address)"), Visibility = shared ? Visibility.Visible : Visibility.Collapsed };
-        var invite = new Button { Content = WorkflowText("Inviter", "Invite"), Visibility = shared ? Visibility.Visible : Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Right };
+            : WorkflowText("Les personnes autorisées pourront suivre cette conversation en direct. La conversation et ses outils restent sur cet appareil. Un code de partage sera généré : transmettez-le à qui doit la suivre.",
+                "Authorized people will be able to follow this conversation live. The conversation and its tools stay on this device. A sharing code will be generated: hand it to whoever should follow it."), 13));
         var message = Label("", 12);
-        invite.Click += async (_, _) =>
+        var isPublic = new ToggleSwitch
         {
-            try
-            {
-                await Server.Api.InviteAsync(sharedChats[target.Id], email.Text.Trim());
-                message.Text = WorkflowText("Invitation envoyée : ", "Invitation sent: ") + email.Text.Trim(); email.Text = "";
-            }
-            catch (ServerException ex) { message.Text = ex.Message; }
+            Header = WorkflowText("Visible par tous les comptes du serveur", "Visible to every account on the server"), IsOn = details?.IsPublic ?? false,
+            OnContent = WorkflowText("Publique : listée dans l'onglet Cloud de chacun", "Public: listed in everybody's Cloud view"), OffContent = WorkflowText("Privée : code ou invitation requis", "Private: code or invitation required")
         };
-        panel.Children.Add(email); panel.Children.Add(invite); panel.Children.Add(message);
+        if (shared)
+            isPublic.Toggled += async (_, _) =>
+            {
+                try { await Server.Api.SetSharePublicAsync(shareId, isPublic.IsOn); message.Text = isPublic.IsOn ? WorkflowText("Conversation publique.", "Conversation is public.") : WorkflowText("Conversation privée.", "Conversation is private."); }
+                catch (ServerException ex) { message.Text = ex.Message; }
+            };
+        panel.Children.Add(isPublic);
+        if (shared)
+        {
+            var code = new TextBlock { Text = details?.Code ?? WorkflowText("(code désactivé)", "(code turned off)"), FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"), FontSize = 26, IsTextSelectionEnabled = true, Foreground = FluentDesign.Primary };
+            var copy = new Button { Content = WorkflowText("Copier le code", "Copy code"), IsEnabled = details?.Code != null };
+            var renew = new Button { Content = WorkflowText("Nouveau code", "New code") };
+            var turnOff = new HyperlinkButton { Content = WorkflowText("Désactiver le code", "Turn the code off"), Padding = new(0) };
+            copy.Click += (_, _) =>
+            {
+                if (code.Text.Length == 0 || details?.Code == null) return;
+                var data = new Windows.ApplicationModel.DataTransfer.DataPackage(); data.SetText(details.Code);
+                Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
+                message.Text = WorkflowText("Code copié.", "Code copied.");
+            };
+            renew.Click += async (_, _) =>
+            {
+                try { details = await Server.Api.NewShareCodeAsync(shareId); code.Text = details.Code ?? ""; copy.IsEnabled = true; message.Text = WorkflowText("Nouveau code généré : l'ancien ne fonctionne plus.", "New code generated: the old one no longer works."); }
+                catch (ServerException ex) { message.Text = ex.Message; }
+            };
+            turnOff.Click += async (_, _) =>
+            {
+                try { details = await Server.Api.DisableShareCodeAsync(shareId); code.Text = WorkflowText("(code désactivé)", "(code turned off)"); copy.IsEnabled = false; message.Text = WorkflowText("Code désactivé : seules les invitations (et la liste publique) donnent accès.", "Code turned off: only invitations (and the public list) give access."); }
+                catch (ServerException ex) { message.Text = ex.Message; }
+            };
+            var codeBox = new StackPanel { Spacing = 6 };
+            codeBox.Children.Add(Label(WorkflowText("Code de partage", "Sharing code"), 12));
+            codeBox.Children.Add(code);
+            var codeActions = Row(copy, renew); codeBox.Children.Add(codeActions); codeBox.Children.Add(turnOff);
+            panel.Children.Add(codeBox);
+            var email = new TextBox { Header = WorkflowText("Inviter un compte du serveur (adresse e-mail)", "Invite a server account (e-mail address)") };
+            var invite = new Button { Content = WorkflowText("Inviter", "Invite"), HorizontalAlignment = HorizontalAlignment.Right };
+            invite.Click += async (_, _) =>
+            {
+                try
+                {
+                    await Server.Api.InviteAsync(shareId, email.Text.Trim());
+                    message.Text = WorkflowText("Invitation envoyée : ", "Invitation sent: ") + email.Text.Trim(); email.Text = "";
+                }
+                catch (ServerException ex) { message.Text = ex.Message; }
+            };
+            panel.Children.Add(email); panel.Children.Add(invite);
+        }
+        panel.Children.Add(message);
         var dialog = new ContentDialog
         {
-            XamlRoot = root.XamlRoot, Title = WorkflowText("Partager en direct", "Share live"), Content = panel,
+            XamlRoot = root.XamlRoot, Title = WorkflowText("Partager en direct", "Share live"), Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
             PrimaryButtonText = shared ? WorkflowText("Arrêter le partage", "Stop sharing") : WorkflowText("Démarrer le partage", "Start sharing"), CloseButtonText = T("Fermer"), DefaultButton = ContentDialogButton.Primary
         };
         if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
         try
         {
-            if (shared) await StopShareAsync(target); else await StartShareAsync(target);
+            if (shared) await StopShareAsync(target); else await StartShareAsync(target, isPublic.IsOn);
             ShowStatus(shared ? WorkflowText("Partage arrêté.", "Sharing stopped.") : WorkflowText("Partage en direct démarré.", "Live sharing started."), StatusKind.Notice);
             RefreshSharingIndicator();
         }
-        catch (ServerException ex) { ShowStatus(ex.Message, StatusKind.Error); }
+        catch (ServerException ex) { ShowStatus(ex.Message, StatusKind.Error); return; }
+        // Just started: show the code to hand out right away.
+        if (!shared) await ManageShareAsync(target);
     }
 
     /// <summary>The conversation title carries a marker while it is shared or lives on the server.</summary>
@@ -339,6 +398,7 @@ public sealed partial class MainWindow
         if (chat == null) return;
         var marker = sharedChats.ContainsKey(chat.Id) ? "⇄ " : IsCloudChat(chat) ? "☁ " : "";
         title.Text = marker + chat.Title;
+        RefreshSharingChip();
         ToolTipService.SetToolTip(title, marker.Length == 0 ? chat.Title : marker + chat.Title + " · " + (marker == "☁ " ? WorkflowText("exécution sur le serveur", "runs on the server") : WorkflowText("partagée en direct", "shared live")));
     }
 }

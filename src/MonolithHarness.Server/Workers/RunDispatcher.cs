@@ -18,6 +18,8 @@ public sealed class RunDispatcher(RunService runs, IRunExecutor executor, ILogge
             {
                 foreach (var next in await runs.NextToStartAsync())
                 {
+                    // A relayed call of a local conversation only needs its slot: the HTTP request that waits for it does the work.
+                    if (next.Source == RunService.RelaySource) { await runs.BeginRelayAsync(next.Id); continue; }
                     if (await runs.BeginAsync(next.Id) is not { } active) continue;
                     tasks[next.Id] = Task.Run(async () =>
                     {

@@ -7,7 +7,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime Js
 
-<PageTitle>@(_share?.Title ?? "Conversation partagée") · Monolith Harness Server</PageTitle>
+<PageTitle>@(_title ?? _share?.Title ?? "Conversation partagée") · Monolith Harness Server</PageTitle>
 
 @if (_closed != null)
 {
@@ -18,11 +18,12 @@ else if (_share != null)
 {
     <div class="d-flex align-center flex-wrap gap-2 mb-2">
         <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/shares" aria-label="Retour aux partages" />
-        <MudText Typo="Typo.h4">@_share.Title</MudText>
+        <MudText Typo="Typo.h4">@(_title ?? _share.Title)</MudText>
         <MudChip T="string" Size="Size.Small" Color="@(_online ? Color.Success : Color.Default)">@(_online ? "En direct" : "Appareil de l’hôte hors ligne")</MudChip>
+        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Visibility" aria-label="Spectateurs en direct">@_viewers @(_viewers > 1 ? "spectateurs" : "spectateur")</MudChip>
         <MudSpacer />
         <MudText Typo="Typo.caption" Class="mud-text-secondary">Hôte: @_share.HostEmail</MudText>
-        @if (!_share.IsHost)
+        @if (!_share.IsHost && _share.Joined)
         {
             <MudButton Variant="Variant.Text" OnClick="Leave">Quitter la discussion</MudButton>
         }
@@ -33,7 +34,24 @@ else if (_share != null)
             <div id="share-scroll" class="mh-chat">
                 @foreach (var item in _items)
                 {
-                    <div class="mh-msg @item.Role">@item.Text</div>
+                    <div class="mh-msg @item.Role">
+                        @if (item.Role == "user" && item.AuthorEmail is { Length: > 0 } author)
+                        {
+                            <div class="mh-author"><AccountAvatar Email="@author" Name="@item.AuthorName" Size="22" /><span>@(string.IsNullOrWhiteSpace(item.AuthorName) ? author : item.AuthorName)</span></div>
+                        }
+                        @if (item.Reasoning.Length > 0)
+                        {
+                            <details class="mh-details" open="@item.Streaming"><summary>Réflexion</summary><div>@item.Reasoning</div></details>
+                        }
+                        @if (item.Role == "tool")
+                        {
+                            <details class="mh-details"><summary>Outil · @item.ToolName</summary><div>@item.Text</div></details>
+                        }
+                        else
+                        {
+                            @item.Text
+                        }
+                    </div>
                 }
                 @if (_items.Count == 0)
                 {
@@ -77,13 +95,15 @@ else if (_share != null)
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    sealed record Item(string Key, string Role, string Text);
+    sealed record Item(string Key, string Role, string Text, string Reasoning = "", string ToolName = "", string? AuthorEmail = null, string? AuthorName = null, bool Streaming = false);
     sealed record Remark(string Author, string Text, DateTime Time);
 
     ShareView? _share;
     string? _closed;
     bool _online, _canComment, _scroll;
     string _comment = "", _raw = "";
+    string? _title;
+    int _viewers;
     readonly List<Item> _items = [];
     readonly List<Remark> _comments = [];
     IDisposable? _watch, _userWatch;
@@ -112,9 +132,16 @@ else if (_share != null)
                 _online = message.Data.TryGetProperty("online", out var online) && online.ValueKind == JsonValueKind.True;
                 if (!_online) { _items.Clear(); _raw = ""; }
                 break;
+            case "viewers":
+                _viewers = message.Data.ValueKind == JsonValueKind.Object && message.Data.TryGetProperty("count", out var count) && count.TryGetInt32(out var people) ? people : 0;
+                break;
+            case "title":
+                if (Text(message.Data, "title") is { Length: > 0 } renamed) _title = renamed;
+                break;
             case "snapshot":
                 _items.Clear();
                 _raw = "";
+                if (Text(message.Data, "title") is { Length: > 0 } snapshotTitle) _title = snapshotTitle;
                 if (message.Data.ValueKind == JsonValueKind.Object && message.Data.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array)
                     foreach (var element in messages.EnumerateArray()) Upsert(element);
                 else _raw = message.Data.GetRawText();
@@ -139,11 +166,24 @@ else if (_share != null)
 
     void Upsert(JsonElement element, bool streaming = false)
     {
+        if (element.ValueKind != JsonValueKind.Object) return;
         var key = element.TryGetProperty("id", out var id) ? id.ToString() : element.TryGetProperty("messageId", out var messageId) ? messageId.ToString() : Guid.NewGuid().ToString();
         var role = streaming ? "assistant" : Text(element, "role") is { Length: > 0 } r ? r : "assistant";
         var text = streaming ? Text(element, "text") : Text(element, "content");
+        var reasoning = Text(element, "reasoning");
+        var tool = "";
+        if (role == "tool")
+        {
+            // Tool results arrive as "name\nresult".
+            var lines = text.Split('\n', 2);
+            tool = lines[0];
+            text = lines.Length > 1 ? lines[1] : "";
+        }
+        string? authorEmail = null, authorName = null;
+        if (element.TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.Object) { authorEmail = Text(author, "email"); authorName = Text(author, "name"); }
+        var item = new Item(key, role, text, reasoning, tool, authorEmail, authorName, streaming);
         var index = _items.FindIndex(x => x.Key == key);
-        if (index >= 0) _items[index] = new Item(key, role, text); else _items.Add(new Item(key, role, text));
+        if (index >= 0) _items[index] = item; else _items.Add(item);
     }
 
     static string Text(JsonElement element, string name) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";

@@ -64,7 +64,7 @@
             _stats.Add(("Connexions actives", (await db.Sessions.CountAsync(x => x.RevokedUtc == null && x.ExpiresUtc > DateTime.UtcNow && x.Kind != SessionKinds.Run)).ToString()));
             _stats.Add(("WebSockets", Hub.ConnectionCount.ToString()));
         }
-        if (Ui.Can(user, Permissions.QueueManage))
+        if (Ui.CanManageQueue(user))
         {
             var queue = await Runs.OverviewAsync(user);
             _stats.Add(("En attente", queue.Queued.ToString()));

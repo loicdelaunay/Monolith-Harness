@@ -134,10 +134,15 @@ public sealed partial class TerminalUi
         var cloud = CurrentProject is { } owner && serverLink?.Projects.ContainsKey(owner.Id) == true;
         var shared = CurrentChat is { } current && serverLink?.Shares.ContainsKey(current.Id) == true;
         canvas.Write(textLeft, 3, cloud ? "☁ " + L("Projet cloud · exécution sur le serveur", "Cloud project · runs on the server") + (shared ? " · " + L("partagé", "shared") : "")
-            : (shared ? "⇄ " + L("Conversation partagée en direct · ", "Live shared conversation · ") : "") + (CurrentProject?.GetSourceFolders().FirstOrDefault() ?? Environment.CurrentDirectory), p.Dim, textWidth);
+            : (shared ? "⇄ " + L("Conversation partagée en direct · ", "Live shared conversation · ") + (shareViewers.TryGetValue(CurrentChat!.Id, out var watching) ? $"👁 {watching} · " : "") : "") + (CurrentProject?.GetSourceFolders().FirstOrDefault() ?? Environment.CurrentDirectory), p.Dim, textWidth);
         int active = runs.Count(r => !r.Value.IsCompleted);
+        var serverLine = serverState is { } state && serverState["state"]?.GetValue<string>() is { } link && link != "NotConfigured"
+            ? "☁ " + (link switch { "Online" => L("Serveur connecté", "Server connected"), "Offline" => L("Serveur hors ligne", "Server offline"), "SessionLost" => L("Session serveur expirée · /server", "Server session expired · /server"), "SignedOut" => L("Serveur non connecté · /server", "Server signed out · /server"), _ => L("Connexion au serveur…", "Connecting to the server…") })
+                + (state["worst"]?.GetValue<string>() is { } worst ? " · ⚠ " + worst + " · /server" : "")
+            : null;
         if (active > 0) canvas.Write(textLeft, 4, $"{active} " + L("conversation(s) active(s) · /chats", "active conversation(s) · /chats"), new(p.Green, p.Background), textWidth);
         else if (availableUpdate != null) canvas.Write(textLeft, 4, L("Mise à jour ", "Update ") + availableUpdate.Version + " · /update", p.Highlight, textWidth);
+        else if (serverLine != null) canvas.Write(textLeft, 4, serverLine, p.Dim, textWidth);
     }
 
     void DrawDialog(TerminalCanvas canvas, Palette p, UiDialog prompt, CliTheme appearance)

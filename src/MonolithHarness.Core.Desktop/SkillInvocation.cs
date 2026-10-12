@@ -14,14 +14,15 @@ public static class SkillInvocation
     {
         if (selectionLength != 0 || caret < 0 || caret > text.Length) return null;
         var start = caret;
-        while (start > 0 && NameCharacter(text[start - 1])) start--;
+        // Skill names are short. A large unbroken draft is not a completion token.
+        while (start > 0 && NameCharacter(text[start - 1])) { if (caret - start >= 160) return null; start--; }
         if (start == 0 || text[start - 1] != '/') return null;
         start--;
         if (start > 0 && !char.IsWhiteSpace(text[start - 1])) return null;
         var end = caret;
-        while (end < text.Length && NameCharacter(text[end])) end++;
+        while (end < text.Length && NameCharacter(text[end])) { if (end - start >= 160) return null; end++; }
         if (end < text.Length && (text[end] is '/' or '\\' || !char.IsWhiteSpace(text[end]) && !char.IsPunctuation(text[end]))) return null;
-        return new(start, end - start, text[(start + 1)..caret], string.IsNullOrWhiteSpace(text[..start]));
+        return new(start, end - start, text[(start + 1)..caret], text.AsSpan(0, start).Trim().IsEmpty);
     }
 
     public static IReadOnlyList<SkillDefinition> Requested(string text, IEnumerable<string>? roots = null, int projectId = 0)

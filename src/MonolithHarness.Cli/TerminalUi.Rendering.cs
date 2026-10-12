@@ -20,6 +20,9 @@ public sealed partial class TerminalUi
                 var rendered = new List<DisplayLine>();
                 string kind = message.Role == "user" ? "user" : message.Role == "tool" ? "tool" : "assistant";
                 if (kind == "tool") rendered.Add(new("● " + message.Content.Split('\n')[0], "tool-title"));
+                // In a shared cloud project each user message says who sent it.
+                if (kind == "user" && MonolithHarness.Core.Remote.ServerSync.AuthorOf(message) is { } sender)
+                    rendered.Add(new($"◉ {MonolithHarness.Core.Remote.Avatar.Initials(sender.Name, sender.Email)} · {sender.DisplayName}", "muted"));
                 if (reasoning.Length > 0)
                 {
                     rendered.Add(new((showDetails ? "▾ " : "▸ ") + L("Raisonnement", "Reasoning") + $" · {reasoning.Length:N0} · /details", "muted"));

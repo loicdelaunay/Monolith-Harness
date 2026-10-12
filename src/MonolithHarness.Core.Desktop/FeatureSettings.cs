@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace MonolithHarness.Core;
 
-public sealed class FeatureSettings : IRetrySettings
+public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySettings
 {
     public InformationSettings Information { get; set; } = new();
     public int ImageGenerationProviderId { get; set; }
@@ -105,6 +105,8 @@ public sealed class FeatureSettings : IRetrySettings
     public int AgentMaxSteps { get; set; } = 200;
     public bool ShowComposerSpeed { get; set; } = true;
     public bool ShowComposerContext { get; set; } = true;
+    public bool ShowGlobalTokenSpeed { get; set; }
+    public bool RecoverPrematureCompletion { get; set; }
     public bool QuickModelLevelsEnabled { get; set; }
     public List<QuickModelLevel> QuickModelLevels { get; set; } = [];
     public string QuickModelSelectionMode { get; set; } = "simple";

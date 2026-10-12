@@ -62,6 +62,7 @@ public static class ServerApp
         services.AddSingleton<AccountService>();
         services.AddSingleton<DirectoryService>();
         services.AddSingleton<BackupService>();
+        services.AddSingleton<SyncSignals>();
         services.AddSingleton<ProviderService>();
         services.AddSingleton<ProviderRelay>();
         services.AddHttpClient(ProviderRelay.ClientName).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler

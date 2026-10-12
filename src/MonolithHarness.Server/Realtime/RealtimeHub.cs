@@ -54,6 +54,12 @@ public sealed class RealtimeHub
 
     public int ConnectionCount => connections.Count;
 
+    /// <summary>Raised (with the topic) whenever a connection joins or leaves a topic, including when it disconnects.</summary>
+    public event Action<string>? MembershipChanged;
+
+    /// <summary>The connections currently subscribed to a topic.</summary>
+    public IReadOnlyList<RealtimeConnection> Subscribers(string topic) => topics.TryGetValue(topic, out var set) ? [.. set.Values] : [];
+
     public static string UserTopic(Guid id) => "user:" + id;
     public static string RunTopic(Guid id) => "run:" + id;
     public static string ProjectTopic(Guid id) => "project:" + id;
@@ -79,12 +85,20 @@ public sealed class RealtimeHub
     {
         lock (connection.Topics) connection.Topics.Add(topic);
         topics.GetOrAdd(topic, _ => new()).TryAdd(connection.Id, connection);
+        RaiseMembership(topic);
+    }
+
+    void RaiseMembership(string topic)
+    {
+        try { MembershipChanged?.Invoke(topic); }
+        catch (Exception) { /* an observer must never break a subscription */ }
     }
 
     public void Unsubscribe(RealtimeConnection connection, string topic)
     {
         lock (connection.Topics) connection.Topics.Remove(topic);
         if (topics.TryGetValue(topic, out var set)) { set.TryRemove(connection.Id, out _); if (set.IsEmpty) topics.TryRemove(topic, out _); }
+        RaiseMembership(topic);
     }
 
     /// <summary>Removes subscribers of a topic (revoked share, removed viewer, ...). The filter keeps the others.</summary>

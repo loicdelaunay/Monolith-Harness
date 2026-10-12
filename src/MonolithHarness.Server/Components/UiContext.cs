@@ -44,6 +44,8 @@ public sealed class UiContext(AuthenticationStateProvider auth, SessionService s
 
     public bool Enabled(string feature) => settings.FeatureEnabled(feature);
 
+    public bool CanManageQueue(ClaimsPrincipal? user) => access.CanManageQueue(user);
+
     /// <summary>Runs an action; business errors become a message, anything else is logged and reported generically.</summary>
     public async Task<bool> TryAsync(Func<ClaimsPrincipal, Task> action, string? success = null)
     {

@@ -13,7 +13,7 @@ public sealed record MemberView(Guid UserId, string Email, string Access);
 public sealed record MemberRequest(string? Email, string? Access);
 
 /// <summary>Cloud projects: ownership, membership and lifecycle. Each project owns an isolated folder and engine database.</summary>
-public sealed class ProjectService(IDbContextFactory<ServerDb> factory, ProjectStore store, ProjectFiles files, AccessService access, AuditService audit, RealtimeHub hub)
+public sealed class ProjectService(IDbContextFactory<ServerDb> factory, ProjectStore store, ProjectFiles files, AccessService access, AuditService audit, RealtimeHub hub, SyncSignals signals)
 {
     public const string Owner = "owner";
 
@@ -40,6 +40,7 @@ public sealed class ProjectService(IDbContextFactory<ServerDb> factory, ProjectS
             await db.SaveChangesAsync();
         }
         await audit.WriteAsync("project.created", name, project.Id.ToString());
+        await signals.ProjectAsync(project.Id, "projects");
         return (await ListAsync(user)).First(x => x.Id == project.Id);
     }
 
@@ -76,13 +77,17 @@ public sealed class ProjectService(IDbContextFactory<ServerDb> factory, ProjectS
             await db.Projects.Where(x => x.Id == projectId).ExecuteUpdateAsync(set => set.SetProperty(x => x.Name, name));
         await store.RenameAsync(projectId, name);
         await audit.WriteAsync("project.renamed", project.Name, name);
+        await signals.ProjectAsync(projectId, "projects");
     }
 
     public async Task DeleteAsync(ClaimsPrincipal user, Guid projectId)
     {
         var (project, _) = await RequireAsync(user, projectId, Owner);
+        List<Guid> audience;
         await using (var db = await factory.CreateDbContextAsync())
         {
+            audience = await db.ProjectMembers.AsNoTracking().Where(x => x.ProjectId == projectId).Select(x => x.UserId).ToListAsync();
+            audience.Add(project.OwnerId);
             var busy = await db.Runs.AnyAsync(x => x.ProjectId == projectId && (x.State == RunStates.Queued || x.State == RunStates.Running || x.State == RunStates.AwaitingApproval));
             if (busy) throw ApiException.Conflict("project_busy", "Cancel the project's queued or running requests before deleting it.");
             db.Projects.Remove(await db.Projects.SingleAsync(x => x.Id == projectId));
@@ -90,6 +95,7 @@ public sealed class ProjectService(IDbContextFactory<ServerDb> factory, ProjectS
         }
         store.Destroy(projectId);
         await audit.WriteAsync("project.deleted", project.Name, projectId.ToString());
+        signals.ToUsers(audience, "projects", projectId);
     }
 
     public async Task<List<MemberView>> MembersAsync(ClaimsPrincipal user, Guid projectId)
@@ -120,6 +126,7 @@ public sealed class ProjectService(IDbContextFactory<ServerDb> factory, ProjectS
         await db.SaveChangesAsync();
         // Members who lost access stop receiving the project's live events.
         hub.Unsubscribe(RealtimeHub.ProjectTopic(projectId), c => c.UserId is { } u && u != project.OwnerId && !desired.ContainsKey(u));
+        await signals.ProjectAsync(projectId, "projects", also: existing.Select(x => x.UserId));
         await audit.WriteAsync("project.members_changed", project.Name, $"{desired.Count} member(s)");
     }
 

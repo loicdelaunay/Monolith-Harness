@@ -1,0 +1,8 @@
+@* The round avatar of an account (initials on a color derived from its address); see MonolithHarness.Core.Remote.Avatar. *@
+<span class="mh-avatar" style="width:@(Size)px;height:@(Size)px;line-height:@(Size)px;font-size:@((Size * 0.42).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))px;background:@MonolithHarness.Core.Remote.Avatar.Hex(Email)" title="@(Name is { Length: > 0 } ? $"{Name} · {Email}" : Email)" aria-label="@Email">@MonolithHarness.Core.Remote.Avatar.Initials(Name, Email)</span>
+
+@code {
+    [Parameter] public string Email { get; set; } = "";
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public int Size { get; set; } = 22;
+}

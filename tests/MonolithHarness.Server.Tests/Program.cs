@@ -29,6 +29,11 @@ await Area("shares", ShareChecks.Run);
 await Area("realtime", RealtimeChecks.Run);
 await Area("worker", WorkerChecks.Run);
 await Area("clients", ClientChecks.Run);
+await Area("probe", ProviderProbeChecks.Run);
+await Area("relayqueue", RelayQueueChecks.Run);
+await Area("sharecodes", ShareCodeChecks.Run);
+await Area("sync", SyncChecks.Run);
+await Area("liveview", LiveViewChecks.Run);
 
 Console.WriteLine();
 Console.WriteLine($"{passed} contrôles réussis, {failed} échec(s).");

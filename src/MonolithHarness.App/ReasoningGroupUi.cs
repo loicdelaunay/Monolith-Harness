@@ -11,6 +11,7 @@ public sealed partial class MainWindow
         public required StackPanel Host { get; init; }
         public required Border Card { get; init; }
         public required StackPanel Details { get; init; }
+        public required ScrollViewer Scroller { get; init; }
         public required TextBlock Summary { get; init; }
         public bool Expanded { get; private set; }
         bool preference;
@@ -23,6 +24,7 @@ public sealed partial class MainWindow
         public void SetExpanded(bool value)
         {
             Expanded = value; Details.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+            Scroller.Visibility = Details.Visibility;
             Summary.Text = (value ? "▼ " : "▶ ") + latest;
         }
         public void Update(string text)
@@ -36,6 +38,7 @@ public sealed partial class MainWindow
     }
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<StackPanel, ReasoningGroupUi> activityGroups = new();
     readonly List<WeakReference<ReasoningGroupUi>> activityGroupViews = [];
+    bool reasoningResizeObserved;
     ReasoningGroupUi ActivityGroup(StackPanel host)
     {
         host = MessageHost(host);
@@ -45,9 +48,24 @@ public sealed partial class MainWindow
         var summary = Label("", 13); summary.TextTrimming = TextTrimming.CharacterEllipsis; summary.MaxLines = 1;
         var toggle = new Button { Content = summary, HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new(0) };
-        var content = new StackPanel { Spacing = 8 }; content.Children.Add(toggle); content.Children.Add(details);
+        var scroller = new ScrollViewer { Content = details, MaxHeight = 360, Visibility = Visibility.Collapsed,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollMode = ScrollMode.Disabled };
+        void ResizeDetails() => scroller.MaxHeight = Math.Clamp(root.ActualHeight * .4, 140, 360);
+        scroller.Loaded += (_, _) => ResizeDetails();
+        if (!reasoningResizeObserved)
+        {
+            reasoningResizeObserved = true;
+            root.SizeChanged += (_, _) =>
+            {
+                activityGroupViews.RemoveAll(reference => !reference.TryGetTarget(out _));
+                foreach (var reference in activityGroupViews)
+                    if (reference.TryGetTarget(out var view)) view.Scroller.MaxHeight = Math.Clamp(root.ActualHeight * .4, 140, 360);
+            };
+        }
+        var content = new StackPanel { Spacing = 8 }; content.Children.Add(toggle); content.Children.Add(scroller);
         var card = FluentDesign.MessageSurface(content, "assistant"); card.Visibility = Visibility.Collapsed;
-        var group = new ReasoningGroupUi { Host = host, Card = card, Details = details, Summary = summary };
+        var group = new ReasoningGroupUi { Host = host, Card = card, Details = details, Scroller = scroller, Summary = summary };
         group.Refresh(state.ShowReasoningDetails);
         toggle.Click += (_, _) => group.SetExpanded(!group.Expanded);
         ToolTipService.SetToolTip(toggle, WorkflowText("Étapes de réflexion et outils", "Reasoning steps and tools"));

@@ -59,10 +59,14 @@ public sealed partial class MainWindow
         panel.Children.Add(Label(WorkflowText("Le thème est prévisualisé immédiatement. Enregistrez les réglages pour conserver les changements.", "Themes preview immediately. Save settings to keep your changes."), 12));
         var density = BuildChatDensitySettings(); panel.Children.Add(density.Panel);
         var fonts = BuildFontSettings(); panel.Children.Add(fonts.Panel);
+        var globalSpeed = new ToggleSwitch { IsOn = settings.ShowGlobalTokenSpeed };
+        panel.Children.Add(FluentDesign.Setting(WorkflowText("Afficher le débit global", "Show global token speed"),
+            WorkflowText("Au-dessus de Tâches planifiées et Outils : somme des débits des conversations en cours sur les deux dernières secondes. Désactivé par défaut.", "Above Scheduled tasks and Tools: combined token speed of active conversations over the last two seconds. Disabled by default."), globalSpeed));
         return (panel, target => {
             target.CustomThemes = custom.Select(CopyTheme).ToList(); target.Theme = selected;
             if (AppearanceThemes.IsCustomId(target.CliTheme) && !custom.Any(x => x.Id == target.CliTheme)) target.CliTheme = "shared";
             density.Save(target); fonts.Save(target);
+            target.ShowGlobalTokenSpeed = globalSpeed.IsOn;
         });
     }
 

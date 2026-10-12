@@ -48,6 +48,11 @@ public sealed partial class MainWindow
     {
         var overlay = new Grid();
         composer.CornerRadius = new(8); composer.FontSize = 15;
+        // Spell checking and prediction repeatedly scan large pasted source documents.
+        composer.IsSpellCheckEnabled = false;
+#if !HAS_UNO
+        composer.IsTextPredictionEnabled = false;
+#endif
         composer.MinHeight = 124; composer.MaxHeight = 260; composer.Padding = new Thickness(14, 12, 14, 58);
         overlay.Children.Add(composer);
         var plus = new Button { Width = 28, Height = 28, MinWidth = 0, MinHeight = 0, Padding = new(0),

@@ -132,6 +132,7 @@ public sealed partial class MainWindow
     IEnumerable<string> CurrentResourcePaths() => chat != null && project != null ? ProjectResources.For(chat, project) : [];
     void AddHistoryActions(Message message, Border? card)
     {
+        if (suppressHistoryActions) return;
         if (card != null)
         {
             chatSearchAnchors[message.Id] = new(card);

@@ -30,7 +30,7 @@ public sealed class TokenUsage
 
 // Call metadata only: no prompts, replies, attachments, URLs or credentials are stored.
 // AsyncLocal keeps simultaneous chats and inherited subagents in their own usage scopes.
-public static class TokenConsumption
+public static partial class TokenConsumption
 {
     sealed record Scope(string Database, string Activity, int? ProjectId, string ProjectName, int? ChatId, string ChatTitle);
     static readonly AsyncLocal<Scope?> current = new();
@@ -57,13 +57,17 @@ public static class TokenConsumption
             ProviderName = provider.Name, Model = provider.Model, Activity = scope.Activity, ProjectId = scope.ProjectId,
             ProjectName = scope.ProjectName, ChatId = scope.ChatId, ChatTitle = scope.ChatTitle };
         var timer = Stopwatch.StartNew();
+        var liveId = Guid.NewGuid();
+        var liveSpeed = scope.ChatId is { } chatId ? new LiveSpeed(scope.Database, chatId) : null;
+        if (liveSpeed != null) liveSpeeds[liveId] = liveSpeed;
         GenerationUpdate? latest = null; Completion? result = null;
-        void Update(GenerationUpdate update) { if (update.Retry == null) latest = update; progress(update); }
+        void Update(GenerationUpdate update) { if (update.Retry == null) latest = update; liveSpeed?.Observe(update); progress(update); }
         try { result = await request(Update); return result; }
         catch (OperationCanceledException) { entry.Status = "cancelled"; throw; }
         catch { entry.Status = "error"; throw; }
         finally
         {
+            liveSpeeds.TryRemove(liveId, out _);
             entry.CompletedUtc = DateTime.UtcNow; entry.Seconds = timer.Elapsed.TotalSeconds;
             // Failed requests with no returned text or counters have no known consumption.
             if (result != null || latest is { InputTokens: not null } or { OutputTokens: not null } ||

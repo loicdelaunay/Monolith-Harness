@@ -33,6 +33,9 @@ public sealed class ServerConnection : IAsyncDisposable
     public bool Configured => Link.Configured;
     public bool SignedIn => Link.SignedIn;
 
+    /// <summary>True while the real-time channel is open (false when it was never started or dropped).</summary>
+    public bool IsRealtimeConnected { get { lock (gate) return socket?.IsConnected == true; } }
+
     /// <summary>Raised when the server stops accepting the stored token (expired or revoked).</summary>
     public event Action? SessionLost;
 
@@ -95,6 +98,8 @@ public sealed class ServerConnection : IAsyncDisposable
         Store.Update(link =>
         {
             link.Email = login.User.Email;
+            link.UserId = login.User.Id.ToString();
+            link.DisplayName = login.User.DisplayName;
             link.ProtectedToken = Convert.ToBase64String(protect(login.Token));
             link.TokenExpiresUtc = login.ExpiresUtc;
         });
@@ -132,6 +137,7 @@ public sealed class ServerConnection : IAsyncDisposable
             }
         }
         catch (ServerException ex) { error = ex.Message; code = ex.Code; }
+        if (user != null && (Link.UserId != user.Id.ToString() || Link.DisplayName != user.DisplayName)) Store.Update(l => { l.UserId = user.Id.ToString(); l.DisplayName = user.DisplayName; });
         var now = Link;
         return new(true, now.Url, now.AllowHttp, now.Email, now.SignedIn, info != null, info?.Name ?? now.ServerName, info?.Version ?? now.ServerVersion,
             info?.Features ?? [], user, user?.PasswordChangePending ?? false, now.TokenExpiresUtc, error, code);

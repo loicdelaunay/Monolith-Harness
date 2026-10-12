@@ -32,11 +32,13 @@ public sealed class MarkdownRenderer
     readonly Func<string,CancellationToken,Task<byte[]?>>? localImage;
     readonly string fullMarkdown;
     readonly bool displayImages;
+    readonly bool displayHtml;
     sealed class RenderState
     {
         public List<string> Keys = [];
         public string Density = "", Markdown = "";
         public bool UsingPlainText;
+        public bool DisplayHtml = true;
         public Func<string, Task>? OpenFile;
         public Func<string, MenuFlyout>? FileMenu;
         public Func<string, Task<string?>>? FilePath;
@@ -78,15 +80,17 @@ public sealed class MarkdownRenderer
         renderedPanels.RemoveAll(x => !x.TryGetTarget(out _));
         foreach (var reference in renderedPanels.ToArray())
             if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state))
-                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu,state.LocalImage,state.FilePath);
+                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu,state.LocalImage,state.FilePath, state.DisplayHtml);
     }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
-    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true) { this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages; }
-    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null, Func<string, Task<string?>>? filePath = null)
+    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true, bool displayHtml=true) { this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages;this.displayHtml=displayHtml; }
+    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null, Func<string, Task<string?>>? filePath = null, bool displayHtml = true)
     {
         markdown ??= "";
         if (!states.TryGetValue(container, out var state))
         { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
+        if (state.DisplayHtml != displayHtml) state.Density = "";
+        state.DisplayHtml = displayHtml;
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;state.LocalImage=localImage; state.FilePath=filePath;
         try
         {
@@ -111,7 +115,7 @@ public sealed class MarkdownRenderer
     static void RenderBlocks(Panel container, string markdown, Func<string, Task>? openFile,
         Func<string, MenuFlyout>? fileMenu, RenderState state)
     {
-        markdown=ReplyWebDocument.PrepareMarkdown(markdown);
+        if (state.DisplayHtml) markdown=ReplyWebDocument.PrepareMarkdown(markdown);
         var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath);
         if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
         {
@@ -127,7 +131,7 @@ public sealed class MarkdownRenderer
         // Adjacent headings, paragraphs, lists and quotes share one selection surface.
         // Reuse that surface and its completed inlines when the streamed tail changes.
         var replacements = new List<UIElement>();
-        var renderer = new MarkdownRenderer(openFile, fileMenu,state.LocalImage,markdown);
+        var renderer = new MarkdownRenderer(openFile, fileMenu,state.LocalImage,markdown, displayHtml: state.DisplayHtml);
         for (int index = shared; index < groups.Count; index++)
         {
             var group = groups[index];
@@ -142,14 +146,14 @@ public sealed class MarkdownRenderer
                 TextBlock flow;
                 if (state.Density == ChatDensity.Id && index < container.Children.Count &&
                     container.Children[index] is StackPanel existing && existing.Children.Count == 1 &&
-                    existing.Children[0] is TextBlock existingFlow && textFlows.TryGetValue(existingFlow, out _))
+                    FileCitationBadges.TextOf(existing.Children[0]) is TextBlock existingFlow && textFlows.TryGetValue(existingFlow, out _))
                 { blockPanel = existing; flow = existingFlow; }
                 else
                 {
                     blockPanel = new StackPanel { Spacing = 4 };
                     flow = new TextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
                         Foreground = FluentDesign.Primary, FontSize = ChatDensity.FontSize, LineHeight = ChatDensity.LineHeight };
-                    blockPanel.Children.Add(flow);
+                    blockPanel.Children.Add(FileCitationBadges.Surface(flow));
                 }
                 renderer.UpdateTextFlow(flow, group, markdown);
             }
@@ -396,6 +400,7 @@ public sealed class MarkdownRenderer
 
             case HtmlBlock html:
                 var htmlSource=html.Lines.ToString();
+                if (!displayHtml) return CreateCodeBlockElement("html", htmlSource);
                 return ReplyWebDocument.IsEnvelopeFragment(htmlSource)?new Border():new ReplyHtmlCard(ReplyWebDocument.FromHtml(htmlSource),localImage);
 
             case FencedCodeBlock fenced:
@@ -490,7 +495,7 @@ public sealed class MarkdownRenderer
         var rawCode = ExtractCode(fenced.Lines);
         var lang = string.IsNullOrWhiteSpace(fenced.Info) ? "code" : fenced.Info.Trim();
         var code=CreateCodeBlockElement(lang,rawCode);
-        if(fenced.ClosingFencedCharCount>0 && ReplyWebDocument.IsHtml(lang) && rawCode.Length<=ReplyWebDocument.MaxCharacters) {
+        if(displayHtml && fenced.ClosingFencedCharCount>0 && ReplyWebDocument.IsHtml(lang) && rawCode.Length<=ReplyWebDocument.MaxCharacters) {
             var artifact=ReplyWebDocument.Extract(fullMarkdown).FirstOrDefault(x=>x.Html.StartsWith(rawCode,StringComparison.Ordinal))??ReplyWebDocument.FromHtml(rawCode);
             var panel=new StackPanel {Spacing=8};panel.Children.Add(new ReplyHtmlCard(artifact,localImage));panel.Children.Add(new Expander {Header=T("Voir le code HTML"),Content=code,HorizontalAlignment=HorizontalAlignment.Stretch});return panel;
         }
