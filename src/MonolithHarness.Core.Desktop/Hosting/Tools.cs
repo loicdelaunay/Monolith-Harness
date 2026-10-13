@@ -169,6 +169,11 @@ public sealed partial class HarnessService
             }, ct, AgentPolicy.ReadOnly(run.Chat.ExecutionMode)));
         if (name is DesktopControlTools.InspectTool or "desktop_keyboard" or "desktop_mouse")
         {
+            var inputSkill = name == "desktop_mouse" ? "mouse_control" : "keyboard_control";
+            if (name == DesktopControlTools.InspectTool
+                ? hostOptions?.DisabledSkills.Contains("mouse_control") == true && hostOptions.DisabledSkills.Contains("keyboard_control")
+                : hostOptions?.DisabledSkills.Contains(inputSkill) == true)
+                throw new NotSupportedException("This host does not support the skill: " + (name == DesktopControlTools.InspectTool ? "desktop input" : inputSkill));
             async Task<FeatureSettings> InputSettings(CancellationToken token)
             {
                 var current = await db.States.AsNoTracking().SingleAsync(token);

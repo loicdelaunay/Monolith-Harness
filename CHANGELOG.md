@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.97.2 — 2026-10-13
+
+- CLI : les outils de contrôle du bureau sont de nouveau refusés avec la réponse explicite « This host does not support… » lorsque l’hôte les désactive, avant la lecture des réglages UI Automation. Les restrictions graphiques du CLI sont inchangées.
+- Release regroupant le retry des erreurs 400 de JSON incomplet et l’ensemble des modifications locales desktop et serveur ; la publication 1.97.1 a été arrêtée avant sa mise en ligne après le contrôle automatique.
+
 ## 1.97.1 — 2026-10-13
 
 - Relances automatiques : les erreurs HTTP 400 signalant un JSON reçu incomplet (`json_invalid` / JSON decode error avec une chaîne non terminée ou une fin de données inattendue) rejoignent la boucle de retry existante. Le nombre de tentatives, le délai et le toggle Réessayer automatiquement restent appliqués ; les autres erreurs 400 et les erreurs d’authentification ne sont pas relancées.
