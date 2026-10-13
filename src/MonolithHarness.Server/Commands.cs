@@ -17,6 +17,7 @@ public static class Commands
         Usage: MonolithHarness [serve] [options]
                MonolithHarness reset-password --email <address> [--data <folder>]
                MonolithHarness restore --from <backup.sqlite> [--data <folder>]
+               MonolithHarness service <install|uninstall|status> [--data <folder>]
 
         Options:
           --port <n>             HTTP port (default 5800, or "port" in server.json)
@@ -27,15 +28,23 @@ public static class Commands
           --behind-proxy         Trust X-Forwarded-* headers from a reverse proxy
           --redirect-https       Redirect HTTP to HTTPS
           --data <folder>        Folder holding database.sqlite, server.json and workspace/ (default: beside the executable)
+          --update <mode>        New versions at startup: ask (Y/N on the console, default), auto, notify or off
+          --no-update-check      Same as --update off
+          --update-feed <url>    Release feed to read (default: the project's GitHub releases)
           --version, --help
 
         The database, server.json and the workspace folder live beside the executable, like the Desktop.
+
+        "service install" registers the server as a service that starts with the machine and restarts after a failure
+        (Windows service, systemd unit, launchd daemon); administrator rights are asked for when needed.
         """;
 
     public static async Task<int> RunAsync(string[] args)
     {
         try
         {
+            await ServerRuntime.InitializeAsync(args);
+            args = [.. ServerRuntime.Args];
             if (args.Contains("--help") || args.Contains("-h")) { Console.WriteLine(Help); return 0; }
             if (args.Contains("--version")) { Console.WriteLine($"{Api.ApiSupport.Name} {Api.ApiSupport.Version}"); return 0; }
             var command = args.Length > 0 && !args[0].StartsWith('-') ? args[0] : "serve";
@@ -44,6 +53,7 @@ public static class Commands
             {
                 case "worker": return await WorkerMode.RunAsync(rest);
                 case "serve": return await ServeAsync(rest);
+                case "service": return await ServiceAsync(rest);
                 case "reset-password": return await ResetPasswordAsync(rest);
                 case "restore": return Restore(rest);
                 default: throw new ArgumentException("Unknown command: " + command + ". Use --help.");
@@ -67,10 +77,57 @@ public static class Commands
         paths.Ensure();
         ServerOptions.EnsureFile(paths);
         var options = ServerOptions.Load(paths, args);
-        var app = await ServerApp.BuildAsync(paths, options);
+        var updates = new Services.UpdateService(paths, options);
+        updates.CleanStaging();
+        if (await StartupUpdate.RunAsync(updates, options) is { } handedOver) return handedOver;
+        var app = await ServerApp.BuildAsync(paths, options, builder => builder.Services.AddSingleton(updates));
         app.Lifetime.ApplicationStarted.Register(() => Banner(app, paths, options));
+        var lifecycle = app.Services.GetRequiredService<Services.ServerLifecycle>();
         await app.RunAsync();
-        return 0;
+        // A service that asked to be restarted ends with a failure code, which is what its recovery actions react to.
+        return ServerRuntime.IsService && lifecycle.RestartRequested ? Services.ServerLifecycle.RestartExitCode : 0;
+    }
+
+    static async Task<int> ServiceAsync(string[] args)
+    {
+        var action = args.Length > 0 ? args[0] : "status";
+        var rest = args.Skip(1).ToArray();
+        var paths = Paths(rest);
+        paths.Ensure();
+        string? Option(string name) => ServerRuntime.ArgumentOf(rest, name);
+        switch (action)
+        {
+            case "status":
+            {
+                var state = await Services.ServiceInstaller.StatusAsync(paths);
+                Console.WriteLine($"{state.Platform} · {state.Name} : {(state.Installed ? (state.Running ? "installé, en cours d'exécution" : "installé, arrêté") : "non installé")}");
+                if (state.Detail.Length > 0) Console.WriteLine(state.Detail);
+                return 0;
+            }
+            case "install":
+            {
+                var handle = await Services.ServiceInstaller.BeginInstallAsync(paths, rest, stopThisProcess: false);
+                var result = await Services.ServiceInstaller.WaitAsync(handle, TimeSpan.FromMinutes(3), CancellationToken.None, "started");
+                Console.WriteLine(result.Message);
+                return result.State == "started" ? 0 : 1;
+            }
+            case "uninstall":
+            {
+                var handle = await Services.ServiceInstaller.BeginUninstallAsync(paths);
+                var result = await Services.ServiceInstaller.WaitAsync(handle, TimeSpan.FromMinutes(3), CancellationToken.None, "removed");
+                Console.WriteLine(result.Message);
+                return result.State == "removed" ? 0 : 1;
+            }
+            // Internal: the elevated helper started by the commands above or by the web interface.
+            case "apply-install":
+            {
+                var separator = Array.IndexOf(rest, "--");
+                var wait = int.TryParse(Option("--wait-pid"), out var pid) ? pid : (int?)null;
+                return await Services.ServiceInstaller.ApplyInstallAsync(paths, Option("--result"), wait, separator < 0 ? [] : rest[(separator + 1)..]);
+            }
+            case "apply-uninstall": return await Services.ServiceInstaller.ApplyUninstallAsync(paths, Option("--result"));
+            default: throw new ArgumentException("Unknown service action: " + action + ". Use install, uninstall or status.");
+        }
     }
 
     static void Banner(WebApplication app, ServerPaths paths, ServerOptions options)

@@ -6,7 +6,15 @@ using System.Text.Json.Nodes;
 
 namespace MonolithHarness.Core.Remote;
 
-public sealed record ServerInfo(string Name, string Version, int ApiVersion, Dictionary<string, bool> Features);
+/// <summary>The message of the moment set by an administrator; <see cref="Level"/> is info, warning or error.</summary>
+public sealed record ServerAnnouncement(string Text, string Level, DateTime UpdatedUtc, DateTime? ExpiresUtc, string? By)
+{
+    /// <summary>Identifies this message for "do not show it again": a new or edited message has another stamp.</summary>
+    public string Stamp => UpdatedUtc.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+    public bool Expired(DateTime nowUtc) => ExpiresUtc is { } end && end <= nowUtc;
+}
+
+public sealed record ServerInfo(string Name, string Version, int ApiVersion, Dictionary<string, bool> Features, ServerAnnouncement? Announcement = null);
 
 public sealed record ServerUser(Guid Id, string Email, string DisplayName, bool PasswordChangePending, bool PasswordChangeRequired, List<string> Roles, List<string> Permissions);
 
@@ -24,7 +32,9 @@ public sealed record ServerChat(int Id, string Title, DateTime? UpdatedUtc = nul
 public sealed record ServerMessage(int Id, string Role, string Content, string State, DateTime? CompletedUtc, int? InputTokens, int? OutputTokens,
     int? CachedInputTokens = null, double Seconds = 0, string Reasoning = "", Guid? AuthorId = null, string? AuthorEmail = null, string? AuthorName = null, string? Wire = null);
 
-public sealed record ServerRun(Guid Id, Guid ProjectId, int ChatId, string State, int? QueuePosition, string Error, string ChangeSummary, Guid? RequesterId = null, string? Requester = null, string? Source = null);
+/// <summary>A request of the queue. For a call of a local conversation through a shared provider (<c>Source == "relay"</c>) the project and conversation are empty and the provider and model say what is waited for.</summary>
+public sealed record ServerRun(Guid Id, Guid ProjectId, int ChatId, string State, int? QueuePosition, string Error, string ChangeSummary, Guid? RequesterId = null, string? Requester = null, string? Source = null,
+    Guid? ProviderId = null, string? Model = null);
 
 public sealed record ServerApproval(Guid Id, Guid RunId, Guid ProjectId, string Kind, string Title, string Details, string Command, JsonElement? Questions, bool OneTimeOnly, string State);
 
@@ -35,6 +45,14 @@ public sealed record ServerShare(Guid Id, string Title, string ClientConversatio
     string? Code = null, bool IsPublic = false, bool Joined = false);
 
 public sealed record ServerUserSuggestion(Guid Id, string Email, string DisplayName);
+
+/// <summary>One model call a client shares with its server: numbers only, never a prompt, a reply or a name of project or conversation.</summary>
+public sealed record UsageSampleDto(string Id, DateTime CompletedUtc, string Provider, string Model, string Activity, long InputTokens, long OutputTokens, long? CachedInputTokens,
+    double Seconds, string Status, bool Estimated, bool ViaServer);
+
+public sealed record UsageAcceptedDto(int Accepted, int Duplicates, int Rejected);
+
+public sealed record UsageStatusDto(bool Enabled, int Samples, DateTime? FirstUtc, DateTime? LastUtc, int RetentionDays);
 
 /// <summary>Typed REST client of the Monolith Harness Server. Errors surface as <see cref="ServerException"/> with the server's stable codes.</summary>
 public sealed class ServerApi
@@ -144,6 +162,17 @@ public sealed class ServerApi
         SendAsync(HttpMethod.Post, $"api/shares/{share}/participants", new { email }, ct);
 
     public Task RevokeShareAsync(Guid share, CancellationToken ct = default) => SendAsync(HttpMethod.Post, $"api/shares/{share}/revoke", new { }, ct);
+
+    // ---- Usage statistics ----
+
+    public Task<UsageAcceptedDto> UploadUsageAsync(string deviceId, IEnumerable<UsageSampleDto> samples, CancellationToken ct = default) =>
+        SendAsync<UsageAcceptedDto>(HttpMethod.Post, "api/usage", new { deviceId, samples = samples.ToList() }, ct);
+
+    public Task<UsageStatusDto> UsageStatusAsync(CancellationToken ct = default) => GetAsync<UsageStatusDto>("api/usage/status", ct);
+
+    /// <summary>Erases everything this account shared; returns how many measurements were deleted.</summary>
+    public async Task<int> DeleteUsageAsync(CancellationToken ct = default) =>
+        (await SendAsync<JsonObject>(HttpMethod.Delete, "api/usage", null, ct))["deleted"]?.GetValue<int>() ?? 0;
 
     // ---- Transport ----
 

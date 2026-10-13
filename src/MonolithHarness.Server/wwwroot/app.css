@@ -37,3 +37,18 @@ html, body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, "Helv
 .mh-author { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: .78rem; opacity: .85; }
 .mh-details { margin-top: 6px; font-size: .85rem; opacity: .85; }
 .mh-details summary { cursor: pointer; }
+
+/* Message of the moment: a band above the page, colored by its level (also on the sign-in page, which has no MudBlazor theme). */
+.mh-banner { display: flex; align-items: center; gap: 12px; padding: 8px 16px; font-size: .92rem; color: #fff; }
+.mh-banner > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mh-banner-info { background: #0067a3; }
+.mh-banner-warning { background: #9a5b00; }
+.mh-banner-error { background: #b3261e; }
+.mh-banner-close { background: transparent; border: 0; color: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0 6px; opacity: .85; }
+.mh-banner-close:hover { opacity: 1; }
+/* Small bar chart for the usage statistics. */
+.mh-bars { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding-top: 8px; }
+.mh-bar-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.mh-bar { width: 100%; max-width: 38px; min-height: 2px; background: var(--mud-palette-primary); border-radius: 3px 3px 0 0; opacity: .9; }
+.mh-bar-col:hover .mh-bar { opacity: 1; filter: brightness(1.15); }
+.mh-bar-label { font-size: .68rem; color: var(--mud-palette-text-secondary); margin-top: 4px; white-space: nowrap; height: 14px; overflow: hidden; }

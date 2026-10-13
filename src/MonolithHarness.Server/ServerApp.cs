@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using MonolithHarness.Server.Api;
@@ -34,6 +35,8 @@ public static class ServerApp
         builder.Logging.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+        // A service has no console to read: its log goes to workspace/logs.
+        if (ServerRuntime.IsService) builder.Logging.AddProvider(new FileLoggerProvider(paths.Logs));
         builder.WebHost.UseStaticWebAssets();
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
@@ -51,10 +54,18 @@ public static class ServerApp
         services.AddPooledDbContextFactory<ServerDb>(o => o.UseSqlite($"Data Source={paths.Database}")
             .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
         var protection = services.AddDataProtection().SetApplicationName("MonolithHarness.Server").PersistKeysToFileSystem(new DirectoryInfo(paths.Keys));
-        if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
+        // Machine scope: the same keys are readable by the console and by the service, which runs under another account.
+        if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi(protectToLocalMachine: true);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(paths.Keys, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         services.AddSingleton<SettingsService>();
+        services.AddSingleton<AnnouncementService>();
+        services.AddSingleton<UsageService>();
+        services.AddSingleton<ServerLifecycle>();
+        services.AddSingleton<MaintenanceService>();
+        services.TryAddSingleton(_ => new UpdateService(paths, options));
+        services.AddHostedService<UpdateChecker>();
+        if (OperatingSystem.IsWindows() && ServerRuntime.IsService) services.AddWindowsService(service => service.ServiceName = ServiceInstaller.WindowsName);
         services.AddSingleton<AuditService>();
         services.AddSingleton<LoginThrottle>();
         services.AddSingleton<SessionService>();
@@ -203,6 +214,8 @@ public static class ServerApp
         });
         app.MapCoreApi();
         app.MapFeatureApi();
+        app.MapUsageApi();
+        app.MapMaintenanceApi();
         app.MapRealtime();
         app.MapWebAuth();
         app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

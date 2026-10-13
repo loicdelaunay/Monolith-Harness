@@ -105,16 +105,27 @@ static class FileCitationBadges
             frame.Frame.Background = ReferenceEquals(frame.Link, link) ? FluentDesign.Resource("ControlHoverBrush") : FluentDesign.Card;
         }
     }
+    internal static async Task VerifyAsync(Span placeholder, FileCitation citation, Func<string, Task<string?>>? resolve,
+        Func<string, Task>? openFile, Action? changed)
+    {
+        var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        var path = await FileCitationVerification.ResolveAsync(citation, resolve).ConfigureAwait(false);
+        if (path == null || dispatcher == null) return;
+        dispatcher.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            placeholder.Inlines.Clear(); placeholder.Inlines.Add(Create(citation with { Path = path }, openFile));
+            changed?.Invoke();
+        });
+    }
     internal static Hyperlink Create(FileCitation citation, Func<string, Task>? openFile)
     {
         var link = new Hyperlink { Foreground = FluentDesign.Primary, UnderlineStyle = UnderlineStyle.None };
         citations.Add(link, citation);
         ChatPathMenus.Register(link, citation.Target);
         link.Inlines.Add(new Run { Text = "\u00A0" });
-        link.Inlines.Add(new Run { Text = FileIconCatalog.Glyph(citation.Extension), FontSize = 16,
+        link.Inlines.Add(new Run { Text = FileIconCatalog.Glyph(citation.Extension), FontSize = ChatDensity.FontSize,
             FontFamily = new FontFamily("ms-appx:///Assets/Fonts/MaterialFileIcons.ttf#Monolith Material Files") });
-        link.Inlines.Add(new Run { Text = "\u00A0" + citation.Name.Replace(' ', '\u00A0'), FontWeight = FontWeights.Medium,
-            FontFamily = new FontFamily("Cascadia Code, Consolas") });
+        link.Inlines.Add(new Run { Text = "\u00A0" + citation.Name.Replace(' ', '\u00A0'), FontWeight = FontWeights.Medium });
         var lines = citation.LineLabel(UiText.Language == "fr");
         if (lines.Length > 0) link.Inlines.Add(new Run { Text = "\u00A0" + lines.Replace(' ', '\u00A0'), Foreground = FluentDesign.Secondary, FontSize = 12 });
         link.Inlines.Add(new Run { Text = "\u00A0" });

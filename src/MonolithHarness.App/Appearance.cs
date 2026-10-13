@@ -19,6 +19,7 @@ public sealed partial class MainWindow
     void ApplyAppearance()
     {
         var config = FeatureSettings.Read(state.FeaturesJson);
+        reasoningDisplayOverride = config.ReasoningDisplay is { } detail && Enum.IsDefined(detail) ? detail : null;
         MarkdownRenderer.ConfigureVisuals(config);
         ChatDensity.Configure(config.ChatMessageDensity);
         AppTypography.Configure(config);
@@ -33,9 +34,13 @@ public sealed partial class MainWindow
     void ApplyTheme(string themeId, IEnumerable<AppearanceTheme>? customThemes = null)
     {
         var theme = AppearanceThemes.Get(themeId, customThemes ?? FeatureSettings.Read(state.FeaturesJson).CustomThemes);
+        var previousRevision = FluentDesign.ThemeRevision;
         FluentDesign.SetTheme(theme);
-        ReplyHtmlPreview.RefreshThemes();
-        MarkdownRenderer.RefreshDensity();
+        if (FluentDesign.ThemeRevision != previousRevision)
+        {
+            ReplyHtmlPreview.RefreshThemes();
+            MarkdownRenderer.RefreshVisualThemes();
+        }
         RefreshVersionChip(theme);
         root.RequestedTheme = theme.Dark ? ElementTheme.Dark : ElementTheme.Light;
         root.Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");

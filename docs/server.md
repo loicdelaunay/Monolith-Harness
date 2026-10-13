@@ -78,9 +78,19 @@ Cloud workers use a separate project workspace and engine database. Code executi
 - REST: `/api/...`; OpenAPI: `/openapi/v1.json`; Swagger: `/swagger`.
 - Real-time updates: `/ws`, for streamed replies, queue progress, questions, approvals and sharing.
 - Provider relay: `/api/providers/{id}/relay/{chat/completions|embeddings|models}`. Access follows the provider permissions.
-- Administration includes an audit log, session revocation and database backups. For a complete backup, stop the server and copy **the entire data folder**, including `workspace/keys` and project files. The built-in backup covers SQLite only. Windows encryption keys are tied to the OS account; Linux data folders must remain private.
+- Administration includes an audit log, session revocation and database backups. For a complete backup, stop the server and copy **the entire data folder**, including `workspace/keys` and project files. The built-in backup covers SQLite only. Windows encryption keys are protected for the machine, so keep the folder private (a service and the console of the same machine read the same keys); Linux data folders must remain private.
 - Recovery: `MonolithHarness reset-password --email <address>` issues a temporary recovery code. `MonolithHarness restore --from <backup.sqlite>` restores SQLite while the server is stopped, preserving the previous database.
-- To update, stop the server and replace only its executable. Keep `database.sqlite`, `server.json` and `workspace/`.
+- To update by hand, stop the server and replace only its executable. Keep `database.sqlite`, `server.json` and `workspace/`. Or let the server do it, see below.
+
+## Message of the moment, updates and service
+
+Administration → **Maintenance** (permission "Enable features and tune the server") groups three tools.
+
+- **Message of the moment:** a text with an alert level (information, warning, incident) and an optional duration. Every page of the web interface, the Desktop (a colored band above the application, which the user can close until the next message) and the CLI (its first line) show it immediately.
+- **Updates:** at startup the server looks for a newer release (tag `server-vX.Y.Z`) with a short timeout, then follows `updateMode` in `server.json` (or `--update`): `ask` (default) asks **Y/N** on the console and treats no answer within `updatePromptSeconds` as "no"; `auto` installs and restarts; `notify` only says so; `off` never looks (`--no-update-check`). Without a console (a service) the server only reports it, here and in the web interface. An installation checks the SHA-256 published with the archive, extracts only the executable, verifies that it starts and reports the expected version, keeps the previous executable as `.previous`, and restarts. Data is never touched; running requests are interrupted by the restart.
+- **Service:** **Install as a service** (or `MonolithHarness service install`) starts the server with the machine and restarts it after a failure. On Windows it creates the `MonolithHarnessServer` service under a dedicated virtual account (`NT SERVICE\MonolithHarnessServer`) with recovery actions after 5, 15 and 60 seconds; the UAC prompt appears **on the server machine**, the account is granted write access to the server folder and the provider-key encryption keys are protected for the machine (a backup copy is kept under `workspace/`). Linux uses a systemd unit and macOS a launchd daemon, both needing `sudo` (the page shows the command). A service writes its log to `workspace/logs/`. Container isolation for cloud runs needs an account that can use Docker or Podman.
+
+Usage statistics are optional: each user can share the speed and token consumption of their model calls from the client (Settings → Server). The server stores numbers only (provider, model, tokens, duration), shows them under **Statistics** as a common view or per user (permission `usage.viewAll`; everybody reads their own), and users can erase what they shared.
 
 ## Build from source
 

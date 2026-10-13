@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Markdig;
+using MonolithHarness.Core.Remote;
 
 namespace MonolithHarness.Core.Hosting;
 
@@ -23,7 +24,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
     static bool B(JsonObject p, string name, bool fallback = false) => p[name]?.GetValue<bool>() ?? fallback;
     static JsonObject Obj(object value) => (JsonSerializer.SerializeToNode(value, Json) as JsonObject)!;
     HarnessDb Db() => new(database);
-    public async Task Initialize() { await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); _ = ResumeSharesAsync(); }
+    public async Task Initialize() { ChatEngine.ProviderGuard = provider => ServerSync.BlockedReason(guardStore.Read(), provider); await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); _ = ResumeSharesAsync(); }
     static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, p.AcpArgumentsJson, hasKey = p.ProtectedKey.Length > 0 };
     static string Html(string text)
     {

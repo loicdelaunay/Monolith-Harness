@@ -14,18 +14,23 @@ public sealed partial class MainWindow
         public required ScrollViewer Scroller { get; init; }
         public required TextBlock Summary { get; init; }
         public bool Expanded { get; private set; }
-        bool preference;
+        public Button? Toggle { get; init; }
+        ReasoningDetailLevel? preference;
         string latest = "";
-        public void Refresh(bool value)
+        public void Refresh(bool value) => Refresh(value ? ReasoningDetailLevel.Detailed : ReasoningDetailLevel.Reduced);
+        public void Refresh(ReasoningDetailLevel value)
         {
             if (preference == value) return;
-            preference = value; SetExpanded(value);
+            preference = value;
+            if (Toggle != null) Toggle.IsEnabled = value != ReasoningDetailLevel.None;
+            SetExpanded(value == ReasoningDetailLevel.Detailed);
         }
         public void SetExpanded(bool value)
         {
+            value &= preference != ReasoningDetailLevel.None;
             Expanded = value; Details.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
             Scroller.Visibility = Details.Visibility;
-            Summary.Text = (value ? "▼ " : "▶ ") + latest;
+            Summary.Text = preference == ReasoningDetailLevel.None ? UiText.Resolve("Raisonnement…", "Reasoning…") : (value ? "▼ " : "▶ ") + latest;
         }
         public void Update(string text)
         {
@@ -36,6 +41,8 @@ public sealed partial class MainWindow
             Card.Visibility = Visibility.Visible; SetExpanded(Expanded);
         }
     }
+    ReasoningDetailLevel? reasoningDisplayOverride;
+    ReasoningDetailLevel CurrentReasoningDisplay => reasoningDisplayOverride ?? (state.ShowReasoningDetails ? ReasoningDetailLevel.Detailed : ReasoningDetailLevel.Reduced);
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<StackPanel, ReasoningGroupUi> activityGroups = new();
     readonly List<WeakReference<ReasoningGroupUi>> activityGroupViews = [];
     bool reasoningResizeObserved;
@@ -65,8 +72,9 @@ public sealed partial class MainWindow
         }
         var content = new StackPanel { Spacing = 8 }; content.Children.Add(toggle); content.Children.Add(scroller);
         var card = FluentDesign.MessageSurface(content, "assistant"); card.Visibility = Visibility.Collapsed;
-        var group = new ReasoningGroupUi { Host = host, Card = card, Details = details, Scroller = scroller, Summary = summary };
-        group.Refresh(state.ShowReasoningDetails);
+        var group = new ReasoningGroupUi { Host = host, Card = card, Details = details, Scroller = scroller, Summary = summary, Toggle = toggle };
+        _ = new ContentTailFollower(scroller);
+        group.Refresh(CurrentReasoningDisplay);
         toggle.Click += (_, _) => group.SetExpanded(!group.Expanded);
         ToolTipService.SetToolTip(toggle, WorkflowText("Étapes de réflexion et outils", "Reasoning steps and tools"));
         host.Children.Add(card); activityGroups.Add(host, group);

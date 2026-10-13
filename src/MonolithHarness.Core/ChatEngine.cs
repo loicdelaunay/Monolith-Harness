@@ -27,6 +27,11 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
 {
     readonly IChatEngineRuntime platform = runtime ?? ChatEngineServices.Runtime;
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, ProviderCompatibility> compatibility = new();
+    /// <summary>
+    /// Lets a host refuse a provider that is not usable right now (the server mode is switched off, so the shared providers of the server are closed):
+    /// returns the reason, or null. Checked before every request.
+    /// </summary>
+    public static Func<Provider, string?>? ProviderGuard { get; set; }
     public static Uri Endpoint(string baseUrl, string resource)
     {
         if (!Uri.TryCreate(baseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var uri) ||
@@ -139,6 +144,7 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
     async Task<Completion> StreamOnceAsync(Provider provider, string key, JsonArray messages, JsonArray tools,
         Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort, int inputEstimate, Action<ContextRequestProgress>? requestProgress, bool requireNoReasoning)
     {
+        if (ProviderGuard?.Invoke(provider) is { } refused) throw new InvalidOperationException(refused);
         if (requireNoReasoning) ChatReasoning.CheckModel(provider);
         var progress = new ContextRequestProgress(ContextRequestStage.Preparing, inputEstimate, messages.Count);
         requestProgress?.Invoke(progress);
@@ -172,7 +178,7 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await ProviderErrorDetails.ReadAsync(response, key, ct);
-                if ((int)response.StatusCode is 400 or 422 && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase)))
+                if ((int)response.StatusCode is 400 or 422 && !RequestRetry.IsIncompleteJsonBadRequest(response.StatusCode, detail) && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase)))
                 {
                     if (requireNoReasoning && profile.NoEffort) throw ChatReasoning.Unsupported(provider.Model, detail);
                     continue;

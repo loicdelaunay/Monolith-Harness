@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -158,6 +159,79 @@ public sealed partial class MainWindow
         // A local conversation shared live.
         var local = list.First(x => !IsCloudProject(x.Id));
         var localChat = await db.Chats.Where(x => x.ProjectId == local.Id).FirstAsync();
+
+        // The message of the moment from the server: a colored band above the application.
+        Check(announcementBand?.Visibility == Visibility.Collapsed, "Without a message of the moment there is no band.");
+        using var administration = new HttpClient { BaseAddress = new Uri(Setting("URL")) };
+        administration.DefaultRequestHeaders.Authorization = new("Bearer", Server.Token());
+        async Task Announce(string text, string level) => (await administration.PutAsJsonAsync("api/admin/announcement", new { text, level })).EnsureSuccessStatusCode();
+        await Announce("Maintenance du serveur à 22 h", "warning");
+        await Wait(() => announcementBand?.Visibility == Visibility.Visible, 20, "The band did not appear.");
+        root.UpdateLayout(); await Task.Delay(300);
+        Check(announcementText!.Text == "Attention · Maintenance du serveur à 22 h" && ReferenceEquals(announcementBand!.Background, AnnouncementWarning), "A warning from the server shows in the top band, in amber.");
+        await Capture(root, Path.Combine(output, "server-announcement-warning.png"));
+        await Announce("Incident en cours : les requêtes sont ralenties", "error");
+        await Wait(() => announcementText!.Text.StartsWith("Incident"), 20, "The band did not change.");
+        Check(ReferenceEquals(announcementBand!.Background, AnnouncementError), "An error is red, and replaces the previous message by itself.");
+        await Capture(root, Path.Combine(output, "server-announcement-error.png"));
+        await Announce("Une nouvelle fonction est disponible", "info");
+        await Wait(() => announcementText!.Text.StartsWith("Information"), 20, "The band did not change to info.");
+        Check(ReferenceEquals(announcementBand!.Background, AnnouncementInfo), "An information is blue.");
+        await Capture(root, Path.Combine(output, "server-announcement-info.png"));
+        serverSync!.DismissAnnouncement(); RefreshAnnouncement();
+        Check(announcementBand.Visibility == Visibility.Collapsed, "Closing the message hides the band until the administrator publishes another.");
+        await Announce("Dernier message", "warning");
+        await Wait(() => announcementBand.Visibility == Visibility.Visible, 20, "A new message did not reopen the band.");
+        (await administration.DeleteAsync("api/admin/announcement")).EnsureSuccessStatusCode();
+        await Wait(() => announcementBand.Visibility == Visibility.Collapsed, 20, "Withdrawing the message did not hide the band.");
+        Check(true, "A new message reopens the band and withdrawing it hides the band.");
+
+        // The server mode in one click: a power button beside the connection state.
+        RefreshServerChip();
+        Check(serverModeToggle is { Visibility: Visibility.Visible, IsChecked: true }, "A power button beside the server state shows that the server mode is on.");
+        var linkedShared = db.Providers.Local.First(x => x.Name.EndsWith(ServerSync.ServerProviderSuffix));
+        await SetServerModeAsync(false);
+        root.UpdateLayout(); await Task.Delay(300);
+        Check(serverChipText?.Text == "Serveur · désactivé" && serverModeToggle!.IsChecked == false && !Server.Link.Enabled && Server.Link.SignedIn, "Turning the mode off: the chip says so, the button is released and the account is kept.");
+        SetSidebarView(true);
+        Check(!CloudView && !Descendants(projectNavigation).OfType<ToggleButton>().Any(), "With the mode off only the Local view exists.");
+        SetSidebarView(false);
+        Check(ServerSync.BlockedReason(Server.Link, linkedShared) is { Length: > 0 }, "The shared providers of the server are closed while the mode is off.");
+        root.UpdateLayout(); await Task.Delay(400);
+        await Capture(root, Path.Combine(output, "server-mode-off.png"));
+        await SetServerModeAsync(true);
+        await Wait(() => Sync.Snapshot.State == LinkState.Online, 30, "The server mode did not come back online.");
+        RefreshServerChip();
+        Check(serverModeToggle!.IsChecked == true && serverChipText?.Text == "Serveur · connecté" && ServerSync.BlockedReason(Server.Link, linkedShared) == null, "Turning it back on reconnects and reopens the providers.");
+
+        // A call of a local conversation waiting in the server's queue shows its position.
+        using (var waiting = new ConversationRun(localChat, local, linkedShared, state, "test", []) { Messages = CreateMessagePanel() })
+        {
+            conversationRuns[localChat.Id] = waiting;
+            var serverProviderId = ServerSync.ServerProviderOf(ServerLink, linkedShared)!.Value.ServerProvider;
+            ShowRelayQueue([new RelayWait(Guid.NewGuid(), serverProviderId, "demo-model", 2, DateTime.UtcNow)]);
+            Check(waiting.Status == "En attente sur le serveur (position 2)", "A conversation waiting in the server's queue shows its position.");
+            ShowRelayQueue([new RelayWait(Guid.NewGuid(), serverProviderId, "demo-model", 1, DateTime.UtcNow)]);
+            Check(waiting.Status == "En attente sur le serveur (position 1)", "...and follows it as the queue moves.");
+            ShowRelayQueue([]);
+            Check(waiting.Status == "Le modèle réfléchit…", "...and goes back to normal when the call starts.");
+            conversationRuns.Remove(localChat.Id);
+        }
+
+        // Sharing the speed and consumption dashboard is a switch in Settings > Server, off by default.
+        var settingsPanel = BuildServerSettings(this);
+        var usageSwitch = Descendants(settingsPanel).OfType<ToggleSwitch>().Single(x => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(x) == "Partager ma vitesse et ma consommation");
+        var modeSwitch = Descendants(settingsPanel).OfType<ToggleSwitch>().Single(x => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(x) == "Utiliser le serveur");
+        Check(!usageSwitch.IsOn && !Server.Link.ShareUsage && modeSwitch.IsOn, "Sharing the dashboard is off by default and the server mode switch is on.");
+        usageSwitch.IsOn = true; await Task.Delay(800);
+        Check(Server.Link.ShareUsage && Server.Link.DeviceId.Length > 0, "Turning the switch on shares the dashboard with the server.");
+        var overlay = new Border { Background = FluentDesign.Resource("LayerFillColorDefaultBrush"), Padding = new(24), Child = new ScrollViewer { Content = settingsPanel }, MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Center };
+        root.Children.Add(overlay); root.UpdateLayout(); await Task.Delay(400);
+        await Capture(root, Path.Combine(output, "server-settings-mode-usage.png"));
+        root.Children.Remove(overlay);
+        usageSwitch.IsOn = false; await Task.Delay(300);
+        Check(!Server.Link.ShareUsage, "Turning it off stops the sharing.");
+
         var shareId = await StartShareAsync(localChat);
         Check((await Server.Api.SharesAsync()).Any(x => x.Id == shareId && x.IsHost && x.Live), "A local conversation is shared live through the bridge.");
         var hosted = await Server.Api.ShareAsync(shareId);
@@ -196,7 +270,7 @@ public sealed partial class MainWindow
         await ForwardSharedMessage(Bridge, shareId, new Message { Id = 9004, ChatId = localChat.Id, Role = "assistant", Content = "Le fichier contient des notes.", State = "complete", Seconds = 2.0 }, sender);
         await Bridge.ForwardAsync(shareId, "stream", new { chatId = localChat.Id, messageId = 9005, text = "Réponse en cours d'écriture", reasoning = "Je réfléchis encore" });
         var window = sharedWindows[shareId];
-        var layout = (FrameworkElement)window.Content;
+        var layout = (FrameworkElement)window.Content!;
         await Wait(() => Descendants(layout).OfType<TextBlock>().Any(t => t.Text.Contains("Réponse en cours d'écriture")), 20, "The text being written did not show in the viewer.");
         root.UpdateLayout(); layout.UpdateLayout(); await Task.Delay(500);
         File.WriteAllLines(Path.Combine(output, "viewer-tree.txt"), Descendants(layout).Select(x => x.GetType().Name + " tag=" + x.Tag + " " + (x as TextBlock)?.Text));

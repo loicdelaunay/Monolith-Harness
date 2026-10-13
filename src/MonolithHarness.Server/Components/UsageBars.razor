@@ -1,0 +1,23 @@
+<div class="mh-bars" role="img" aria-label="@Title">
+    @for (var i = 0; i < Buckets.Count; i++)
+    {
+        var bucket = Buckets[i];
+        var value = Value(bucket);
+        var height = Max <= 0 ? 0 : Math.Clamp(value / Max * 100, 0, 100);
+        <div class="mh-bar-col" title="@Tooltip(bucket)">
+            <div class="mh-bar" style="height:@(height.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+            <div class="mh-bar-label">@(i % Every == 0 ? LabelOf(bucket) : "")</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<UsageBucket> Buckets { get; set; } = [];
+    [Parameter, EditorRequired] public Func<UsageBucket, double> Value { get; set; } = _ => 0;
+    [Parameter, EditorRequired] public Func<UsageBucket, string> LabelOf { get; set; } = _ => "";
+    [Parameter, EditorRequired] public Func<UsageBucket, string> Tooltip { get; set; } = _ => "";
+    [Parameter] public string Title { get; set; } = "";
+
+    double Max => Buckets.Count == 0 ? 0 : Buckets.Max(Value);
+    int Every => Buckets.Count switch { > 24 => 5, > 12 => 3, _ => 1 };
+}

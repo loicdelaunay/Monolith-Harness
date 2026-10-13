@@ -97,6 +97,9 @@ public sealed partial class MainWindow : Window
     {
         engine = new(http);
         openCodeEngine = new(http);
+        // With the server mode off the providers of the server are closed (the link file is read, so a user without a server pays nothing).
+        var linkGuard = new MonolithHarness.Core.Remote.ServerLinkStore(MonolithHarness.Core.Remote.ServerLinkStore.PathFor(HarnessDb.DatabasePath));
+        ChatEngine.ProviderGuard = candidate => MonolithHarness.Core.Remote.ServerSync.BlockedReason(linkGuard.Read(), candidate);
         Title = BrandingAssets.DefaultName;
         AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1440, Height = 940 });
         var iconFile = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
@@ -104,7 +107,14 @@ public sealed partial class MainWindow : Window
         FluentDesign.WindowChrome(this);
         Content = root;
         root.Children.Add(backgroundBrowsers);
-        root.Children.Add(shell);
+        // The message of the moment from the server sits above the application (collapsed when there is none).
+        var frame = new Grid();
+        frame.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        frame.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
+        frame.Children.Add(BuildAnnouncementBand());
+        Grid.SetRow(shell, 1);
+        frame.Children.Add(shell);
+        root.Children.Add(frame);
         BuildSidebar(); BuildWorkspace();
         InitializeModelActivity(); InitializeConversationRetention();
         ObserveTextZoom(root);
@@ -640,27 +650,35 @@ public sealed partial class MainWindow : Window
         public TextBlock ThinkingBody { get; init; } = null!;
         public bool IsThinkingExpanded { get; set; }
         public Func<bool> ShowReasoningDetails { get; init; } = () => true;
-        bool? lastReasoningPreference;
+        public Func<ReasoningDetailLevel>? ReasoningDisplay { get; init; }
+        public ContentTailFollower? ThinkingFollower { get; init; }
+        ReasoningDetailLevel Preference => ReasoningDisplay?.Invoke() ?? (ShowReasoningDetails() ? ReasoningDetailLevel.Detailed : ReasoningDetailLevel.Reduced);
+        ReasoningDetailLevel? lastReasoningPreference;
+        string reasoningText = "";
         bool reasoningComplete;
         public void RefreshThinkingHeader()
         {
-            var reasoning = ThinkingBody.Text;
+            if (Preference == ReasoningDetailLevel.None) { ThinkingHeaderLabel.Text = UiText.Resolve("Raisonnement…", "Reasoning…"); return; }
+            var reasoning = reasoningText;
             var prefix = reasoningComplete ? T("Raisonnement terminé") : T("Raisonnement en cours…");
             var line = !reasoningComplete ? ModelActivity.ReasoningLine(reasoning) : "";
             ThinkingHeaderLabel.Text = $"🧠 {prefix} ({reasoning.Length:N0} {T("car.")})" + (line.Length > 0 ? " · " + line : "") + "  " + (IsThinkingExpanded ? "▼" : "▶");
         }
         public void RefreshReasoningPreference()
         {
-            var preference = ShowReasoningDetails();
+            var preference = Preference;
             if (Group is { } group)
             {
                 group.Refresh(preference); IsThinkingExpanded = group.Expanded;
-                ThinkingScroll.Visibility = Visibility.Visible; return;
+                ThinkingScroll.Visibility = Visibility.Visible;
+                ThinkingBody.Text = preference == ReasoningDetailLevel.None ? "" : reasoningText; return;
             }
             if (lastReasoningPreference == preference) return;
             lastReasoningPreference = preference;
-            IsThinkingExpanded = preference;
-            ThinkingScroll.Visibility = preference ? Visibility.Visible : Visibility.Collapsed;
+            ThinkingHeaderBtn.IsEnabled = preference != ReasoningDetailLevel.None;
+            IsThinkingExpanded = preference == ReasoningDetailLevel.Detailed;
+            ThinkingScroll.Visibility = IsThinkingExpanded ? Visibility.Visible : Visibility.Collapsed;
+            ThinkingBody.Text = preference == ReasoningDetailLevel.None ? "" : reasoningText;
             RefreshThinkingHeader();
         }
         public string CurrentText { get; private set; } = "";
@@ -744,19 +762,16 @@ public sealed partial class MainWindow : Window
                 return;
             }
             ThinkingCard.Visibility = Visibility.Visible;
-            ThinkingBody.Text = reasoning;
+            reasoningText = reasoning;
+            ThinkingFollower?.BeforeTextChange();
+            ThinkingBody.Text = Preference == ReasoningDetailLevel.None ? "" : reasoning;
+            ThinkingFollower?.AfterTextChange();
             Group?.Update(reasoning);
             reasoningComplete = isComplete;
             RefreshReasoningPreference();
             RefreshThinkingHeader();
-            if (!isComplete && IsThinkingExpanded)
-            {
-            if (!CanPaint()) return;
-            ThinkingScroll.UpdateLayout();
-                ThinkingScroll.ChangeView(null, ThinkingScroll.ScrollableHeight, null, true);
-                ThinkingScroll.DispatcherQueue.TryEnqueue(() =>
-                    ThinkingScroll.ChangeView(null, ThinkingScroll.ScrollableHeight, null, true));
-            }
+            // Each nested pane follows only while the user remains at its own bottom.
+            if (!isComplete && IsThinkingExpanded) ThinkingFollower?.Queue();
         }
     }
     AssistantMessageUi AddAssistantMessage(string initialText = "", string? initialReasoning = null, StackPanel? target = null, Project? sourceProject = null)
@@ -825,6 +840,8 @@ public sealed partial class MainWindow : Window
             Duration = duration,
             CanPaint = () => followChatTail || !ReferenceEquals(target ?? messages, scroll.Content),
             ShowReasoningDetails = () => state.ShowReasoningDetails,
+            ReasoningDisplay = () => CurrentReasoningDisplay,
+            ThinkingFollower = new ContentTailFollower(thinkingScroll),
             OpenFile = path => OpenChatItemAsync(path, messageProject),
             FileMenu = path => CreateChatFileMenu(path, messageProject),
             FilePath = path => ResolveCitationPathAsync(path, messageProject),
@@ -852,6 +869,10 @@ public sealed partial class MainWindow : Window
 
         var actualHost = MessageHost(target ?? messages);
         ui.Group = ActivityGroup(actualHost);
+        // One scroll surface for the complete reasoning/tool group, including long individual steps.
+        thinkingScroll.MaxHeight = double.PositiveInfinity;
+        thinkingScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        thinkingScroll.VerticalScrollMode = ScrollMode.Disabled;
         thinkingHeaderBtn.Visibility = Visibility.Collapsed;
         thinkingScroll.Visibility = Visibility.Visible;
         ui.Group.Details.Children.Add(thinkingCard);
@@ -1048,6 +1069,7 @@ public sealed partial class MainWindow : Window
             "desktop_screens" => "🖥️",
             "desktop_screenshot" or "browser_screenshot" => "📸",
             "desktop_mouse" or "browser_mouse" => "🖱️",
+            DesktopControlTools.InspectTool => "🪟",
             "desktop_keyboard" or "browser_keyboard" or "keyboard_keys" => "⌨️",
             "inspect_dom" or "browser_dom" => "🔍",
             "git_changes" => "🌿",
@@ -1415,10 +1437,10 @@ public sealed partial class MainWindow : Window
         autoContinue.Header = null;
         chatSettings.Children.Add(FluentDesign.Setting(T("Continuer automatiquement après 12 étapes"),
             T("Poursuit les appels d’outils jusqu’à la réponse finale ou Arrêter. Des tokens supplémentaires peuvent être consommés ; les autorisations restent applicables."), autoContinue));
-        var showReasoning = new CheckBox { Content = T("Afficher les détails du raisonnement"), IsChecked = state.ShowReasoningDetails };
-        showReasoning.Content = null;
+        var showReasoning = new ComboBox { ItemsSource = new[] { WorkflowText("Aucun", "None"), WorkflowText("Réduit", "Reduced"), WorkflowText("Détaillé", "Detailed") },
+            SelectedIndex = (int)CurrentReasoningDisplay, MinWidth = 150 };
         chatSettings.Children.Add(FluentDesign.Setting(T("Afficher les détails du raisonnement"),
-            WorkflowText("Déplie par défaut le groupe des réflexions et outils, dans l’historique et pendant la génération.", "Expand the reasoning and tools group by default, in history and during generation."), showReasoning));
+            WorkflowText("Aucun : indique seulement Raisonnement… ; Réduit : résumé actuel, groupe replié ; Détaillé : groupe ouvert par défaut.", "None: only show Reasoning…; Reduced: current summary, collapsed group; Detailed: expanded by default."), showReasoning));
         var markdownFeatures = FeatureSettings.Read(state.FeaturesJson);
         var toolWebViews = new ToggleSwitch { IsOn = markdownFeatures.AllowWebViewInTools };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Autoriser les aperçus WebView dans les outils", "Allow WebView previews in tools"),
@@ -1496,6 +1518,8 @@ public sealed partial class MainWindow : Window
         var imageGenerationSettings = BuildImageGenerationSettings(providerEditor.Drafts);
         var webHttpSettings = BuildWebHttpSettings();
         var informationSettings = BuildInformationSettings();
+        var keyboardSettings = BuildDesktopInputSettings("desktop_keyboard");
+        var mouseSettings = BuildDesktopInputSettings("desktop_mouse");
         var gitRead = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableRead) };
         var gitWrite = new ToggleSwitch { IsOn = !Skills.Enabled(state.EnabledSkills, GitTools.DisableWrite) };
         var gitSettings = new StackPanel { Spacing = 8 };
@@ -1515,13 +1539,13 @@ public sealed partial class MainWindow : Window
             var skillTitle = toggle.Header.ToString()!;
             toggle.Header = null;
             skillPanel.Children.Add(FluentDesign.Setting(skillTitle,
-                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == InformationSkill.SkillId ? informationSettings.Panel : skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
+                WorkflowText(skill.FrenchDescription, skill.EnglishDescription), toggle, skill.Id == "keyboard_control" ? keyboardSettings.Panel : skill.Id == "mouse_control" ? mouseSettings.Panel : skill.Id == InformationSkill.SkillId ? informationSettings.Panel : skill.Id == "rag" ? features.Rag : skill.Id == "vision_bridge" ? features.Vision : skill.Id == "git" ? gitSettings : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : null,
                 caption: SkillLabel(skill, bold: true), information: SkillInfoButton(skill)));
             if (skill.Id == "git")
             { gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; toggle.Toggled += (_, _) => gitSettings.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed; }
-            if(skill.Id is "rag" or "vision_bridge" or "web" or ImageGenerationTools.SkillId or InformationSkill.SkillId)
+            if(skill.Id is "keyboard_control" or "mouse_control" or "rag" or "vision_bridge" or "web" or ImageGenerationTools.SkillId or InformationSkill.SkillId)
             {
-                var settingsPanel = skill.Id == InformationSkill.SkillId ? informationSettings.Panel : skill.Id == "rag" ? features.Rag : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
+                var settingsPanel = skill.Id == "keyboard_control" ? keyboardSettings.Panel : skill.Id == "mouse_control" ? mouseSettings.Panel : skill.Id == InformationSkill.SkillId ? informationSettings.Panel : skill.Id == "rag" ? features.Rag : skill.Id == "web" ? webHttpSettings.Panel : skill.Id == ImageGenerationTools.SkillId ? imageGenerationSettings.Panel : features.Vision;
                 settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 toggle.Toggled+=(_,_)=>settingsPanel.Visibility=toggle.IsOn?Visibility.Visible:Visibility.Collapsed;
                 settingsPanel.Margin = new(0, 8, 0, 0);
@@ -1646,6 +1670,7 @@ public sealed partial class MainWindow : Window
         savedFeatures.ShowComposerSpeed = showComposerSpeed.IsOn;
         savedFeatures.ShowComposerContext = showComposerContext.IsOn;
         savedFeatures.AutoFocusTool = autoFocusTool.IsChecked == true;
+        savedFeatures.ReasoningDisplay = (ReasoningDetailLevel)Math.Clamp(showReasoning.SelectedIndex, 0, 2);
         savedFeatures.ResponseStyle = ResponseStyles.All[Math.Clamp(responseStyle.SelectedIndex, 0, ResponseStyles.All.Count - 1)].Id;
         updates.Save(savedFeatures);
         conversationPreferences.Save(savedFeatures);
@@ -1656,7 +1681,9 @@ public sealed partial class MainWindow : Window
         compactionSettings.Save(savedFeatures);
         webHttpSettings.Save(savedFeatures);
         informationSettings.Save(savedFeatures);
+        keyboardSettings.Save(savedFeatures); mouseSettings.Save(savedFeatures);
         commandGuardSettings.Save(savedFeatures);
+        AppLog.Write(AppLogLevel.Information, "settings.save.branding");
         await branding.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
         MarkdownRenderer.ConfigureVisuals(savedFeatures);
@@ -1666,9 +1693,10 @@ public sealed partial class MainWindow : Window
         { foreach(var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray())CloseConversationBrowser(id); ShowBrowserNotice(); }
         state.Language = language.SelectedItem is ComboBoxItem { Tag: string languageCode } ? languageCode : "fr";
         state.AutoContinue = autoContinue.IsOn;
-        state.ShowReasoningDetails = showReasoning.IsChecked == true;
+        reasoningDisplayOverride = savedFeatures.ReasoningDisplay;
+        state.ShowReasoningDetails = CurrentReasoningDisplay == ReasoningDetailLevel.Detailed;
         foreach (var reference in activityGroupViews)
-            if (reference.TryGetTarget(out var group)) group.Refresh(state.ShowReasoningDetails);
+            if (reference.TryGetTarget(out var group)) group.Refresh(CurrentReasoningDisplay);
         foreach (var reference in reasoningViews)
             if (reference.TryGetTarget(out var view)) view.RefreshReasoningPreference();
         state.EnabledSkills = string.Join(',', skillToggles.Where(x => x.Value.IsOn).Select(x => x.Key));
@@ -1682,13 +1710,16 @@ public sealed partial class MainWindow : Window
             _ => PermissionModes.Ask
         };
         SaveTemplateDrafts(templateEditor.Drafts);
+        AppLog.Write(AppLogLevel.Information, "settings.save.mcp");
         await mcpEditor.Save();
         foreach (var item in revoke.Where(x => x.Value.IsChecked == true).Select(x => x.Key)) db.PermissionGrants.Remove(item);
+        AppLog.Write(AppLogLevel.Information, "settings.save.providers");
         var selectedProvider = await SaveProviderDraftsAsync(providerEditor);
         quickModelSettings.Save(savedFeatures);
         imageGenerationSettings.Save(savedFeatures);
         state.FeaturesJson = savedFeatures.Json();
         state.ProviderId = selectedProvider?.Id ?? 0;
+        AppLog.Write(AppLogLevel.Information, "settings.save.database");
         await db.SaveChangesAsync();
 
         var providerList = (await db.Providers.OrderBy(x => x.Id).ToListAsync()).Where(ProviderModels.CanChat).ToList();
@@ -1705,6 +1736,7 @@ public sealed partial class MainWindow : Window
         UpdateProvider();
         PopulateModelSelector();
         ConfigureAutomaticUpdates();
+        AppLog.Write(AppLogLevel.Information, "settings.save.complete");
         ShowStatus(T("Configuration enregistrée."));
     }
 
@@ -2103,19 +2135,11 @@ public sealed partial class MainWindow : Window
                     return T("Erreur : l'accès IA au navigateur n'est pas autorisé ou le skill 'screenshots' est inactif.");
                 return await CaptureBrowserScreenshotAsync(ct, run.Provider);
 
+            case DesktopControlTools.InspectTool:
+                return await InspectDesktopUiAsync(argsObj, run, ct);
+
             case "desktop_mouse":
-                if (!Skills.Enabled(state.EnabledSkills, "mouse_control")) return T("Outil non autorisé.");
-                return await ControlDesktopMouseAsync(
-                    argsObj["action"]?.GetValue<string>() ?? "click",
-                    JsonNumber(argsObj["x"]),
-                    JsonNumber(argsObj["y"]),
-                    JsonNumber(argsObj["delta_y"] ?? argsObj["deltaY"] ?? argsObj["delta"]),
-                    argsObj["button"]?.GetValue<string>() ?? "left",
-                    JsonNullableInt(argsObj["click_count"] ?? argsObj["clickCount"]) ?? 1,
-                    ct, argsObj["window_id"]?.GetValue<string>(),
-                    argsObj["x2"] == null ? null : JsonNumber(argsObj["x2"]),
-                    argsObj["y2"] == null ? null : JsonNumber(argsObj["y2"]),
-                    argsObj["pattern"]?.GetValue<string>());
+                return await ExecuteDesktopInputAsync("desktop_mouse", argsObj, run, ct);
 
             case "browser_mouse":
                 if (!Skills.Enabled(state.EnabledSkills, "mouse_control") || !BrowserSkillAccess.Enabled(state.EnabledSkills) || !BrowserSkillAccess.DomEnabled(state.EnabledSkills))
@@ -2137,12 +2161,7 @@ public sealed partial class MainWindow : Window
                 return Skills.Enabled(state.EnabledSkills, "keyboard_control") ? KeyboardInput.DescribeKeys() : T("Outil non autorisé.");
 
             case "desktop_keyboard":
-                if (!Skills.Enabled(state.EnabledSkills, "keyboard_control")) return T("Outil non autorisé.");
-                return await ControlDesktopKeyboardAsync(
-                    argsObj["action"]?.GetValue<string>() ?? "type",
-                    argsObj["text"]?.GetValue<string>() ?? "",
-                    argsObj["keys"]?.GetValue<string>() ?? argsObj["key"]?.GetValue<string>() ?? argsObj["shortcut"]?.GetValue<string>() ?? "",
-                    ct);
+                return await ExecuteDesktopInputAsync("desktop_keyboard", argsObj, run, ct);
 
             case "browser_keyboard":
                 if (!Skills.Enabled(state.EnabledSkills, "keyboard_control") || !BrowserSkillAccess.Enabled(state.EnabledSkills))

@@ -8,7 +8,8 @@ public sealed partial class MainWindow
 {
     readonly TerminalHub terminals = new();
     readonly TabView terminalTabs = new() { IsAddTabButtonVisible = true, TabWidthMode = TabViewWidthMode.SizeToContent };
-    sealed record TerminalUi(int ChatId, TabViewItem Tab, TextBlock Info, TextBox Command, TextBox Output, Button Run, Button Stop);
+    sealed record TerminalUi(int ChatId, TabViewItem Tab, TextBlock Info, TextBox Command, TextBox Output, Button Run, Button Stop)
+    { public ContentTailFollower? Follower { get; set; } }
     readonly Dictionary<string, TerminalUi> terminalViews = [];
     readonly DispatcherTimer terminalRefresh = new() { Interval = TimeSpan.FromMilliseconds(400) };
     int? terminalVisibleChat;
@@ -69,17 +70,14 @@ public sealed partial class MainWindow
             var text = (row.Command.Length == 0 ? "" : "> " + row.Command + "\n") + row.Output;
             if (ui.Output.Text != text)
             {
-                var scroller = FindTerminalScroll(ui.Output);
-                var offset = scroller?.VerticalOffset ?? 0;
-                var follow = scroller == null || scroller.ScrollableHeight - offset < 24;
+                if (ui.Follower == null && FindTerminalScroll(ui.Output) is { } scroller) ui.Follower = new ContentTailFollower(scroller);
+                ui.Follower?.BeforeTextChange();
                 var selection = ui.Output.SelectionStart; var length = ui.Output.SelectionLength;
                 ui.Output.Text = text;
                 if (length > 0) ui.Output.Select(Math.Min(selection, text.Length), Math.Min(length, Math.Max(0, text.Length - selection)));
-                ui.Output.DispatcherQueue.TryEnqueue(() => {
-                    if (ui.Output.Text != text) return;
-                    ui.Output.UpdateLayout();
-                    var view = FindTerminalScroll(ui.Output);
-                    view?.ChangeView(null, follow ? view.ScrollableHeight : offset, null, true);
+                ui.Follower?.AfterTextChange();
+                if (ui.Follower == null) ui.Output.DispatcherQueue.TryEnqueue(() => {
+                    if (FindTerminalScroll(ui.Output) is { } view) { ui.Follower ??= new ContentTailFollower(view); ui.Follower.Queue(); }
                 });
             }
             ui.Run.IsEnabled = row.Status != "running" && !row.Sandbox;

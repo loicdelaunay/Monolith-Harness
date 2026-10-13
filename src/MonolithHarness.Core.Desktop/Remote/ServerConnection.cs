@@ -3,7 +3,7 @@ using System.Text;
 namespace MonolithHarness.Core.Remote;
 
 public sealed record ServerStatus(bool Configured, string Url, bool AllowHttp, string Email, bool SignedIn, bool Reachable, string ServerName, string Version,
-    Dictionary<string, bool> Features, ServerUser? User, bool PasswordChangeSuggested, DateTime? TokenExpiresUtc, string Error, string ErrorCode);
+    Dictionary<string, bool> Features, ServerUser? User, bool PasswordChangeSuggested, DateTime? TokenExpiresUtc, string Error, string ErrorCode, ServerAnnouncement? Announcement = null);
 
 /// <summary>
 /// The optional link of a client (Desktop, CLI) to a Monolith Harness Server: address, account, protected token, REST client and
@@ -140,7 +140,7 @@ public sealed class ServerConnection : IAsyncDisposable
         if (user != null && (Link.UserId != user.Id.ToString() || Link.DisplayName != user.DisplayName)) Store.Update(l => { l.UserId = user.Id.ToString(); l.DisplayName = user.DisplayName; });
         var now = Link;
         return new(true, now.Url, now.AllowHttp, now.Email, now.SignedIn, info != null, info?.Name ?? now.ServerName, info?.Version ?? now.ServerVersion,
-            info?.Features ?? [], user, user?.PasswordChangePending ?? false, now.TokenExpiresUtc, error, code);
+            info?.Features ?? [], user, user?.PasswordChangePending ?? false, now.TokenExpiresUtc, error, code, info?.Announcement);
     }
 
     // ---- Real time ----

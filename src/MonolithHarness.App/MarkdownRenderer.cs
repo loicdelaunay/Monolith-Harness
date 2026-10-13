@@ -29,6 +29,8 @@ public sealed class MarkdownRenderer
 
     readonly Func<string, Task>? openFile;
     readonly Func<string, MenuFlyout>? fileMenu;
+    readonly Func<string, Task<string?>>? filePath;
+    readonly Action? onCitationChanged;
     readonly Func<string,CancellationToken,Task<byte[]?>>? localImage;
     readonly string fullMarkdown;
     readonly bool displayImages;
@@ -39,6 +41,7 @@ public sealed class MarkdownRenderer
         public string Density = "", Markdown = "";
         public bool UsingPlainText;
         public bool DisplayHtml = true;
+        public int VisualRevision = -1;
         public Func<string, Task>? OpenFile;
         public Func<string, MenuFlyout>? FileMenu;
         public Func<string, Task<string?>>? FilePath;
@@ -57,6 +60,8 @@ public sealed class MarkdownRenderer
         if (visualViews.Count % 64 == 0) visualViews.RemoveAll(x => !x.TryGetTarget(out _));
         visualViews.Add(new(view));
     }
+    static int visualRevision;
+    static bool refreshingDensity, refreshAgain;
     internal static bool RenderMermaid { get; private set; } = true;
     internal static bool AllowRichWebPreview {get;private set;}
     internal static bool PreviewHtmlInline {get;private set;}
@@ -67,28 +72,55 @@ public sealed class MarkdownRenderer
     {
         if (RenderMermaid == settings.RenderMermaid && RenderMath == settings.RenderMath && AllowRichWebPreview == settings.AllowWebViewInChat && PreviewHtmlInline == settings.PreviewHtmlInline && DynamicHtmlHeight == settings.DynamicHtmlHeight && ReplyRendering == settings.ReplyRendering) return;
         RenderMermaid = settings.RenderMermaid; RenderMath = settings.RenderMath; AllowRichWebPreview=settings.AllowWebViewInChat; PreviewHtmlInline=settings.PreviewHtmlInline; DynamicHtmlHeight=settings.DynamicHtmlHeight; ReplyRendering=settings.ReplyRendering;
-        // Settings affect existing cards even when their Markdown has not changed.
-        foreach (var reference in renderedPanels.ToArray())
-            if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state)) state.Density = "";
+        // Off-screen cards pick up this revision when reused; do not realize them here.
+        visualRevision++;
         RefreshDensity();
-        visualViews.RemoveAll(x => !x.TryGetTarget(out _));
-        foreach (var reference in visualViews.ToArray())
-            if (reference.TryGetTarget(out var view)) view.RefreshVisuals();
+        RefreshVisualThemes();
     }
     public static void RefreshDensity()
     {
+        if (refreshingDensity) { refreshAgain = true; return; }
         renderedPanels.RemoveAll(x => !x.TryGetTarget(out _));
-        foreach (var reference in renderedPanels.ToArray())
-            if (reference.TryGetTarget(out var panel) && states.TryGetValue(panel, out var state))
-                RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu,state.LocalImage,state.FilePath, state.DisplayHtml);
+        var work = renderedPanels.ToArray(); int index = 0;
+        var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        if (dispatcher == null) return;
+        refreshingDensity = true;
+        void Batch()
+        {
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            while (index < work.Length)
+            {
+                var reference = work[index++];
+                if (reference.TryGetTarget(out var panel) && panel.IsLoaded && states.TryGetValue(panel, out var state))
+                    RenderTo(panel, state.Markdown, state.OpenFile, state.FileMenu, state.LocalImage, state.FilePath, state.DisplayHtml);
+                if (elapsed.ElapsedMilliseconds >= 12) break;
+            }
+            if (index < work.Length && dispatcher.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, Batch)) return;
+            refreshingDensity = false;
+            if (refreshAgain) { refreshAgain = false; RefreshDensity(); }
+        }
+        if (!dispatcher.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, Batch)) refreshingDensity = false;
+    }
+    internal static void RefreshVisualThemes()
+    {
+        visualViews.RemoveAll(x => !x.TryGetTarget(out _));
+        foreach (var reference in visualViews.ToArray()) if (reference.TryGetTarget(out var view) && view.IsLoaded) view.RefreshVisuals();
     }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
-    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true, bool displayHtml=true) { this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages;this.displayHtml=displayHtml; }
+    MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true, bool displayHtml=true, Func<string, Task<string?>>? filePath=null, Action? onCitationChanged=null) { this.filePath=filePath; this.onCitationChanged=onCitationChanged; this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages;this.displayHtml=displayHtml; }
     public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null, Func<string, Task<string?>>? filePath = null, bool displayHtml = true)
     {
         markdown ??= "";
         if (!states.TryGetValue(container, out var state))
-        { state = new(); states.Add(container, state); renderedPanels.Add(new(container)); }
+        {
+            state = new(); states.Add(container, state); renderedPanels.Add(new(container));
+            container.Loaded += (_, _) =>
+            {
+                if (states.TryGetValue(container, out var saved) && (saved.VisualRevision != visualRevision || saved.Density != ChatDensity.Id))
+                    RenderTo(container, saved.Markdown, saved.OpenFile, saved.FileMenu, saved.LocalImage, saved.FilePath, saved.DisplayHtml);
+            };
+        }
+        if (state.VisualRevision != visualRevision) { state.Density = ""; state.VisualRevision = visualRevision; }
         if (state.DisplayHtml != displayHtml) state.Density = "";
         state.DisplayHtml = displayHtml;
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;state.LocalImage=localImage; state.FilePath=filePath;
@@ -112,12 +144,22 @@ public sealed class MarkdownRenderer
             });
         }
     }
+    internal static void RenderNativeFallback(Panel container, string markdown, Func<string, Task>? openFile,
+        Func<string, MenuFlyout>? fileMenu, Func<string, Task<string?>>? filePath)
+    {
+        container.Children.Clear();
+        var renderer = new MarkdownRenderer(openFile, fileMenu, fullMarkdown: markdown, displayHtml: false,
+            filePath: filePath, onCitationChanged: () => { FileCitationBadges.Apply(container); if (fileMenu != null) ChatPathMenus.Attach(container, fileMenu, filePath); });
+        foreach (var block in MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false))
+            if (renderer.RenderBlock(block) is { } element) container.Children.Add(element);
+        FileCitationBadges.Apply(container);
+    }
     static void RenderBlocks(Panel container, string markdown, Func<string, Task>? openFile,
         Func<string, MenuFlyout>? fileMenu, RenderState state)
     {
         if (state.DisplayHtml) markdown=ReplyWebDocument.PrepareMarkdown(markdown);
-        var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath);
-        if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
+        var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false);
+        if (AllowRichWebPreview && MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
         {
             var view = container.Children.Count == 1 ? container.Children[0] as AdvancedMarkdownView : null;
             if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile, fileMenu, state.FilePath); container.Children.Add(view); }
@@ -131,12 +173,12 @@ public sealed class MarkdownRenderer
         // Adjacent headings, paragraphs, lists and quotes share one selection surface.
         // Reuse that surface and its completed inlines when the streamed tail changes.
         var replacements = new List<UIElement>();
-        var renderer = new MarkdownRenderer(openFile, fileMenu,state.LocalImage,markdown, displayHtml: state.DisplayHtml);
+        var renderer = new MarkdownRenderer(openFile, fileMenu,state.LocalImage,markdown, displayHtml: state.DisplayHtml, filePath: state.FilePath, onCitationChanged: () => { FileCitationBadges.Apply(container); if (fileMenu != null) ChatPathMenus.Attach(container, fileMenu, state.FilePath); });
         for (int index = shared; index < groups.Count; index++)
         {
             var group = groups[index];
             StackPanel blockPanel;
-            if(group.Any(b=>PreviewNodes(b).Any(n=>RenderMath && n is MathBlock or MathInline || RenderMermaid && n is FencedCodeBlock code && code.Info=="mermaid")))
+            if(AllowRichWebPreview && group.Any(b=>PreviewNodes(b).Any(n=>RenderMath && n is MathBlock or MathInline || RenderMermaid && n is FencedCodeBlock code && string.Equals(code.Info,"mermaid",StringComparison.OrdinalIgnoreCase))))
             {
                 blockPanel=new StackPanel();var visual=new AdvancedMarkdownView(openFile, fileMenu, state.FilePath);blockPanel.Children.Add(visual);visual.Update(SourceText(markdown,group[0].Span.Start,group[^1].Span.End));
                 foreach(var image in group.SelectMany(PreviewNodes).OfType<LinkInline>().Where(x=>x.IsImage).Take(12))blockPanel.Children.Add(new ReplyImageView(image.Url??"",image.Title??"Image",FluentDesign.Secondary,true,state.LocalImage));
@@ -217,9 +259,9 @@ public sealed class MarkdownRenderer
     public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,
         Func<string, MenuFlyout> fileMenu, Func<string, Task<FrameworkElement?>> imagePreview, CancellationToken ct, Func<string, Task<string?>>? filePath = null)
     {
-        var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown, RenderMath), ct);
+        var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false), ct);
         ct.ThrowIfCancellationRequested();
-        if (MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
+        if (AllowRichWebPreview && MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
         {
             var visual = new AdvancedMarkdownView(openFile, fileMenu, filePath); target.Children.Add(visual); visual.Update(markdown); return;
         }
@@ -303,7 +345,7 @@ public sealed class MarkdownRenderer
             return;
         }
 
-        var doc = MarkdownPipelineHelper.Parse(markdown, RenderMath);
+        var doc = MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false);
         if (doc.Count == 0)
         {
             var fallback = new TextBlock
@@ -495,6 +537,14 @@ public sealed class MarkdownRenderer
         var rawCode = ExtractCode(fenced.Lines);
         var lang = string.IsNullOrWhiteSpace(fenced.Info) ? "code" : fenced.Info.Trim();
         var code=CreateCodeBlockElement(lang,rawCode);
+        if (RenderMermaid && lang.Equals("mermaid", StringComparison.OrdinalIgnoreCase))
+        {
+            if (NativeMermaidDiagram.TryCreate(rawCode, () => code) is { } diagram) return diagram;
+            var fallback = new StackPanel { Spacing = 6 };
+            fallback.Children.Add(new TextBlock { Text = UiText.Resolve("Diagramme incomplet ou format sans rendu natif : source affichée. Le rendu complet nécessite les aperçus WebView du chat.", "Incomplete diagram or format without native rendering: source shown. Full rendering requires chat WebView previews."),
+                TextWrapping = TextWrapping.Wrap, FontSize = 11, Foreground = FluentDesign.Secondary });
+            fallback.Children.Add(code); return fallback;
+        }
         if(displayHtml && fenced.ClosingFencedCharCount>0 && ReplyWebDocument.IsHtml(lang) && rawCode.Length<=ReplyWebDocument.MaxCharacters) {
             var artifact=ReplyWebDocument.Extract(fullMarkdown).FirstOrDefault(x=>x.Html.StartsWith(rawCode,StringComparison.Ordinal))??ReplyWebDocument.FromHtml(rawCode);
             var panel=new StackPanel {Spacing=8};panel.Children.Add(new ReplyHtmlCard(artifact,localImage));panel.Children.Add(new Expander {Header=T("Voir le code HTML"),Content=code,HorizontalAlignment=HorizontalAlignment.Stretch});return panel;
@@ -836,7 +886,10 @@ public sealed class MarkdownRenderer
                 }
                 else if (FileCitation.FromUrl(link.Url) is { } citation)
                 {
-                    target.Add(FileCitationBadges.Create(citation, openFile));
+                    var placeholder = new Span();
+                    RenderInlines(link, placeholder.Inlines);
+                    target.Add(placeholder);
+                    _ = FileCitationBadges.VerifyAsync(placeholder, citation, filePath, openFile, onCitationChanged);
                 }
                 else
                 {
@@ -865,7 +918,9 @@ public sealed class MarkdownRenderer
             case AutolinkInline autolink:
                 if (FileCitation.FromUrl(autolink.Url) is { } autoCitation)
                 {
-                    target.Add(FileCitationBadges.Create(autoCitation, openFile));
+                    var placeholder = new Span(); placeholder.Inlines.Add(new Run { Text = autolink.Url });
+                    target.Add(placeholder);
+                    _ = FileCitationBadges.VerifyAsync(placeholder, autoCitation, filePath, openFile, onCitationChanged);
                     break;
                 }
                 var autoHyperlink = new Hyperlink

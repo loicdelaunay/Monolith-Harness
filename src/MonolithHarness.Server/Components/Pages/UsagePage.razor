@@ -1,0 +1,212 @@
+@page "/usage"
+@attribute [Authorize]
+@inject UiContext Ui
+@inject UsageService Usage
+
+<PageTitle>Statistiques · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Statistiques d’utilisation</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Vitesse et consommation de jetons que les utilisateurs ont choisi de partager depuis leur application (Réglages › Serveur › Partager mes statistiques).
+    Seuls des chiffres sont reçus : jamais les messages, les noms de projets ni de conversations.
+</MudText>
+
+@if (!Ui.Enabled(Features.Usage))
+{
+    <MudAlert Severity="Severity.Warning">Les statistiques d’utilisation sont désactivées sur ce serveur.</MudAlert>
+}
+else
+{
+    <div class="d-flex flex-wrap align-center gap-3 mb-4">
+        @if (_canViewAll)
+        {
+            <MudToggleGroup T="string" Value="_scope" ValueChanged="ScopeChanged" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary" Size="Size.Small">
+                <MudToggleItem Value="@("all")" Text="Vue commune" />
+                <MudToggleItem Value="@("me")" Text="Mes statistiques" />
+            </MudToggleGroup>
+        }
+        <MudToggleGroup T="string" Value="_period" ValueChanged="PeriodChanged" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary" Size="Size.Small">
+            <MudToggleItem Value="@("24h")" Text="24 h" />
+            <MudToggleItem Value="@("7d")" Text="7 jours" />
+            <MudToggleItem Value="@("30d")" Text="30 jours" />
+            <MudToggleItem Value="@("1y")" Text="1 an" />
+        </MudToggleGroup>
+        @if (_viewed != null)
+        {
+            <MudChip T="string" Color="Color.Primary" OnClose="BackToCommon">@_viewed.Value.Name</MudChip>
+        }
+    </div>
+
+    @if (_summary == null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_summary.Totals.Calls == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            Aucune mesure sur cette période. @(_scope == "me" ? "Activez « Partager mes statistiques » dans l’application (Réglages › Serveur) pour les voir ici." : "Les utilisateurs doivent activer le partage dans leur application.")
+        </MudAlert>
+    }
+    else
+    {
+        var totals = _summary.Totals;
+        <MudGrid>
+            @foreach (var (label, value) in Cards(totals))
+            {
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Class="pa-3" Outlined="true">
+                        <MudText Typo="Typo.h5">@value</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@label</MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.subtitle1">Jetons générés</MudText>
+                    <UsageBars Buckets="_summary.Timeline" Value="@(b => b.OutputTokens)" LabelOf="Label" Title="Jetons générés par période"
+                               Tooltip="@(b => $"{Label(b)} · {b.OutputTokens:N0} jetons générés, {b.InputTokens:N0} envoyés, {b.Calls} requête(s)")" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Outlined="true">
+                    <MudText Typo="Typo.subtitle1">Vitesse moyenne (jetons/s)</MudText>
+                    <UsageBars Buckets="_summary.Timeline" Value="@(b => b.AverageSpeed ?? 0)" LabelOf="Label" Title="Vitesse moyenne par période"
+                               Tooltip="@(b => b.AverageSpeed is { } speed ? $"{Label(b)} · {speed:0.#} jetons/s" : $"{Label(b)} · pas de mesure")" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" Class="mt-6 mb-2">Par modèle</MudText>
+        <div class="mh-table-wrap">
+            <MudTable Items="_summary.Models" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+                <HeaderContent><MudTh>Provider</MudTh><MudTh>Modèle</MudTh><MudTh>Requêtes</MudTh><MudTh>Envoyés</MudTh><MudTh>Générés</MudTh><MudTh>Vitesse moyenne</MudTh><MudTh>Min – max</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Provider">@context.Provider</MudTd>
+                    <MudTd DataLabel="Modèle">@(context.Model.Length == 0 ? "—" : context.Model)</MudTd>
+                    <MudTd DataLabel="Requêtes">@context.Calls.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Envoyés">@context.InputTokens.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Générés">@context.OutputTokens.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Vitesse moyenne">@Speed(context.AverageSpeed)</MudTd>
+                    <MudTd DataLabel="Min – max">@(context.MinSpeed is { } min && context.MaxSpeed is { } max ? $"{min:0.#} – {max:0.#}" : "—")</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </div>
+
+        @if (_summary.Users is { } users)
+        {
+            <MudText Typo="Typo.h6" Class="mt-6 mb-2">Par utilisateur</MudText>
+            <div class="mh-table-wrap">
+                <MudTable Items="users" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm" OnRowClick="@((TableRowClickEventArgs<UsageUserRow> row) => ViewUser(row.Item!))">
+                    <HeaderContent><MudTh>Utilisateur</MudTh><MudTh>Requêtes</MudTh><MudTh>Envoyés</MudTh><MudTh>Générés</MudTh><MudTh>Vitesse moyenne</MudTh><MudTh>Dernière mesure</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Utilisateur">
+                            <div class="d-flex align-center gap-2">
+                                <AccountAvatar Email="@context.Email" Name="@context.DisplayName" Size="24" />
+                                <span>@(string.IsNullOrWhiteSpace(context.DisplayName) ? context.Email : context.DisplayName)</span>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Requêtes">@context.Calls.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Envoyés">@context.InputTokens.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Générés">@context.OutputTokens.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Vitesse moyenne">@Speed(context.AverageSpeed)</MudTd>
+                        <MudTd DataLabel="Dernière mesure">@(context.LastUtc?.ToLocalTime().ToString("g") ?? "—")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1 d-block">Cliquez sur un utilisateur pour voir seulement ses statistiques.</MudText>
+        }
+    }
+
+    @if (_status is { Samples: > 0 } status)
+    {
+        <MudPaper Class="pa-4 mt-6" Outlined="true">
+            <MudText Typo="Typo.subtitle1">Mes mesures partagées</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                @status.Samples.ToString("N0") mesure(s) partagée(s) par votre compte@(status.LastUtc is { } last ? $", la dernière le {last.ToLocalTime():g}" : ""). Conservées @status.RetentionDays jours.
+            </MudText>
+            <div class="d-flex justify-end">
+                <MudButton Variant="Variant.Text" OnClick="EraseMine">Effacer mes mesures du serveur</MudButton>
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    string _scope = "me", _period = "7d";
+    bool _canViewAll;
+    UsageSummary? _summary;
+    UsageStatus? _status;
+    (Guid Id, string Name)? _viewed;
+
+    [Inject] IDialogService Dialogs { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Ui.UserAsync();
+        _canViewAll = Usage.CanViewAll(user);
+        _scope = _canViewAll ? "all" : "me";
+        await Load();
+    }
+
+    async Task Load()
+    {
+        _summary = null;
+        _status = await Ui.Try(user => Usage.StatusAsync(user));
+        _summary = await Ui.Try(user => Usage.SummaryAsync(user, _viewed != null ? "user" : _scope, _period, _viewed?.Id));
+        _summary ??= new UsageSummary(_scope, _period, DateTime.UtcNow, DateTime.UtcNow, new UsageTotals(0, 0, 0, 0, 0, 0, null, null, null, 0, 0, null, null), [], [], null, null);
+    }
+
+    async Task ScopeChanged(string? scope)
+    {
+        _scope = scope ?? _scope;
+        _viewed = null;
+        await Load();
+    }
+
+    async Task PeriodChanged(string? period)
+    {
+        _period = period ?? _period;
+        await Load();
+    }
+
+    async Task ViewUser(UsageUserRow row)
+    {
+        _viewed = (row.UserId, string.IsNullOrWhiteSpace(row.DisplayName) ? row.Email : row.DisplayName);
+        await Load();
+    }
+
+    async Task BackToCommon()
+    {
+        _viewed = null;
+        await Load();
+    }
+
+    async Task EraseMine()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Effacer mes mesures", "Toutes les mesures que votre compte a partagées seront supprimées du serveur. Votre application continuera à les partager si l’option reste activée.",
+                yesText: "Effacer", cancelText: "Annuler") != true) return;
+        await Ui.TryAsync(async user => await Usage.DeleteAsync(user, null), "Mesures effacées.");
+        await Load();
+    }
+
+    IEnumerable<(string Label, string Value)> Cards(UsageTotals totals)
+    {
+        yield return ("Requêtes", totals.Calls.ToString("N0"));
+        yield return ("Jetons envoyés", totals.InputTokens.ToString("N0"));
+        yield return ("Jetons générés", totals.OutputTokens.ToString("N0"));
+        yield return ("Jetons réutilisés (cache)", totals.CachedInputTokens.ToString("N0"));
+        yield return ("Vitesse moyenne", Speed(totals.AverageSpeed));
+        yield return (_summary?.Scope == "all" ? "Utilisateurs" : "Temps de génération", _summary?.Scope == "all" ? totals.Users.ToString("N0") : TimeSpan.FromSeconds(totals.Seconds).ToString(totals.Seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss"));
+    }
+
+    string Label(UsageBucket bucket)
+    {
+        var local = bucket.FromUtc.ToLocalTime();
+        return _summary?.Period switch { "24h" => local.ToString("HH'h'"), "1y" => local.ToString("MMM yy"), _ => local.ToString("dd/MM") };
+    }
+
+    static string Speed(double? speed) => speed is { } value ? $"{value:0.#} jetons/s" : "—";
+}

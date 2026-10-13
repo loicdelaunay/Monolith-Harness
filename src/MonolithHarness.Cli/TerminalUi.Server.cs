@@ -34,6 +34,13 @@ public sealed partial class TerminalUi
             if (shared) choices.Add(new("unshare", L("Arrêter le partage", "Stop sharing")));
             choices.Add(new("join", L("Rejoindre avec un code", "Join with a code"), L("Suivre une conversation partagée", "Follow a shared conversation")));
             choices.Add(new("sync", L("Synchronisation", "Synchronization"), L("État, problèmes, fréquence", "State, problems, frequency")));
+            var enabled = serverState?["enabled"]?.GetValue<bool>() != false;
+            choices.Add(new("toggle", enabled ? L("Désactiver le mode serveur", "Turn the server mode off") : L("Activer le mode serveur", "Turn the server mode on"),
+                enabled ? L("Plus aucun échange avec le serveur; le compte est conservé", "Nothing is exchanged with the server; the account is kept") : L("Reprend la synchronisation et les providers du serveur", "Resumes synchronization and the server providers")));
+            var sharing = serverState?["shareUsage"]?.GetValue<bool>() == true;
+            choices.Add(new("usage", sharing ? L("Ne plus partager mes statistiques", "Stop sharing my statistics") : L("Partager mes statistiques d’utilisation", "Share my usage statistics"),
+                L("Vitesse et consommation de jetons, sans aucun contenu", "Speed and token consumption, no content at all")));
+            if (serverState?["announcement"] is JsonObject) choices.Add(new("dismiss", L("Masquer le message du serveur", "Hide the server message")));
             choices.Add(new("password", L("Changer le mot de passe", "Change password")));
             choices.Add(new("logout", L("Se déconnecter", "Sign out")));
             choices.Add(new("forget", L("Oublier ce serveur", "Forget this server")));
@@ -64,6 +71,26 @@ public sealed partial class TerminalUi
                 break;
             }
             case "sync": await ServerSyncMenu(); break;
+            case "toggle":
+            {
+                var on = serverState?["enabled"]?.GetValue<bool>() == false;
+                serverState = await client.Call("server.enable", new { enabled = on }, lifetime.Token);
+                await Refresh();
+                Post(() => notice = on ? L("Mode serveur activé", "Server mode on") : L("Mode serveur désactivé : la synchronisation et les providers du serveur sont en pause", "Server mode off: synchronization and the server providers are paused"));
+                break;
+            }
+            case "usage":
+            {
+                var on = serverState?["shareUsage"]?.GetValue<bool>() != true;
+                if (on && await Prompt(L("Partager mes statistiques ?", "Share my statistics?"),
+                        L("Le serveur reçoit, pour chaque appel de modèle : le provider, le modèle, les jetons, la durée et la vitesse. Jamais les messages ni les noms de projets ou de conversations. Les 30 derniers jours sont envoyés aussi. Vous pouvez les effacer du serveur à tout moment.",
+                          "The server receives, for each model call: the provider, the model, tokens, duration and speed. Never messages or project or conversation names. The last 30 days are sent too. You can erase them from the server at any time."),
+                        [new("no", "Annuler / Cancel"), new("yes", "Partager / Share")]) != "yes") return;
+                serverState = await client.Call("server.usage.share", new { enabled = on }, lifetime.Token);
+                Post(() => notice = on ? L("Statistiques partagées avec le serveur", "Statistics shared with the server") : L("Partage des statistiques arrêté (ce qui a été envoyé reste sur le serveur jusqu’à effacement : server erase-usage)", "Sharing stopped (what was sent stays on the server until erased: server erase-usage)"));
+                break;
+            }
+            case "dismiss": serverState = await client.Call("server.announcement.dismiss", ct: lifetime.Token); break;
             case "join": await ServerJoin(); break;
             case "password": await ServerPassword(); break;
             case "logout":

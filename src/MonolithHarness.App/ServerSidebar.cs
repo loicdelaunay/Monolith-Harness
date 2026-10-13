@@ -19,10 +19,10 @@ public sealed partial class MainWindow
     readonly Dictionary<Guid, Window> sharedWindows = [];
 
     /// <summary>The Cloud view is showing (only possible when a server is configured).</summary>
-    bool CloudView => ServerLink.Configured && ServerLink.CloudView;
+    bool CloudView => ServerLink is { Configured: true, Enabled: true, CloudView: true };
 
-    /// <summary>A project belongs to the view being shown: cloud projects in Cloud, everything else in Local (all projects without a server).</summary>
-    bool InSidebarView(int projectId) => !ServerLink.Configured || IsCloudProject(projectId) == ServerLink.CloudView;
+    /// <summary>A project belongs to the view being shown: cloud projects in Cloud, everything else in Local (all projects without a server; with the server mode off only the Local view exists).</summary>
+    bool InSidebarView(int projectId) => !ServerLink.Configured || IsCloudProject(projectId) == CloudView;
 
     FrameworkElement BuildViewToggle()
     {

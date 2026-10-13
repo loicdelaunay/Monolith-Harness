@@ -55,6 +55,7 @@ public sealed partial class MainWindow
 #endif
         composer.MinHeight = 124; composer.MaxHeight = 260; composer.Padding = new Thickness(14, 12, 14, 58);
         overlay.Children.Add(composer);
+        overlay.Children.Add(BuildComposerExpandButton());
         var plus = new Button { Width = 28, Height = 28, MinWidth = 0, MinHeight = 0, Padding = new(0),
             BorderThickness = new(0), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new(10, 0, 0, 10) };
@@ -1080,100 +1081,6 @@ public sealed partial class MainWindow
         };
         return Task.FromResult(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
     }
-    async Task<string> ControlDesktopMouseAsync(string action, double x, double y, double deltaY, string button, int clickCount, CancellationToken ct, string? windowId = null, double? x2 = null, double? y2 = null, string? pattern = null)
-    {
-        if(OperatingSystem.IsMacOS())return await MacInput("desktop_mouse",new JsonObject { ["action"]=action,["x"]=x,["y"]=y,["x2"]=x2,["y2"]=y2,["pattern"]=pattern,["delta_y"]=deltaY,["button"]=button,["click_count"]=clickCount },windowId,ct);
-        action = action.Trim().ToLowerInvariant(); button = MouseInput.NormalizeButton(button);
-        if (action is not ("move" or "click" or "scroll" or "slide")) throw new ArgumentException(T("Action souris invalide : move, click, scroll ou slide."));
-        if (action == "slide" && (!x2.HasValue || !y2.HasValue)) throw new ArgumentException("slide requires x2 and y2.");
-        if (!double.IsFinite(x) || !double.IsFinite(y) || Math.Abs(x) > 100000 || Math.Abs(y) > 100000 ||
-            (action == "slide" && (!double.IsFinite(x2!.Value) || !double.IsFinite(y2!.Value) || Math.Abs(x2.Value) > 100000 || Math.Abs(y2.Value) > 100000)))
-            throw new ArgumentException("Invalid mouse coordinates.");
-        if (action == "slide") pattern = MouseInput.NormalizeSlidePattern(pattern);
-        clickCount = MouseInput.NormalizeClickCount(clickCount);
-        var application = windowId == null ? null : DesktopApplications.Resolve(windowId);
-        var point = application?.RelativePoint(x, y) ?? (X: x, Y: y);
-        var destination = action == "slide" ? application?.RelativePoint(x2!.Value, y2!.Value) ?? (X: x2!.Value, Y: y2!.Value) : point;
-        var minX = DesktopInterop.GetSystemMetrics(DesktopInterop.VirtualX); var minY = DesktopInterop.GetSystemMetrics(DesktopInterop.VirtualY);
-        var width = DesktopInterop.GetSystemMetrics(DesktopInterop.VirtualWidth); var height = DesktopInterop.GetSystemMetrics(DesktopInterop.VirtualHeight);
-        var px = (int)Math.Floor(point.X); var py = (int)Math.Floor(point.Y);
-        if (px < minX || py < minY || px >= minX + width || py >= minY + height) throw new ArgumentOutOfRangeException(nameof(x), T("Coordonnées hors du bureau Windows."));
-        if (action == "slide" && (destination.X < minX || destination.Y < minY || destination.X >= minX + width || destination.Y >= minY + height)) throw new ArgumentOutOfRangeException(nameof(x2), T("Coordonnées de destination hors du bureau Windows."));
-        var details = T("Action souris demandée : ") + action + $"\nX={px}, Y={py}" + (action == "scroll" ? $"\nΔY={deltaY:0}" : "") + (action == "click" ? "\n" + T("Bouton : ") + button + $"\nClics : {clickCount}" : "") + (action == "slide" ? $"\nX2={destination.X:0}, Y2={destination.Y:0}\nPattern={pattern}\nBouton={button}" : "");
-        if (application != null) details += "\n" + application.Application + " · " + application.Title + "\nwindow_id=" + windowId;
-        var targetWindow = application == null ? DesktopInterop.GetForegroundWindow() : (nint)application.NativeId;
-        if (!await RequestAccessAsync("desktop|mouse", T("Contrôler la souris Windows"), details, T("Souris sur le bureau Windows"), ct)) return T("Accès refusé par l’utilisateur.");
-        ct.ThrowIfCancellationRequested();
-        await RestoreForegroundWindowAsync(targetWindow, ct);
-        if (windowId != null)
-        {
-            application = DesktopApplications.Resolve(windowId);
-            point = application.RelativePoint(x, y);
-            DesktopApplications.DemandPointTarget(application, point.X, point.Y);
-            px = (int)Math.Floor(point.X); py = (int)Math.Floor(point.Y);
-            if (action == "slide")
-            {
-                destination = application.RelativePoint(x2!.Value, y2!.Value);
-                DesktopApplications.DemandPointTarget(application, destination.X, destination.Y);
-            }
-        }
-        IReadOnlyList<MouseInput.SlideStep>? slideSteps = null;
-        if (action == "slide")
-        {
-            slideSteps = MouseInput.SlidePath(point.X, point.Y, destination.X, destination.Y, pattern);
-            if (application != null)
-                foreach (var step in slideSteps) DesktopApplications.DemandPointTarget(application, step.X, step.Y);
-        }
-        if (!DesktopInterop.SetCursorPos(px, py)) throw new InvalidOperationException(T("Impossible de déplacer le pointeur."));
-        if (action is "click" or "scroll") await Task.Delay(60, ct);
-        if (action == "click")
-        {
-            var right = button == "right";
-            for (var index = 0; index < clickCount; index++)
-            {
-                DesktopInterop.Click(right);
-                if (index + 1 < clickCount) await Task.Delay(80, ct);
-            }
-        }
-        else if (action == "scroll") DesktopInterop.Scroll(MouseInput.ToWindowsWheelDelta(deltaY));
-        else if (action == "slide")
-        {
-            DesktopInterop.MouseButton(button == "right", true);
-            try
-            {
-                foreach (var step in slideSteps!)
-                {
-                    await Task.Delay(step.DelayMs, ct);
-                    var sx = Math.Clamp((int)Math.Round(step.X), minX, minX + width - 1);
-                    var sy = Math.Clamp((int)Math.Round(step.Y), minY, minY + height - 1);
-                    if (!DesktopInterop.SetCursorPos(sx, sy)) throw new InvalidOperationException(T("Impossible de déplacer le pointeur."));
-                }
-            }
-            finally { DesktopInterop.MouseButton(button == "right", false); }
-        }
-        return JsonSerializer.Serialize(new { ok = true, action, x = px, y = py, x2 = action == "slide" ? destination.X : (double?)null, y2 = action == "slide" ? destination.Y : (double?)null, pattern = action == "slide" ? pattern : null, button, click_count = clickCount, deltaY, desktop = new { x = minX, y = minY, width, height } });
-    }
-    async Task<string> ControlDesktopKeyboardAsync(string action, string text, string keys, CancellationToken ct)
-    {
-        if(OperatingSystem.IsMacOS())return await MacInput("desktop_keyboard",new JsonObject { ["action"]=action,["text"]=text,["keys"]=keys },null,ct);
-        action = action.Trim().ToLowerInvariant();
-        if (action is not ("type" or "press")) throw new ArgumentException(T("Action clavier invalide : type ou press."));
-        if (action == "type" && string.IsNullOrEmpty(text)) throw new ArgumentException(T("Texte à saisir requis."));
-        if (text.Length > 10_000) throw new ArgumentException(T("Texte trop long (10 000 caractères maximum)."));
-        var chord = action == "press" ? ParseKeyboardChord(keys) : null;
-        var details = action == "type"
-            ? T("Saisie clavier demandée : ") + text[..Math.Min(text.Length, 500)]
-            : T("Raccourci clavier demandé : ") + keys;
-        var targetWindow = DesktopInterop.GetForegroundWindow();
-        if (!await RequestAccessAsync("desktop|keyboard", T("Contrôler le clavier Windows"), details, T("Clavier sur le bureau Windows"), ct)) return T("Accès refusé par l’utilisateur.");
-        ct.ThrowIfCancellationRequested();
-        await RestoreForegroundWindowAsync(targetWindow, ct);
-        if (action == "type") DesktopInterop.SendText(text);
-        else DesktopInterop.SendChord(chord!);
-        return action == "type"
-            ? JsonSerializer.Serialize(new { ok = true, action, characters = text.Length })
-            : JsonSerializer.Serialize(new { ok = true, action, keys = string.Join('+', chord!.Modifiers.Append(chord.Key)) });
-    }
     async Task<string> CaptureDesktopScreenshotAsync(
         string? screenTarget,
         int? x, int? y, int? width, int? height,
@@ -1589,5 +1496,6 @@ public sealed partial class MainWindow
             });
         }
         ApplicationTools.AddDefinitions(definitions, state.EnabledSkills);
+        DesktopControlTools.AddDefinitions(definitions, state.EnabledSkills, FeatureSettings.Read(state.FeaturesJson));
     }
 }

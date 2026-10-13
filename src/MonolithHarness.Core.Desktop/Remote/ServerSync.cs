@@ -86,6 +86,12 @@ public static class ServerSync
         connection.Store.Update(l => l.Providers.Clear());
     }
 
+    /// <summary>Why a provider cannot be used now (it belongs to the server and the server mode is off), or null. The engine checks it before each request.</summary>
+    public static string? BlockedReason(ServerLinkData link, Provider provider) =>
+        link is { Configured: true, Enabled: false } && ServerProviderOf(link, provider) != null
+            ? "Mode serveur désactivé : réactivez-le (puce du serveur) pour utiliser ce provider / Server mode is off: turn it back on to use this provider."
+            : null;
+
     /// <summary>The server provider id and model behind a local provider, or null for an ordinary local provider.</summary>
     public static (Guid ServerProvider, string Model)? ServerProviderOf(ServerLinkData link, Provider provider) =>
         link.Providers.FirstOrDefault(x => x.Value == provider.Id) is { Key: { Length: > 0 } key } && Guid.TryParse(key, out var id) ? (id, provider.Model) : null;

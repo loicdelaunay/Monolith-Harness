@@ -13,7 +13,7 @@ internal sealed class AdvancedMarkdownView : UserControl
     readonly Func<string, Task<string?>>? filePath;
     readonly Dictionary<string, string> resolvedPaths = [];
     string markdown = "", searchQuery = "";
-    bool starting, ready, painting, again;
+    bool starting, ready, painting, again, nativeFallback;
     int revision;
     string diagnostic = "";
     string? paintedMarkdown;
@@ -30,7 +30,7 @@ internal sealed class AdvancedMarkdownView : UserControl
         Loaded += (_, _) => Begin(); SizeChanged += (_, _) => Begin();
         Unloaded += (_, _) =>
         {
-            revision++; ready = starting = HasSelection = false; paintedMarkdown = null; paintedOptions = null;
+            revision++; ready = starting = nativeFallback = HasSelection = false; paintedMarkdown = null; paintedOptions = null;
 #if WINDOWS
             view.Close();
 #else
@@ -39,7 +39,20 @@ internal sealed class AdvancedMarkdownView : UserControl
             view = new(); Content = view; resolvedPaths.Clear();
         };
     }
-    internal void Update(string text) { markdown = text; Paint(); }
+    internal void Update(string text)
+    {
+        markdown = text;
+        if (nativeFallback) ShowNativeFallback(); else Paint();
+    }
+    void ShowNativeFallback()
+    {
+        nativeFallback = true; ready = false; paintedMarkdown = null;
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock { Text = UiText.Resolve("Aperçu web indisponible · rendu natif", "Web preview unavailable · native rendering"), FontSize = 11, Foreground = FluentDesign.Secondary });
+        var body = new StackPanel { Spacing = 6 }; panel.Children.Add(body);
+        MarkdownRenderer.RenderNativeFallback(body, markdown, openFile, fileMenu, filePath);
+        Height = double.NaN; Content = panel;
+    }
     internal void RefreshVisuals() => Paint();
     internal async void SetSearchQuery(string query)
     {
@@ -50,11 +63,12 @@ internal sealed class AdvancedMarkdownView : UserControl
     }
     async void Begin()
     {
-        if (starting || ActualWidth <= 0) return;
+        if (starting || nativeFallback || ActualWidth <= 0 || !MarkdownRenderer.AllowRichWebPreview) return;
         starting = true; var current = view; var version = revision;
         try
         {
-            await current.EnsureCoreWebView2Async(); if (version != revision) return;
+            async Task InitializeAsync() => await current.EnsureCoreWebView2Async();
+            await InitializeAsync().WaitAsync(TimeSpan.FromSeconds(12)); if (version != revision) return;
 #if WINDOWS
             current.CoreWebView2.DownloadStarting += (_, e) => e.Cancel = true;
             current.CoreWebView2.PermissionRequested += (_, e) => e.State = Microsoft.Web.WebView2.Core.CoreWebView2PermissionState.Deny;
@@ -109,7 +123,7 @@ internal sealed class AdvancedMarkdownView : UserControl
             current.CoreWebView2.NavigationCompleted += async (_, e) =>
             {
                 if (version != revision) return;
-                if (!e.IsSuccess) { diagnostic = "Navigation failed: " + e.WebErrorStatus; return; }
+                if (!e.IsSuccess) { diagnostic = "Navigation failed: " + e.WebErrorStatus; ShowNativeFallback(); return; }
                 try
                 {
                     // NavigateToString is limited to 2 MB on Windows WebView2.
@@ -119,9 +133,11 @@ internal sealed class AdvancedMarkdownView : UserControl
                         if (version != revision) return;
                         await current.ExecuteScriptAsync(script);
                     }
+                    var probe = await current.ExecuteScriptAsync("typeof markdownVisuals === 'object' && typeof mermaid !== 'undefined' && typeof katex !== 'undefined'");
+                    if (probe != "true") throw new InvalidOperationException("Bundled diagram libraries did not initialize.");
                     if (version == revision) { ready = true; Paint(); }
                 }
-                catch (Exception ex) { diagnostic = ex.ToString(); }
+                catch (Exception ex) { diagnostic = ex.ToString(); AppLog.Write(AppLogLevel.Warning, "markdown.initialize", ex); if (version == revision) ShowNativeFallback(); }
             };
             EmbeddedPageNavigation.RestrictToDocument(current, document.Value); current.NavigateToString(document.Value);
         }
@@ -129,7 +145,8 @@ internal sealed class AdvancedMarkdownView : UserControl
         {
             if (version != revision) return;
             diagnostic = ex.ToString();
-            Content = new TextBlock { Text = markdown + "\n" + ex.Message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+            AppLog.Write(AppLogLevel.Warning, "markdown.initialize", ex);
+            ShowNativeFallback();
         }
     }
     async void Paint()
@@ -148,7 +165,9 @@ internal sealed class AdvancedMarkdownView : UserControl
                 var text = markdown;
                 if (paintedMarkdown == text && paintedOptions == options) continue;
                 var colors = new { text = options.Foreground, background = "transparent", dark = options.Dark, palette = JsonSerializer.Deserialize<JsonElement>(options.Palette) };
-                await view.ExecuteScriptAsync($"document.documentElement.lang={JsonSerializer.Serialize(options.Language)};markdownVisuals.set({JsonSerializer.Serialize(MarkdownDisplay.Html(text, options.Math, fileBadges: true))},{JsonSerializer.Serialize(colors)},{options.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)},{options.LineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture)},{JsonSerializer.Serialize(new { mermaid = options.Mermaid, math = options.Math })})");
+                var html = await MarkdownDisplay.VerifiedHtmlAsync(text, options.Math, filePath);
+                if (version != revision || !ready) return;
+                await view.ExecuteScriptAsync($"document.documentElement.lang={JsonSerializer.Serialize(options.Language)};markdownVisuals.set({JsonSerializer.Serialize(html)},{JsonSerializer.Serialize(colors)},{options.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)},{options.LineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture)},{JsonSerializer.Serialize(new { mermaid = options.Mermaid, math = options.Math })})");
                 if (version == revision) { paintedMarkdown = text; paintedOptions = options; await view.ExecuteScriptAsync($"markdownVisuals.search({JsonSerializer.Serialize(searchQuery)})"); }
             } while (again && version == revision);
         }

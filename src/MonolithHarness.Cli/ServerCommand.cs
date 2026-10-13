@@ -16,6 +16,10 @@ public static class ServerCommand
           logout                         Sign out and remove the server's providers
           sync                           Synchronize now (providers, cloud projects, shared conversations)
           interval <never|1|5|60|1440>   Minutes between two complete resynchronizations (default 5; live changes always apply)
+          on | off                       Turn the server mode on or off (off: nothing is exchanged; the account and links are kept)
+          share-usage <on|off>           Share the speed and consumption of your model calls with the server (numbers only; off by default)
+          erase-usage                    Erase on the server everything this account shared
+          dismiss                        Hide the server message of the moment until it changes
           shares                         Conversations shared with the account (and the public ones)
           join <code>                    Follow a shared conversation from its sharing code and print what the host shows
           projects                       Cloud projects of the account
@@ -60,6 +64,18 @@ public static class ServerCommand
                     if (!json && result!["passwordChangeSuggested"]?.GetValue<bool>() == true) Console.Error.WriteLine("This password is temporary: change it from the interactive CLI (/server) or the server web interface.");
                     return Print(json, result, Describe);
                 case "logout": return Print(json, await client.Call("server.logout", ct: ct), Describe);
+                case "on" or "off":
+                    return Print(json, await client.Call("server.enable", new { enabled = command == "on" }, ct), node => command == "on" ? "Server mode on." : "Server mode off: nothing is exchanged with the server (the account and links are kept; `server on` resumes).");
+                case "share-usage":
+                {
+                    var choice = rest.Count == 1 ? rest[0].ToLowerInvariant() : "";
+                    if (choice is not ("on" or "off")) throw new ArgumentException("Usage: server share-usage <on|off>");
+                    return Print(json, await client.Call("server.usage.share", new { enabled = choice == "on" }, ct), node => choice == "on"
+                        ? "Sharing your usage statistics: the last 30 days and then each model call (provider, model, tokens, duration, speed; never any content)."
+                        : "Sharing stopped. What was already sent stays on the server until `server erase-usage`.");
+                }
+                case "erase-usage": return Print(json, await client.Call("server.usage.erase", ct: ct), node => $"{node!["deleted"]} measurement(s) erased from the server.");
+                case "dismiss": return Print(json, await client.Call("server.announcement.dismiss", ct: ct), _ => "Message hidden until the administrator publishes another one.");
                 case "forget": return Print(json, await client.Call("server.disconnect", ct: ct), Describe);
                 case "sync":
                 {
@@ -119,11 +135,14 @@ public static class ServerCommand
     static string DescribeSync(JsonNode? state)
     {
         if (state == null) return "";
-        var lines = new List<string>
+        var lines = new List<string>();
+        if (state["announcement"] is JsonObject note) lines.Add($"[{note["level"]}] Server message: {TerminalText.Clean(note["text"]?.ToString() ?? "")}");
+        if (state["shareUsage"]?.GetValue<bool>() == true) lines.Add($"Sharing usage statistics · {state["usageSent"]} measurement(s) sent");
+        lines.AddRange(new[]
         {
             $"State: {state["state"]}{(state["realtime"]?.GetValue<bool>() == true ? " · real time on" : "")} · last sync: {(state["lastSyncUtc"] is { } last ? DateTime.Parse(last.ToString()).ToLocalTime().ToString("g") : "never")} · full resync every {(state["minutes"]?.GetValue<int>() == 0 ? "— (never)" : state["minutes"] + " min")}",
             $"{state["providers"]} provider(s) · {state["projects"]} cloud project(s) · {state["sharedWithMe"]} shared with you · {state["publicShares"]} public"
-        };
+        });
         foreach (var issue in state["issues"]?.AsArray() ?? []) lines.Add($"  [{issue!["level"]}] {issue["area"]}: {issue["message"]}");
         return string.Join('\n', lines);
     }

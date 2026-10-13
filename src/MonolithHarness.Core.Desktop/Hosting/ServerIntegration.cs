@@ -22,6 +22,8 @@ public sealed partial class HarnessService
     readonly ConcurrentDictionary<int, CloudRun> cloudRuns = new();
     readonly ConcurrentDictionary<string, TaskCompletionSource<CloudAnswer>> cloudQuestions = new();
     readonly ConcurrentDictionary<int, Guid> sharedChats = new();
+    /// <summary>Reads the link file for the provider guard without creating the connection (an ordinary user without a server never pays for it).</summary>
+    readonly ServerLinkStore guardStore = new(ServerLinkStore.PathFor(database));
     readonly Lazy<ServerConnection> serverLink = new(() => new ServerConnection(new ServerLinkStore(ServerLinkStore.PathFor(database)), KeyVault.Encrypt, KeyVault.Decrypt));
     ShareBridge? shareBridge;
     Func<object, Task>? emitTee;
@@ -36,7 +38,38 @@ public sealed partial class HarnessService
         service.StateChanged += state => _ = EmitQuietly(new { @event = "server.state", state = SyncView(state) });
         service.Changed += changes => EmitQuietly(new { @event = "server.changed", changes = ChangesView(changes) });
         service.RemoteRunProgress += progress => EmitQuietly(RemoteView(progress));
+        service.RelayQueueChanged += waits => { _ = EmitQuietly(new { @event = "server.queue", waits = waits.Select(WaitView).ToList() }); _ = ShowRelayQueueAsync(waits); };
         return service;
+    }
+
+    readonly HashSet<int> relayStatusChats = [];
+
+    /// <summary>
+    /// A call of a local conversation waits in the server's queue for a shared provider: its rank is shown as the status of the conversation that made it
+    /// (the conversations running with that provider, in order), and removed when the call starts.
+    /// </summary>
+    async Task ShowRelayQueueAsync(IReadOnlyList<RelayWait> waits)
+    {
+        try
+        {
+            var link = Server.Link;
+            var shown = new HashSet<int>();
+            var candidates = runs.ToList().Select(x => (Chat: x.Key, Server: ServerSync.ServerProviderOf(link, x.Value.Provider))).Where(x => x.Server != null).OrderBy(x => x.Chat).ToList();
+            foreach (var group in candidates.GroupBy(x => x.Server!.Value.ServerProvider))
+            {
+                var theirs = waits.Where(x => x.ProviderId == group.Key).OrderBy(x => x.SinceUtc).ToList();
+                var chats = group.ToList();
+                for (var i = 0; i < Math.Min(theirs.Count, chats.Count); i++)
+                {
+                    shown.Add(chats[i].Chat);
+                    await emit(new { @event = "status", chatId = chats[i].Chat, text = $"En attente sur le serveur (position {theirs[i].Position}) / Queued on the server (position {theirs[i].Position})" });
+                }
+            }
+            List<int> cleared;
+            lock (relayStatusChats) { cleared = relayStatusChats.Except(shown).ToList(); relayStatusChats.Clear(); relayStatusChats.UnionWith(shown); }
+            foreach (var chat in cleared) await emit(new { @event = "status", chatId = chat, text = "" });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLog.Write(AppLogLevel.Information, "server.queue_status_skipped", ex); }
     }
 
     async Task EmitQuietly(object value)
@@ -49,10 +82,14 @@ public sealed partial class HarnessService
     public static object SyncView(SyncSnapshot s) => new
     {
         state = s.State.ToString(), s.Syncing, s.Realtime, s.LastSyncUtc, s.NextSyncUtc, minutes = s.SyncMinutes, s.ServerName, s.ServerVersion, s.Url, s.Email,
-        s.Providers, s.Projects, s.SharedWithMe, s.PublicShares, worst = s.Worst?.ToString(),
+        s.Providers, s.Projects, s.SharedWithMe, s.PublicShares, worst = s.Worst?.ToString(), s.Enabled, s.ShareUsage, s.UsageSent, s.UsageLastSentUtc,
+        announcement = s.Announcement == null ? null : new { s.Announcement.Text, s.Announcement.Level, s.Announcement.UpdatedUtc, s.Announcement.ExpiresUtc, s.Announcement.By },
+        relayWaits = s.RelayWaits?.Select(WaitView).ToList(),
         issues = s.Issues.Select(x => new { x.Key, level = x.Level.ToString(), x.Area, x.Message, x.SinceUtc, x.LastUtc, x.Count }).ToList(),
         log = s.Log.Take(30).Select(x => new { x.TimeUtc, level = x.Level.ToString(), x.Area, x.Message }).ToList()
     };
+
+    static object WaitView(RelayWait w) => new { w.Id, w.ProviderId, w.Model, w.Position, w.SinceUtc };
 
     /// <summary>A request sent from elsewhere, as the events a local generation would emit (the streaming message has the id -1 until the real ones arrive).</summary>
     static object RemoteView(RemoteProgress p) => p.Finished
@@ -162,6 +199,7 @@ public sealed partial class HarnessService
         if (text.Length == 0) throw new ArgumentException("Message required.");
         if ((p["images"] as JsonArray)?.Count > 0) throw new ArgumentException("Les images ne sont pas prises en charge dans un projet cloud / Images are not supported in a cloud project.");
         if (!Server.SignedIn) throw new InvalidOperationException("Connectez-vous au serveur : /server login / Sign in to the server first.");
+        if (!Server.Link.Enabled) throw new InvalidOperationException("Mode serveur désactivé : réactivez-le (/server on) / Server mode is off: turn it back on (/server on).");
         await using var db = Db();
         var chat = await db.Chats.SingleAsync(x => x.Id == chatId, lifetime);
         var provider = await db.Providers.SingleAsync(x => x.Id == I(p, "providerId"), lifetime);
@@ -397,6 +435,32 @@ public sealed partial class HarnessService
             case "server.sync.clear":
                 Sync.ClearIssues();
                 return SyncView(Sync.Snapshot);
+            case "server.enable":
+            {
+                var enabled = B(p, "enabled", true);
+                if (!enabled)
+                {
+                    if (!cloudRuns.IsEmpty) throw new InvalidOperationException("Arrêtez les requêtes cloud en cours avant de désactiver le mode serveur / Stop running cloud requests first.");
+                    // Conversations hosted here go offline (the shares stay, they attach again when the mode is back on).
+                    foreach (var shared in sharedChats.ToList()) if (sharedChats.TryRemove(shared.Key, out var share)) await Bridge.Detach(share);
+                }
+                await Sync.SetEnabledAsync(enabled);
+                if (enabled && Server.Link is { Configured: true, SignedIn: true }) { Sync.Start(); _ = ResumeSharesAsync(); }
+                return SyncView(Sync.Snapshot);
+            }
+            case "server.announcement.dismiss":
+                Sync.DismissAnnouncement();
+                return SyncView(Sync.Snapshot);
+            case "server.usage.share":
+                Sync.SetShareUsage(B(p, "enabled"));
+                if (B(p, "enabled")) _ = Sync.PushUsageAsync(CancellationToken.None);
+                return SyncView(Sync.Snapshot);
+            case "server.usage.status":
+            {
+                var usage = await Server.Api.UsageStatusAsync(ct);
+                return new { usage.Enabled, usage.Samples, usage.FirstUtc, usage.LastUtc, usage.RetentionDays, sharing = Server.Link.ShareUsage, sent = Server.Link.UsageSent, lastSentUtc = Server.Link.UsageLastSentUtc };
+            }
+            case "server.usage.erase": return new { deleted = await Sync.EraseSharedUsageAsync(ct) };
             case "server.share.start": return await StartShare(I(p, "chatId"), S(p, "title"), B(p, "isPublic"), ct);
             case "server.share.info":
             {
@@ -490,7 +554,7 @@ public sealed partial class HarnessService
         try
         {
             var link = Server.Link;
-            if (!link.SignedIn || link.Shares.Count == 0) return;
+            if (!link.Active || link.Shares.Count == 0) return;
             var live = (await Server.Api.SharesAsync()).Where(x => x.IsHost && x.RevokedUtc == null).Select(x => x.Id).ToHashSet();
             foreach (var (chatId, id) in link.Shares.ToList())
             {

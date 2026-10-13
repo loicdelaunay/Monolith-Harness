@@ -22,13 +22,13 @@ public static class LocalFileLinks
          Paths.Match(value) is { Success: true, Index: 0 } match && match.Length == WithoutLocation(value).Length ||
          WithoutLocation(value) is "README" or "LICENSE" or "AGENTS.md" or "Dockerfile" or "Makefile" or ".env" or ".gitignore");
 
-    static PathMatch ExtendExistingAbsolutePath(string text, Match match, string value)
+    static PathMatch ExtendExistingAbsolutePath(string text, Match match, string value, bool lookupExistingPaths)
     {
         // Bare paths such as Service.cs#L42-L57 keep their location too.
         var following = FollowingLocation.Match(text.Substring(match.Index + match.Length, Math.Min(64, text.Length - match.Index - match.Length)));
         if (following.Success) value += following.Value;
         var original = new PathMatch(match.Index, value.Length, value);
-        if (!Path.IsPathFullyQualified(value) || value.StartsWith(@"\\") || match.Index + match.Length >= text.Length || !char.IsWhiteSpace(text[match.Index + match.Length])) return original;
+        if (!lookupExistingPaths || !Path.IsPathFullyQualified(value) || value.StartsWith(@"\\") || match.Index + match.Length >= text.Length || !char.IsWhiteSpace(text[match.Index + match.Length])) return original;
         var end = Math.Min(text.Length, match.Index + 512);
         var delimiter = text.IndexOfAny(['\r', '\n', '<', '>', '"', '\'', '|', '?', '*', ')', ']', '}', ';'], match.Index);
         if (delimiter >= 0) end = Math.Min(end, delimiter);
@@ -46,7 +46,7 @@ public static class LocalFileLinks
         return original;
     }
 
-    public static IReadOnlyList<PathMatch> Find(string text, bool wholePath = false)
+    public static IReadOnlyList<PathMatch> Find(string text, bool wholePath = false, bool lookupExistingPaths = true)
     {
         var trimmed = text.Trim();
         if (wholePath && trimmed.Length > 0 && LooksLikePath(trimmed))
@@ -66,7 +66,7 @@ public static class LocalFileLinks
             if (preceding.Contains("://", StringComparison.Ordinal) || preceding.Contains('@')) continue;
             var value = match.Value.TrimEnd(',', ';', ':', '!', '?');
             if (value.EndsWith('.') && !value.EndsWith("/.") && !value.EndsWith("\\.") && !value.EndsWith("/..") && !value.EndsWith("\\..")) value = value.TrimEnd('.');
-            if (value.Length > 0) found.Add(ExtendExistingAbsolutePath(text, match, value));
+            if (value.Length > 0) found.Add(ExtendExistingAbsolutePath(text, match, value, lookupExistingPaths));
         }
         return found.OrderBy(x => x.Index).ToArray();
     }
@@ -81,7 +81,7 @@ public static class LocalFileLinks
         var decoded = Uri.UnescapeDataString(url);
         return LooksLikePath(decoded) ? decoded : null;
     }
-    public static void Decorate(MarkdownDocument document)
+    public static void Decorate(MarkdownDocument document, bool lookupExistingPaths = true)
     {
         void Inlines(ContainerInline container)
         {
@@ -96,7 +96,7 @@ public static class LocalFileLinks
                 else if (child is LiteralInline or CodeInline)
                 {
                     var text = child is LiteralInline literal ? literal.Content.ToString() : ((CodeInline)child).Content;
-                    var matches = Find(text, child is CodeInline); int offset = 0;
+                    var matches = Find(text, child is CodeInline, lookupExistingPaths); int offset = 0;
                     foreach (var match in matches)
                     {
                         if (match.Index > offset) child.InsertBefore(child is CodeInline ? new CodeInline(text[offset..match.Index]) : new LiteralInline(text[offset..match.Index]));

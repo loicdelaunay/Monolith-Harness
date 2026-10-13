@@ -5,6 +5,8 @@ namespace MonolithHarness.Core;
 public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySettings
 {
     public InformationSettings Information { get; set; } = new();
+    public DesktopInputSettings KeyboardInput { get; set; } = new();
+    public DesktopInputSettings MouseInput { get; set; } = new();
     public int ImageGenerationProviderId { get; set; }
     public string ImageGenerationModel { get; set; } = "";
     public int ImageGenerationWidth { get; set; } = 1024;
@@ -20,6 +22,7 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
     public string Theme { get; set; } = "fluent-dark";
     public List<AppearanceTheme> CustomThemes { get; set; } = [];
     public string ResponseStyle { get; set; } = "default";
+    public ReasoningDetailLevel? ReasoningDisplay { get; set; }
     public string CliTheme { get; set; } = "shared";
     public string CliFont { get; set; } = "";
     public int CliFontSize { get; set; } = 14;
@@ -167,6 +170,8 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
             settings.SidebarChatOrder = (settings.SidebarChatOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
             settings.Information ??= new();
             settings.Information.Normalize();
+            settings.KeyboardInput ??= new(); settings.KeyboardInput.Normalize();
+            settings.MouseInput ??= new(); settings.MouseInput.Normalize();
             settings.Compaction ??= new();
             settings.Compaction.Normalize();
             settings.WebHttpResponseMode = settings.WebHttpResponseMode?.Trim().ToLowerInvariant() switch {
@@ -186,6 +191,8 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
     {
         if (Information == null) throw new ArgumentException("Information skill settings required.");
         Information.Validate();
+        if (KeyboardInput == null || MouseInput == null) throw new ArgumentException("Desktop input settings required.");
+        KeyboardInput.Validate(); MouseInput.Validate();
         if (CommandGuardMode is not ("lancet" or "model") || CommandGuardProviderId < 0 || CommandGuardModel == null || CommandGuardModel.Length > 300)
             throw new ArgumentException("Réglages du validateur de commandes invalides / Invalid command validator settings.");
         WebHttpResponseMode = WebHttpTools.NormalizeResponseMode(WebHttpResponseMode);

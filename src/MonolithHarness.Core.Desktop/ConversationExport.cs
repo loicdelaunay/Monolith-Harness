@@ -56,7 +56,7 @@ public static class ConversationExport
         Setting("Navigateur / Browser",features.BrowserMode);
         Setting("RAG",features.RagMode+" · "+(features.RagMode=="local"?LocalEmbeddings.ModelName:features.RagModel));
         Setting("RAG provider / files / results",$"{features.RagProviderId} / {features.RagMaxFiles} / {features.RagTopK}");
-        Setting(L("Détails du raisonnement", "Reasoning details"), state.ShowReasoningDetails);
+        Setting(L("Détails du raisonnement", "Reasoning details"), features.ReasoningDisplay?.ToString() ?? (state.ShowReasoningDetails ? "Detailed" : "Reduced"));
         Setting("Mode", chat.ExecutionMode);
         Setting(L("Sous-agents", "Subagents"), chat.OrchestrationMode);
         Setting("Sandbox", chat.SandboxEnabled);

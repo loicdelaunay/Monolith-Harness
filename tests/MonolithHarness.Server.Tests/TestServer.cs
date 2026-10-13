@@ -18,25 +18,28 @@ sealed class TestServer : IAsyncDisposable
     public string Base { get; private set; } = "";
     readonly Action<WebApplicationBuilder>? configure;
     readonly bool keepData;
+    readonly ServerOptions options;
 
-    TestServer(ServerPaths paths, Action<WebApplicationBuilder>? configure, bool keepData)
+    TestServer(ServerPaths paths, Action<WebApplicationBuilder>? configure, bool keepData, ServerOptions options)
     {
         Paths = paths;
         this.configure = configure;
         this.keepData = keepData;
+        this.options = options;
     }
 
-    public static async Task<TestServer> StartAsync(Action<WebApplicationBuilder>? configure = null, string? data = null)
+    public static async Task<TestServer> StartAsync(Action<WebApplicationBuilder>? configure = null, string? data = null, ServerOptions? options = null)
     {
         var folder = data ?? Path.Combine(Path.GetTempPath(), "mh-server-test-" + Guid.NewGuid().ToString("N"));
-        var server = new TestServer(new ServerPaths(folder), configure, data != null);
+        // The update check is off by default: tests never reach out to the release feed.
+        var server = new TestServer(new ServerPaths(folder), configure, data != null, options ?? new ServerOptions { Port = 0, UpdateMode = "off" });
         await server.BootAsync();
         return server;
     }
 
     async Task BootAsync()
     {
-        App = await ServerApp.BuildAsync(Paths, new ServerOptions { Port = 0 }, configure);
+        App = await ServerApp.BuildAsync(Paths, options, configure);
         // Workers are this very server, launched from its build output.
         App.Services.GetRequiredService<WorkerLauncher>().Use("dotnet", ServerDll());
         await App.StartAsync();

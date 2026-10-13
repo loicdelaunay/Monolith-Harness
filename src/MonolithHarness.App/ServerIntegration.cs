@@ -70,7 +70,7 @@ public sealed partial class MainWindow
     /// <summary>The server copy of a cloud conversation is the reference: bring the local one up to date (offline, the local copy stays).</summary>
     async Task PullCloudChatAsync(Chat target, CancellationToken ct)
     {
-        if (!IsCloudChat(target) || !ServerLink.SignedIn || !ServerLink.Chats.ContainsKey(target.Id) || conversationRuns.ContainsKey(target.Id)) return;
+        if (!IsCloudChat(target) || !ServerLink.Active || !ServerLink.Chats.ContainsKey(target.Id) || conversationRuns.ContainsKey(target.Id)) return;
         try
         {
             await using var store = new HarnessDb();
@@ -86,6 +86,7 @@ public sealed partial class MainWindow
     {
         var chat = run.Chat; var db = run.Db; var ct = run.Cancellation.Token;
         if (!Server.SignedIn) throw new InvalidOperationException(WorkflowText("Connectez-vous au serveur dans Réglages › Serveur.", "Sign in to the server in Settings › Server."));
+        if (!Server.Link.Enabled) throw new InvalidOperationException(WorkflowText("Le mode serveur est désactivé : réactivez-le (bouton à côté de l'état du serveur) pour lancer une requête cloud.", "Server mode is off: turn it back on (the button beside the server state) to send a cloud request."));
         var target = ServerSync.ServerProviderOf(ServerLink, run.Provider)
             ?? throw new InvalidOperationException(WorkflowText("Un projet cloud exige un fournisseur du serveur (« · serveur » ou « · cloud »).", "A cloud project needs a server provider (“· server” or “· cloud”)."));
         if (run.Images.Count > 0) throw new InvalidOperationException(WorkflowText("Les images ne sont pas prises en charge dans un projet cloud.", "Images are not supported in a cloud project."));
@@ -131,7 +132,7 @@ public sealed partial class MainWindow
         {
             owner.SetRunStatus(run, state.State switch
             {
-                "queued" => state.QueuePosition is { } rank ? owner.WorkflowText($"En attente sur le serveur (rang {rank})", $"Queued on the server (position {rank})") : owner.WorkflowText("En attente sur le serveur", "Queued on the server"),
+                "queued" => state.QueuePosition is { } rank ? owner.WorkflowText($"En attente sur le serveur (position {rank})", $"Queued on the server (position {rank})") : owner.WorkflowText("En attente sur le serveur", "Queued on the server"),
                 "running" => owner.WorkflowText("Exécution sur le serveur…", "Running on the server…"),
                 "awaiting_approval" => owner.WorkflowText("Approbation requise", "Approval required"),
                 _ => run.Status
@@ -290,7 +291,7 @@ public sealed partial class MainWindow
         try
         {
             var link = Server.Link;
-            if (!link.SignedIn || link.Shares.Count == 0) return;
+            if (!link.Active || link.Shares.Count == 0) return;
             var live = (await Server.Api.SharesAsync()).Where(x => x.IsHost && x.RevokedUtc == null).Select(x => x.Id).ToHashSet();
             foreach (var (chatId, id) in link.Shares.ToList())
             {
@@ -308,6 +309,7 @@ public sealed partial class MainWindow
     async Task ManageShareAsync(Chat target)
     {
         if (!ServerLink.SignedIn) { ShowStatus(WorkflowText("Connectez-vous au serveur dans Réglages › Serveur.", "Sign in to the server in Settings › Server."), StatusKind.Notice); return; }
+        if (!ServerLink.Enabled) { ShowStatus(WorkflowText("Le mode serveur est désactivé : réactivez-le pour partager une conversation.", "Server mode is off: turn it back on to share a conversation."), StatusKind.Notice); return; }
         if (IsCloudChat(target)) { ShowStatus(WorkflowText("Une conversation cloud est déjà sur le serveur.", "A cloud conversation is already on the server."), StatusKind.Notice); return; }
         var shared = sharedChats.TryGetValue(target.Id, out var shareId);
         ServerShare? details = null;

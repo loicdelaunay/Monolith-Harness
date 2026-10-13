@@ -258,6 +258,33 @@ public sealed class MessageAuthor
     public Guid UserId { get; set; }
 }
 
+/// <summary>
+/// One model call a client chose to share (tokens, duration, speed): numbers only, never prompts, replies, project or conversation names.
+/// <see cref="SampleKey"/> makes uploads idempotent: a client may send the same call again without counting it twice.
+/// </summary>
+public sealed class UsageSample
+{
+    public long Id { get; set; }
+    public Guid UserId { get; set; }
+    public string SampleKey { get; set; } = "";
+    public DateTime CompletedUtc { get; set; }
+    public DateTime ReceivedUtc { get; set; } = DateTime.UtcNow;
+    public string Provider { get; set; } = "";
+    public string Model { get; set; } = "";
+    public string Activity { get; set; } = "chat";
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
+    public long? CachedInputTokens { get; set; }
+    public double Seconds { get; set; }
+    public string Status { get; set; } = "complete";
+    /// <summary>Counts were estimated by the client rather than reported by the provider.</summary>
+    public bool Estimated { get; set; }
+    /// <summary>The call went through a provider of this server (relay).</summary>
+    public bool ViaServer { get; set; }
+    /// <summary>Output tokens per second of a complete call with a measurable duration; null otherwise (such calls do not enter speed averages).</summary>
+    public double? Speed { get; set; }
+}
+
 public sealed class ShareParticipant
 {
     public Guid ShareId { get; set; }

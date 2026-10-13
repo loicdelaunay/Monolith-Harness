@@ -65,6 +65,7 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
     WorkspaceSnapshot? workspace;
     MonolithHarness.Core.Remote.ServerLinkData? serverLink;
     JsonNode? serverState;
+    string lastAnnouncement = "";
     readonly Dictionary<int, int> shareViewers = [];
     UiDialog? dialog;
     int chatId, providerId, pendingOperations, frame;
@@ -204,7 +205,13 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
         switch (S(data, "event"))
         {
             case "chat.renamed": Work(Refresh); break;
-            case "server.state": serverState = data["state"]; break;
+            case "server.state":
+                serverState = data["state"];
+                // A message of the moment that appears (or changes) is also said once in the status line.
+                var stamp = serverState?["announcement"] is JsonObject current ? Str(current, "updatedUtc") + Str(current, "text") : "";
+                if (stamp.Length > 0 && stamp != lastAnnouncement) notice = L("Message du serveur : ", "Server message: ") + TerminalText.Clean(Str(serverState!["announcement"], "text"));
+                lastAnnouncement = stamp;
+                break;
             case "server.changed":
                 Work(Refresh);
                 // A conversation changed elsewhere (another member, another device): show what the server has now.

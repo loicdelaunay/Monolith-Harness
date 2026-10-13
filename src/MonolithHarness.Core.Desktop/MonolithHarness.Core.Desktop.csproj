@@ -3,6 +3,7 @@
   <PropertyGroup><AssemblyTitle>Monolith Harness Desktop Engine</AssemblyTitle><RootNamespace>MonolithHarness.Core</RootNamespace><Product>Monolith Harness</Product></PropertyGroup>
   <ItemGroup><ProjectReference Include="../MonolithHarness.Core/MonolithHarness.Core.csproj" /></ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
     <PackageReference Include="AngleSharp" Version="1.8.4" />
     <PackageReference Include="Cronos" Version="0.11.1" />
     <PackageReference Include="SkiaSharp" Version="3.119.2" />

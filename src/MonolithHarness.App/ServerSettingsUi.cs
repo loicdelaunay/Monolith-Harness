@@ -33,6 +33,14 @@ public sealed partial class MainWindow
         var passwordStatus = Label("", 13);
         var forget = new Button { Content = WorkflowText("Oublier ce serveur", "Forget this server"), HorizontalAlignment = HorizontalAlignment.Right };
 
+        // The server mode (one click, also available beside the connection chip) and the sharing of the speed / consumption dashboard.
+        var mode = new ToggleSwitch { IsOn = link.Enabled, OnContent = WorkflowText("Activé", "On"), OffContent = WorkflowText("Désactivé", "Off") };
+        var modeStatus = Label("", 13);
+        var shareUsage = new ToggleSwitch { IsOn = link.ShareUsage, OnContent = WorkflowText("Partagé", "Shared"), OffContent = WorkflowText("Non partagé", "Not shared") };
+        var usageStatus = Label("", 13);
+        var eraseUsage = new Button { Content = WorkflowText("Effacer mes statistiques du serveur", "Erase my statistics from the server"), HorizontalAlignment = HorizontalAlignment.Right };
+        var refreshing = false;
+
         // Synchronization: how often a complete resync runs (changes themselves arrive live), and a button to run one now.
         var intervals = ServerSyncService.IntervalChoices;
         var interval = new ComboBox { ItemsSource = intervals.Select(IntervalLabel).ToList(), SelectedIndex = Array.IndexOf(intervals, link.SyncMinutes) is var known and >= 0 ? known : Array.IndexOf(intervals, ServerSyncService.DefaultMinutes), MinWidth = 220 };
@@ -56,6 +64,20 @@ public sealed partial class MainWindow
         account.Children.Add(accountActions); account.Children.Add(accountStatus);
         panel.Children.Add(account);
         var signedInArea = new StackPanel { Spacing = 14 };
+        var modeArea = new StackPanel { Spacing = 8 };
+        modeArea.Children.Add(Label(WorkflowText("Mode serveur", "Server mode"), 16));
+        modeArea.Children.Add(FluentDesign.Setting(WorkflowText("Utiliser le serveur", "Use the server"),
+            WorkflowText("Désactivé, rien n'est échangé avec le serveur : ni synchronisation, ni providers partagés, ni projets cloud, ni partage de conversations. Le compte et les liens sont conservés ; le réactiver reprend tout en un clic (bouton d'alimentation à côté de l'état du serveur).",
+                "Off, nothing is exchanged with the server: no synchronization, no shared providers, no cloud projects, no conversation sharing. The account and links are kept; turning it back on resumes everything in one click (the power button beside the server state)."), mode));
+        modeArea.Children.Add(modeStatus);
+        signedInArea.Children.Add(modeArea);
+        var usageArea = new StackPanel { Spacing = 8 };
+        usageArea.Children.Add(Label(WorkflowText("Statistiques d'utilisation", "Usage statistics"), 16));
+        usageArea.Children.Add(FluentDesign.Setting(WorkflowText("Partager ma vitesse et ma consommation", "Share my speed and consumption"),
+            WorkflowText("Envoie au serveur, pour chaque appel de modèle : le provider, le modèle, les jetons, la durée et la vitesse. Jamais le contenu des messages ni les noms de projets ou de conversations. Les 30 derniers jours partent à l'activation ; l'administrateur les consulte dans l'interface web, en vue commune ou par utilisateur. Désactivé par défaut.",
+                "Sends the server, for each model call: the provider, the model, tokens, duration and speed. Never the content of messages or the names of projects or conversations. The last 30 days are sent when you turn it on; the administrator reads them in the web interface, as a common view or per user. Off by default."), shareUsage));
+        usageArea.Children.Add(usageStatus); usageArea.Children.Add(eraseUsage);
+        signedInArea.Children.Add(usageArea);
         var syncArea = new StackPanel { Spacing = 8 };
         syncArea.Children.Add(Label(WorkflowText("Synchronisation", "Synchronization"), 16));
         syncArea.Children.Add(syncInfo);
@@ -86,6 +108,13 @@ public sealed partial class MainWindow
             var snapshot = serverSync?.Snapshot;
             syncStatus.Text = snapshot == null ? "" : WorkflowText("Dernière synchronisation : ", "Last synchronization: ") + Ago(snapshot.LastSyncUtc)
                 + WorkflowText($" · {snapshot.Providers} provider(s) · {snapshot.Projects} projet(s) cloud", $" · {snapshot.Providers} provider(s) · {snapshot.Projects} cloud project(s)");
+            refreshing = true;
+            try { mode.IsOn = l.Enabled; shareUsage.IsOn = l.ShareUsage; }
+            finally { refreshing = false; }
+            syncNow.IsEnabled = interval.IsEnabled = l.Enabled;
+            usageStatus.Text = !l.ShareUsage ? WorkflowText("Rien n'est partagé.", "Nothing is shared.")
+                : WorkflowText($"Partage actif · {l.UsageSent} mesure(s) envoyée(s)", $"Sharing is on · {l.UsageSent} measurement(s) sent") + (l.UsageLastSentUtc is { } sent ? WorkflowText(" · dernier envoi ", " · last sent ") + Ago(sent) : "")
+                    + (l.Enabled ? "" : WorkflowText(" · en pause (mode serveur désactivé)", " · paused (server mode off)"));
         }
         async Task Guarded(Func<Task> action, TextBlock target)
         {
@@ -129,6 +158,33 @@ public sealed partial class MainWindow
             ServerLinkChanged();
             accountStatus.Text = WorkflowText("Déconnecté.", "Signed out.");
         }, accountStatus);
+        mode.Toggled += async (_, _) =>
+        {
+            if (refreshing || mode.IsOn == Server.Link.Enabled) return;
+            await Guarded(() => SetServerModeAsync(mode.IsOn), modeStatus);
+            modeStatus.Text = Server.Link.Enabled ? WorkflowText("Mode serveur activé.", "Server mode on.") : WorkflowText("Mode serveur désactivé.", "Server mode off.");
+        };
+        shareUsage.Toggled += async (_, _) =>
+        {
+            if (refreshing || shareUsage.IsOn == Server.Link.ShareUsage) return;
+            Sync.SetShareUsage(shareUsage.IsOn);
+            InvalidateServerLink();
+            Refresh();
+            if (shareUsage.IsOn) await Guarded(() => Sync.PushUsageAsync(), usageStatus);
+        };
+        eraseUsage.Click += async (_, _) => await Guarded(async () =>
+        {
+            var confirm = new ContentDialog
+            {
+                XamlRoot = (owner.Content as FrameworkElement)?.XamlRoot ?? root.XamlRoot, Title = WorkflowText("Effacer mes statistiques du serveur ?", "Erase my statistics from the server?"),
+                Content = Label(WorkflowText("Toutes les mesures que cet appareil et vos autres appareils ont partagées sont supprimées du serveur. Elles ne seront pas renvoyées ; le partage, s'il est activé, reprend avec les prochains appels.", "Every measurement shared by this device and your other devices is deleted from the server. They are not sent again; sharing, if it is on, resumes with the next calls."), 14),
+                PrimaryButtonText = WorkflowText("Effacer", "Erase"), CloseButtonText = T("Annuler"), DefaultButton = ContentDialogButton.Close
+            };
+            if (await ShowDialogAsync(confirm) != ContentDialogResult.Primary) return;
+            var deleted = await Sync.EraseSharedUsageAsync();
+            InvalidateServerLink();
+            usageStatus.Text = WorkflowText($"{deleted} mesure(s) effacée(s) du serveur.", $"{deleted} measurement(s) erased from the server.");
+        }, usageStatus);
         interval.SelectionChanged += (_, _) =>
         {
             if (interval.SelectedIndex < 0 || interval.SelectedIndex >= intervals.Length) return;

@@ -4,6 +4,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime Js
 @inject ApprovalService Approvals
+@inject UpdateService Updates
 
 <MudThemeProvider @ref="_provider" Theme="_theme" @bind-IsDarkMode="_dark" />
 <MudPopoverProvider />
@@ -30,6 +31,17 @@
         <NavMenu User="_user" PendingApprovals="_pending" />
     </MudDrawer>
     <MudMainContent>
+        <AnnouncementBanner />
+        @if (_newVersion != null)
+        {
+            <MudAlert Severity="Severity.Info" Square="true" Dense="true" Class="mb-0">
+                <div class="d-flex align-center flex-wrap gap-3">
+                    <span>Une nouvelle version du serveur est disponible : @_newVersion.</span>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Href="/admin/maintenance">Voir</MudButton>
+                </div>
+            </MudAlert>
+        }
         @if (_user?.PasswordChangePending() == true && !_dismissed && !Navigation.Uri.Contains("/account", StringComparison.Ordinal))
         {
             <MudAlert Severity="Severity.Warning" Square="true" Dense="true" Class="mb-0">
@@ -51,6 +63,7 @@
     MudThemeProvider? _provider;
     bool _dark = true, _drawer = true, _dismissed;
     string _email = "";
+    string? _newVersion;
     int _pending;
     ClaimsPrincipal? _user;
     IDisposable? _listener;
@@ -75,6 +88,7 @@
             _user = await Ui.UserAsync();
             _email = _user.Email();
             _pending = (await Approvals.ListAsync(_user.RequireUserId(), true)).Count;
+            _newVersion = Ui.Can(_user, Permissions.SettingsManage) ? Updates.Available?.Version : null;
             if (_listener == null)
                 _listener = Ui.Hub.Listen(RealtimeHub.UserTopic(_user.RequireUserId()), message =>
                 {

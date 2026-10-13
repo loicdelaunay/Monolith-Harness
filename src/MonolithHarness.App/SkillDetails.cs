@@ -82,6 +82,18 @@ public sealed partial class MainWindow
                 Section("Fonctionnement", "How it works", "Le modèle du chat appelle generate_image. Un fournisseur et un modèle dédiés, choisis dans Réglages → Skills, réalisent la génération. L’image est jointe au chat et conservée dans images/chat-…/.", "The chat model calls generate_image. A dedicated provider and model selected in Settings → Skills generate the image. It is attached to chat and saved in images/chat-…/.");
                 Section("Conception et limites", "Design and limits", "Une image par appel, autorisation du chat, délai maximum de 15 minutes et annulation. API distante images/generations ou moteur stable-diffusion.cpp local. Cette bêta charge des checkpoints complets SD/SDXL ; les composants séparés et la retouche ne sont pas pris en charge. Le skill ne s’active pas automatiquement.", "One image per call, chat permissions, cancellation and a 15-minute timeout. Remote images/generations API or local stable-diffusion.cpp engine. This beta loads full SD/SDXL checkpoints; separate components and image editing are not supported. The skill is not automatically enabled.");
             }
+            else if (skill.Id is "keyboard_control" or "mouse_control")
+            {
+                Section("Modes de contrôle", "Control modes",
+                    "Choisissez le mode dans Réglages → Skills → Contrôle du clavier ou de la souris. Automatique privilégie les actions UI Automation sur Windows. Le modèle peut choisir UI Automation ou Legacy pour chaque appel si vous l’autorisez. Un mode fixe reste imposé. Le repli automatique vers Legacy est désactivé par défaut et configurable séparément.",
+                    "Choose a mode in Settings → Skills → Keyboard or Mouse control. Automatic prefers UI Automation on Windows. The model may choose UI Automation or Legacy per call when allowed. Fixed modes remain enforced. Automatic Legacy fallback is separately configurable and disabled by default.");
+                Section("Actions et limites", "Actions and limits",
+                    "L’IA inspecte les contrôles, leurs identifiants et leurs actions disponibles. UI Automation peut renseigner une valeur, activer un bouton, sélectionner, basculer, défiler ou développer un contrôle sans déplacer le curseur. Certaines applications ouvrent des fenêtres ou changent le focus. Les outils DOM/API déjà exposés sont privilégiés pour le navigateur. Les raccourcis, clics droit/double et glisser-déposer nécessitent le legacy. Sur macOS, seul le legacy est disponible ; Linux ne dispose pas encore d’un moteur de contrôle du bureau.",
+                    "The AI inspects controls, their IDs and supported actions. UI Automation can set values, invoke, select, toggle, scroll or expand without moving the cursor. Some applications may open windows or change focus. Existing DOM/API tools are preferred for the browser. Shortcuts, right/double clicks and dragging require Legacy. macOS supports Legacy only; Linux has no desktop input backend yet.");
+                Section("Autorisations", "Permissions",
+                    "Chaque mode conserve les autorisations de la conversation. Le résultat indique le mode réellement utilisé et le motif de repli. Une erreur d’exécution ou un délai dépassé ne déclenche jamais une répétition automatique en legacy. Les appels Windows sont isolés du thread de l’interface.",
+                    "Every mode follows conversation permissions. Results report the actual mode and fallback reason. Execution errors or timeouts never trigger an automatic Legacy replay. Windows calls are isolated from the UI thread.");
+            }
             else if (skill.Id == "web")
             {
                 Section("Lecture ciblée", "Targeted reading",

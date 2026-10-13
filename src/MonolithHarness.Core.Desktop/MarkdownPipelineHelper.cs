@@ -14,12 +14,12 @@ public static class MarkdownPipelineHelper
         .Build();
 
     static readonly MarkdownPipeline plainMathPipeline = new MarkdownPipelineBuilder().UseAutoLinks().UsePipeTables().UseTaskLists().UseEmphasisExtras().Build();
-    public static MarkdownDocument Parse(string? markdown, bool renderMath = true)
+    public static MarkdownDocument Parse(string? markdown, bool renderMath = true, bool lookupExistingPaths = true)
     {
         if (string.IsNullOrEmpty(markdown))
             return new MarkdownDocument();
         var document = Markdown.Parse(markdown, renderMath ? Pipeline : plainMathPipeline);
-        LocalFileLinks.Decorate(document);
+        LocalFileLinks.Decorate(document, lookupExistingPaths);
         return document;
     }
 }

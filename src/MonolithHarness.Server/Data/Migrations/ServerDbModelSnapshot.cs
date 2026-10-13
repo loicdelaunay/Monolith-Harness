@@ -550,6 +550,74 @@ namespace MonolithHarness.Server.Data.Migrations
                     b.ToTable("Providers");
                 });
 
+            modelBuilder.Entity("MonolithHarness.Server.Data.UsageSample", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Activity")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CachedInputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CompletedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Estimated")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReceivedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SampleKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("Seconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("Speed")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ViaServer")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedUtc");
+
+                    b.HasIndex("UserId", "CompletedUtc");
+
+                    b.HasIndex("UserId", "SampleKey")
+                        .IsUnique();
+
+                    b.ToTable("UsageSamples");
+                });
+
             modelBuilder.Entity("MonolithHarness.Server.Data.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -779,6 +847,15 @@ namespace MonolithHarness.Server.Data.Migrations
                     b.HasOne("MonolithHarness.Server.Data.User", null)
                         .WithMany()
                         .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MonolithHarness.Server.Data.UsageSample", b =>
+                {
+                    b.HasOne("MonolithHarness.Server.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

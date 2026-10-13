@@ -34,6 +34,12 @@ await Area("relayqueue", RelayQueueChecks.Run);
 await Area("sharecodes", ShareCodeChecks.Run);
 await Area("sync", SyncChecks.Run);
 await Area("liveview", LiveViewChecks.Run);
+await Area("announcement", AnnouncementChecks.Run);
+await Area("positions", QueuePositionChecks.Run);
+await Area("usage", UsageChecks.Run);
+await Area("update", UpdateChecks.Run);
+await Area("service", ServiceChecks.Run);
+await Area("clientfeatures", ClientFeatureChecks.Run);
 
 Console.WriteLine();
 Console.WriteLine($"{passed} contrôles réussis, {failed} échec(s).");

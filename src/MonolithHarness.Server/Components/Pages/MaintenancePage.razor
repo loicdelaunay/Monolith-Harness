@@ -1,0 +1,273 @@
+@page "/admin/maintenance"
+@attribute [Authorize]
+@implements IDisposable
+@inject UiContext Ui
+@inject AnnouncementService Announcements
+@inject MaintenanceService Maintenance
+@inject AuditService Audit
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+
+<PageTitle>Maintenance · Monolith Harness Server</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Maintenance</MudText>
+
+@if (_denied)
+{
+    <MudAlert Severity="Severity.Error">Vous n’avez pas le droit de régler le serveur.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Message du moment</MudText>
+    <MudPaper Class="pa-4" Outlined="true">
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            Un message affiché tout de suite à tous les utilisateurs : bandeau en haut de cette interface et de l’application Desktop, en-tête du CLI. Utile pour annoncer une maintenance ou un incident.
+        </MudText>
+        @if (_current != null)
+        {
+            <div class="mh-banner mh-banner-@_current.Level mb-3" style="border-radius:4px">
+                <span><strong>Publié :</strong> @_current.Text</span>
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                Depuis @_current.UpdatedUtc.ToLocalTime().ToString("g")@(string.IsNullOrEmpty(_current.By) ? "" : $" par {_current.By}")@(_current.ExpiresUtc is { } end ? $" · retiré automatiquement à {end.ToLocalTime():g}" : " · jusqu’à ce que vous le retiriez").
+            </MudText>
+        }
+        <MudGrid>
+            <MudItem xs="12">
+                <MudTextField T="string" @bind-Value="_text" Label="Message" Lines="2" MaxLength="500" Counter="500" Variant="Variant.Outlined" Immediate="true" ShrinkLabel="true" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" @bind-Value="_level" Label="Niveau d’alerte" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@AnnouncementLevels.Info">Information (bleu)</MudSelectItem>
+                    <MudSelectItem Value="@AnnouncementLevels.Warning">Avertissement (orange)</MudSelectItem>
+                    <MudSelectItem Value="@AnnouncementLevels.Error">Incident (rouge)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="int" @bind-Value="_minutes" Label="Durée d’affichage" Variant="Variant.Outlined">
+                    <MudSelectItem Value="0">Jusqu’à ce que je le retire</MudSelectItem>
+                    <MudSelectItem Value="60">1 heure</MudSelectItem>
+                    <MudSelectItem Value="240">4 heures</MudSelectItem>
+                    <MudSelectItem Value="1440">24 heures</MudSelectItem>
+                    <MudSelectItem Value="10080">7 jours</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+        <div class="d-flex justify-end gap-3 mt-4">
+            <MudButton Variant="Variant.Text" Disabled="@(_current == null)" OnClick="ClearAnnouncement">Retirer le message</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@string.IsNullOrWhiteSpace(_text)" OnClick="PublishAnnouncement">Publier</MudButton>
+        </div>
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" Class="mt-6 mb-2">Mises à jour</MudText>
+    <MudPaper Class="pa-4" Outlined="true">
+        @if (_update != null)
+        {
+            <div class="d-flex flex-wrap align-center gap-3 mb-2">
+                <MudChip T="string" Size="Size.Small">Version @_update.Current</MudChip>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@ModeLabel(_update.Mode)</MudChip>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @(_update.CheckedUtc is { } at ? $"Dernière recherche : {at.ToLocalTime():g}." : "Aucune recherche faite depuis le démarrage.")
+                </MudText>
+            </div>
+            @if (_update.Error != null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_update.Error</MudAlert>
+            }
+            @if (_update.Available is { } release)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    La version <strong>@release.Version</strong> est disponible (@FormatSize(release.Size)).
+                    <MudLink Href="@release.Page" Target="_blank">Notes de version</MudLink>
+                </MudAlert>
+                @if (!_update.CanApply)
+                {
+                    <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-3">Cette instance ne vient pas d’un exécutable publié (lancement de développement) : elle ne peut pas se mettre à jour elle-même.</MudAlert>
+                }
+            }
+            else if (_update.CheckedUtc != null && _update.Error == null)
+            {
+                <MudText Typo="Typo.body2" Class="mb-3">Ce serveur est à jour.</MudText>
+            }
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                Au démarrage, le mode « @ModeLabel(_update.Mode) » s’applique (<span class="mh-mono">updateMode</span> dans server.json ou option <span class="mh-mono">--update</span>). L’installation vérifie la somme SHA-256 publiée,
+                contrôle que le nouvel exécutable démarre, conserve l’ancien (<span class="mh-mono">.previous</span>) et ne touche jamais à la base, à server.json ni à workspace/.
+            </MudText>
+        }
+        @if (_busy != null)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-3" />
+            <MudText Typo="Typo.caption" Class="d-block mt-1">@_busy</MudText>
+        }
+        <div class="d-flex justify-end gap-3 mt-4">
+            <MudButton Variant="Variant.Text" Disabled="@(_busy != null)" OnClick="CheckUpdate">Rechercher une mise à jour</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy != null || _update?.Available == null || _update.CanApply == false)" OnClick="ApplyUpdate">Installer et redémarrer</MudButton>
+        </div>
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" Class="mt-6 mb-2">Service</MudText>
+    <MudPaper Class="pa-4" Outlined="true">
+        @if (_service != null)
+        {
+            <div class="d-flex flex-wrap align-center gap-3 mb-2">
+                <MudChip T="string" Size="Size.Small" Color="@(_service.ThisProcess ? Color.Success : _service.Installed ? Color.Info : Color.Default)">
+                    @(_service.ThisProcess ? "Ce serveur tourne comme service" : _service.Installed ? (_service.Running ? "Service installé et en marche" : "Service installé (arrêté)") : "Non installé comme service")
+                </MudChip>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_service.Platform · @_service.Name</MudText>
+            </div>
+            <MudText Typo="Typo.body2" Class="mb-2">
+                Installé comme service, le serveur démarre avec la machine, sans session ouverte, et redémarre tout seul après une panne (au bout de 5 s, puis 15 s, puis 60 s).
+                L’installation demande les droits administrateur <strong>sur la machine du serveur</strong> (fenêtre UAC sous Windows), puis le serveur bascule sur le service : cette page se reconnecte d’elle-même.
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                Sous Windows le service s’exécute avec un compte virtuel dédié (<span class="mh-mono">NT SERVICE\@ServiceInstaller.WindowsName</span>) qui reçoit le droit d’écrire dans le dossier du serveur ;
+                les clés de chiffrement des providers sont protégées pour la machine (une copie de sécurité est faite). Le journal du service est dans <span class="mh-mono">workspace/logs/</span>.
+                L’isolation par conteneur (exécution cloud) exige un compte qui sait utiliser Docker ou Podman.
+            </MudText>
+            @if (!string.IsNullOrEmpty(_service.Detail))
+            {
+                <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-3">@_service.Detail</MudAlert>
+            }
+            @if (!_service.CanInstallHere && !_service.Installed)
+            {
+                <MudText Typo="Typo.body2" Class="mt-3 mb-1">À la place, depuis un terminal :</MudText>
+                @foreach (var step in _service.ManualSteps)
+                {
+                    <div class="mh-mono mb-1" style="user-select:all;word-break:break-all">@step</div>
+                }
+            }
+        }
+        @if (_serviceBusy != null)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-3" />
+            <MudText Typo="Typo.caption" Class="d-block mt-1">@_serviceBusy</MudText>
+        }
+        <div class="d-flex justify-end gap-3 mt-4">
+            <MudButton Variant="Variant.Text" Disabled="@(_serviceBusy != null || _service?.Installed != true)" OnClick="UninstallService">Désinstaller le service</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_serviceBusy != null || _service == null || !_service.CanInstallHere || _service.ThisProcess)" OnClick="InstallService">
+                @(_service?.Installed == true ? "Réinstaller le service" : "Installer comme service")
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    bool _denied;
+    Announcement? _current;
+    string _text = "";
+    string _level = AnnouncementLevels.Info;
+    int _minutes;
+    UpdateInfo? _update;
+    ServiceState? _service;
+    string? _busy, _serviceBusy;
+    IDisposable? _listener;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _denied = !await Ui.TryAsync(user => Ui.Can(user, Permissions.SettingsManage) ? Task.CompletedTask : throw ApiException.Forbidden("missing_permission"));
+        if (_denied) return;
+        _current = Announcements.Current();
+        if (_current != null) { _text = _current.Text; _level = _current.Level; }
+        await Reload();
+        _listener = Ui.Hub.Listen(RealtimeHub.ServerTopic, message =>
+        {
+            if (message.Name == AnnouncementService.Event) _ = InvokeAsync(() => { _current = Announcements.Current(); StateHasChanged(); });
+        });
+    }
+
+    async Task Reload()
+    {
+        _update = await Ui.Try(user => Maintenance.UpdateInfoAsync(user));
+        _service = await Ui.Try(user => Maintenance.ServiceStateAsync(user));
+    }
+
+    async Task PublishAnnouncement()
+    {
+        await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.SettingsManage)) throw ApiException.Forbidden("missing_permission");
+            _current = await Announcements.SetAsync(_text, _level, _minutes == 0 ? null : _minutes, user.Email());
+            await Audit.WriteAsync("announcement.set", _current.Level, _current.Text.Length > 200 ? _current.Text[..200] : _current.Text, actor: user);
+        }, "Message publié : les clients l’affichent immédiatement.");
+    }
+
+    async Task ClearAnnouncement()
+    {
+        await Ui.TryAsync(async user =>
+        {
+            if (!Ui.Can(user, Permissions.SettingsManage)) throw ApiException.Forbidden("missing_permission");
+            await Announcements.ClearAsync();
+            await Audit.WriteAsync("announcement.cleared", actor: user);
+            _current = null;
+            _text = "";
+        }, "Message retiré.");
+    }
+
+    async Task CheckUpdate()
+    {
+        _busy = "Recherche d’une mise à jour…";
+        StateHasChanged();
+        try { _update = await Ui.Try(user => Maintenance.CheckAsync(user)) ?? _update; }
+        finally { _busy = null; }
+    }
+
+    async Task ApplyUpdate()
+    {
+        if (_update?.Available is not { } release) return;
+        var warning = _update.ActiveRuns > 0
+            ? $"{_update.ActiveRuns} requête(s) en cours seront interrompues. "
+            : "";
+        if (await Dialogs.ShowMessageBoxAsync($"Installer la version {release.Version}", $"{warning}Le serveur télécharge la mise à jour, la vérifie, puis redémarre : cette page se reconnectera d’elle-même.",
+                yesText: "Installer et redémarrer", cancelText: "Annuler") != true) return;
+        _busy = $"Téléchargement et vérification de la version {release.Version}…";
+        StateHasChanged();
+        try
+        {
+            if (await Ui.Try(user => Maintenance.ApplyUpdateAsync(user)) != null) _busy = "Mise à jour installée : le serveur redémarre, cette page va se reconnecter…";
+            else _busy = null;
+        }
+        catch { _busy = null; throw; }
+    }
+
+    async Task InstallService()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Installer le service", "Une fenêtre de contrôle de compte (UAC) va s’ouvrir sur la machine du serveur : acceptez-la pour continuer. Le serveur s’arrêtera ensuite et redémarrera en tant que service ; les requêtes en cours seront interrompues.",
+                yesText: "Installer le service", cancelText: "Annuler") != true) return;
+        _serviceBusy = "En attente de l’élévation (UAC) sur la machine du serveur, puis installation…";
+        StateHasChanged();
+        try
+        {
+            if (await Ui.Try(user => Maintenance.InstallServiceAsync(user)) != null) _serviceBusy = "Service installé : le serveur bascule sur le service, cette page va se reconnecter…";
+            else _serviceBusy = null;
+        }
+        catch { _serviceBusy = null; throw; }
+    }
+
+    async Task UninstallService()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Désinstaller le service", _service?.ThisProcess == true
+                ? "Ce serveur tourne comme ce service : il s’arrêtera. Relancez-le ensuite à la main (MonolithHarness.exe). Les données ne sont pas touchées."
+                : "Le service sera arrêté puis supprimé. Les données du serveur ne sont pas touchées.", yesText: "Désinstaller", cancelText: "Annuler") != true) return;
+        _serviceBusy = "Suppression du service (élévation UAC sous Windows)…";
+        StateHasChanged();
+        try
+        {
+            var result = await Ui.Try(user => Maintenance.UninstallServiceAsync(user));
+            _serviceBusy = null;
+            if (result != null) await Reload();
+        }
+        catch { _serviceBusy = null; throw; }
+    }
+
+    static string ModeLabel(string mode) => mode switch
+    {
+        "auto" => "installation automatique",
+        "notify" => "notification seulement",
+        "off" => "recherche désactivée",
+        _ => "demande Y/N"
+    };
+
+    static string FormatSize(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.#} Mo" : $"{bytes / 1024d:0.#} Ko";
+
+    public void Dispose() => _listener?.Dispose();
+}

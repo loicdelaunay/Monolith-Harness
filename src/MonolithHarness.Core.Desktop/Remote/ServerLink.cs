@@ -48,9 +48,28 @@ public sealed class ServerLinkData
     public int SyncMinutes { get; set; } = 5;
     /// <summary>The sidebar shows the server's projects and shared conversations instead of the local ones.</summary>
     public bool CloudView { get; set; }
+    /// <summary>
+    /// The server mode is on. Off, nothing is sent to or received from the server (no synchronization, no live channel, no cloud view, no shared provider,
+    /// no cloud request) but the address, the account and the links are kept, so that turning it back on is one click.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>The user shares the speed and consumption of their model calls with the server (off by default).</summary>
+    public bool ShareUsage { get; set; }
+    /// <summary>Identifies this installation among the user's devices, so that the same call is never counted twice.</summary>
+    public string DeviceId { get; set; } = "";
+    /// <summary>Id of the last consumption record already sent; sending resumes after it.</summary>
+    public long UsageCursor { get; set; }
+    /// <summary>Records completed before this moment are not sent (the first sending covers the last 30 days).</summary>
+    public DateTime? UsageSinceUtc { get; set; }
+    public long UsageSent { get; set; }
+    public DateTime? UsageLastSentUtc { get; set; }
+    /// <summary>The message of the moment the user closed (its stamp): it does not come back until the administrator changes it.</summary>
+    public string DismissedAnnouncement { get; set; } = "";
 
     public bool Configured => Url.Length > 0;
     public bool SignedIn => ProtectedToken.Length > 0;
+    /// <summary>Something is exchanged with the server: configured, signed in and switched on.</summary>
+    public bool Active => Configured && SignedIn && Enabled;
 }
 
 /// <summary>Atomic, thread-safe persistence of <see cref="ServerLinkData"/>.</summary>

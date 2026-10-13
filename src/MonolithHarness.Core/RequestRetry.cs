@@ -12,11 +12,24 @@ public static class RequestRetry
 {
     public static bool IsTransient(Exception error) => error switch
     {
-        HttpRequestException request => request.StatusCode == null || request.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)request.StatusCode >= 500,
+        HttpRequestException request => request.StatusCode == null || request.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)request.StatusCode >= 500 || IsIncompleteJsonBadRequest(request.StatusCode, request.Message),
         IOException => true,
         OperationCanceledException => true, // The caller's token is checked separately.
         _ => false
     };
+
+    // A gateway can reject a truncated downstream JSON body as HTTP 400 even though
+    // our outgoing request is serialized correctly. Retry only this known parse failure;
+    // authentication, context limits, model parameters and other 400s remain permanent.
+    public static bool IsIncompleteJsonBadRequest(HttpStatusCode? status, string? detail)
+    {
+        if (status != HttpStatusCode.BadRequest || string.IsNullOrWhiteSpace(detail)) return false;
+        bool Has(string text) => detail.Contains(text, StringComparison.OrdinalIgnoreCase);
+        var decoding = Has("json_invalid") || Has("JSON decode error") || Has("JSONDecodeError") || Has("JSON parse error");
+        var incomplete = Has("Unterminated string") || Has("unexpected end of JSON") || Has("unexpected EOF")
+            || Has("EOF while parsing") || Has("end of file while parsing") || Has("unexpected end of data");
+        return decoding && incomplete;
+    }
 
     // Retry one model request, never the surrounding agent turn or its tool effects.
     public static async Task<T> RunAsync<T>(Func<Task<T>> request, IRetrySettings? settings, CancellationToken ct,

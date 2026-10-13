@@ -22,7 +22,7 @@ public static class MarkdownDisplay
         if (mathematics != null) builder.Extensions.Remove(mathematics);
         return builder.Build();
     }
-    public static string Html(string markdown, bool renderMath = true, bool fileBadges = false)
+    public static string Html(string markdown, bool renderMath = true, bool fileBadges = false, IReadOnlyDictionary<string, string>? verifiedPaths = null)
     {
         var selected = renderMath ? pipeline : plainMathPipeline;
         var doc = Markdown.Parse(markdown, selected); LocalFileLinks.Decorate(doc);
@@ -30,15 +30,29 @@ public static class MarkdownDisplay
         using var writer = new StringWriter();
         var renderer = new Markdig.Renderers.HtmlRenderer(writer);
         selected.Setup(renderer);
-        renderer.ObjectRenderers.Insert(0, new FileCitationLinkRenderer());
+        renderer.ObjectRenderers.Insert(0, new FileCitationLinkRenderer(verifiedPaths));
         renderer.Render(doc);
         return writer.ToString();
     }
-    sealed class FileCitationLinkRenderer : Markdig.Renderers.Html.Inlines.LinkInlineRenderer
+    public static async Task<string> VerifiedHtmlAsync(string markdown, bool renderMath, Func<string, Task<string?>>? resolve)
+    {
+        return await Task.Run(async () =>
+        {
+            var doc = MarkdownPipelineHelper.Parse(markdown, renderMath);
+            var references = Nodes(doc).OfType<LinkInline>().Where(link => !link.IsImage)
+                .Select(link => FileCitation.FromUrl(link.Url)).OfType<FileCitation>().DistinctBy(item => item.Target).ToArray();
+            var checks = await Task.WhenAll(references.Select(async item => (item.Target, Path: await FileCitationVerification.ResolveAsync(item, resolve))));
+            var verified = checks.Where(item => item.Path != null).ToDictionary(item => item.Target, item => item.Path!);
+            return Html(markdown, renderMath, fileBadges: true, verifiedPaths: verified);
+        }).ConfigureAwait(false);
+    }
+    sealed class FileCitationLinkRenderer(IReadOnlyDictionary<string, string>? verified) : Markdig.Renderers.Html.Inlines.LinkInlineRenderer
     {
         protected override void Write(Markdig.Renderers.HtmlRenderer renderer, LinkInline link)
         {
             if (link.IsImage || FileCitation.FromUrl(link.Url) is not { } citation) { base.Write(renderer, link); return; }
+            if (verified == null || !verified.TryGetValue(citation.Target, out var path)) { renderer.WriteChildren(link); return; }
+            citation = citation with { Path = path };
             static string Encode(string text) => System.Net.WebUtility.HtmlEncode(text);
             // Only emit fixed markup and encoded data; file contents are never loaded here.
             renderer.Write("<a class=\"file-citation\" href=\"" + Encode(LocalFileLinks.Prefix + Uri.EscapeDataString(citation.Target)) +

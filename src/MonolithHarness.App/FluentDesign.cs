@@ -10,6 +10,8 @@ namespace MonolithHarness.App;
 internal static partial class FluentDesign
 {
     static AppearanceTheme theme = AppearanceThemes.All[0];
+    static string? themeSignature;
+    internal static int ThemeRevision { get; private set; }
     internal static AppearanceTheme CurrentTheme => theme;
     static readonly Dictionary<string, SolidColorBrush> resources = [];
     static readonly Dictionary<(byte R, byte G, byte B), SolidColorBrush> adapted = [];
@@ -82,6 +84,9 @@ internal static partial class FluentDesign
     public static void SetTheme(string id) => SetTheme(AppearanceThemes.Get(id));
     public static void SetTheme(AppearanceTheme selected)
     {
+        var signature = System.Text.Json.JsonSerializer.Serialize(selected);
+        if (themeSignature == signature) return;
+        themeSignature = signature; ThemeRevision++;
         theme = selected;
         foreach (var (key,brush) in resources) brush.Color = ResourceColor(key);
         foreach (var (key,brush) in adapted) brush.Color = AdaptColor(key.R,key.G,key.B);

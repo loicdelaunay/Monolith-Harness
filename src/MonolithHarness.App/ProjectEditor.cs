@@ -14,7 +14,7 @@ public sealed partial class MainWindow
         var name = new TextBox { Text = owner.Name, Header = T("Nom du projet"), MaxLength = 120 };
         var appearance = BuildProjectAppearance(owner);
         var folders = new TextBox { Header = WorkflowText("Dossiers par défaut · un par ligne", "Default folders · one per line"),
-            Text = string.Join('\n', owner.GetSourceFolders()), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90, MaxHeight = 180 };
+            AcceptsReturn = true, Text = string.Join(Environment.NewLine, owner.GetSourceFolders()), TextWrapping = TextWrapping.Wrap, MinHeight = 90, MaxHeight = 180 };
         ScrollViewer.SetVerticalScrollBarVisibility(folders, ScrollBarVisibility.Auto);
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Resource("ToolMessageErrorStrokeBrush"),
             IsTextSelectionEnabled = true, Visibility = Visibility.Collapsed };

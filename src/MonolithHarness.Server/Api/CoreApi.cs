@@ -16,6 +16,7 @@ public sealed record PasswordRequest(string? Password);
 public sealed record RoleRequest(string? Name, string? Description, List<string>? Permissions);
 public sealed record FeatureRequest(bool Enabled);
 public sealed record SettingRequest(string? Value);
+public sealed record AnnouncementRequest(string? Text, string? Level, int? ExpiresMinutes);
 
 public static class CoreApi
 {
@@ -28,15 +29,16 @@ public static class CoreApi
 
     static void MapServer(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/server", (SettingsService settings) => new
+        app.MapGet("/api/server", (SettingsService settings, AnnouncementService announcements) => new
         {
             name = ApiSupport.Name,
             version = ApiSupport.Version,
             apiVersion = ApiSupport.ApiVersion,
             features = settings.FeatureStates(),
             webSocket = "/ws",
-            openApi = "/openapi/v1.json"
-        }).WithTags("Server").WithSummary("Server identity and enabled features (anonymous: used by clients to test a connection).");
+            openApi = "/openapi/v1.json",
+            announcement = announcements.Current()
+        }).WithTags("Server").WithSummary("Server identity, enabled features and the message of the moment, if any (anonymous: used by clients to test a connection).");
     }
 
     static void MapAuth(RouteGroupBuilder auth)
@@ -194,6 +196,27 @@ public static class CoreApi
             await audit.WriteAsync("setting.changed", key, request.Value ?? "");
             return Results.NoContent();
         });
+
+        // Message of the moment
+        admin.MapGet("/announcement", (ClaimsPrincipal user, AccessService access, AnnouncementService announcements) =>
+        {
+            access.Require(user, Permissions.SettingsManage);
+            return announcements.Current();
+        }).WithSummary("The message of the moment, or null.");
+        admin.MapPut("/announcement", async (AnnouncementRequest request, ClaimsPrincipal user, AccessService access, AnnouncementService announcements, AuditService audit) =>
+        {
+            access.Require(user, Permissions.SettingsManage);
+            var current = await announcements.SetAsync(request.Text, request.Level, request.ExpiresMinutes, user.Email());
+            await audit.WriteAsync("announcement.set", current.Level, current.Text.Length > 200 ? current.Text[..200] : current.Text);
+            return current;
+        }).WithSummary("Publishes a message (level info, warning or error; optional duration in minutes) that every client shows immediately.");
+        admin.MapDelete("/announcement", async (ClaimsPrincipal user, AccessService access, AnnouncementService announcements, AuditService audit) =>
+        {
+            access.Require(user, Permissions.SettingsManage);
+            await announcements.ClearAsync();
+            await audit.WriteAsync("announcement.cleared");
+            return Results.NoContent();
+        }).WithSummary("Withdraws the message of the moment.");
 
         // Audit
         admin.MapGet("/audit", async (ClaimsPrincipal user, AccessService access, IDbContextFactory<ServerDb> factory,

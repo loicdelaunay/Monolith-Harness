@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.97.1 — 2026-10-13
+
+- Relances automatiques : les erreurs HTTP 400 signalant un JSON reçu incomplet (`json_invalid` / JSON decode error avec une chaîne non terminée ou une fin de données inattendue) rejoignent la boucle de retry existante. Le nombre de tentatives, le délai et le toggle Réessayer automatiquement restent appliqués ; les autres erreurs 400 et les erreurs d’authentification ne sont pas relancées.
+- La relance conserve le contexte et ne rejoue pas les outils déjà exécutés. Une erreur de JSON incomplet ne désactive pas les outils ou le raisonnement via le mode de compatibilité. Le texte du réglage précise ce comportement.
+- Publications GUI, CLI, Server et Flutter Android alignées ; cette release inclut aussi les évolutions locales 1.95.0, 1.96.0 et 1.97.0.
+
+## 1.97.0 — 2026-10-13
+
+- Serveur : message du moment avec niveau d’alerte (information, avertissement, incident) et durée facultative, publié depuis Administration › Maintenance. Les clients l’affichent aussitôt, sans rien faire : bande colorée en haut de la fenêtre du Desktop (fermable jusqu’au message suivant), première ligne colorée du CLI et bandeau de l’interface web, page de connexion comprise.
+- File d’attente : une requête cloud, ou un appel d’une conversation locale qui utilise un provider du serveur, affiche sa position (« En attente sur le serveur (position N) ») dans le Desktop et le CLI ; la position est mise à jour en direct à chaque avancée de la file et revient à la normale quand l’appel démarre.
+- Mode serveur en un clic : bouton d’alimentation à côté de l’état du serveur (Desktop), interrupteur dans Réglages › Serveur, `/server` et `server on|off` (CLI). Désactivé, plus rien n’est échangé avec le serveur (synchronisation, canal temps réel, vue Cloud, providers partagés, requêtes cloud, conversations partagées) ; le compte et les liens sont conservés et la réactivation reprend tout.
+- Statistiques partagées : option Réglages › Serveur › « Partager ma vitesse et ma consommation » (désactivée par défaut, `server share-usage on|off` en CLI). Elle envoie au serveur le provider, le modèle, les jetons, la durée et la vitesse de chaque appel, jamais de contenu ni de noms de projets ou de conversations ; les 30 derniers jours partent à l’activation et l’effacement côté serveur est possible. Le serveur les affiche dans « Statistiques » (courbes, détail par modèle), en vue commune ou par utilisateur avec le droit usage.viewAll ; chacun voit les siennes.
+- Serveur : mise à jour automatique au démarrage. Recherche limitée dans le temps des versions publiées, question Y/N sur la console (sans réponse : non, le serveur démarre), vérification SHA-256, contrôle que le nouvel exécutable démarre, conservation de l’ancien (.previous) puis redémarrage ; données intactes. Modes ask, auto, notify et off (`updateMode` dans server.json ou `--update`), installation aussi possible depuis Administration › Maintenance.
+- Serveur : installation comme service, bouton « Installer comme service » de la page Maintenance ou `service install` : démarrage avec la machine, redémarrage après une panne (5 s, 15 s puis 60 s) ; service Windows sous compte virtuel dédié (élévation UAC sur la machine du serveur), unité systemd, daemon launchd. Les clés de chiffrement des providers sont protégées pour la machine (copie de sécurité faite) et le journal du service est dans workspace/logs.
+
+## 1.96.0 — 2026-10-13
+
+- Skills clavier et souris : modes Automatique, UI Automation / API et Legacy, configurables séparément dans Réglages › Skills. Choix de mode par l’IA et repli automatique vers Legacy réglables ; les modes fixes restent imposés.
+- Windows : inspection des fenêtres et contrôles accessibles, identifiants ciblés et actions natives (valeur, clic, sélection, bascule, défilement, expansion) sans déplacement du curseur. Les outils DOM/API existants restent privilégiés pour le navigateur ; les raccourcis, clics droit/double et glisser-déposer utilisent le legacy si autorisé.
+- Moteur desktop : contrôle commun, autorisations conservées, mode réel et motif de repli dans les résultats. Appels UI Automation isolés sur un thread MTA avec délais limites ; aucune répétition legacy après une erreur ou un délai dépassé. macOS utilise le legacy ; Linux signale le contrôle du bureau indisponible.
+
+## 1.95.0 — 2026-10-13
+
+- Desktop : les citations de fichiers sont affichées en texte classique tant que le fichier n’a pas été vérifié ; seules les références existantes deviennent des chips, avec leur chemin résolu et leurs lignes. Les vérifications sont limitées et effectuées en arrière-plan.
+- Icônes de fichiers : les formes transparentes des SVG restent transparentes dans la police native, notamment pour les exécutables ; taille et police du texte des chips harmonisées.
+- Raisonnement et terminal : défilement automatique en bas, position conservée quand l’utilisateur remonte, et reprise en revenant en bas ; le groupe de réflexion utilise un seul défilement interne.
+- Saisie : bouton d’agrandissement pour les longs brouillons (plus de dix lignes), éditeur occupant la fenêtre et retour au chat avec texte et sélection conservés.
+- Projets : le champ des sources est configuré pour plusieurs lignes avant de recevoir les dossiers enregistrés, afin de tous les afficher à la réouverture.
+- Réglages › Chat : niveaux de raisonnement Aucun / Réduit / Détaillé ; les préférences précédentes sont conservées et l’export indique le niveau choisi.
+- Mermaid : rendu natif simplifié des organigrammes et séquences quand la WebView est désactivée ; source conservée pour les formats non pris en charge. Le rendu web respecte le réglage du chat, reconnaît les blocs Mermaid indépendamment de la casse et revient au rendu natif si l’initialisation échoue.
+- Réglages : la fenêtre reste ouverte pendant l’enregistrement ; suppression des rafraîchissements de thème inchangé, mise à jour progressive des cartes visibles et traces des étapes de sauvegarde sans prompts ni clés.
+
 ## 1.94.0 — 2026-10-12
 
 - Conversations cloud : chaque bulle utilisateur affiche l'avatar et le nom de qui l'a envoyée (initiales sur une couleur propre au compte), sur le Desktop et sur les pages du serveur.

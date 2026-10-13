@@ -24,6 +24,7 @@ public sealed class ServerDb(DbContextOptions<ServerDb> options) : DbContext(opt
     public DbSet<SharedConversation> Shares => Set<SharedConversation>();
     public DbSet<ShareParticipant> ShareParticipants => Set<ShareParticipant>();
     public DbSet<MessageAuthor> MessageAuthors => Set<MessageAuthor>();
+    public DbSet<UsageSample> UsageSamples => Set<UsageSample>();
 
     public static DbContextOptions<ServerDb> Options(string database) => new DbContextOptionsBuilder<ServerDb>()
         .UseSqlite(new SqliteConnectionStringBuilder { DataSource = database, Pooling = true }.ToString())
@@ -112,6 +113,13 @@ public sealed class ServerDb(DbContextOptions<ServerDb> options) : DbContext(opt
             e.HasKey(x => new { x.ProjectId, x.MessageId });
             e.HasIndex(x => new { x.ProjectId, x.ChatId });
             e.HasOne<CloudProject>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        model.Entity<UsageSample>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.SampleKey }).IsUnique();
+            e.HasIndex(x => x.CompletedUtc);
+            e.HasIndex(x => new { x.UserId, x.CompletedUtc });
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         model.Entity<ShareParticipant>(e =>

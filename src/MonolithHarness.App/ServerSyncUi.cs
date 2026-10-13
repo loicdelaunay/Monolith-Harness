@@ -35,9 +35,10 @@ public sealed partial class MainWindow
     ServerSyncService CreateServerSync()
     {
         var service = new ServerSyncService(Server, () => new HarnessDb(HarnessDb.DatabasePath)) { IsChatBusy = IsChatBusyFromAnyThread };
-        service.StateChanged += _ => DispatcherQueue.TryEnqueue(RefreshServerChip);
+        service.StateChanged += _ => DispatcherQueue.TryEnqueue(() => { RefreshServerChip(); RefreshAnnouncement(); });
         service.Changed += changes => RunOnUiAsync(() => ApplyServerChangesAsync(changes));
         service.RemoteRunProgress += OnRemoteProgressAsync;
+        service.RelayQueueChanged += waits => DispatcherQueue.TryEnqueue(() => ShowRelayQueue(waits));
         return service;
     }
 
@@ -56,6 +57,7 @@ public sealed partial class MainWindow
     {
         if (Server.Link.Configured) Sync.Start();
         RefreshServerChip();
+        RefreshAnnouncement();
     }
 
     /// <summary>Starts over after the address or the account changed (sign-in, sign-out, forget).</summary>
@@ -65,6 +67,7 @@ public sealed partial class MainWindow
         if (Server.Link.Configured) { Sync.LinkChanged(); Sync.Start(); }
         else serverSync?.LinkChanged();
         RefreshServerChip();
+        RefreshAnnouncement();
         RebuildProjectNavigation();
     }
 
@@ -167,6 +170,7 @@ public sealed partial class MainWindow
             LinkState.Connecting => (WorkflowText("Connexion au serveur…", "Connecting…"), StatusAmber),
             LinkState.Offline => (WorkflowText("Serveur · hors ligne", "Server · offline"), StatusAmber),
             LinkState.SessionLost => (WorkflowText("Serveur · session expirée", "Server · session expired"), StatusRed),
+            LinkState.Paused => (WorkflowText("Serveur · désactivé", "Server · off"), StatusGrey),
             _ => (WorkflowText("Serveur · connecté", "Server · connected") + (snapshot?.Realtime == false ? "" : ""), StatusGreen)
         };
     }
@@ -191,6 +195,7 @@ public sealed partial class MainWindow
         var detail = snapshot == null ? text : $"{text} · {snapshot.Issues.Count} {WorkflowText("point(s) à voir", "item(s) to review")}";
         ToolTipService.SetToolTip(serverChip, detail);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(serverChip, detail);
+        RefreshServerModeToggle();
     }
 
     // ---- The dialog behind the chip ----
@@ -237,6 +242,18 @@ public sealed partial class MainWindow
             heading.Children.Add(new Border { Width = 10, Height = 10, CornerRadius = new(5), Background = color, VerticalAlignment = VerticalAlignment.Center });
             heading.Children.Add(Label(state, 16));
             body.Children.Add(heading);
+            if (Server.Link.SignedIn)
+            {
+                var mode = new ToggleSwitch { IsOn = Server.Link.Enabled, OnContent = WorkflowText("Mode serveur activé", "Server mode on"), OffContent = WorkflowText("Mode serveur désactivé", "Server mode off") };
+                mode.Toggled += async (_, _) => { if (mode.IsOn != Server.Link.Enabled) await Guard(() => SetServerModeAsync(mode.IsOn)); Fill(); };
+                body.Children.Add(mode);
+            }
+            if (snapshot?.Announcement is { } note)
+            {
+                var message = new Border { Background = note.Level switch { "error" => AnnouncementError, "warning" => AnnouncementWarning, _ => AnnouncementInfo }, CornerRadius = new(6), Padding = new(12, 8, 12, 8) };
+                message.Child = new TextBlock { Text = note.Text, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Colors.White), FontSize = 13, IsTextSelectionEnabled = true };
+                body.Children.Add(message);
+            }
             var info = new StackPanel { Spacing = 2 };
             var current = Server.Link;
             info.Children.Add(Label($"{(snapshot?.ServerName is { Length: > 0 } name ? name : current.ServerName)} {(snapshot?.ServerVersion is { Length: > 0 } version ? version : current.ServerVersion)}".Trim(), 13));

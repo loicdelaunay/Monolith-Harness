@@ -69,6 +69,10 @@ public static class ProjectResources
         if (string.IsNullOrWhiteSpace(snapshot)) return null;
         var rules = JsonNode.Parse(snapshot)!.AsObject();
         var type = scope.Split('|')[0];
-        return (rules[scope] ?? rules[type] ?? rules["*"])?.GetValue<string>();
+        // Retain existing desktop|mouse / desktop|keyboard project rules when adding a mode suffix.
+        // Saved grants still distinguish UIA and Legacy, so a UIA grant does not approve physical input.
+        var inputScope = scope is "desktop|mouse|uia" or "desktop|mouse|legacy" ? "desktop|mouse"
+            : scope is "desktop|keyboard|uia" or "desktop|keyboard|legacy" ? "desktop|keyboard" : null;
+        return (rules[scope] ?? (inputScope == null ? null : rules[inputScope]) ?? rules[type] ?? rules["*"])?.GetValue<string>();
     }
 }

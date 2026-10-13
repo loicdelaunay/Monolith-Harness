@@ -8,6 +8,12 @@ namespace MonolithHarness.Core.Hosting;
 // Native calls are isolated here: no Windows DLL is loaded on macOS, or vice versa.
 public static class DesktopInput
 {
+    public static void DemandPoint(double x, double y)
+    {
+        if (OperatingSystem.IsWindows()) Win.DemandPoint(x, y);
+        else if (OperatingSystem.IsMacOS() && !MacDesktop.Screens().Any(s => x >= s.X && y >= s.Y && x < s.X+s.Width && y < s.Y+s.Height))
+            throw new ArgumentException("Coordinates outside displays.");
+    }
     public static long Foreground() => OperatingSystem.IsMacOS() ? Mac.Foreground() : OperatingSystem.IsWindows() ? Win.GetForegroundWindow().ToInt64() : 0;
     public static void Restore(long target)
     {
@@ -234,6 +240,14 @@ public static class DesktopInput
     }
     static class Win
     {
+        [DllImport("user32.dll")] static extern int GetSystemMetrics(int metric);
+        public static void DemandPoint(double x, double y)
+        {
+            using var dpi = DesktopApplications.PhysicalCoordinates();
+            var left = GetSystemMetrics(76); var top = GetSystemMetrics(77);
+            if (x < left || y < top || x >= left + GetSystemMetrics(78) || y >= top + GetSystemMetrics(79))
+                throw new ArgumentException("Coordinates outside the Windows virtual desktop.");
+        }
         [StructLayout(LayoutKind.Sequential)] struct Input { public uint Type; public Union Data; }
         [StructLayout(LayoutKind.Explicit)] struct Union { [FieldOffset(0)] public MouseData Mouse; [FieldOffset(0)] public KeyData Key; }
         [StructLayout(LayoutKind.Sequential)] struct MouseData { public int X, Y; public uint Data, Flags, Time; public nuint Extra; }
@@ -266,6 +280,7 @@ public static class DesktopInput
         }
         public static void Mouse(string action, int x, int y, bool right, int clicks, int delta)
         {
+            using var dpi = DesktopApplications.PhysicalCoordinates();
             if (!SetCursorPos(x, y)) throw new Win32Exception();
             if (action == "scroll") Send(new Input { Data = new Union { Mouse = new MouseData { Flags = 0x0800, Data = unchecked((uint)-delta) } } });
             if (action == "click") for (int i = 0; i < clicks; i++) Send(
@@ -274,11 +289,13 @@ public static class DesktopInput
         }
         public static void MouseDown(int x, int y, bool right)
         {
+            using var dpi = DesktopApplications.PhysicalCoordinates();
             if (!SetCursorPos(x, y)) throw new Win32Exception();
             Send(new Input { Data = new Union { Mouse = new MouseData { Flags = right ? 8u : 2u } } });
         }
         public static void MouseDragged(int x, int y)
         {
+            using var dpi = DesktopApplications.PhysicalCoordinates();
             if (!SetCursorPos(x, y)) throw new Win32Exception();
         }
         public static void MouseUp(bool right) =>

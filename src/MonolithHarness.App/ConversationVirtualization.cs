@@ -194,7 +194,8 @@ public sealed partial class MainWindow
             Task? loading;
             CancellationTokenSource? cancellation;
             double height;
-            bool? activityExpanded, reasoningPreference;
+            bool? activityExpanded;
+            ReasoningDetailLevel? reasoningPreference;
             bool[] expanderState = [];
             public VirtualTurn(VirtualConversation view, List<Message> records, Project? project, bool live)
             {
@@ -232,7 +233,7 @@ public sealed partial class MainWindow
                     source.Token.ThrowIfCancellationRequested();
                     if (!Wanted || !ReferenceEquals(view.owner.scroll.Content, view.host)) return;
                     var body = NewContent(); view.owner.RenderHistory(Records, body, Project);
-                    if (activityExpanded.HasValue && reasoningPreference == view.owner.state.ShowReasoningDetails && view.owner.activityGroups.TryGetValue(body, out var activity))
+                    if (activityExpanded.HasValue && reasoningPreference == view.owner.CurrentReasoningDisplay && view.owner.activityGroups.TryGetValue(body, out var activity))
                         activity.SetExpanded(activityExpanded.Value);
                     var i = 0; foreach (var expander in Expanders(body)) { if (i < expanderState.Length) expander.IsExpanded = expanderState[i]; i++; }
                     Frame.Child = body; Frame.Height = double.NaN;
@@ -272,7 +273,7 @@ public sealed partial class MainWindow
                     var focus = view.owner.root.XamlRoot == null ? null : FocusManager.GetFocusedElement(view.owner.root.XamlRoot) as DependencyObject;
                     if (ContainsVisual(body, focus)) return;
                 }
-                if (view.owner.activityGroups.TryGetValue(body, out var activity)) { activityExpanded = activity.Expanded; reasoningPreference = view.owner.state.ShowReasoningDetails; }
+                if (view.owner.activityGroups.TryGetValue(body, out var activity)) { activityExpanded = activity.Expanded; reasoningPreference = view.owner.CurrentReasoningDisplay; }
                 expanderState = Expanders(body).Select(x => x.IsExpanded).ToArray();
                 if (Frame.ActualHeight > 0) height = Frame.ActualHeight; Frame.Height = height; Frame.Child = null;
                 ReleaseImages();

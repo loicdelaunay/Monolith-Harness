@@ -12,7 +12,7 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 10 };
         var enabled = new ToggleSwitch { IsOn = config.RetryEnabled };
         panel.Children.Add(FluentDesign.Setting(WorkflowText("Réessayer automatiquement", "Automatic retry"),
-            WorkflowText("Relance une requête en cas d’erreur réseau, de saturation ou de flux interrompu. Les erreurs de clé API et les outils déjà exécutés ne sont pas relancés.", "Retry network, rate-limit and interrupted-stream errors. Invalid API keys and completed tools are not retried."), enabled));
+            WorkflowText("Relance une requête en cas d’erreur réseau, de saturation, de flux interrompu ou d’erreur HTTP 400 signalant un JSON reçu incomplet. Respecte le nombre de tentatives et le délai ci-dessous. Les erreurs de clé API, les autres erreurs 400 et les outils déjà exécutés ne sont pas relancés.", "Retry network, rate-limit, interrupted-stream errors and HTTP 400 errors reporting incomplete received JSON. Use the retry count and delay below. Invalid API keys, other HTTP 400 errors and completed tools are not retried."), enabled));
         var count = new NumberBox { Header = WorkflowText("Nombre de nouvelles tentatives", "Number of retries"), Minimum = 0, Maximum = 10, Value = config.RetryCount, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
         var delay = new NumberBox { Header = WorkflowText("Délai entre les tentatives (secondes)", "Delay between retries (seconds)"), Minimum = 1, Maximum = 300, Value = config.RetryDelaySeconds, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
         panel.Children.Add(count); panel.Children.Add(delay);

@@ -119,9 +119,20 @@ public sealed partial class TerminalUi
         return canvas;
     }
 
+    /// <summary>The message of the moment set on the server: a colored band on the first line, by alert level.</summary>
+    void DrawAnnouncement(TerminalCanvas canvas, int left, int width)
+    {
+        if (serverState?["announcement"] is not JsonObject note) return;
+        var level = Str(note, "level");
+        var (icon, background) = level switch { "error" => ("✖", 0xb3261e), "warning" => ("⚠", 0x9a5b00), _ => ("ℹ", 0x0067a3) };
+        var text = $" {icon} {L("Message du serveur", "Server message")} : {TerminalText.Clean(Str(note, "text"))}";
+        canvas.Write(left, 0, TerminalText.Fit(text, width).PadRight(width), new Ink(0xffffff, background, true), width);
+    }
+
     void Header(TerminalCanvas canvas, CliTheme appearance, int left, int width)
     {
         var p = appearance.Palette;
+        DrawAnnouncement(canvas, left, width);
         TerminalLogo.Draw(canvas, left, 1, p);
         string title = BrandingAssets.DisplayName(FeatureSettings.Read(workspace?.State.FeaturesJson ?? "{}").ApplicationName) + " CLI " + CliOptions.CurrentVersion;
         int textLeft = left + TerminalLogo.Width + 2, textWidth = width - TerminalLogo.Width - 2;
@@ -137,7 +148,7 @@ public sealed partial class TerminalUi
             : (shared ? "⇄ " + L("Conversation partagée en direct · ", "Live shared conversation · ") + (shareViewers.TryGetValue(CurrentChat!.Id, out var watching) ? $"👁 {watching} · " : "") : "") + (CurrentProject?.GetSourceFolders().FirstOrDefault() ?? Environment.CurrentDirectory), p.Dim, textWidth);
         int active = runs.Count(r => !r.Value.IsCompleted);
         var serverLine = serverState is { } state && serverState["state"]?.GetValue<string>() is { } link && link != "NotConfigured"
-            ? "☁ " + (link switch { "Online" => L("Serveur connecté", "Server connected"), "Offline" => L("Serveur hors ligne", "Server offline"), "SessionLost" => L("Session serveur expirée · /server", "Server session expired · /server"), "SignedOut" => L("Serveur non connecté · /server", "Server signed out · /server"), _ => L("Connexion au serveur…", "Connecting to the server…") })
+            ? "☁ " + (link switch { "Online" => L("Serveur connecté", "Server connected"), "Offline" => L("Serveur hors ligne", "Server offline"), "SessionLost" => L("Session serveur expirée · /server", "Server session expired · /server"), "SignedOut" => L("Serveur non connecté · /server", "Server signed out · /server"), "Paused" => L("Mode serveur désactivé · /server", "Server mode off · /server"), _ => L("Connexion au serveur…", "Connecting to the server…") })
                 + (state["worst"]?.GetValue<string>() is { } worst ? " · ⚠ " + worst + " · /server" : "")
             : null;
         if (active > 0) canvas.Write(textLeft, 4, $"{active} " + L("conversation(s) active(s) · /chats", "active conversation(s) · /chats"), new(p.Green, p.Background), textWidth);

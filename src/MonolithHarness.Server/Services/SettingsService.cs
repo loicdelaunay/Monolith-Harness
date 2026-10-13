@@ -36,6 +36,7 @@ public static class SettingKeys
     public const string MaxSchedulesPerUser = "schedules.maxPerUser";
     public const string MinScheduleMinutes = "schedules.minIntervalMinutes";
     public const string RelayMaxRequestMb = "providers.relayMaxRequestMb";
+    public const string UsageRetentionDays = "usage.retentionDays";
 }
 
 /// <summary>Feature switches and tunable limits. Values live in SQLite and are cached because they are read on every request.</summary>
@@ -69,6 +70,7 @@ public sealed class SettingsService(IDbContextFactory<ServerDb> factory)
         new(SettingKeys.MaxSchedulesPerUser, "Tâches planifiées", "Tâches planifiées par utilisateur", "int", "20", 1, 1000),
         new(SettingKeys.MinScheduleMinutes, "Tâches planifiées", "Intervalle minimal entre deux occurrences (minutes)", "int", "5", 1, 10080),
         new(SettingKeys.RelayMaxRequestMb, "Providers", "Taille maximale d’une requête relayée (Mo)", "int", "20", 1, 512),
+        new(SettingKeys.UsageRetentionDays, "Statistiques", "Durée de conservation des statistiques partagées (jours)", "int", "365", 7, 3650),
     ];
 
     readonly ConcurrentDictionary<string, string> values = new();
@@ -104,6 +106,18 @@ public sealed class SettingsService(IDbContextFactory<ServerDb> factory)
         var before = FeatureEnabled(feature);
         await StoreAsync("feature." + feature, enabled ? "true" : "false");
         if (before != enabled) FeatureChanged?.Invoke(feature, enabled);
+    }
+
+    /// <summary>Free-text values that are not tunable limits (the announcement, the update state): stored like the settings, outside the catalog.</summary>
+    public string Text(string key, string fallback = "") => values.TryGetValue(key, out var value) ? value : fallback;
+
+    public Task SetTextAsync(string key, string value) => StoreAsync(key, value);
+
+    public async Task RemoveTextAsync(params string[] keys)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        await db.Settings.Where(x => keys.Contains(x.Key)).ExecuteDeleteAsync();
+        foreach (var key in keys) values.TryRemove(key, out _);
     }
 
     public Task SetAsync(string key, string value)

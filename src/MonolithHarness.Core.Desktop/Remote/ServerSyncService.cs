@@ -1,19 +1,28 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 
 namespace MonolithHarness.Core.Remote;
 
 public enum SyncLevel { Info, Warning, Error }
 
-/// <summary>The state of the link as the user sees it.</summary>
-public enum LinkState { NotConfigured, SignedOut, Connecting, Online, Offline, SessionLost }
+/// <summary>The state of the link as the user sees it. <see cref="Paused"/>: configured and signed in, but the server mode is switched off.</summary>
+public enum LinkState { NotConfigured, SignedOut, Connecting, Online, Offline, SessionLost, Paused }
+
+/// <summary>
+/// A call of a local conversation that waits in the server's queue for a shared provider. <see cref="Position"/> is its rank (1 = next); the host
+/// matches it to a conversation through the provider and the model.
+/// </summary>
+public sealed record RelayWait(Guid Id, Guid ProviderId, string Model, int Position, DateTime SinceUtc);
 
 /// <summary>A problem that is still there: it disappears by itself when the next synchronization succeeds.</summary>
 public sealed record SyncIssue(string Key, SyncLevel Level, string Area, string Message, DateTime SinceUtc, DateTime LastUtc, int Count);
 
 public sealed record SyncLogEntry(DateTime TimeUtc, SyncLevel Level, string Area, string Message);
 
+/// <param name="Announcement">The message of the moment to show now: not expired and not closed by the user.</param>
 public sealed record SyncSnapshot(LinkState State, bool Syncing, bool Realtime, DateTime? LastSyncUtc, DateTime? NextSyncUtc, int SyncMinutes, string ServerName, string ServerVersion,
-    string Url, string Email, int Providers, int Projects, int SharedWithMe, int PublicShares, IReadOnlyList<SyncIssue> Issues, IReadOnlyList<SyncLogEntry> Log)
+    string Url, string Email, int Providers, int Projects, int SharedWithMe, int PublicShares, IReadOnlyList<SyncIssue> Issues, IReadOnlyList<SyncLogEntry> Log,
+    ServerAnnouncement? Announcement = null, bool Enabled = true, bool ShareUsage = false, long UsageSent = 0, DateTime? UsageLastSentUtc = null, IReadOnlyList<RelayWait>? RelayWaits = null)
 {
     /// <summary>The most serious problem, or null when everything is fine (drives the badge next to the connection chip).</summary>
     public SyncLevel? Worst => Issues.Count == 0 ? null : Issues.Max(x => x.Level);
@@ -87,12 +96,17 @@ public sealed class ServerSyncService : IAsyncDisposable
     List<ServerShare> sharedWithMe = [], publicShares = [];
     string sharesSignature = "";
     readonly HashSet<string> skipNotes = [];
+    ServerAnnouncement? announcement;
+    readonly Dictionary<Guid, RelayWait> relayWaits = [];
+    DateTime nextUsage;
+    bool usageRefused;
+    static readonly TimeSpan UsageEvery = TimeSpan.FromSeconds(60);
 
     public ServerSyncService(ServerConnection connection, Func<HarnessDb> openDb)
     {
         this.connection = connection;
         this.openDb = openDb;
-        connection.RealtimeConnected += () => { lock (gate) forceFull = true; return Task.CompletedTask; };
+        connection.RealtimeConnected += () => { lock (gate) { forceFull = true; relayWaits.Clear(); } return Task.CompletedTask; };
         connection.SessionLost += () => { lock (gate) state = LinkState.SessionLost; };
     }
 
@@ -140,8 +154,145 @@ public sealed class ServerSyncService : IAsyncDisposable
             foreach (var follow in follows.Values) follow.Watch?.Dispose();
             follows.Clear();
             sharedWithMe = []; publicShares = []; sharesSignature = ""; lastSync = null; nextFull = null;
+            announcement = null; relayWaits.Clear(); nextUsage = DateTime.MinValue; usageRefused = false;
         }
         Publish();
+    }
+
+    // ---- Switching the server mode on and off ----
+
+    /// <summary>
+    /// One click: off, the link keeps its account and its links but nothing goes to or comes from the server any more (the live channel is closed
+    /// and the shared conversations hosted here go offline); on, everything resumes with a complete synchronization.
+    /// </summary>
+    public async Task SetEnabledAsync(bool enabled)
+    {
+        if (connection.Link.Enabled == enabled) return;
+        connection.Store.Update(l => l.Enabled = enabled);
+        if (!enabled) await connection.StopRealtimeAsync();
+        LinkChanged();
+    }
+
+    // ---- The message of the moment ----
+
+    /// <summary>The user closes the message: it stays closed until the administrator publishes another one.</summary>
+    public void DismissAnnouncement()
+    {
+        ServerAnnouncement? current;
+        lock (gate) current = announcement;
+        if (current == null) return;
+        connection.Store.Update(l => l.DismissedAnnouncement = current.Stamp);
+        Publish();
+    }
+
+    void SetAnnouncement(ServerAnnouncement? value)
+    {
+        bool changed;
+        lock (gate)
+        {
+            changed = announcement?.Stamp != value?.Stamp || announcement?.Text != value?.Text || announcement?.Level != value?.Level;
+            announcement = value;
+        }
+        if (changed) Publish();
+    }
+
+    /// <summary>The message to show: published, not over, not closed by the user.</summary>
+    ServerAnnouncement? VisibleAnnouncement(ServerLinkData link)
+    {
+        lock (gate)
+        {
+            if (announcement is not { } current || current.Expired(DateTime.UtcNow) || current.Stamp == link.DismissedAnnouncement) return null;
+            return current;
+        }
+    }
+
+    // ---- Calls waiting in the queue (local conversations that use a shared provider) ----
+
+    public IReadOnlyList<RelayWait> RelayWaits { get { lock (gate) return [.. relayWaits.Values.OrderBy(x => x.SinceUtc)]; } }
+
+    /// <summary>Raised, off the UI thread, when the calls waiting for a shared provider or their ranks change.</summary>
+    public event Action<IReadOnlyList<RelayWait>>? RelayQueueChanged;
+
+    void TrackRelay(ServerRun run)
+    {
+        bool changed;
+        lock (gate)
+        {
+            if (run.State == "queued" && run.QueuePosition is { } position && run.ProviderId is { } provider)
+            {
+                var since = relayWaits.TryGetValue(run.Id, out var known) ? known.SinceUtc : DateTime.UtcNow;
+                var wait = new RelayWait(run.Id, provider, run.Model ?? "", position, since);
+                changed = !relayWaits.TryGetValue(run.Id, out var before) || before.Position != position;
+                relayWaits[run.Id] = wait;
+            }
+            else changed = relayWaits.Remove(run.Id);
+        }
+        if (!changed) return;
+        try { RelayQueueChanged?.Invoke(RelayWaits); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { AppLog.Write(AppLogLevel.Warning, "server.queue_event_failed", ex); }
+        Publish();
+    }
+
+    // ---- Sharing the speed and consumption dashboard ----
+
+    public bool ShareUsage => connection.Link.ShareUsage;
+
+    /// <summary>Turns the sharing of the dashboard on (the last 30 days are sent too) or off (what was already sent stays until it is erased).</summary>
+    public void SetShareUsage(bool on)
+    {
+        connection.Store.Update(l =>
+        {
+            if (on) UsageSharing.Enable(l); else l.ShareUsage = false;
+        });
+        lock (gate) { nextUsage = DateTime.MinValue; usageRefused = false; }
+        if (!on) ClearIssue("usage");
+        Publish();
+    }
+
+    /// <summary>Erases, on the server, everything this account shared. Sharing stays as it was; turn it off first to stop it.</summary>
+    public async Task<int> EraseSharedUsageAsync(CancellationToken ct = default)
+    {
+        var deleted = await connection.Api.DeleteUsageAsync(ct);
+        // What is erased is not sent again: sharing, if it stays on, resumes with the calls made from now on.
+        long last;
+        await using (var db = openDb()) last = await db.TokenUsages.MaxAsync(x => (long?)x.Id, ct) ?? 0;
+        connection.Store.Update(l => { l.UsageSent = 0; l.UsageLastSentUtc = null; l.UsageCursor = last; });
+        Publish();
+        return deleted;
+    }
+
+    /// <summary>Sends what was measured since the last sending. Called by the loop; safe to call from a host ("send now").</summary>
+    public async Task PushUsageAsync(CancellationToken ct = default)
+    {
+        var link = connection.Link;
+        if (!link.ShareUsage || !link.Active) return;
+        int sent = 0;
+        try
+        {
+            await using var db = openDb();
+            while (true)
+            {
+                link = connection.Link;
+                var batch = await UsageSharing.NextBatchAsync(db, link, ct);
+                if (batch.LastId == link.UsageCursor) break;
+                if (batch.Samples.Count > 0)
+                {
+                    var result = await connection.Api.UploadUsageAsync(link.DeviceId, batch.Samples, ct);
+                    sent += result.Accepted;
+                }
+                connection.Store.Update(l => l.UsageCursor = Math.Max(l.UsageCursor, batch.LastId));
+                if (!batch.More) break;
+            }
+            if (sent > 0) connection.Store.Update(l => { l.UsageSent += sent; l.UsageLastSentUtc = DateTime.UtcNow; });
+            lock (gate) issues.Remove("usage");
+            if (sent > 0) Publish();
+        }
+        catch (ServerException ex) when (ex.Code is "feature_disabled" or "forbidden" or "missing_permission")
+        {
+            lock (gate) usageRefused = true;
+            ReportIssue("usage", SyncLevel.Info, "Statistiques", "Le serveur n'accepte pas le partage des statistiques (désactivé ou non autorisé).");
+        }
+        catch (ServerException ex) when (ex.Code is "unreachable" or "timeout" or "too_many_uploads") { /* the next round tries again */ }
     }
 
     /// <summary>A conversation was renamed (or otherwise changed) on this device: send it to the server soon.</summary>
@@ -193,10 +344,13 @@ public sealed class ServerSyncService : IAsyncDisposable
                 var current = state;
                 if (!link.Configured) current = LinkState.NotConfigured;
                 else if (!link.SignedIn && current != LinkState.SessionLost) current = LinkState.SignedOut;
+                else if (!link.Enabled) current = LinkState.Paused;
                 return new SyncSnapshot(current, syncing, connection.IsRealtimeConnected, lastSync, link.SyncMinutes == 0 ? null : nextFull, link.SyncMinutes,
                     status?.ServerName is { Length: > 0 } name ? name : link.ServerName, status?.Version is { Length: > 0 } version ? version : link.ServerVersion, link.Url, link.Email,
                     link.Providers.Count, link.Projects.Count, sharedWithMe.Count, publicShares.Count,
-                    [.. issues.Values.OrderByDescending(x => x.Level).ThenByDescending(x => x.LastUtc)], [.. log.AsEnumerable().Reverse()]);
+                    [.. issues.Values.OrderByDescending(x => x.Level).ThenByDescending(x => x.LastUtc)], [.. log.AsEnumerable().Reverse()],
+                    link.Active ? (announcement is { } shown && !shown.Expired(DateTime.UtcNow) && shown.Stamp != link.DismissedAnnouncement ? shown : null) : null,
+                    link.Enabled, link.ShareUsage, link.UsageSent, link.UsageLastSentUtc, [.. relayWaits.Values.OrderBy(x => x.SinceUtc)]);
             }
         }
     }
@@ -265,20 +419,26 @@ public sealed class ServerSyncService : IAsyncDisposable
     async Task TickAsync(CancellationToken ct)
     {
         var link = connection.Link;
-        if (!link.Configured || !link.SignedIn)
+        if (!link.Active)
         {
             bool changed;
             lock (gate)
             {
-                var next = link.Configured ? LinkState.SignedOut : LinkState.NotConfigured;
-                changed = state != next || issues.Count > 0;
-                state = next; subscribed = false; issues.Clear(); forceFull = true; sharedWithMe = []; publicShares = [];
+                var next = !link.Configured ? LinkState.NotConfigured : !link.SignedIn ? LinkState.SignedOut : LinkState.Paused;
+                changed = state != next || issues.Count > 0 || announcement != null || relayWaits.Count > 0;
+                state = next; subscribed = false; issues.Clear(); forceFull = true; sharedWithMe = []; publicShares = []; announcement = null; relayWaits.Clear();
             }
+            // Switched off: the live channel is closed too (an off server mode talks to nobody).
+            if (link.Configured && link.SignedIn && !link.Enabled && connection.IsRealtimeConnected) await connection.StopRealtimeAsync();
             if (changed) Publish();
             return;
         }
         await EnsureSubscribedAsync();
         var now = DateTime.UtcNow;
+        // A message whose time is over disappears by itself.
+        bool expired;
+        lock (gate) expired = announcement is { } shown && shown.Expired(now);
+        if (expired) { lock (gate) announcement = null; Publish(); }
         // A run whose end was never heard of (connection lost) stops being followed after a while; the next full sync catches up.
         List<Follow> stale;
         lock (gate) stale = follows.Values.Where(x => now - x.LastEvent > TimeSpan.FromMinutes(15)).ToList();
@@ -300,6 +460,16 @@ public sealed class ServerSyncService : IAsyncDisposable
             else if (link.SyncMinutes > 0 && nextFull is { } due && now >= due) scope = SyncScope.Full;
         }
         if (scope != SyncScope.None) await SyncAsync(scope, projects, chats, ct);
+        await PushUsageIfDueAsync(ct);
+    }
+
+    async Task PushUsageIfDueAsync(CancellationToken ct)
+    {
+        bool due;
+        lock (gate) due = state == LinkState.Online && !usageRefused && DateTime.UtcNow >= nextUsage;
+        if (!due || !connection.Link.ShareUsage) return;
+        lock (gate) nextUsage = DateTime.UtcNow + UsageEvery;
+        await PushUsageAsync(ct);
     }
 
     async Task EnsureSubscribedAsync()
@@ -317,6 +487,23 @@ public sealed class ServerSyncService : IAsyncDisposable
     Task OnEventAsync(ServerEvent evt)
     {
         if (evt.Name == "feature.changed") { lock (gate) forceFull = true; return Task.CompletedTask; }
+        if (evt.Name == "announcement")
+        {
+            ServerAnnouncement? parsed = null;
+            try { parsed = evt.Data.ValueKind == JsonValueKind.Object ? evt.Data.Deserialize<ServerAnnouncement>(ServerApi.Json) : null; }
+            catch (JsonException) { }
+            SetAnnouncement(parsed);
+            return Task.CompletedTask;
+        }
+        // The server tells an account about the calls of its local conversations waiting in the queue, and again each time their rank changes.
+        if (evt.Name == "run.state" && evt.Data.ValueKind == JsonValueKind.Object)
+        {
+            ServerRun? run = null;
+            try { run = evt.Data.Deserialize<ServerRun>(ServerApi.Json); }
+            catch (JsonException) { }
+            if (run?.Source == "relay") TrackRelay(run);
+            return Task.CompletedTask;
+        }
         if (evt.Name != "sync") return Task.CompletedTask;
         var area = evt.Data.ValueKind == JsonValueKind.Object && evt.Data.TryGetProperty("area", out var a) ? a.GetString() : null;
         Guid? project = evt.Data.ValueKind == JsonValueKind.Object && evt.Data.TryGetProperty("projectId", out var p) && p.ValueKind == JsonValueKind.String && Guid.TryParse(p.GetString(), out var id) ? id : null;
@@ -381,6 +568,7 @@ public sealed class ServerSyncService : IAsyncDisposable
         var now = DateTime.UtcNow;
         var check = await connection.StatusAsync(ct);
         status = check;
+        if (check.Reachable) SetAnnouncement(check.Announcement);
         if (!check.Reachable)
         {
             lock (gate) { state = LinkState.Offline; nextRetry = now + OfflineRetry; }

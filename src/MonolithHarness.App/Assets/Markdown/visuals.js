@@ -69,7 +69,7 @@
     const version = (versions.get(root) || 0) + 1; versions.set(root, version);
     if (enabled.math !== false) renderMathInElement(root, options);
     if (enabled.mermaid === false) return;
-    for (const code of root.querySelectorAll('pre > code.language-mermaid, pre.mermaid')) {
+    for (const code of [...root.querySelectorAll('pre > code, pre.mermaid')].filter(node => node.matches('pre.mermaid') || [...node.classList].some(name => name.toLowerCase() === 'language-mermaid'))) {
       const palette = JSON.stringify(themeVariables);
       const valid = () => versions.get(root) === version && root.contains(code) && (!root.isConnected || code.isConnected);
       if (!valid()) return;

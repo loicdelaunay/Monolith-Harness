@@ -10,7 +10,7 @@ public sealed partial class MainWindow
     SettingsNavigation? settingsNavigation;
     int settingsProviderTab = -1, settingsPermissionTab = -1, settingsServerTab = -1;
     bool providersRequested, permissionsRequested, serverRequested;
-    bool editingSettings;
+    bool editingSettings, settingsSaveInProgress;
 
     Task Settings() => Settings(showProviders: false);
 
@@ -81,6 +81,7 @@ public sealed partial class MainWindow
         catch (OperationCanceledException) when (!ReferenceEquals(settingsWindow, window)) { }
         finally
         {
+            settingsSaveInProgress = false;
             if (ReferenceEquals(settingsWindow, window)) window.Close();
             ApplyTheme(MonolithHarness.Core.FeatureSettings.Read(state.FeaturesJson).Theme);
         }
@@ -130,9 +131,16 @@ public sealed partial class MainWindow
         {
             if (databaseMaintenanceBusy) return;
             if (!validate()) return;
+            if (settingsSaveInProgress) return;
+            settingsSaveInProgress = true;
+            save.IsEnabled = cancel.IsEnabled = false;
+            content.IsHitTestVisible = false;
+            save.Content = WorkflowText("Enregistrement…", "Saving…");
+            MonolithHarness.Core.AppLog.Write(MonolithHarness.Core.AppLogLevel.Information, "settings.save.begin");
+            // Keep the controls alive until their values have been read and persisted.
             completed.TrySetResult(true);
-            window.Close();
         };
+        window.AppWindow.Closing += (_, args) => { if (settingsSaveInProgress) args.Cancel = true; };
         cancel.Click += (_, _) => window.Close();
         window.Closed += (_, _) =>
         {

@@ -24,6 +24,9 @@ for index, path in enumerate(sorted(icons.glob("*.svg"))):
     base = path.stem; order.append(base); cmap[0xE100 + index] = base
     glyphs[base] = TTGlyphPen(None).glyph(); layers[base] = []
     for number, element in enumerate(svg.findall("{http://www.w3.org/2000/svg}path")):
+        # Respect the SVG root fill: invisible view-box paths must not become black glyph layers.
+        fill = element.attrib.get("fill", svg.attrib.get("fill", "#000000"))
+        if fill == "none": continue
         name = f"{base}.{number}"; order.append(name)
         pen = TTGlyphPen(None)
         transformed = TransformPen(Cu2QuPen(pen, max_err=0.5), (1000/width, 0, 0, -1000/height, -x*1000/width, 850+y*1000/height))
@@ -31,7 +34,7 @@ for index, path in enumerate(sorted(icons.glob("*.svg"))):
         layer.append(copy.deepcopy(element))
         SVGPath.fromstring(ET.tostring(layer)).draw(transformed)
         glyphs[name] = pen.glyph()
-        color = element.attrib.get("fill", "#000000")
+        color = fill
         if color.startswith("url("):
             # COLR v0 uses solid fills; retain the gradient's first stop for native text.
             color = svg.find(".//{http://www.w3.org/2000/svg}stop").attrib["stop-color"]

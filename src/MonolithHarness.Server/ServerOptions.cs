@@ -19,6 +19,17 @@ public sealed class ServerOptions
     /// <summary>Trust X-Forwarded-* headers from a TLS-terminating reverse proxy.</summary>
     public bool BehindProxy { get; set; }
     public bool RedirectToHttps { get; set; }
+    /// <summary>
+    /// What the server does about new versions when it starts: "ask" (propose it on the console, Y/N), "auto" (install it and restart without asking),
+    /// "notify" (only say so, here and in the web interface) or "off" (never look). Without a console, "ask" behaves like "notify".
+    /// </summary>
+    public string UpdateMode { get; set; } = "ask";
+    /// <summary>Seconds the startup check may take; a slow or absent network never delays the start longer.</summary>
+    public int UpdateTimeoutSeconds { get; set; } = 5;
+    /// <summary>Seconds the console waits for the Y/N answer; no answer means "no" and the server starts normally.</summary>
+    public int UpdatePromptSeconds { get; set; } = 20;
+    /// <summary>Where releases are listed (GitHub's API for the project's releases by default).</summary>
+    public string UpdateFeed { get; set; } = MonolithHarness.Core.GitHubUpdates.Api + "?per_page=100";
 
     [JsonIgnore] public IPAddress Address => ParseHost(Host);
 
@@ -38,6 +49,14 @@ public sealed class ServerOptions
         if (HttpsPort != null && (string.IsNullOrWhiteSpace(CertificatePath) || !File.Exists(CertificatePath)))
             throw new ArgumentException("HTTPS needs a PKCS#12 certificate: set certificatePath in server.json or pass --cert.");
         if (RedirectToHttps && HttpsPort == null) throw new ArgumentException("redirectToHttps requires an HTTPS port.");
+        UpdateMode = (UpdateMode ?? "ask").Trim().ToLowerInvariant();
+        if (UpdateMode is not ("ask" or "auto" or "notify" or "off")) throw new ArgumentException("updateMode must be ask, auto, notify or off.");
+        if (UpdateTimeoutSeconds is < 1 or > 120) throw new ArgumentException("updateTimeoutSeconds must be between 1 and 120.");
+        if (UpdatePromptSeconds is < 3 or > 600) throw new ArgumentException("updatePromptSeconds must be between 3 and 600.");
+        if (!Uri.TryCreate(UpdateFeed, UriKind.Absolute, out var feed) || feed.Scheme is not ("https" or "http"))
+            throw new ArgumentException("updateFeed must be an http(s) address.");
+        // A plain-HTTP feed would let anyone on the path offer a release: only loopback (tests, a local mirror) may use it.
+        if (feed.Scheme == "http" && !feed.IsLoopback) throw new ArgumentException("updateFeed must use HTTPS (HTTP is only accepted on this machine).");
     }
 
     public static ServerOptions Load(ServerPaths paths, IReadOnlyList<string> args)
@@ -51,6 +70,8 @@ public sealed class ServerOptions
         if (Env("HTTPS_PORT") is { } httpsPort) options.HttpsPort = ParsePort(httpsPort);
         if (Env("CERT") is { } cert) options.CertificatePath = cert;
         if (Env("CERT_PASSWORD") is { } password) options.CertificatePassword = password;
+        if (Env("UPDATE") is { } update) options.UpdateMode = update;
+        if (Env("UPDATE_FEED") is { } feed) options.UpdateFeed = feed;
         for (var i = 0; i < args.Count; i++)
         {
             string Next() => i + 1 < args.Count ? args[++i] : throw new ArgumentException(args[i] + " requires a value.");
@@ -63,6 +84,9 @@ public sealed class ServerOptions
                 case "--cert-password": options.CertificatePassword = Next(); break;
                 case "--behind-proxy": options.BehindProxy = true; break;
                 case "--redirect-https": options.RedirectToHttps = true; break;
+                case "--update": options.UpdateMode = Next(); break;
+                case "--no-update-check": options.UpdateMode = "off"; break;
+                case "--update-feed": options.UpdateFeed = Next(); break;
             }
         }
         options.Validate();

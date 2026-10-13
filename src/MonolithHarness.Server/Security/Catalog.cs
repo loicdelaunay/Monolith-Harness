@@ -12,6 +12,7 @@ public static class Features
     public const string Schedules = "schedules";
     public const string Queue = "queue";
     public const string Providers = "providers";
+    public const string Usage = "usage";
 
     // Code-executing features start disabled: the administrator opts in once isolation is configured.
     public static readonly IReadOnlyList<FeatureInfo> All =
@@ -21,6 +22,7 @@ public static class Features
         new(Schedules, "Tâches planifiées cloud", "Tâches exécutées par le serveur aux horaires définis, sans client connecté.", false),
         new(Queue, "File d’attente", "Limite le nombre d’utilisateurs et d’exécutions simultanés. Désactivée : aucune limite.", true),
         new(Providers, "Providers partagés", "Catalogue de providers dont les clés restent sur le serveur, qui relaie les appels.", true),
+        new(Usage, "Statistiques d’utilisation", "Reçoit la vitesse et la consommation de jetons que les utilisateurs choisissent de partager depuis leur application, et les affiche (vue commune ou par utilisateur).", true),
     ];
 
     public static bool IsKnown(string key) => All.Any(x => x.Key == key);
@@ -42,6 +44,7 @@ public static class Permissions
     public const string QueueManage = "queue.manage";
     public const string ProvidersManage = "providers.manage";
     public const string ProvidersUse = "providers.use";
+    public const string UsageViewAll = "usage.viewAll";
 
     public static readonly IReadOnlyList<PermissionInfo> All =
     [
@@ -58,6 +61,7 @@ public static class Permissions
         new(QueueManage, Features.Queue, "Voir et annuler toutes les requêtes de la file"),
         new(ProvidersManage, Features.Providers, "Configurer le catalogue de providers"),
         new(ProvidersUse, Features.Providers, "Utiliser les providers partagés autorisés"),
+        new(UsageViewAll, Features.Usage, "Voir les statistiques de tous les utilisateurs (vue commune et par utilisateur)"),
     ];
 
     public static bool IsKnown(string key) => All.Any(x => x.Key == key);

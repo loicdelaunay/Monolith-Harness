@@ -92,7 +92,7 @@ public sealed partial class MainWindow
         // With a server configured the sidebar shows one view at a time: Local or Cloud.
         var items = (projects.ItemsSource as IEnumerable<Project> ?? []).Where(x => InSidebarView(x.Id)).ToList();
         var summaries = navigationChats.Where(x => InSidebarView(x.ProjectId)).Select(CurrentSidebarChat).ToList();
-        if (ServerLink.Configured) projectNavigation.Children.Add(BuildViewToggle());
+        if (ServerLink is { Configured: true, Enabled: true }) projectNavigation.Children.Add(BuildViewToggle());
         var pinned = SidebarOrder(summaries.Where(x => x.IsPinned && MatchesSidebarSearch(x)).OrderBy(x => x.Id), false, x => x.Id).ToList();
         if (pinned.Count > 0)
         {

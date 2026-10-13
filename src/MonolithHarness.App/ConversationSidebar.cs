@@ -98,7 +98,7 @@ public sealed partial class MainWindow
             var favorite = new MenuFlyoutItem { Text = WorkflowText(target.IsFavorite ? "Retirer des favoris" : "Ajouter aux favoris", target.IsFavorite ? "Remove favorite" : "Add favorite"), Icon = new FontIcon { Glyph = "\uE734" } };
             favorite.Click += async (_, _) => await Guard(() => ToggleFavoriteAsync(target));
             menu.Items.Add(favorite);
-            if (ServerLink.SignedIn && !IsCloudChat(target))
+            if (ServerLink.Active && !IsCloudChat(target))
             {
                 var share = new MenuFlyoutItem { Text = WorkflowText(sharedChats.ContainsKey(target.Id) ? "Partage en direct…" : "Partager en direct…", sharedChats.ContainsKey(target.Id) ? "Live sharing…" : "Share live…"), Icon = new FontIcon { Glyph = "\uE72D" } };
                 share.Click += async (_, _) => await Guard(() => ManageShareAsync(target));

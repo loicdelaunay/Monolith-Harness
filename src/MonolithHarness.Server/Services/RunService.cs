@@ -60,6 +60,9 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
 
     readonly ConcurrentDictionary<Guid, RelayEntry> relays = new();
     readonly ConcurrentDictionary<Guid, ActiveRun> active = new();
+    /// <summary>The queue position each waiting request was last told, so that only the ones that moved are notified again.</summary>
+    readonly ConcurrentDictionary<Guid, int> toldPositions = new();
+    int refreshScheduled;
     readonly object sequenceLock = new();
     long sequence;
     public event Func<RunRequest, Task>? Finished;
@@ -135,6 +138,13 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
     }
 
     // ---- Reading ----
+
+    /// <summary>Requests being executed right now (cloud runs and relayed calls): what an update or a restart would interrupt.</summary>
+    public async Task<int> ActiveCountAsync()
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.Runs.CountAsync(x => x.State == RunStates.Running || x.State == RunStates.AwaitingApproval) + relays.Values.Count(x => x.State == RunStates.Running);
+    }
 
     public async Task<RunView> GetAsync(ClaimsPrincipal user, Guid id)
     {
@@ -410,10 +420,17 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
 
     async Task PublishRelayAsync(RelayEntry entry)
     {
+        await PublishRelayCoreAsync(entry);
+        ScheduleRefresh();
+    }
+
+    async Task PublishRelayCoreAsync(RelayEntry entry)
+    {
         try
         {
             await using var db = await factory.CreateDbContextAsync();
             var view = (await RelayViews(db, [entry]))[0];
+            Remember(view);
             hub.PublishToUser(entry.UserId, "run.state", view);
             hub.Publish(RealtimeHub.QueueTopic, "run.state", view);
         }
@@ -425,9 +442,59 @@ public sealed class RunService(IDbContextFactory<ServerDb> factory, SettingsServ
 
     void Publish(RunView view)
     {
+        PublishCore(view);
+        ScheduleRefresh();
+    }
+
+    void PublishCore(RunView view)
+    {
+        Remember(view);
         hub.PublishToUser(view.RequesterId, "run.state", view);
         hub.Publish(RealtimeHub.RunTopic(view.Id), "run.state", view);
         hub.Publish(RealtimeHub.ProjectTopic(view.ProjectId), "run.state", view);
         hub.Publish(RealtimeHub.QueueTopic, "run.state", view);
+    }
+
+    void Remember(RunView view)
+    {
+        if (view.QueuePosition is { } position) toldPositions[view.Id] = position;
+        else toldPositions.TryRemove(view.Id, out _);
+    }
+
+    // ---- Live queue positions ----
+
+    /// <summary>
+    /// A request leaves the queue (starts, ends, is cancelled) or joins it: everybody behind moves up. The waiting requests whose position
+    /// changed are published again, shortly after (several changes in a row cost a single pass), so that clients show a live rank.
+    /// </summary>
+    void ScheduleRefresh()
+    {
+        if (Interlocked.Exchange(ref refreshScheduled, 1) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(150);
+            Interlocked.Exchange(ref refreshScheduled, 0);
+            await RefreshPositionsAsync();
+        });
+    }
+
+    async Task RefreshPositionsAsync()
+    {
+        try
+        {
+            await using var db = await factory.CreateDbContextAsync();
+            var positions = await QueuePositions(db);
+            foreach (var gone in toldPositions.Keys.Where(x => !positions.ContainsKey(x)).ToList()) toldPositions.TryRemove(gone, out _);
+            foreach (var (id, position) in positions)
+            {
+                if (toldPositions.TryGetValue(id, out var told) && told == position) continue;
+                if (relays.TryGetValue(id, out var relay)) await PublishRelayCoreAsync(relay);
+                else PublishCore(await ViewAsync(id));
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or ObjectDisposedException or ApiException)
+        {
+            // A missed notification only delays the next rank; clients also poll.
+        }
     }
 }

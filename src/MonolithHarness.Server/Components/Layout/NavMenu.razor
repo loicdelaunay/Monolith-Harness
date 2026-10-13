@@ -16,6 +16,10 @@
     {
         <MudNavLink Href="/shares" Icon="@Icons.Material.Filled.Share">Partages</MudNavLink>
     }
+    @if (Ui.Enabled(Features.Usage))
+    {
+        <MudNavLink Href="/usage" Icon="@Icons.Material.Filled.QueryStats">Statistiques</MudNavLink>
+    }
     @if (AnyAdmin)
     {
         <MudDivider Class="my-2" />
@@ -27,6 +31,7 @@
             @if (Can(Permissions.QueueManage)) { <MudNavLink Href="/admin/queue" Icon="@Icons.Material.Filled.ViewList">File d’attente</MudNavLink> }
             @if (Can(Permissions.AuditRead)) { <MudNavLink Href="/admin/audit" Icon="@Icons.Material.Filled.History">Journal d’audit</MudNavLink> }
             @if (Can(Permissions.BackupManage)) { <MudNavLink Href="/admin/backups" Icon="@Icons.Material.Filled.Backup">Sauvegardes</MudNavLink> }
+            @if (Can(Permissions.SettingsManage)) { <MudNavLink Href="/admin/maintenance" Icon="@Icons.Material.Filled.Build">Maintenance</MudNavLink> }
         </MudNavGroup>
     }
 </MudNavMenu>

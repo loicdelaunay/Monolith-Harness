@@ -1,0 +1,54 @@
+@implements IDisposable
+@inject AnnouncementService Announcements
+@inject RealtimeHub Hub
+
+@if (_current is { } item && _dismissed != item.UpdatedUtc)
+{
+    <div class="mh-banner mh-banner-@item.Level" role="status">
+        <span><strong>@Label(item.Level) :</strong> @item.Text</span>
+        <button type="button" class="mh-banner-close" aria-label="Masquer ce message" @onclick="@(() => _dismissed = item.UpdatedUtc)">×</button>
+    </div>
+}
+
+@code {
+    Announcement? _current;
+    DateTime _dismissed;
+    IDisposable? _listener;
+    Timer? _expiry;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+        // Published, replaced or withdrawn from another page: every open page follows at once.
+        _listener = Hub.Listen(RealtimeHub.ServerTopic, message =>
+        {
+            if (message.Name == AnnouncementService.Event) _ = InvokeAsync(() => { Refresh(); StateHasChanged(); });
+        });
+    }
+
+    void Refresh()
+    {
+        _current = Announcements.Current();
+        _expiry?.Dispose();
+        _expiry = null;
+        if (_current?.ExpiresUtc is { } end)
+        {
+            var wait = end - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero && wait < TimeSpan.FromDays(24))
+                _expiry = new Timer(_ => _ = InvokeAsync(() => { Refresh(); StateHasChanged(); }), null, wait + TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    static string Label(string level) => level switch
+    {
+        AnnouncementLevels.Error => "Incident",
+        AnnouncementLevels.Warning => "Attention",
+        _ => "Information"
+    };
+
+    public void Dispose()
+    {
+        _listener?.Dispose();
+        _expiry?.Dispose();
+    }
+}

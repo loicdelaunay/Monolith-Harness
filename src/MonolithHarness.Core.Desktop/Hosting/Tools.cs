@@ -114,6 +114,7 @@ public sealed partial class HarnessService
             if (browserAccess) Add("browser_screenshot", "Capture the integrated browser with cursor, after approval.");
         }
         ApplicationTools.AddDefinitions(definitions, skills);
+        DesktopControlTools.AddDefinitions(definitions, skills, FeatureSettings.Read(run.Options.FeaturesJson));
         RagTools.AddDefinitions(definitions, source, skills);
         VisionBridge.AddDefinitions(definitions, skills);
         PythonTools.AddDefinitions(definitions, skills);
@@ -166,6 +167,23 @@ public sealed partial class HarnessService
                 skills = await db.States.Select(x => x.EnabledSkills).SingleAsync(token);
                 return allowed;
             }, ct, AgentPolicy.ReadOnly(run.Chat.ExecutionMode)));
+        if (name is DesktopControlTools.InspectTool or "desktop_keyboard" or "desktop_mouse")
+        {
+            async Task<FeatureSettings> InputSettings(CancellationToken token)
+            {
+                var current = await db.States.AsNoTracking().SingleAsync(token);
+                var enabled = ConversationModes.EffectiveSkills(run.Chat, current.EnabledSkills, run.Provider.IsOpenCode);
+                bool Supports(string id) => Skills.Enabled(enabled, id) && hostOptions?.DisabledSkills.Contains(id) != true;
+                if (name == DesktopControlTools.InspectTool ? !Supports("keyboard_control") && !Supports("mouse_control")
+                    : !Supports(name == "desktop_keyboard" ? "keyboard_control" : "mouse_control")) throw new UnauthorizedAccessException("Desktop input skill disabled on this host.");
+                return FeatureSettings.Read(current.FeaturesJson);
+            }
+            await InputSettings(ct);
+            if (name == DesktopControlTools.InspectTool)
+                return new(await DesktopControl.InspectAsync(p, InputSettings, (mode, details, token) => Approve("desktop|ui", "Inspecter les contrôles Windows / Inspect Windows UI", details, token), ct));
+            return new(await DesktopControl.ExecuteAsync(name, p, InputSettings, (mode, details, token) =>
+                Approve(name + "|" + mode, run.Chat.Title + " · " + name + " · " + mode, details, token), ct));
+        }
         var required = name switch
         {
             "keyboard_keys" or "desktop_keyboard" or "browser_keyboard" => "keyboard_control",
@@ -227,7 +245,7 @@ public sealed partial class HarnessService
         }
         if (name is "browse" or "read_page" or "inspect_dom" or "desktop_screens")
             return new((await host(name, p, ct))?.ToJsonString() ?? "");
-        if (name is not ("desktop_keyboard" or "desktop_mouse" or "desktop_screenshot" or "browser_keyboard" or "browser_mouse" or "browser_screenshot" or "browser_dom" or "browser_javascript")) throw new ArgumentException("Unknown tool.");
+        if (name is not ("desktop_screenshot" or "browser_keyboard" or "browser_mouse" or "browser_screenshot" or "browser_dom" or "browser_javascript")) throw new ArgumentException("Unknown tool.");
         if (name.EndsWith("screenshot", StringComparison.Ordinal) && !run.Provider.SupportsImages && !VisionBridge.Enabled(skills)) throw new InvalidOperationException("Enable Bypass image AI or choose a vision model.");
         if (name.EndsWith("keyboard", StringComparison.Ordinal) && S(p, "action") == "press")
         {
@@ -255,38 +273,8 @@ public sealed partial class HarnessService
         if (application != null)
         {
             application = DesktopApplications.Resolve(windowId!);
-            if (name == "desktop_mouse")
-            {
-                var point = application.RelativePoint(p["x"]!.GetValue<double>(), p["y"]!.GetValue<double>());
-                DesktopApplications.DemandPointTarget(application, point.X, point.Y);
-                p["x"] = point.X; p["y"] = point.Y;
-                if (S(p, "action") == "slide")
-                {
-                    var end = application.RelativePoint(p["x2"]?.GetValue<double>() ?? throw new ArgumentException("x2 required for slide"),
-                        p["y2"]?.GetValue<double>() ?? throw new ArgumentException("y2 required for slide"));
-                    DesktopApplications.DemandPointTarget(application, end.X, end.Y);
-                    p["x2"] = end.X; p["y2"] = end.Y;
-                }
-            }
-            else
-            {
-                DesktopApplications.ValidateCapture(application);
-                p["application_window"] = Obj(application);
-            }
-        }
-        if (name is "desktop_keyboard" or "desktop_mouse")
-        {
-            using var dpi = application == null ? null : DesktopApplications.PhysicalCoordinates();
-            IReadOnlyList<MouseInput.SlideStep>? slideSteps = null;
-            if (name == "desktop_mouse" && S(p, "action") == "slide")
-            {
-                slideSteps = MouseInput.SlidePath(p["x"]!.GetValue<double>(), p["y"]!.GetValue<double>(),
-                    p["x2"]?.GetValue<double>() ?? throw new ArgumentException("x2 required for slide"),
-                    p["y2"]?.GetValue<double>() ?? throw new ArgumentException("y2 required for slide"), S(p, "pattern"));
-                if (application != null)
-                    foreach (var step in slideSteps) DesktopApplications.DemandPointTarget(application, step.X, step.Y);
-            }
-            await DesktopInput.ExecuteAsync(name, p, ct, slideSteps); return new("Input sent successfully.");
+            DesktopApplications.ValidateCapture(application);
+            p["application_window"] = Obj(application);
         }
         var response = await host(name, p, ct);
         if (response is JsonObject image && image["data"] != null)
