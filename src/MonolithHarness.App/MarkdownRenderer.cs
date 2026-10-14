@@ -158,6 +158,7 @@ public sealed class MarkdownRenderer
         Func<string, MenuFlyout>? fileMenu, RenderState state)
     {
         if (state.DisplayHtml) markdown=ReplyWebDocument.PrepareMarkdown(markdown);
+        if (RenderMath) markdown = MathMarkdown.Prepare(markdown);
         var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false);
         if (AllowRichWebPreview && MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
         {
@@ -259,6 +260,7 @@ public sealed class MarkdownRenderer
     public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,
         Func<string, MenuFlyout> fileMenu, Func<string, Task<FrameworkElement?>> imagePreview, CancellationToken ct, Func<string, Task<string?>>? filePath = null)
     {
+        if (RenderMath) markdown = MathMarkdown.Prepare(markdown);
         var blocks = await Task.Run(() => MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false), ct);
         ct.ThrowIfCancellationRequested();
         if (AllowRichWebPreview && MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath))
@@ -386,7 +388,7 @@ public sealed class MarkdownRenderer
     }
 
     static bool IsRichNode(Markdig.Syntax.MarkdownObject node)=>node is LinkInline {IsImage:true} or HtmlBlock || node is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info);
-    static bool CanJoinText(MdBlock block) => !PreviewNodes(block).Any(IsRichNode) && (block is ParagraphBlock or HeadingBlock ||
+    static bool CanJoinText(MdBlock block) => !PreviewNodes(block).Any(node => IsRichNode(node) || RenderMath && node is MathInline) && (block is ParagraphBlock or HeadingBlock ||
         block is ListBlock or ListItemBlock or QuoteBlock && ((ContainerBlock)block).All(CanJoinText));
 
     void AppendText(MdBlock block, TextBlock flow, int depth, string prefix = "")
@@ -445,6 +447,10 @@ public sealed class MarkdownRenderer
                 if (!displayHtml) return CreateCodeBlockElement("html", htmlSource);
                 return ReplyWebDocument.IsEnvelopeFragment(htmlSource)?new Border():new ReplyHtmlCard(ReplyWebDocument.FromHtml(htmlSource),localImage);
 
+            case MathBlock math:
+                var latex = ExtractCode(math.Lines);
+                return RenderMath ? new NativeMathView(latex, true, () => CreateCodeBlockElement("latex", latex)) : CreateCodeBlockElement("latex", latex);
+
             case FencedCodeBlock fenced:
                 return RenderFencedCode(fenced);
 
@@ -479,6 +485,8 @@ public sealed class MarkdownRenderer
 
     private FrameworkElement RenderHeading(HeadingBlock heading)
     {
+        if (RenderMath && heading.Inline != null && PreviewNodes(heading).Any(n => n is MathInline))
+            return RenderMathParagraph(heading.Inline, heading.Level <= 2 ? 20 : 16);
         var (fontSize, weight, margin) = heading.Level switch
         {
             1 => (21.0, FontWeights.Bold, new Thickness(0, 10, 0, 4)),
@@ -509,6 +517,8 @@ public sealed class MarkdownRenderer
 
     private FrameworkElement RenderParagraph(ParagraphBlock paragraph)
     {
+        if (RenderMath && paragraph.Inline != null && PreviewNodes(paragraph).Any(n => n is MathInline))
+            return RenderMathParagraph(paragraph.Inline, ChatDensity.FontSize);
         var rtb = new TextBlock
         {
             IsTextSelectionEnabled = true,
@@ -536,6 +546,8 @@ public sealed class MarkdownRenderer
     {
         var rawCode = ExtractCode(fenced.Lines);
         var lang = string.IsNullOrWhiteSpace(fenced.Info) ? "code" : fenced.Info.Trim();
+        if (RenderMath && MathMarkdown.IsMathFence(lang) && fenced.ClosingFencedCharCount > 0)
+            return new NativeMathView(rawCode, true, () => CreateCodeBlockElement(lang, rawCode));
         var code=CreateCodeBlockElement(lang,rawCode);
         if (RenderMermaid && lang.Equals("mermaid", StringComparison.OrdinalIgnoreCase))
         {
@@ -814,15 +826,65 @@ public sealed class MarkdownRenderer
         return container;
     }
 
-    private void RenderInlines(ContainerInline inlines, InlineCollection target)
+    FrameworkElement RenderMathParagraph(ContainerInline inlines, double fontSize)
+    {
+#if WINDOWS
+        var block = new RichTextBlock { IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+            Foreground = FluentDesign.Primary, FontSize = fontSize, Margin = new(0, 2, 0, 4) };
+        var paragraph = new Paragraph(); RenderInlines(inlines, paragraph.Inlines, true); block.Blocks.Add(paragraph);
+        return block;
+#else
+        var flow = new NativeMathFlow { Margin = new(0, 2, 0, 4), MinimumLineHeight = fontSize * 1.45 };
+        void Emit(MdInline node, bool bold = false, bool italic = false, bool strike = false)
+        {
+            if (node is MathInline math) { flow.Children.Add(new NativeMathView(math.Content.ToString(), false)); return; }
+            if (node is LineBreakInline) { flow.Children.Add(new TextBlock { Tag = NativeMathFlow.BreakTag }); return; }
+            if (node is EmphasisInline emphasis)
+            {
+                foreach (var child in emphasis) Emit(child, bold || emphasis.DelimiterCount >= 2 && emphasis.DelimiterChar != '~',
+                    italic || emphasis.DelimiterCount == 1 && emphasis.DelimiterChar != '~', strike || emphasis.DelimiterChar == '~');
+                return;
+            }
+            TextBlock Word()
+            {
+                var text = new TextBlock { FontSize = fontSize, Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+                if (bold) text.FontWeight = FontWeights.Bold;
+                if (italic) text.FontStyle = FontStyle.Italic;
+                if (strike) text.TextDecorations = TextDecorations.Strikethrough;
+                return text;
+            }
+            if (node is LiteralInline literal)
+            {
+                var value = literal.Content.ToString();
+                // Bound native element count for unusually long mathematical paragraphs.
+                if (flow.Children.Count >= 512) { var tail = Word(); tail.Text = value; flow.Children.Add(tail); return; }
+                foreach (System.Text.RegularExpressions.Match word in System.Text.RegularExpressions.Regex.Matches(value, @"\s+|[^\s]+"))
+                {
+                    if (flow.Children.Count >= 512) { var tail = Word(); tail.Text = value[word.Index..]; flow.Children.Add(tail); break; }
+                    if (string.IsNullOrWhiteSpace(word.Value)) flow.Children.Add(new Border { Width = fontSize * .32 * Math.Min(12, word.Length), Height = fontSize * 1.2 });
+                    else { var text = Word(); text.Text = word.Value; flow.Children.Add(text); }
+                }
+            }
+            else { var text = Word(); RenderInline(node, text.Inlines, false); flow.Children.Add(text); }
+        }
+        foreach (var node in inlines) Emit(node);
+        var media = displayImages ? PreviewNodes(inlines).OfType<LinkInline>().Where(x => x.IsImage).Take(12).ToArray() : [];
+        if (media.Length == 0) return flow;
+        var panel = new StackPanel { Spacing = 8 }; panel.Children.Add(flow);
+        foreach (var image in media) panel.Children.Add(new ReplyImageView(image.Url ?? "", image.Title ?? "Image", FluentDesign.Secondary, true, localImage));
+        return panel;
+#endif
+    }
+
+    private void RenderInlines(ContainerInline inlines, InlineCollection target, bool mathControls = false)
     {
         foreach (var inline in inlines)
         {
-            RenderInline(inline, target);
+            RenderInline(inline, target, mathControls);
         }
     }
 
-    private void RenderInline(MdInline inline, InlineCollection target)
+    private void RenderInline(MdInline inline, InlineCollection target, bool mathControls)
     {
         switch (inline)
         {
@@ -834,21 +896,29 @@ public sealed class MarkdownRenderer
                 if (emphasis.DelimiterChar == '~')
                 {
                     var span = new Span { TextDecorations = TextDecorations.Strikethrough };
-                    RenderInlines(emphasis, span.Inlines);
+                    RenderInlines(emphasis, span.Inlines, mathControls);
                     target.Add(span);
                 }
                 else if (emphasis.DelimiterCount >= 2)
                 {
                     var bold = new Bold();
-                    RenderInlines(emphasis, bold.Inlines);
+                    RenderInlines(emphasis, bold.Inlines, mathControls);
                     target.Add(bold);
                 }
                 else
                 {
                     var italic = new Italic();
-                    RenderInlines(emphasis, italic.Inlines);
+                    RenderInlines(emphasis, italic.Inlines, mathControls);
                     target.Add(italic);
                 }
+                break;
+
+            case MathInline math:
+#if WINDOWS
+                if (RenderMath && mathControls) target.Add(new InlineUIContainer { Child = new NativeMathView(math.Content.ToString(), false) });
+                else
+#endif
+                    target.Add(new Run { Text = math.Content.ToString() });
                 break;
 
             case CodeInline code:
@@ -872,7 +942,7 @@ public sealed class MarkdownRenderer
                     if (fileMenu != null) ChatPathMenus.Register(imageLink, imagePath);
                     imageLink.Click += async (_, _) => { if (!ChatPathMenus.IsSecondaryPress(imageLink)) await openFile(imagePath); };
                     imageLink.Inlines.Add(new Run { Text = "🖼 " });
-                    if (link.FirstChild != null) RenderInlines(link, imageLink.Inlines);
+                    if (link.FirstChild != null) RenderInlines(link, imageLink.Inlines, mathControls);
                     else imageLink.Inlines.Add(new Run { Text = link.Title ?? "Image" });
                     target.Add(imageLink);
                 }
@@ -887,7 +957,7 @@ public sealed class MarkdownRenderer
                 else if (FileCitation.FromUrl(link.Url) is { } citation)
                 {
                     var placeholder = new Span();
-                    RenderInlines(link, placeholder.Inlines);
+                    RenderInlines(link, placeholder.Inlines, mathControls);
                     target.Add(placeholder);
                     _ = FileCitationBadges.VerifyAsync(placeholder, citation, filePath, openFile, onCitationChanged);
                 }
@@ -910,7 +980,7 @@ public sealed class MarkdownRenderer
                             try { await Launcher.LaunchUriAsync(uri); } catch { }
                         };
                     }
-                    RenderInlines(link, hyperlink.Inlines);
+                    RenderInlines(link, hyperlink.Inlines, mathControls);
                     target.Add(hyperlink);
                 }
                 break;
@@ -958,7 +1028,7 @@ public sealed class MarkdownRenderer
                 break;
 
             case ContainerInline container:
-                RenderInlines(container, target);
+                RenderInlines(container, target, mathControls);
                 break;
 
             default:

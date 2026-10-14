@@ -537,29 +537,32 @@ public sealed partial class MainWindow
     {
         ct.ThrowIfCancellationRequested();
         var profile = permissionProject.Value?.PermissionProfileJson ?? "";
+        bool Decide(bool allowed, string method, CommandGuardResult? validation = null) =>
+            ToolApprovalAudit.Decision(allowed, method, state.PermissionMode, profile, scope, action, validation);
+        string AutomaticMethod() => ProjectResources.Decision(profile, scope) == "allow" ? "project-rule" : "global-mode";
         var command = CommandApproval.Read(scope, details);
         var execution = CommandApproval.IsExecution(scope);
-        var automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
-        if (automatic == false) return false;
         CommandGuardResult? risk = null;
+        var automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
+        if (automatic == false) return Decide(false, ProjectResources.Decision(profile, scope) == "deny" ? "project-rule" : "global-mode", risk);
         if (execution && PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow)
         {
             risk = await CheckCommandWithFeedbackAsync(command, ct);
             automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
-            if (automatic == false) return false;
-            if (automatic == true && (PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Full || PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow && risk.AllowsAutomatic)) return true;
+            if (automatic == false) return Decide(false, ProjectResources.Decision(profile, scope) == "deny" ? "project-rule" : "global-mode", risk);
+            if (automatic == true && (PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Full || PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow && risk.AllowsAutomatic)) return Decide(true, PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Full ? AutomaticMethod() : "command-validator", risk);
         }
-        else if (automatic == true) return true;
+        else if (automatic == true) return Decide(true, AutomaticMethod());
         await approvalQueue.WaitAsync(ct);
         try
         {
             ct.ThrowIfCancellationRequested();
             automatic = ProjectResources.AutomaticDecision(state.PermissionMode, profile, scope);
-            if (automatic == false) return false;
+            if (automatic == false) return Decide(false, ProjectResources.Decision(profile, scope) == "deny" ? "project-rule" : "global-mode", risk);
             var guarded = execution && PermissionModes.Normalize(state.PermissionMode) == PermissionModes.Allow;
-            if (!guarded && automatic == true) return true;
+            if (!guarded && automatic == true) return Decide(true, AutomaticMethod());
             await using var permissionDb = new HarnessDb();
-            if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await permissionDb.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return true;
+            if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await permissionDb.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return Decide(true, "saved-grant");
             using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var dialog = new ContentDialog { XamlRoot = root.XamlRoot, Title = T("Autorisation supplémentaire"),
                 Content = CommandApprovalContent(action, command?.Display ?? details, command, guarded ? risk ?? CommandGuardResult.Review("unavailable") : null, lifetime.Token),
@@ -577,7 +580,8 @@ public sealed partial class MainWindow
                 permissionDb.PermissionGrants.Add(new PermissionGrant { Scope = scope, Name = action, Details = scopeDescription, GrantedAtUtc = DateTime.UtcNow });
                 await permissionDb.SaveChangesAsync(ct);
             }
-            return response == ContentDialogResult.Primary || !guarded && response == ContentDialogResult.Secondary;
+            return Decide(response == ContentDialogResult.Primary || !guarded && response == ContentDialogResult.Secondary,
+                response == ContentDialogResult.Secondary && !guarded ? "manual-always" : response == ContentDialogResult.Primary ? "manual-once" : "manual-denied", risk);
         }
         finally { approvalQueue.Release(); }
     }

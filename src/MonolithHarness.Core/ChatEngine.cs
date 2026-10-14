@@ -340,6 +340,7 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
         {
             var wire = JsonNode.Parse(message.WireJson)!.AsObject();
             wire.Remove(GenerationTermination.MetadataKey);
+            wire.Remove(ToolAuthorization.MetadataKey);
             return wire;
         }
         if (AgentHandoff.IsLegacyReport(message)) return AgentHandoff.Input(message.Content[AgentHandoff.ReportPrefix.Length..]);

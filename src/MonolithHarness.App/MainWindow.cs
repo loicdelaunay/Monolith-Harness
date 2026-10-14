@@ -185,8 +185,7 @@ public sealed partial class MainWindow : Window
         settingsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
         foot.Children.Add(BuildGuiUpdateButton());
         foot.Children.Add(BuildGlobalTokenSpeed());
-        foot.Children.Add(BuildDedicatedToolsRow());
-        foot.Children.Add(settingsButton);
+        foot.Children.Add(BuildDedicatedToolsRow(settingsButton));
         Grid.SetRow(foot, 3); panel.Children.Add(foot);
         shell.Pane = panel;
         idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector]);
@@ -627,7 +626,7 @@ public sealed partial class MainWindow : Window
                     catch { }
                 }
                 var attach = item.Attachments.FirstOrDefault();
-                AddToolMessage(toolName, toolArgs, result, attach?.Data, attach?.Mime, messages, sourceProject, item.Seconds);
+                AddToolMessage(toolName, toolArgs, result, attach?.Data, attach?.Mime, messages, sourceProject, item.Seconds, ToolAuthorization.Read(item));
             }
             else
             {
@@ -1042,7 +1041,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    ToolMessageUi AddToolMessage(string toolName, string arguments, string? result = null, byte[]? imageBytes = null, string? imageMime = null, StackPanel? target = null, Project? sourceProject = null, double seconds = 0)
+    ToolMessageUi AddToolMessage(string toolName, string arguments, string? result = null, byte[]? imageBytes = null, string? imageMime = null, StackPanel? target = null, Project? sourceProject = null, double seconds = 0, ToolApprovalEvidence[]? authorization = null)
     {
         var messageProject = sourceProject ?? (chat == null || project == null ? project : ProjectResources.Effective(chat, project));
         void AddPaths(TextBlock text, string value) => MarkdownRenderer.RenderPathText(text, value,
@@ -1109,8 +1108,10 @@ public sealed partial class MainWindow : Window
             Background = Brush(34, 40, 55),
             BorderThickness = new Thickness(0)
         };
-        Grid.SetColumn(toggleBtn, 1);
-        headerGrid.Children.Add(toggleBtn);
+        var approvalBadge = BuildToolAuthorizationBadge(toolName);
+        var toolActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        toolActions.Children.Add(approvalBadge.Button); toolActions.Children.Add(toggleBtn);
+        Grid.SetColumn(toolActions, 1); headerGrid.Children.Add(toolActions);
         stack.Children.Add(headerGrid);
 
         string summary = "";
@@ -1227,7 +1228,8 @@ public sealed partial class MainWindow : Window
                     toolName == "browser_screenshot" ? T("Capture navigateur") : T("Capture d’écran bureau"), maxWidth: 440, maxHeight: 240));
                 imageHost.Visibility = Visibility.Visible;
             }
-        });
+        }, approvalBadge.Update);
+        if (authorization != null) ui.SetAuthorization(authorization);
         group.Update(T("Outil") + " : " + toolName + " · " + summary);
         if (result != null) ui.Complete(result, seconds, imageBytes, imageMime);
         else ui.UpdateProgress(0);
@@ -1416,6 +1418,7 @@ public sealed partial class MainWindow : Window
         var branding = BuildBrandingSettings();
         var conversationPreferences = BuildConversationPreferences();
         var retrySettings = BuildRetrySettings();
+        var loopSettings = BuildLoopDetectionSettings();
         var notificationSettings = BuildNotificationSettings();
         var agentAutomationSettings = BuildAgentAutomationSettings();
         var compactionSettings = BuildCompactionSettings();
@@ -1598,6 +1601,7 @@ public sealed partial class MainWindow : Window
         providerEditor.ViewChanged = tabs.ScrollToTop;
         tabs.Add("Skills",skillPanel, "\uE945");
         tabs.Add(WorkflowText("Agents", "Agents"), agentAutomationSettings.Panel, "\uE8D7");
+        tabs.Add(WorkflowText("Détection de boucle", "Loop detection"), loopSettings.Panel, "\uE777");
         tabs.Add(WorkflowText("Mémoire", "Memory"), BuildMemorySettings(skillToggles), "\uE8F1");
         var compactionTab = tabs.Add(WorkflowText("Compactage", "Compaction"), compactionSettings.Panel, "\uE8A3");
         var mcpTab = tabs.Add("MCP",mcpEditor.Panel, "\uE8D4");
@@ -1676,7 +1680,7 @@ public sealed partial class MainWindow : Window
         conversationPreferences.Save(savedFeatures);
         retentionSettings.Save(savedFeatures); renderingSettings.Save(savedFeatures);
         savedFeatures.ShowAttentionSection = attentionSection.IsOn;
-        retrySettings.Save(savedFeatures); notificationSettings.Save(savedFeatures);
+        retrySettings.Save(savedFeatures); loopSettings.Save(savedFeatures); notificationSettings.Save(savedFeatures);
         agentAutomationSettings.Save(savedFeatures);
         compactionSettings.Save(savedFeatures);
         webHttpSettings.Save(savedFeatures);
@@ -2463,6 +2467,7 @@ public sealed partial class MainWindow : Window
                         bool acquiredToolQueue = false;
                         var runningTool = BeginToolActivity(run, toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}");
                         ShareToolStarted(chat, call["id"]?.GetValue<string>() ?? "", toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}");
+                        using var approvalAudit = ToolApprovalAudit.Begin(evidence => DispatcherQueue.TryEnqueue(() => runningTool.Message.SetAuthorization(evidence)));
                         try
                         {
                             if (!TerminalHub.IsBoundedWait(toolName, call["function"]?["arguments"]?.GetValue<string>() ?? "{}"))
@@ -2507,6 +2512,8 @@ public sealed partial class MainWindow : Window
                         finally { EndToolActivity(run, runningTool); if (acquiredToolQueue) { TakePendingToolScreenshot(); toolQueue.Release(); } }
                         var toolWire = new JsonObject { ["role"] = "tool", ["tool_call_id"] = call["id"]!.GetValue<string>(), ["content"] = result };
                         var toolMsg = new Message { ChatId = chat.Id, Role = "tool", Content = toolName + "\n" + result, WireJson = toolWire.ToJsonString(), Seconds = runningTool.Timer.Elapsed.TotalSeconds, CompletedUtc = DateTime.UtcNow };
+                        ToolAuthorization.Save(toolMsg, approvalAudit.Snapshot());
+                        runningTool.Message.SetAuthorization(approvalAudit.Snapshot());
                         if (screenshot != null)
                         {
                             var ext = screenshot.Value.Mime.Contains("jpeg") || screenshot.Value.Mime.Contains("jpg") ? "jpg" : "png";

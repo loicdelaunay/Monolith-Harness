@@ -12,12 +12,14 @@ public sealed partial class MainWindow
     DashboardWindow? dashboardWindow;
     AiDetectorWindow? aiDetectorWindow;
 
-    Grid BuildDedicatedToolsRow()
+    Grid BuildDedicatedToolsRow(Button settingsButton)
     {
         var row = new Grid { ColumnSpacing = 6 };
         row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        row.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        row.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        row.RowSpacing = 12;
         // The server connection chip takes the place of the former "Scheduled tasks" button, which moved into the Tools menu.
         var serverState = BuildServerChip();
         var menu = new MenuFlyout();
@@ -35,11 +37,15 @@ public sealed partial class MainWindow
         dashboard.Click += async (_, _) => await Guard(ShowDashboardAsync); menu.Items.Add(dashboard);
         var detector = new MenuFlyoutItem { Text = "AI Generated detector", Icon = FluentDesign.Icon("\uE9F5") };
         detector.Click += async (_, _) => await Guard(ShowAiDetectorAsync); menu.Items.Add(detector);
+        var debug = new MenuFlyoutItem { Text = WorkflowText("Débug · Diagnostics", "Debug · Diagnostics"), Icon = FluentDesign.Icon("\uE9D9") };
+        debug.Click += async (_, _) => await Guard(ShowDiagnosticsAsync); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(debug);
         var tools = new DropDownButton { Content = WorkflowText("Outils", "Tools"), Flyout = menu, FontSize = 12, Padding = new(8, 8, 8, 8) };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tools, WorkflowText("Outils dédiés", "Dedicated tools"));
         var modeToggle = BuildServerModeToggle();
-        row.Children.Add(serverState); Grid.SetColumn(modeToggle, 1); row.Children.Add(modeToggle); Grid.SetColumn(tools, 2); row.Children.Add(tools);
-        Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); };
+        row.Children.Add(serverState); Grid.SetColumn(modeToggle, 1); row.Children.Add(modeToggle);
+        Grid.SetRow(settingsButton, 1); row.Children.Add(settingsButton);
+        Grid.SetRow(tools, 1); Grid.SetColumn(tools, 1); row.Children.Add(tools);
+        Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); diagnosticsWindow?.Close(); foreach (var approval in authorizationWindows.ToArray()) approval.Close(); };
         return row;
     }
 

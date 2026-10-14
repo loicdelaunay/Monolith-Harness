@@ -28,8 +28,14 @@ public static class ProjectResources
     public static async Task DemandToolAsync(Project project, string tool, string details, Func<string,string,CancellationToken,Task<bool>> approve, CancellationToken ct)
     {
         var decision = Decision(project.PermissionProfileJson, tool);
-        if (decision == "deny" || decision == "ask" && !await approve(tool, details, ct))
+        if (decision == "deny")
+        {
+            ToolApprovalAudit.Decision(false, "project-rule", "", project.PermissionProfileJson, tool, tool);
             throw new UnauthorizedAccessException("Outil refusé par les permissions du projet : " + tool);
+        }
+        if (decision == "ask" && !await approve(tool, details, ct))
+            throw new UnauthorizedAccessException("Outil refusé par les permissions du projet : " + tool);
+        if (decision == "allow") ToolApprovalAudit.Decision(true, "project-rule", "", project.PermissionProfileJson, tool, tool);
     }
     public static List<string> For(Chat chat, Project project, string? database = null)
     {

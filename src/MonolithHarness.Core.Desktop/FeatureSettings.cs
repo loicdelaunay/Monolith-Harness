@@ -4,6 +4,7 @@ namespace MonolithHarness.Core;
 
 public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySettings
 {
+    public LoopDetectionSettings LoopDetection { get; set; } = new();
     public InformationSettings Information { get; set; } = new();
     public DesktopInputSettings KeyboardInput { get; set; } = new();
     public DesktopInputSettings MouseInput { get; set; } = new();
@@ -191,6 +192,8 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
     {
         if (Information == null) throw new ArgumentException("Information skill settings required.");
         Information.Validate();
+        if (LoopDetection == null) throw new ArgumentException("Loop detection settings required.");
+        LoopDetection.Validate();
         if (KeyboardInput == null || MouseInput == null) throw new ArgumentException("Desktop input settings required.");
         KeyboardInput.Validate(); MouseInput.Validate();
         if (CommandGuardMode is not ("lancet" or "model") || CommandGuardProviderId < 0 || CommandGuardModel == null || CommandGuardModel.Length > 300)

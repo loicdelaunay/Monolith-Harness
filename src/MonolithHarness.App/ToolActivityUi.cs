@@ -5,9 +5,10 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    sealed class ToolMessageUi(Action<double, string?> progress, Action<string, double, byte[]?, string?, bool> complete)
+    sealed class ToolMessageUi(Action<double, string?> progress, Action<string, double, byte[]?, string?, bool> complete, Action<ToolApprovalEvidence[]> approval)
     {
         public bool IsRunning { get; private set; } = true;
+        public void SetAuthorization(ToolApprovalEvidence[] evidence) => approval(evidence);
         public void UpdateProgress(double seconds, string? phase = null)
         { if (IsRunning) progress(seconds, phase); }
         public void Complete(string result, double seconds, byte[]? image = null, string? mime = null, bool cancelled = false)

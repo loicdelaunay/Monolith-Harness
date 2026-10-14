@@ -18,7 +18,7 @@ public static class MarkdownPipelineHelper
     {
         if (string.IsNullOrEmpty(markdown))
             return new MarkdownDocument();
-        var document = Markdown.Parse(markdown, renderMath ? Pipeline : plainMathPipeline);
+        var document = Markdown.Parse(renderMath ? MathMarkdown.Prepare(markdown) : markdown, renderMath ? Pipeline : plainMathPipeline);
         LocalFileLinks.Decorate(document, lookupExistingPaths);
         return document;
     }

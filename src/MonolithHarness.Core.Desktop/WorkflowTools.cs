@@ -96,23 +96,35 @@ public sealed class WorkflowTools(Func<IReadOnlyList<AgentQuestion>, Cancellatio
 
 public sealed class ToolLoopGuard
 {
+    readonly bool enabled;
+    readonly int threshold;
+    readonly string action;
     string previous = "";
     int repeats;
+    public ToolLoopGuard(LoopDetectionSettings? settings = null)
+    {
+        settings ??= new(); settings.Validate();
+        enabled = settings.Enabled; threshold = settings.RepeatedCallThreshold; action = settings.Action;
+    }
     static JsonNode? Canonical(JsonNode? node) => node switch {
         JsonObject obj => new JsonObject(obj.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => KeyValuePair.Create(x.Key, Canonical(x.Value)))),
         JsonArray array => new JsonArray(array.Select(Canonical).ToArray()), _ => node?.DeepClone() };
     public bool Observe(string name, string arguments)
     {
+        if (!enabled) return false;
         string canonical;
         try { canonical = Canonical(JsonNode.Parse(arguments))?.ToJsonString() ?? arguments; }
         catch (System.Text.Json.JsonException) { canonical = arguments.Trim(); }
         var key = name + "\n" + canonical;
         repeats = previous == key ? repeats + 1 : 1; previous = key;
-        return repeats >= 3;
+        return repeats >= threshold;
     }
     public async Task CheckAsync(string name, string arguments, WorkflowTools? workflow, CancellationToken ct)
     {
-        if (Observe(name, arguments) && (workflow == null || !await workflow.DecideLoopAsync(name + "\n" + arguments, ct)))
-            throw new OperationCanceledException("Boucle arrêtée par l’utilisateur / Repeated calls stopped.", ct);
+        ct.ThrowIfCancellationRequested();
+        if (!Observe(name, arguments)) return;
+        AppLog.Write(AppLogLevel.Warning, "tools.loop_detected");
+        if (action == "stop" || workflow == null || !await workflow.DecideLoopAsync(name + "\n" + arguments, ct))
+            throw new OperationCanceledException("Boucle d’appels interrompue / Repeated calls stopped.", ct);
     }
 }

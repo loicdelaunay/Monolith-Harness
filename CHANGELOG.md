@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.98.0 — 2026-10-15
+
+- Réglages desktop : nouvelle section Détection de boucle pour activer ou désactiver la surveillance des appels identiques, ajuster le seuil (3 par défaut) et choisir une confirmation ou un arrêt automatique. La configuration s’applique aussi aux sous-agents et au moteur partagé.
+- Barre latérale : Outils est aligné avec Réglages. Le menu propose Débug · Diagnostics : état des générations, CPU, mémoire, durée d’activité, journaux filtrables et détails des erreurs de génération conservées.
+- LaTeX : rendu natif hors ligne des formules inline, des blocs mathématiques et des blocs de code latex/tex/math, avec adaptation au thème et source visible en cas de formule incomplète ou non prise en charge. Les délimiteurs LaTeX alternatifs sont reconnus hors des blocs de code.
+- Bulles d’outils : bouclier coloré à côté de Détails, avec une fenêtre flottante indiquant la décision, son origine, sa portée et l’analyse du validateur lorsqu’elle existe. Les nouvelles décisions sont conservées dans l’historique et les exports ; ces métadonnées locales ne sont pas envoyées au modèle.
+
 ## 1.97.2 — 2026-10-13
 
 - CLI : les outils de contrôle du bureau sont de nouveau refusés avec la réponse explicite « This host does not support… » lorsque l’hôte les désactive, avant la lecture des réglages UI Automation. Les restrictions graphiques du CLI sont inchangées.

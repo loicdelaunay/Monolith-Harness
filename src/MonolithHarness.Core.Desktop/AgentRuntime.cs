@@ -213,7 +213,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         childWorkflow.Value = run.Workflow?.ForChild(SaveChildTasks);
         await Report("Démarrage / Starting");
         int input = 0, output = 0;
-        var loop = new ToolLoopGuard();
+        var loop = new ToolLoopGuard(FeatureSettings.Read(run.Options.FeaturesJson).LoopDetection);
         bool planReminderSent = false, finalReminderSent = false;
         SubagentWorktrees? worktrees = null;
         IDisposable? projectBinding = null;
@@ -307,6 +307,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                 foreach (var call in calls)
                 {
                     var tool = call?["function"]?["name"]?.GetValue<string>() ?? ""; string result;
+                    using var approvalAudit = ToolApprovalAudit.Begin();
                     try
                     {
                         await Report("Outil / Tool · " + tool);
@@ -359,7 +360,10 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
                     catch (OperationCanceledException) { throw; }
                     catch (Exception ex) { result = "Erreur outil : " + ex.Message; }
                     var toolMessage = new JsonObject { ["role"] = "tool", ["tool_call_id"] = call!["id"]!.GetValue<string>(), ["content"] = result };
-                    wire.Add(toolMessage); transcript.Add(toolMessage.DeepClone());
+                    wire.Add(toolMessage);
+                    var persistedTool = new Message { Role = "tool", Content = result, WireJson = toolMessage.ToJsonString() };
+                    ToolAuthorization.Save(persistedTool, approvalAudit.Snapshot());
+                    transcript.Add(JsonNode.Parse(persistedTool.WireJson));
                     await Report("Outil terminé / Tool completed · " + tool);
                 }
                 if (images.Count > 0)

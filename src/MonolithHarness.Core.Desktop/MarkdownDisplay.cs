@@ -25,7 +25,7 @@ public static class MarkdownDisplay
     public static string Html(string markdown, bool renderMath = true, bool fileBadges = false, IReadOnlyDictionary<string, string>? verifiedPaths = null)
     {
         var selected = renderMath ? pipeline : plainMathPipeline;
-        var doc = Markdown.Parse(markdown, selected); LocalFileLinks.Decorate(doc);
+        var doc = Markdown.Parse(renderMath ? MathMarkdown.Prepare(markdown) : markdown, selected); LocalFileLinks.Decorate(doc);
         if (!fileBadges) return Markdown.ToHtml(doc, selected);
         using var writer = new StringWriter();
         var renderer = new Markdig.Renderers.HtmlRenderer(writer);

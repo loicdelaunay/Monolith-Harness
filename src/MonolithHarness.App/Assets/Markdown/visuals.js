@@ -67,7 +67,15 @@
   async function render(root, dark, themeVariables = {}, enabled = {}) {
     if (dark === undefined) dark = (getComputedStyle(root).color.match(/\d+/g) || []).slice(0, 3).reduce((sum, value) => sum + Number(value), 0) > 400;
     const version = (versions.get(root) || 0) + 1; versions.set(root, version);
-    if (enabled.math !== false) renderMathInElement(root, options);
+    if (enabled.math !== false) {
+      for (const code of root.querySelectorAll('pre > code.language-latex, pre > code.language-tex, pre > code.language-math, pre > code.language-katex')) {
+        const source = code.textContent.trim().replace(/^\$\$([\s\S]*)\$\$$/, '$1').replace(/^\\\[([\s\S]*)\\\]$/, '$1');
+        const formula = document.createElement('div'); formula.className = 'math';
+        try { katex.render(source, formula, { displayMode: true, throwOnError: true, trust: false, maxSize: 20, maxExpand: 1000 }); code.parentElement.replaceWith(formula); }
+        catch { /* Keep the visible source for incomplete or unsupported formulas. */ }
+      }
+      renderMathInElement(root, options);
+    }
     if (enabled.mermaid === false) return;
     for (const code of [...root.querySelectorAll('pre > code, pre.mermaid')].filter(node => node.matches('pre.mermaid') || [...node.classList].some(name => name.toLowerCase() === 'language-mermaid'))) {
       const palette = JSON.stringify(themeVariables);

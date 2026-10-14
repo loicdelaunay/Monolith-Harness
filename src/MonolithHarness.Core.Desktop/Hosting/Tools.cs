@@ -24,8 +24,11 @@ public sealed partial class HarnessService
             await using var db = Db();
             var mode = hostOptions?.PermissionModeOverride ?? await db.States.Select(x => x.PermissionMode).SingleAsync(ct);
             var profile = permissionProject.Value?.PermissionProfileJson ?? "";
+            bool Decide(bool allowed, string method, CommandGuardResult? validation = null) =>
+                ToolApprovalAudit.Decision(allowed, method, mode, profile, scope, title, validation);
+            string AutomaticMethod() => ProjectResources.Decision(profile, scope) == "allow" ? "project-rule" : "global-mode";
             var automatic = ProjectResources.AutomaticDecision(mode, profile, scope);
-            if (automatic == false) return false;
+            if (automatic == false) return Decide(false, ProjectResources.Decision(profile, scope) == "deny" ? "project-rule" : "global-mode");
             var request = CommandApproval.Read(scope, details);
             var guarded = CommandApproval.IsExecution(scope) && PermissionModes.Normalize(mode) == PermissionModes.Allow;
             CommandGuardResult? risk = null;
@@ -36,12 +39,12 @@ public sealed partial class HarnessService
                     (selected, token) => Decrypt(selected.ProtectedKey, token), http, ct);
                 mode = hostOptions?.PermissionModeOverride ?? await db.States.Select(x => x.PermissionMode).SingleAsync(ct);
                 automatic = ProjectResources.AutomaticDecision(mode, profile, scope);
-                if (automatic == false) return false;
+                if (automatic == false) return Decide(false, ProjectResources.Decision(profile, scope) == "deny" ? "project-rule" : "global-mode");
                 guarded = PermissionModes.Normalize(mode) == PermissionModes.Allow;
-                if (automatic == true && (PermissionModes.Normalize(mode) == PermissionModes.Full || guarded && risk.AllowsAutomatic)) return true;
+                if (automatic == true && (PermissionModes.Normalize(mode) == PermissionModes.Full || guarded && risk.AllowsAutomatic)) return Decide(true, PermissionModes.Normalize(mode) == PermissionModes.Full ? AutomaticMethod() : "command-validator", risk);
             }
-            else if (automatic == true) return true;
-            if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await db.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return true;
+            else if (automatic == true) return Decide(true, AutomaticMethod());
+            if (!guarded && ProjectResources.Decision(profile, scope) != "ask" && await db.PermissionGrants.AnyAsync(x => x.Scope == scope, ct)) return Decide(true, "saved-grant");
             if (request != null) details = CommandImpact.Details(request, risk);
             else if (risk != null) details = risk.Validator + " · " + risk.Classification + " · " + risk.Reason + "\n" + details;
             var reply = await host("permission", Obj(new { title, details, command = request, oneTimeOnly = guarded }), ct);
@@ -52,7 +55,8 @@ public sealed partial class HarnessService
                 db.PermissionGrants.Add(new PermissionGrant { Scope = scope, Name = title, Details = details, GrantedAtUtc = DateTime.UtcNow });
                 await db.SaveChangesAsync(ct);
             }
-            return choice == "allow" || !guarded && choice == "always";
+            return Decide(choice == "allow" || !guarded && choice == "always",
+                choice == "always" && !guarded ? "manual-always" : choice == "allow" ? "manual-once" : "manual-denied", risk);
         }
         finally { permissions.Release(); }
     }

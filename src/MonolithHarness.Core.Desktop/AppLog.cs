@@ -12,6 +12,13 @@ public static class AppLog
     static Settings settings = new(PortableStorage.Root, true, AppLogLevel.Information, 7);
     static readonly Channel<Entry> queue = Channel.CreateBounded<Entry>(new BoundedChannelOptions(2048) { FullMode = BoundedChannelFullMode.Wait });
     static readonly Task worker = Task.Run(WriteLoop);
+    static readonly object recentLock = new();
+    static readonly Queue<string> recent = new();
+    static long dropped;
+    public static bool Enabled => settings.Enabled;
+    public static int PendingCount => queue.Reader.CanCount ? queue.Reader.Count : 0;
+    public static long DroppedCount => Interlocked.Read(ref dropped);
+    public static string[] Recent() { lock (recentLock) return recent.ToArray(); }
     static AppLog()
     {
         AppDomain.CurrentDomain.UnhandledException += (_, args) => Write(AppLogLevel.Critical, "process.unhandled", args.ExceptionObject as Exception);
@@ -32,8 +39,19 @@ public static class AppLog
         // Never store prompts, tool arguments, API keys, headers or response bodies.
         var json = JsonSerializer.Serialize(new { time = DateTimeOffset.UtcNow, level = level.ToString(), operation, chatId,
             errorType = error?.GetType().FullName, errorCode = error?.HResult,
-            httpStatus = (error as HttpRequestException)?.StatusCode, stack = error?.StackTrace });
-        queue.Writer.TryWrite(new(current, json));
+            httpStatus = (error as HttpRequestException)?.StatusCode, parameter = (error as ArgumentException)?.ParamName,
+            stack = ToolAuthorization.Clean(error?.StackTrace, 8000), innerErrors = ErrorChain(error?.InnerException) });
+        lock (recentLock) { if (recent.Count >= 500) recent.Dequeue(); recent.Enqueue(json); }
+        if (!queue.Writer.TryWrite(new(current, json))) Interlocked.Increment(ref dropped);
+    }
+    static object[] ErrorChain(Exception? error)
+    {
+        var chain = new List<object>();
+        for (int i = 0; error != null && i < 6; i++, error = error.InnerException)
+            chain.Add(new { errorType = error.GetType().FullName, errorCode = error.HResult,
+                httpStatus = (error as HttpRequestException)?.StatusCode, parameter = (error as ArgumentException)?.ParamName,
+                stack = ToolAuthorization.Clean(error.StackTrace, 4000) });
+        return chain.ToArray();
     }
     public static void Prune(string directory, int days, DateTime utcNow)
     {

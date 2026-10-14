@@ -103,6 +103,10 @@ public static class ConversationExport
                     foreach (var previous in end.PreviousEndings ?? []) Setting(L("Fin avant continuation", "Ending before continuation"), previous.Describe(state.Language != "en") + (previous.ProviderReason.Length > 0 ? " · " + previous.ProviderReason : ""));
                 }
             }
+            foreach (var approval in ToolAuthorization.Read(message))
+                Setting(L("Autorisation de l’outil", "Tool authorization"),
+                    $"{approval.Allowed} · {approval.Method} · {approval.Mode} · {approval.Scope} · {approval.TimeUtc:O}" +
+                    (approval.Validator == null ? "" : $" · {approval.Validator} · {approval.Classification} · {approval.Reason}"));
             var reasoning = live?.Reasoning ?? wire?["reasoning_content"]?.ToString() ?? wire?["reasoning"]?.ToString();
             if (!string.IsNullOrEmpty(reasoning)) b.AppendLine().AppendLine("#### " + L("Raisonnement", "Reasoning")).AppendLine().AppendLine(reasoning);
             b.AppendLine().AppendLine(live?.Text ?? message.Content).AppendLine();

@@ -159,6 +159,7 @@ public sealed partial class HarnessService
                         var name = call!["function"]!["name"]!.GetValue<string>();
                         var arguments = call["function"]?["arguments"]?.GetValue<string>() ?? "{}";
                         ToolResult result;
+                        using var approvalAudit = ToolApprovalAudit.Begin();
                         if (!TerminalHub.IsBoundedWait(name, arguments)) await run.LoopGuard.CheckAsync(name, arguments, run.Workflow, ct);
                         var ownsToolQueue = !AgentRuntime.Handles(name) && !TerminalHub.Handles(name) && !RagTools.Handles(name) && !VisionBridge.Handles(name) && !PythonTools.Handles(name);
                         if (ownsToolQueue) await tools.WaitAsync(ct);
@@ -185,6 +186,7 @@ public sealed partial class HarnessService
                         finally { toolTimer.Stop(); if (ownsToolQueue) tools.Release(); }
                         var toolWire = new JsonObject { ["role"] = "tool", ["tool_call_id"] = call["id"]!.GetValue<string>(), ["content"] = result.Text };
                         var message = new Message { ChatId = chat.Id, Role = "tool", State = "interrupted", Content = name + "\n" + result.Text, WireJson = toolWire.ToJsonString(), Seconds = toolTimer.Elapsed.TotalSeconds, CompletedUtc = DateTime.UtcNow };
+                        ToolAuthorization.Save(message, approvalAudit.Snapshot());
                         if (result.Image != null) message.Attachments.Add(result.Image);
                         results.Add(message);
                         run.Db.Messages.Add(message); await run.Db.SaveChangesAsync(ct);

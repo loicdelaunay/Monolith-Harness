@@ -14,7 +14,7 @@ public class ConversationSession : IDisposable
     public WorkflowTools? Workflow { get; set; }
     public VisionBridge? Vision { get; set; }
     public WebHttpTools WebHttp { get; }
-    public ToolLoopGuard LoopGuard { get; } = new();
+    public ToolLoopGuard LoopGuard { get; }
     public SandboxWorkspace? Sandbox { get; private set; }
     public string? SandboxEngine { get; private set; }
     public async Task PrepareSandboxAsync(CancellationToken ct)
@@ -71,6 +71,7 @@ public class ConversationSession : IDisposable
         if (Provider.IsAcp) { Chat.ChatWebEnabled = false; Chat.ChatPythonEnabled = false; }
         Options = new AppState { FeaturesJson = options.FeaturesJson, Language = options.Language, EnabledSkills = options.EnabledSkills, ThinkingLevel = ConversationModes.EffectiveThinking(Chat, options.ThinkingLevel, options.ChatThinkingLevel), ChatThinkingLevel = options.ChatThinkingLevel, AutoContinue = options.AutoContinue, PermissionMode = options.PermissionMode };
         Options.EnabledSkills = ConversationModes.EffectiveSkills(Chat, options.EnabledSkills, Provider.IsExternalAgent);
+        LoopGuard = new(FeatureSettings.Read(Options.FeaturesJson).LoopDetection);
         Prompt = prompt;
         Images = images.Select(x => new Attachment { Name = x.Name, Mime = x.Mime, Data = [.. x.Data] }).ToList();
         Db = new HarnessDb(databasePath);
