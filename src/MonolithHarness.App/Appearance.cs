@@ -26,6 +26,7 @@ public sealed partial class MainWindow
         AppTypography.SetScope(composer, FontArea.User);
         TextZoom.Set(config.FontZoomPercent);
         ApplyTheme(config.Theme);
+        ConfigureChatBackground(config);
         ApplyBranding();
         ConfigureGlobalTokenSpeed(config.ShowGlobalTokenSpeed);
         RefreshComposerModelSummary();
@@ -41,12 +42,14 @@ public sealed partial class MainWindow
             ReplyHtmlPreview.RefreshThemes();
             MarkdownRenderer.RefreshVisualThemes();
         }
+        animatedChatBackground.Configure(chatBackgroundAnimation, theme, chatBackgroundOpacityPercent, chatBackgroundColor);
         RefreshVersionChip(theme);
         root.RequestedTheme = theme.Dark ? ElementTheme.Dark : ElementTheme.Light;
         root.Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
         shell.PaneBackground = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush");
         ApplyBranding(theme.Dark);
         FluentDesign.WindowChrome(this);
+        ApplyDesktopTitleBarTheme(); RefreshWorkspaceToolChrome();
         foreach (var review in proposalReviewWindows.Values)
         { review.ReviewRoot.RequestedTheme = root.RequestedTheme; FluentDesign.WindowChrome(review); }
         if (settingsWindow?.Content is FrameworkElement settingsRoot)

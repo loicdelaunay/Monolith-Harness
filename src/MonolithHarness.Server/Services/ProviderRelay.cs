@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using MonolithHarness.Core;
 using Microsoft.EntityFrameworkCore;
 using MonolithHarness.Server.Data;
 using MonolithHarness.Server.Security;
@@ -62,9 +64,18 @@ public sealed class ProviderRelay(ProviderService providers, AccessService acces
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted, slot?.Cancelled ?? CancellationToken.None);
         var cancel = linked.Token;
         calls.AddOrUpdate(providerId, 1, (_, count) => count + 1);
-        using var request = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl + "/" + path) { Content = new ByteArrayContent(body) };
-        request.Content.Headers.ContentType = new("application/json");
-        if (providers.Secret(provider) is { Length: > 0 } secret) request.Headers.Authorization = new("Bearer", secret);
+        var nativeVertex = VertexAi.UsesApiKey(provider.BaseUrl);
+        if (nativeVertex && path != "chat/completions")
+            throw ApiException.BadRequest("unsupported_vertex_path", "Vertex API key connections support Gemini chat completions.");
+        var payload = nativeVertex ? JsonNode.Parse(body)!.AsObject() : null;
+        var vertex = new Provider { Kind = "vertex", BaseUrl = provider.BaseUrl, Model = model };
+        using var request = nativeVertex ? VertexApiKey.CreateRequest(vertex, payload!)
+            : new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl + "/" + path) { Content = new ByteArrayContent(body) };
+        request.Content!.Headers.ContentType = new("application/json");
+        var secret = providers.Secret(provider);
+        if (nativeVertex) secret = await VertexAi.AuthorizeAsync(request, vertex, cancel, secret);
+        else if (secret.Length > 0) request.Headers.Authorization = new("Bearer", secret);
+        else if (VertexAi.IsEndpoint(provider.BaseUrl)) await VertexAi.AuthorizeAsync(request, vertex, cancel);
         HttpResponseMessage upstream;
         try { upstream = await clients.CreateClient(ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel); }
         catch (HttpRequestException ex)
@@ -74,6 +85,38 @@ public sealed class ProviderRelay(ProviderService providers, AccessService acces
         }
         using (upstream)
         {
+            if (nativeVertex)
+            {
+                if (!upstream.IsSuccessStatusCode)
+                {
+                    http.Response.StatusCode = (int)upstream.StatusCode;
+                    var detail = await VertexApiKey.ReadErrorAsync(upstream, secret, cancel);
+                    await http.Response.WriteAsJsonAsync(new { error = new { message = detail, type = "vertex_error" } }, cancel);
+                    return;
+                }
+                using var reader = new StreamReader(await upstream.Content.ReadAsStreamAsync(cancel));
+                var lines = VertexApiKey.OpenAiLinesAsync(reader, model, cancel);
+                if (payload!["stream"]?.GetValue<bool>() == true)
+                {
+                    http.Response.ContentType = "text/event-stream";
+                    await foreach (var line in lines.WithCancellation(cancel))
+                    {
+                        await http.Response.WriteAsync(line + "\n", cancel);
+                        if (line.Length == 0) await http.Response.Body.FlushAsync(cancel);
+                    }
+                }
+                else
+                {
+                    var completion = await ChatEngine.ParseLinesAsync(lines, _ => { }, cancel);
+                    var choices = new JsonArray(new JsonObject { ["index"] = 0, ["message"] = completion.Message,
+                        ["finish_reason"] = completion.Termination?.ProviderReason ?? "stop" });
+                    await http.Response.WriteAsJsonAsync(new JsonObject { ["object"] = "chat.completion", ["model"] = model,
+                        ["id"] = "chatcmpl-vertex-" + Guid.NewGuid().ToString("N"), ["created"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                        ["choices"] = choices, ["usage"] = new JsonObject { ["prompt_tokens"] = completion.InputTokens, ["completion_tokens"] = completion.OutputTokens } }, cancel);
+                }
+                failed = false;
+                return;
+            }
             http.Response.StatusCode = (int)upstream.StatusCode;
             if (upstream.Content.Headers.ContentType is { } type) http.Response.ContentType = type.ToString();
             await using var stream = await upstream.Content.ReadAsStreamAsync(cancel);

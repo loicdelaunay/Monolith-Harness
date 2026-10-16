@@ -10,6 +10,20 @@ public static class AppearanceThemes
 {
     public static IReadOnlyList<AppearanceTheme> All { get; } = [
         new("fluent-dark", "Fluent sombre", "Fluent dark", true, "#202020", "#2D2D2D", "#F3F3F3", "#B8B8B8", "#60CDFF"),
+        new("fluent-dark-v2", "Fluent sombre V2", "Fluent dark V2", true, "#0B0B0B", "#141414", "#EFEFEF", "#A6A6A6", "#1D6FC8")
+        {
+            Colors = new()
+            {
+                ["ControlStrokeColorDefaultBrush"] = "#2A2A2A", ["CardStrokeColorDefaultBrush"] = "#252525",
+                ["ControlHoverBrush"] = "#1E1E1E", ["ControlPressedBrush"] = "#292929",
+                ["ControlSelectedBrush"] = "#303030", ["ControlSelectedHoverBrush"] = "#3B3B3B",
+                ["ConversationHoverFillBrush"] = "#1C1C1C", ["ConversationHoverStrokeBrush"] = "#3A3A3A",
+                ["UserMessageFillBrush"] = "#222222", ["UserMessageStrokeBrush"] = "#3C3C3C",
+                ["AssistantMessageFillBrush"] = "#171717", ["AssistantMessageStrokeBrush"] = "#2C2C2C",
+                ["ToolMessageFillBrush"] = "#1D1D1D", ["ToolMessageStrokeBrush"] = "#353535",
+                ["ToolMessageTitleBrush"] = "#CACACA", ["ToolMessageErrorStrokeBrush"] = "#808080"
+            }
+        },
         new("midnight", "Minuit", "Midnight", true, "#131C2C", "#202E43", "#EFF5FF", "#B5C5DE", "#A7BCFF"),
         new("forest", "Forêt", "Forest", true, "#17231F", "#273830", "#EFF7F1", "#B5CABB", "#8EDDB0"),
         new("fluent-light", "Fluent clair", "Fluent light", false, "#F3F3F3", "#FFFFFF", "#202020", "#606060", "#0067A3"),

@@ -38,6 +38,13 @@ public sealed class MarkdownRenderer
     sealed class RenderState
     {
         public List<string> Keys = [];
+        public List<MdBlock[]> KeyGroups = [];
+        public string CssKey = "";
+        // Streaming cache: completed blocks before StreamStable in StreamSource.
+        public string StreamSource = "";
+        public int StreamStable;
+        public List<MdBlock> StreamBlocks = [];
+        public bool StreamVisuals, StreamRich, StreamMath, StreamHtml;
         public string Density = "", Markdown = "";
         public bool UsingPlainText;
         public bool DisplayHtml = true;
@@ -50,8 +57,10 @@ public sealed class MarkdownRenderer
     sealed class TextFlowState
     {
         public List<string> Keys = [];
+        public List<MdBlock> Blocks = [];
         public List<int> InlineEnds = [];
     }
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MdBlock, System.Runtime.CompilerServices.StrongBox<bool>> joinable = new();
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TextBlock, TextFlowState> textFlows = new();
     static readonly List<WeakReference<Panel>> renderedPanels = [];
     static readonly List<WeakReference<AdvancedMarkdownView>> visualViews = [];
@@ -108,7 +117,7 @@ public sealed class MarkdownRenderer
     }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Panel, RenderState> states = new();
     MarkdownRenderer(Func<string, Task>? openFile, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null,string fullMarkdown="",bool displayImages=true, bool displayHtml=true, Func<string, Task<string?>>? filePath=null, Action? onCitationChanged=null) { this.filePath=filePath; this.onCitationChanged=onCitationChanged; this.openFile = openFile; this.fileMenu = fileMenu;this.localImage=localImage;this.fullMarkdown=fullMarkdown;this.displayImages=displayImages;this.displayHtml=displayHtml; }
-    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null, Func<string, Task<string?>>? filePath = null, bool displayHtml = true)
+    public static void RenderTo(Panel container, string? markdown, Func<string, Task>? openFile = null, Func<string, MenuFlyout>? fileMenu = null,Func<string,CancellationToken,Task<byte[]?>>? localImage=null, Func<string, Task<string?>>? filePath = null, bool displayHtml = true, bool streaming = false)
     {
         markdown ??= "";
         if (!states.TryGetValue(container, out var state))
@@ -126,8 +135,7 @@ public sealed class MarkdownRenderer
         state.Markdown = markdown; state.OpenFile = openFile; state.FileMenu = fileMenu;state.LocalImage=localImage; state.FilePath=filePath;
         try
         {
-            RenderBlocks(container, markdown, openFile, fileMenu, state);
-            FileCitationBadges.Apply(container);
+            RenderBlocks(container, markdown, openFile, fileMenu, state, streaming);
             state.UsingPlainText = false;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -135,7 +143,7 @@ public sealed class MarkdownRenderer
             // Display failures must not escape into the streaming generation callback.
             // Retry Markdown on the next update; do not cache partially rendered blocks.
             if (!state.UsingPlainText) AppLog.Write(AppLogLevel.Warning, "markdown.render.fallback", ex);
-            state.UsingPlainText = true; state.Keys.Clear(); state.Density = "";
+            state.UsingPlainText = true; state.Keys.Clear(); state.KeyGroups.Clear(); state.StreamStable = 0; state.Density = "";
             container.Children.Clear();
             container.Children.Add(new TextBlock
             {
@@ -155,20 +163,30 @@ public sealed class MarkdownRenderer
         FileCitationBadges.Apply(container);
     }
     static void RenderBlocks(Panel container, string markdown, Func<string, Task>? openFile,
-        Func<string, MenuFlyout>? fileMenu, RenderState state)
+        Func<string, MenuFlyout>? fileMenu, RenderState state, bool streaming)
     {
         if (state.DisplayHtml) markdown=ReplyWebDocument.PrepareMarkdown(markdown);
         if (RenderMath) markdown = MathMarkdown.Prepare(markdown);
-        var blocks = MarkdownPipelineHelper.Parse(markdown, RenderMath, lookupExistingPaths: false);
-        if (AllowRichWebPreview && MarkdownDisplay.HasVisuals(blocks, RenderMermaid, RenderMath) && !PreviewNodes(blocks).Any(IsRichNode))
+        var (blocks, visuals, rich) = ParseBlocks(markdown, state, streaming);
+        if (AllowRichWebPreview && visuals && !rich)
         {
             var view = container.Children.Count == 1 ? container.Children[0] as AdvancedMarkdownView : null;
             if (view == null) { container.Children.Clear(); view = new AdvancedMarkdownView(openFile, fileMenu, state.FilePath); container.Children.Add(view); }
-            view.Update(markdown); state.Keys.Clear(); state.Density = ChatDensity.Id; return;
+            view.Update(markdown); state.Keys.Clear(); state.KeyGroups.Clear(); state.Density = ChatDensity.Id;
+            FileCitationBadges.Apply(container); AppTypography.Apply(container); return;
         }
         var groups = GroupTextBlocks(blocks).ToList();
-        var cssKey=groups.Any(g=>g.Any(b=>b is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info)))?ReplyWebDocument.ExtraCss(markdown):"";
-        var keys = groups.Select(group => SourceText(markdown, group[0].Span.Start, group[^1].Span.End)+(group.Any(b=>b is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info))?"\0"+cssKey:"")).ToList();
+        static bool IsHtmlFence(MdBlock block) => block is FencedCodeBlock fence && ReplyWebDocument.IsHtml(fence.Info);
+        var cssKey=groups.Any(g=>g.Any(IsHtmlFence))?ReplyWebDocument.ExtraCss(markdown):"";
+        var keys = new List<string>(groups.Count);
+        for (int g = 0; g < groups.Count; g++)
+        {
+            var group = groups[g]; var html = group.Any(IsHtmlFence);
+            // Cached streaming blocks keep their identity, so their key needs no new copy.
+            var reuse = g < state.Keys.Count && g < state.KeyGroups.Count && ReferenceEquals(state.KeyGroups[g][0], group[0])
+                && ReferenceEquals(state.KeyGroups[g][^1], group[^1]) && (!html || state.CssKey == cssKey);
+            keys.Add(reuse ? state.Keys[g] : SourceText(markdown, group[0].Span.Start, group[^1].Span.End) + (html ? "\0" + cssKey : ""));
+        }
         int shared = 0;
         while (state.Density == ChatDensity.Id && shared < keys.Count && shared < state.Keys.Count && shared < container.Children.Count && keys[shared] == state.Keys[shared]) shared++;
         // Adjacent headings, paragraphs, lists and quotes share one selection surface.
@@ -184,7 +202,7 @@ public sealed class MarkdownRenderer
                 blockPanel=new StackPanel();var visual=new AdvancedMarkdownView(openFile, fileMenu, state.FilePath);blockPanel.Children.Add(visual);visual.Update(SourceText(markdown,group[0].Span.Start,group[^1].Span.End));
                 foreach(var image in group.SelectMany(PreviewNodes).OfType<LinkInline>().Where(x=>x.IsImage).Take(12))blockPanel.Children.Add(new ReplyImageView(image.Url??"",image.Title??"Image",FluentDesign.Secondary,true,state.LocalImage));
             }
-            else if (CanJoinText(group[0]))
+            else if (Joinable(group[0]))
             {
                 TextBlock flow;
                 if (state.Density == ChatDensity.Id && index < container.Children.Count &&
@@ -218,8 +236,46 @@ public sealed class MarkdownRenderer
             else container.Children.Add(replacements[i]);
         }
         while (container.Children.Count > keys.Count) container.Children.RemoveAt(container.Children.Count - 1);
-        state.Keys = keys; state.Density = ChatDensity.Id;
-        AppTypography.Apply(container);
+        state.Keys = keys; state.KeyGroups = groups; state.CssKey = cssKey; state.Density = ChatDensity.Id;
+        // Unchanged blocks were decorated by an earlier render; only walk the replaced tail.
+        foreach (var replacement in replacements) FileCitationBadges.Apply(replacement);
+        AppTypography.Apply(container, replacements);
+    }
+    static bool Joinable(MdBlock block) => joinable.GetValue(block, item => new(CanJoinText(item))).Value;
+    static (List<MdBlock> Blocks, bool Visuals, bool Rich) ParseBlocks(string markdown, RenderState state, bool streaming)
+    {
+        if (!streaming)
+        {
+            state.StreamSource = ""; state.StreamStable = 0; state.StreamBlocks = [];
+            return ParseChunk(markdown, 0, markdown.Length);
+        }
+        // While streaming, completed blocks before a safe blank line are parsed once. The final
+        // non-streaming render parses the whole reply again, so rare cross-block constructs
+        // (link reference definitions, multi-paragraph raw HTML) are exact once the reply ends.
+        if (state.StreamMath != RenderMath || state.StreamHtml != state.DisplayHtml || state.StreamStable > markdown.Length
+            || !markdown.AsSpan(0, state.StreamStable).SequenceEqual(state.StreamSource.AsSpan(0, state.StreamStable)))
+        {
+            state.StreamStable = 0; state.StreamBlocks = []; state.StreamVisuals = state.StreamRich = false;
+            state.StreamMath = RenderMath; state.StreamHtml = state.DisplayHtml;
+        }
+        var stable = MarkdownStreaming.StableBoundary(markdown, state.StreamStable);
+        if (stable > state.StreamStable)
+        {
+            var chunk = ParseChunk(markdown, state.StreamStable, stable);
+            state.StreamBlocks.AddRange(chunk.Blocks); state.StreamVisuals |= chunk.Visuals; state.StreamRich |= chunk.Rich;
+            state.StreamStable = stable;
+        }
+        state.StreamSource = markdown;
+        var tail = ParseChunk(markdown, stable, markdown.Length);
+        return ([.. state.StreamBlocks, .. tail.Blocks], state.StreamVisuals || tail.Visuals, state.StreamRich || tail.Rich);
+    }
+    static (List<MdBlock> Blocks, bool Visuals, bool Rich) ParseChunk(string markdown, int start, int end)
+    {
+        var document = MarkdownPipelineHelper.Parse(start == 0 && end == markdown.Length ? markdown : markdown[start..end], RenderMath, lookupExistingPaths: false);
+        var blocks = document.ToList();
+        // Group keys slice the complete reply, so chunk spans are moved to reply offsets.
+        if (start > 0) foreach (var block in blocks) block.Span = new SourceSpan(block.Span.Start + start, block.Span.End + start);
+        return (blocks, MarkdownDisplay.HasVisuals(document, RenderMermaid, RenderMath), PreviewNodes(document).Any(IsRichNode));
     }
     static string SourceText(string markdown, int start, int end)
     {
@@ -243,7 +299,8 @@ public sealed class MarkdownRenderer
     void UpdateTextFlow(TextBlock flow, IReadOnlyList<MdBlock> blocks, string markdown)
     {
         var state = textFlows.GetOrCreateValue(flow);
-        var keys = blocks.Select(block => SourceText(markdown, block.Span.Start, block.Span.End)).ToList();
+        var keys = blocks.Select((block, i) => i < state.Keys.Count && i < state.Blocks.Count && ReferenceEquals(state.Blocks[i], block)
+            ? state.Keys[i] : SourceText(markdown, block.Span.Start, block.Span.End)).ToList();
         int shared = 0;
         while (shared < keys.Count && shared < state.Keys.Count && keys[shared] == state.Keys[shared]) shared++;
         int keep = shared > 0 ? state.InlineEnds[shared - 1] : 0;
@@ -254,7 +311,7 @@ public sealed class MarkdownRenderer
             AppendText(block, flow, 0);
             state.InlineEnds.Add(flow.Inlines.Count);
         }
-        state.Keys = keys;
+        state.Keys = keys; state.Blocks = [.. blocks];
     }
     /// <summary>Paginated file rendering with cancellation and UI yields between blocks.</summary>
     public static async Task RenderPreviewAsync(Panel target, string markdown, Func<string, Task> openFile,

@@ -123,13 +123,13 @@ public sealed partial class MainWindow
     /// <summary>Takes the place of the former "Scheduled tasks" button: state of the link and a badge for problems.</summary>
     FrameworkElement BuildServerChip()
     {
-        serverChipDot = new Border { Width = 9, Height = 9, CornerRadius = new(5), Background = StatusGrey, VerticalAlignment = VerticalAlignment.Center };
+        serverChipDot = new Border { Width = 18, Height = 18, Child = FluentDesign.Icon("\uE968", 16), VerticalAlignment = VerticalAlignment.Center };
         serverChipRing = new ProgressRing { Width = 12, Height = 12, IsActive = false, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
-        serverChipText = new TextBlock { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        serverChipText = new TextBlock { FontSize = 12, Foreground = FluentDesign.Secondary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         serverChipBadgeIcon = FluentDesign.Icon("", 11);
         serverChipBadgeIcon.Foreground = new SolidColorBrush(Colors.White);
         serverChipBadge = new Border { Width = 18, Height = 18, CornerRadius = new(9), Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center, Child = serverChipBadgeIcon };
-        var indicator = new Grid { Width = 14, Height = 14, VerticalAlignment = VerticalAlignment.Center };
+        var indicator = new Grid { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center };
         indicator.Children.Add(serverChipDot); indicator.Children.Add(serverChipRing);
         serverChipDot.HorizontalAlignment = HorizontalAlignment.Center;
         var content = new Grid { ColumnSpacing = 8 };
@@ -137,11 +137,17 @@ public sealed partial class MainWindow
         content.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         content.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         content.Children.Add(indicator);
-        Grid.SetColumn(serverChipText, 1); content.Children.Add(serverChipText);
+        var labels = new Grid { ColumnSpacing = 8 };
+        labels.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        labels.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        var title = Label(WorkflowText("Serveur", "Server"), 13); title.VerticalAlignment = VerticalAlignment.Center;
+        labels.Children.Add(title); Grid.SetColumn(serverChipText, 1); labels.Children.Add(serverChipText);
+        Grid.SetColumn(labels, 1); content.Children.Add(labels);
         Grid.SetColumn(serverChipBadge, 2); content.Children.Add(serverChipBadge);
         serverChip = Action("", ShowServerStatusAsync);
         serverChip.Content = content; serverChip.Tag = null;
-        serverChip.FontSize = 12; serverChip.Padding = new(8, 8, 8, 8);
+        serverChip.FontSize = 13; serverChip.Padding = new(8, 8, 4, 8); serverChip.MinHeight = 42;
+        serverChip.Background = FluentDesign.Resource("TransparentBrush"); serverChip.BorderThickness = new(0); serverChip.CornerRadius = new(6);
         serverChip.HorizontalAlignment = HorizontalAlignment.Stretch; serverChip.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         RefreshServerChip();
         return serverChip;
@@ -180,8 +186,14 @@ public sealed partial class MainWindow
         if (serverChip == null || serverChipText == null || serverChipDot == null || serverChipBadge == null || serverChipBadgeIcon == null || serverChipRing == null) return;
         var snapshot = serverSync?.Snapshot;
         var (text, color) = ChipState(snapshot);
-        serverChipText.Text = text;
-        serverChipDot.Background = color;
+        var separator = text.IndexOf('·');
+        var caption = separator >= 0 ? text[(separator + 1)..].Trim() : text switch
+        {
+            "Serveur : aucun" => "Non configuré", "Server: none" => "Not configured",
+            "Connexion au serveur…" => "Connexion…", _ => text
+        };
+        serverChipText.Text = caption.Length == 0 ? caption : char.ToUpperInvariant(caption[0]) + caption[1..];
+        if (serverChipDot.Child is FontIcon icon) icon.Foreground = color;
         var syncing = snapshot?.Syncing == true;
         serverChipRing.IsActive = syncing; serverChipRing.Visibility = syncing ? Visibility.Visible : Visibility.Collapsed;
         serverChipDot.Visibility = syncing ? Visibility.Collapsed : Visibility.Visible;

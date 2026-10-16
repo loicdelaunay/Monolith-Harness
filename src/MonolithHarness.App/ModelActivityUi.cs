@@ -22,7 +22,7 @@ public sealed partial class MainWindow
         run.ContextRequest = progress;
         SetRunStatus(run, T("Le modèle réfléchit…"));
     }
-    void ModelProgress(ConversationRun run, GenerationUpdate update)
+    void ModelProgress(ConversationRun run, GenerationUpdate update, bool refresh = true)
     {
         ObserveComposerSpeed(run, update);
         var retrying = run.RetryFeedbackActive;
@@ -35,7 +35,8 @@ public sealed partial class MainWindow
             run.LastModelProgress = DateTimeOffset.UtcNow;
             run.ProgressText = update.Text; run.ProgressReasoning = update.Reasoning; run.ProgressTokens = update.OutputTokens;
         }
-        RefreshModelActivity();
+        // The one-second activity timer also refreshes it between paints.
+        if (refresh || retrying) RefreshModelActivity();
     }
     void RefreshModelActivity()
     {

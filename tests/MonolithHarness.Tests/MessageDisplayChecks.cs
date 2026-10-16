@@ -11,6 +11,7 @@ static class MessageDisplayChecks
         check(!MarkdownDisplay.HasVisuals(MarkdownPipelineHelper.Parse("```text\n$x$\n```")), "Code stays literal");
         var html = MarkdownDisplay.Html("# Titre\n\nParagraphe.\n\n- Un\n- Deux\n\n$x^2$\n\n```mermaid\nflowchart LR\n A-->B\n```\n\n<script>alert(1)</script>");
         check(html.Contains("class=\"math") && html.Contains("class=\"mermaid\"") && !html.Contains("<script>"), "HTML keeps display formats and escapes raw scripts");
+        CheckStreamingBoundaries(check);
         var folder = Path.Combine(Path.GetTempPath(), "mh-display-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
         var database = Path.Combine(folder, "database.sqlite");
         try
@@ -38,5 +39,33 @@ static class MessageDisplayChecks
             check(refused, "Consumed or deleted messages are not recreated");
         }
         finally { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(folder, true); }
+    }
+
+    static void CheckStreamingBoundaries(Action<bool, string> check)
+    {
+        string[] samples =
+        [
+            "# Titre\n\nParagraphe **gras**.\n\n- un\n- deux\n\n- trois après une ligne vide\n\nSuite du texte.\n\n1. premier\n\n2. second\n\nFin.",
+            "Avant\n\n```csharp\nvar x = 1;\n\n\nConsole.WriteLine(x);\n```\n\nAprès le code.\n\n~~~\nbloc\n\ntilde\n~~~\n\nTexte final.",
+            "Formule :\n\n$$\na = b\n\nc = d\n$$\n\nTexte après la formule.\n\n> citation\n\n> autre citation\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\nFin du tableau.",
+            "- élément\n\n  suite indentée de l'élément\n\nParagraphe.\n\n    code indenté\n\n    encore du code\n\nDernier paragraphe avec `code` et [lien](https://example.com).",
+            "## Plan\n\n- un\n- deux\n\n- trois\n\nTexte **gras**.\n\n```csharp\nvar x = 1;\n\nvar y = 2;\n```\n\n1. premier\n\n2. second\n\n10) dixième\n\n2024 est une année.\n\nConclusion.",
+        ];
+        var pipeline = MarkdownPipelineHelper.Pipeline;
+        foreach (var sample in samples)
+        {
+            // Simulate a reply growing a few characters at a time, as the renderer sees it.
+            int stable = 0; var chunks = new List<string>(); var exact = true;
+            for (int length = 1; length <= sample.Length; length++)
+            {
+                var text = sample[..length];
+                var next = MarkdownStreaming.StableBoundary(text, stable);
+                if (next < stable || next > text.Length) { exact = false; break; }
+                if (next > stable) { chunks.Add(text[stable..next]); stable = next; }
+                var html = string.Concat(chunks.Select(x => Markdig.Markdown.ToHtml(x, pipeline))) + Markdig.Markdown.ToHtml(text[stable..], pipeline);
+                if (html != Markdig.Markdown.ToHtml(text, pipeline)) { exact = false; break; }
+            }
+            check(exact && stable > 0, "Streaming Markdown boundaries keep completed blocks identical: " + sample[..12]);
+        }
     }
 }

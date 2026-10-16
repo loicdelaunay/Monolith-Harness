@@ -19,7 +19,7 @@ public sealed partial class MainWindow
     bool compactChatHeader;
     Grid chatHeader = null!;
     StackPanel chatHeaderActions = null!;
-    Button chatExportButton = null!, chatToolsButton = null!, chatNavigationButton = null!;
+    Button chatExportButton = null!, chatNavigationButton = null!;
     readonly List<(ButtonBase Button, TextBlock Label)> chatHeaderLabels = [];
 
     static double NaturalWidth(FrameworkElement element)
@@ -80,9 +80,9 @@ public sealed partial class MainWindow
         }
         finally { resizingComposerFooter = false; }
     }
-    void BuildResponsiveHeader(Grid header, StackPanel actions, Button navigation, Button export, Button tools)
+    void BuildResponsiveHeader(Grid header, StackPanel actions, Button navigation, Button export)
     {
-        chatHeader = header; chatHeaderActions = actions; chatNavigationButton = navigation; chatExportButton = export; chatToolsButton = tools;
+        chatHeader = header; chatHeaderActions = actions; chatNavigationButton = navigation; chatExportButton = export;
         void Add(ButtonBase button, string glyph, string label)
         {
             var caption = new TextBlock { Text = UiText.T(label), Tag = label, VerticalAlignment = VerticalAlignment.Center };
@@ -92,7 +92,7 @@ public sealed partial class MainWindow
             AutomationProperties.SetName(button, UiText.T(label)); ToolTipService.SetToolTip(button, UiText.T(label));
             chatHeaderLabels.Add((button, caption));
         }
-        Add(export, "\uE74E", "Exporter"); Add(tools, "\uE90F", "Outils"); Add(autoScrollButton, "\uE74B", "Auto");
+        Add(export, "\uE74E", "Exporter"); Add(autoScrollButton, "\uE74B", "Auto");
         bool resizing = false;
         void Resize()
         {

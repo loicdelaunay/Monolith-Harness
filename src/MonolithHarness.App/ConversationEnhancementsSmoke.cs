@@ -64,6 +64,34 @@ public sealed partial class MainWindow
         if (!ReferenceEquals(first, assistant.BodyContainer.Children[0]) || !ReferenceEquals(oldLast, assistant.BodyContainer.Children[^1]) || DisplayedText(assistant.BodyContainer) != pausedText) throw new Exception("Streaming repainted paused reading content.");
         SetChatFollow(true);
         if (!ReferenceEquals(first, assistant.BodyContainer.Children[0]) || !DisplayedText(assistant.BodyContainer).Contains("nouveau texte")) throw new Exception("Resuming did not preserve stable blocks and flush the latest text.");
+        // Streaming parses completed blocks once; the final render must equal a full render.
+        const string streamedReply = "## Plan\n\n- un\n- deux\n\n- trois\n\nTexte **gras** et `code`.\n\n```csharp\nvar x = 1;\n\nvar y = 2;\n```\n\n1. premier\n\n2. second\n\nConclusion avec [lien](https://example.com).";
+        var streamed = AddAssistantMessage("", target: messages);
+        UIElement? firstStreamed = null;
+        for (int length = 4; length < streamedReply.Length; length += 5)
+        {
+            streamed.UpdateContent(streamedReply[..length], streaming: true);
+            if (length > 40 && firstStreamed == null) firstStreamed = streamed.BodyContainer.Children[0];
+        }
+        streamed.UpdateContent(streamedReply, streaming: true);
+        if (firstStreamed == null || !ReferenceEquals(firstStreamed, streamed.BodyContainer.Children[0])) throw new Exception("Streaming rebuilt completed leading blocks.");
+        streamed.UpdateContent(streamedReply);
+        var reference = AddAssistantMessage(streamedReply, target: messages);
+        if (DisplayedText(streamed.BodyContainer) != DisplayedText(reference.BodyContainer) || streamed.BodyContainer.Children.Count != reference.BodyContainer.Children.Count)
+            throw new Exception($"The final streamed render differs from a full render of the same reply.\n[{streamed.BodyContainer.Children.Count}] {DisplayedText(streamed.BodyContainer)}\n[{reference.BodyContainer.Children.Count}] {DisplayedText(reference.BodyContainer)}");
+        static string VisibleText(TextBlock block) => block.Inlines.Count > 0 ? string.Concat(block.Inlines.Select(InlineText)) : block.Text;
+        streamed.UpdateThinking("Première étape.", streaming: true);
+        streamed.UpdateThinking("Première étape. Deuxième étape.", streaming: true);
+        streamed.UpdateThinking("Première étape. Deuxième étape. Troisième.", streaming: true);
+        if (VisibleText(streamed.ThinkingBody) != "Première étape. Deuxième étape. Troisième." || streamed.ThinkingBody.Inlines.Count < 2 || streamed.ThinkingBody.Text != VisibleText(streamed.ThinkingBody))
+            throw new Exception("Streamed reasoning was not appended to the existing text.");
+        streamed.UpdateThinking("Texte remplacé.", streaming: true);
+        if (VisibleText(streamed.ThinkingBody) != "Texte remplacé.") throw new Exception("Replaced reasoning kept stale runs.");
+        foreach (var extra in new[] { streamed, reference })
+        {
+            if (extra.Container is { } card) MessageHost(messages).Children.Remove(card);
+            extra.ThinkingCard.Visibility = Visibility.Collapsed;
+        }
         assistant.SetDuration(73.2);
         if (!assistant.Duration.Text.Contains("1 min")) throw new Exception("Duration missing from response footer.");
         if (assistant.Duration.Visibility != Visibility.Visible || assistant.Duration.Opacity != 0) throw new Exception("Response duration should reserve its space but remain hidden until hover.");

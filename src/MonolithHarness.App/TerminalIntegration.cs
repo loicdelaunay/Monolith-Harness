@@ -16,6 +16,7 @@ public sealed partial class MainWindow
 
     FrameworkElement BuildTerminals()
     {
+        CompactToolTabs(terminalTabs);
         terminalTabs.AddTabButtonClick += async (_, _) => await Guard(() => {
             if (chat == null) throw new InvalidOperationException("Sélectionnez une conversation.");
             var created = terminals.Create(chat.Id, false, "", RequireDirectory());
@@ -46,10 +47,13 @@ public sealed partial class MainWindow
                 var panel = new Grid { RowSpacing = 8, Padding = new Thickness(4) };
                 foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto }) panel.RowDefinitions.Add(new() { Height = height });
                 var info = new TextBlock { TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, FontSize = 11, Foreground = FluentDesign.Secondary };
-                var output = OutputBox();
+                var output = OutputBox(); output.CornerRadius = new(6); output.Padding = new(12);
+                output.TextWrapping = TextWrapping.NoWrap;
+                ScrollViewer.SetHorizontalScrollBarVisibility(output, ScrollBarVisibility.Auto);
                 var command = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 60, MaxHeight = 140, PlaceholderText = row.Shell + "…" };
                 var start = new Button { Width = 32, Height = 32, MinWidth = 0, MinHeight = 0, Padding = new(0) };
                 var stop = new Button { Width = 32, Height = 32, MinWidth = 0, MinHeight = 0, Padding = new(0) };
+                StyleChromeAction(start); StyleChromeAction(stop);
                 FluentDesign.IconButton(start, "\uE768", WorkflowText("Exécuter", "Run"), false);
                 FluentDesign.IconButton(stop, "\uE71A", WorkflowText("Arrêter", "Stop"), false);
                 start.Click += async (_, _) => await Guard(() => {

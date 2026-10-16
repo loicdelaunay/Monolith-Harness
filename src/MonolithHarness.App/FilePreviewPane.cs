@@ -34,6 +34,9 @@ public sealed partial class MainWindow
 
     Grid BuildFilePreviewPane()
     {
+        CompactToolTabs(previewTabs);
+        previewRaw.CornerRadius = new(6); previewRaw.Margin = new(8);
+        previewRaw.Padding = new(12);
         var panel = new Grid { RowSpacing = 8 };
         foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star) })
             panel.RowDefinitions.Add(new() { Height = height });

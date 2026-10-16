@@ -24,8 +24,8 @@ public sealed partial class MainWindow : Window
     readonly Grid root = new() { Background = new SolidColorBrush(Colors.Transparent), RequestedTheme = ElementTheme.Dark };
     readonly SplitView shell = new() { IsPaneOpen = true, OpenPaneLength = 320, DisplayMode = SplitViewDisplayMode.Inline };
     readonly Grid workspace = new();
-    readonly Border browserPanel = new() { Visibility = Visibility.Collapsed, Background = FluentDesign.Resource("LayerFillColorDefaultBrush"), CornerRadius = new(12), Margin = new(0, 12, 12, 12) };
-    readonly TextBox address = new() { PlaceholderText = "https://…", HorizontalAlignment = HorizontalAlignment.Stretch };
+    readonly Border browserPanel = new() { Visibility = Visibility.Collapsed, Background = FluentDesign.Resource("LayerFillColorDefaultBrush"), CornerRadius = new(10), Margin = new(0, 8, 8, 8), BorderBrush = FluentDesign.Stroke, BorderThickness = new(1) };
+    readonly TextBox address = new() { PlaceholderText = "Saisissez une URL", HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0, MinHeight = 28, FontSize = 12, Padding = new(10, 3, 10, 3), CornerRadius = new(6), VerticalContentAlignment = VerticalAlignment.Center };
     readonly ComboBox projects = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
     readonly ListView chats = new() { SelectionMode = ListViewSelectionMode.Extended };
     readonly ListView archivedChats = new() { SelectionMode = ListViewSelectionMode.Extended, MaxHeight = 240 };
@@ -110,9 +110,11 @@ public sealed partial class MainWindow : Window
         // The message of the moment from the server sits above the application (collapsed when there is none).
         var frame = new Grid();
         frame.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        frame.RowDefinitions.Add(new() { Height = GridLength.Auto });
         frame.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        frame.Children.Add(BuildAnnouncementBand());
-        Grid.SetRow(shell, 1);
+        frame.Children.Add(BuildDesktopTitleBar());
+        var announcement = BuildAnnouncementBand(); Grid.SetRow(announcement, 1); frame.Children.Add(announcement);
+        Grid.SetRow(shell, 2);
         frame.Children.Add(shell);
         root.Children.Add(frame);
         BuildSidebar(); BuildWorkspace();
@@ -170,15 +172,16 @@ public sealed partial class MainWindow : Window
                     };
                 }
             }
+            // Refresh only the realized row: refreshing every row here made scrolling quadratic.
 #if WINDOWS
-            if (!e.InRecycleQueue) e.RegisterUpdateCallback((_, _) => RefreshConversationProgress());
+            if (!e.InRecycleQueue && e.ItemContainer is ListViewItem realized) e.RegisterUpdateCallback((_, _) => RefreshConversationRow(list, realized));
 #else
-            if (!e.InRecycleQueue) DispatcherQueue.TryEnqueue(RefreshConversationProgress);
+            if (!e.InRecycleQueue && e.ItemContainer is ListViewItem realized) DispatcherQueue.TryEnqueue(() => RefreshConversationRow(list, realized));
 #endif
         };
         WireConversationContainer(chats);
         WireConversationContainer(archivedChats);
-        var foot = new StackPanel { Spacing = 12 };
+        var foot = new StackPanel { Spacing = 0, Margin = new(0, 8, 0, 0) };
         var settingsButton = Action(T("Réglages"), Settings, true);
         FluentDesign.IconButton(settingsButton, "\uE713", T("Réglages"));
         settingsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -186,7 +189,7 @@ public sealed partial class MainWindow : Window
         foot.Children.Add(BuildGuiUpdateButton());
         foot.Children.Add(BuildGlobalTokenSpeed());
         foot.Children.Add(BuildDedicatedToolsRow(settingsButton));
-        Grid.SetRow(foot, 3); panel.Children.Add(foot);
+        Grid.SetRow(foot, 2); panel.Children.Add(foot);
         shell.Pane = panel;
         idleOnly.AddRange([projects, chats, archivedChats, providers, modelOptionsButton, modelSelector, refreshModelsBtn, thinkingSelector]);
         projects.SelectionChanged += async (_, _) => { if (!loading) await Guard(SelectProject); };
@@ -216,8 +219,8 @@ public sealed partial class MainWindow : Window
         workspace.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         workspace.RowDefinitions.Add(new() { Height = new(0) });
         shell.Content = workspace;
-        var main = new Grid { Padding = new(24, 16, 24, 20), RowSpacing = 16,
-            Background = FluentDesign.Resource("LayerFillColorDefaultBrush"), CornerRadius = new(12), Margin = new(12),
+        var main = new Grid { Padding = new(20, 12, 20, 16), RowSpacing = 12,
+            Background = FluentDesign.Resource("LayerFillColorDefaultBrush"), CornerRadius = new(10), Margin = new(8),
             BorderBrush = FluentDesign.Stroke, BorderThickness = new(1) };
         mainArea = main;
         foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
@@ -234,14 +237,12 @@ public sealed partial class MainWindow : Window
         titleHost.Children.Add(namingSpinner); Grid.SetColumn(title, 1); titleHost.Children.Add(title);
         titleHost.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); var sharedChip = BuildSharingChip(); Grid.SetColumn(sharedChip, 2); titleHost.Children.Add(sharedChip);
         Grid.SetColumn(titleHost, 1); header.Children.Add(titleHost);
-        var toolsButton = Action("Outils", ToggleBrowser);
         var headerActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var exportButton = Action("Exporter", ExportConversationAsync); headerActions.Children.Add(exportButton);
-        headerActions.Children.Add(toolsButton);
         autoScrollButton.Click += (_, _) => { chatScrollInputUntil = 0; SetChatFollow(autoScrollButton.IsChecked == true); if (followChatTail) ScrollToBottom(); };
         headerActions.Children.Add(autoScrollButton);
         Grid.SetColumn(headerActions, 2); header.Children.Add(headerActions);
-        BuildResponsiveHeader(header, headerActions, menuBtn, exportButton, toolsButton);
+        BuildResponsiveHeader(header, headerActions, menuBtn, exportButton);
         var chatHeading = new StackPanel { Spacing = 10 }; chatHeading.Children.Add(header); chatHeading.Children.Add(BuildChatFindBar());
         main.Children.Add(chatHeading);
         var conversationPanel = new Grid { RowSpacing = 8 };
@@ -249,7 +250,10 @@ public sealed partial class MainWindow : Window
         conversationPanel.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         conversationPanel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         conversationPanel.Children.Add(BuildParentConversationBar());
+        Grid.SetRow(animatedChatBackground, 1); conversationPanel.Children.Add(animatedChatBackground);
+        scroll.Background = FluentDesign.Resource("TransparentBrush");
         scroll.Content = messages; Grid.SetRow(scroll, 1); conversationPanel.Children.Add(scroll);
+        InitializeChatBackground();
         ObserveChatScroll();
         status.TextWrapping = TextWrapping.Wrap;
         status.TextAlignment = TextAlignment.Center;
@@ -299,17 +303,50 @@ public sealed partial class MainWindow : Window
     {
         BuildModelOptions();
 
-        modelSelector.SelectionChanged += async (_, _) =>
+        providerSelector.SelectionChanged += async (_, _) =>
         {
-            if (loading || updatingModelSelector || applyingQuickLevel || modelSelector.SelectedItem is not ModelChoice choice) return;
+            if (loading || updatingProviderSelector || changingModelProvider || applyingQuickLevel || refreshingModels || ActiveRun != null || providerSelector.SelectedItem is not ProviderChoice choice) return;
             await Guard(async () =>
             {
-                var selected=db.Providers.Local.First(x=>x.Id==choice.ProviderId);
-                if(!ProviderModels.Visible(selected).Contains(choice.Model))return;
-                provider=selected;state.ProviderId=selected.Id;
-                var priorLoading=loading;loading=true;providers.SelectedItem=selected;loading=priorLoading;
-                await OnModelSelectedAsync(choice.Model);
-                UpdateProvider(); RefreshModelOptions(); await db.SaveChangesAsync();
+                var selected = db.Providers.Local.FirstOrDefault(x => x.Id == choice.Id && db.Entry(x).State != EntityState.Deleted && ProviderModels.CanChat(x));
+                if (selected == null) { PopulateModelSelector(); return; }
+                var previousProvider = provider; var previousProviderId = state.ProviderId;
+                changingModelProvider = true; RefreshQuickModelUi();
+                try
+                {
+                    provider = selected; state.ProviderId = selected.Id;
+                    var previousLoading = loading; loading = true;
+                    try { providers.SelectedItem = selected; } finally { loading = previousLoading; }
+                    PopulateModelSelector(); UpdateProvider(); await db.SaveChangesAsync();
+                }
+                catch
+                {
+                    provider = previousProvider; state.ProviderId = previousProviderId;
+                    PopulateModelSelector(); UpdateProvider(); throw;
+                }
+                finally { changingModelProvider = false; RefreshQuickModelUi(); }
+            });
+        };
+
+        modelSelector.SelectionChanged += async (_, _) =>
+        {
+            if (loading || updatingModelSelector || changingModelProvider || applyingQuickLevel || refreshingModels || ActiveRun != null || modelSelector.SelectedItem is not ModelChoice choice) return;
+            await Guard(async () =>
+            {
+                var selected = provider;
+                if (selected == null || selected.Id != choice.ProviderId || !ProviderModels.Visible(selected).Contains(choice.Model)) { PopulateModelSelector(); return; }
+                var previousModel = selected.Model;
+                changingModelProvider = true; RefreshQuickModelUi();
+                try
+                {
+                    await OnModelSelectedAsync(choice.Model);
+                    UpdateProvider(); RefreshModelOptions(); await db.SaveChangesAsync();
+                }
+                catch
+                {
+                    ModelContexts.Select(selected, previousModel); PopulateModelSelector(); UpdateProvider(); throw;
+                }
+                finally { changingModelProvider = false; RefreshQuickModelUi(); }
             });
         };
 
@@ -338,7 +375,7 @@ public sealed partial class MainWindow : Window
             {
                 var selectedProvider = provider;
                 var secret = KeyVault.Decrypt(selectedProvider.ProtectedKey);
-                if (string.IsNullOrEmpty(secret) && !selectedProvider.IsExternalAgent && !selectedProvider.IsLocal)
+                if (string.IsNullOrEmpty(secret) && !selectedProvider.IsExternalAgent && !selectedProvider.IsLocal && (!selectedProvider.IsVertex || VertexAi.UsesApiKey(selectedProvider.BaseUrl)))
                 {
                     ShowStatus(T("Renseignez votre clé API dans les Réglages pour charger la liste."), StatusKind.Error);
                     return;
@@ -439,15 +476,10 @@ public sealed partial class MainWindow : Window
         if (force) { scroll.UpdateLayout(); SetChatFollow(true); }
         if (!followChatTail) return;
         autoScrollButton.IsChecked = true;
-        var target = scroll.Content;
-        scroll.UpdateLayout();
-        if (!followChatTail) return;
-        scroll.ChangeView(null, scroll.ScrollableHeight, null, disableAnimation);
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (!ReferenceEquals(scroll.Content, target) || !followChatTail) return;
-            scroll.ChangeView(null, scroll.ScrollableHeight, null, disableAnimation);
-        });
+        // Streamed paints do not force a synchronous layout: LayoutUpdated queues the tail
+        // again once the grown content has been measured.
+        if (force) scroll.ChangeView(null, scroll.ScrollableHeight, null, disableAnimation);
+        QueueChatTail();
     }
     void ResizeLayout()
     {
@@ -457,11 +489,12 @@ public sealed partial class MainWindow : Window
         if (toolsMaximized) shell.IsPaneOpen = false;
         bool fill = browserVisible && (toolsMaximized || root.ActualWidth < 960);
         mainArea.Visibility = fill ? Visibility.Collapsed : Visibility.Visible;
-        browserPanel.Margin = fill ? new(12) : new(0, 12, 12, 12);
+        browserPanel.Margin = fill ? new(8) : new(0, 8, 8, 8);
         workspace.ColumnDefinitions[0].Width = fill ? new(0) : new(1, GridUnitType.Star);
         workspace.ColumnDefinitions[1].Width = !browserVisible ? new(0) : fill ? new(1, GridUnitType.Star) : new(Math.Max(420, root.ActualWidth * .43));
         workspace.RowDefinitions[1].Height = new(0);
         Grid.SetRow(browserPanel, 0); Grid.SetColumn(browserPanel, 1);
+        RefreshWorkspaceToolChrome(); RefreshPanelSizeAction();
     }
     void ApplyLanguage()
     {
@@ -487,6 +520,8 @@ public sealed partial class MainWindow : Window
         FluentDesign.IconButton(stop, "\uE71A", T("Arrêter"), false);
         ToolTipService.SetToolTip(send, T("Envoyer  ↑")); ToolTipService.SetToolTip(stop, T("Arrêter"));
         RefreshToolLanguage();
+        RefreshWorkspaceToolChrome();
+        address.PlaceholderText = WorkflowText("Saisissez une URL", "Enter a URL");
         RefreshGuiUpdateButton();
         UpdateSourceLabel();
         title.Text = chat?.Title ?? T("Nouvelle conversation");
@@ -670,15 +705,28 @@ public sealed partial class MainWindow : Window
             {
                 group.Refresh(preference); IsThinkingExpanded = group.Expanded;
                 ThinkingScroll.Visibility = Visibility.Visible;
-                ThinkingBody.Text = preference == ReasoningDetailLevel.None ? "" : reasoningText; return;
+                ShowReasoning(preference == ReasoningDetailLevel.None ? "" : reasoningText); return;
             }
             if (lastReasoningPreference == preference) return;
             lastReasoningPreference = preference;
             ThinkingHeaderBtn.IsEnabled = preference != ReasoningDetailLevel.None;
             IsThinkingExpanded = preference == ReasoningDetailLevel.Detailed;
             ThinkingScroll.Visibility = IsThinkingExpanded ? Visibility.Visible : Visibility.Collapsed;
-            ThinkingBody.Text = preference == ReasoningDetailLevel.None ? "" : reasoningText;
+            ShowReasoning(preference == ReasoningDetailLevel.None ? "" : reasoningText);
             RefreshThinkingHeader();
+        }
+        string shownReasoning = "";
+        public string ShownReasoning => shownReasoning;
+        void ShowReasoning(string value)
+        {
+            if (value == shownReasoning) return;
+            // Streamed reasoning only grows: append its new tail as a run so the text already
+            // shaped is not laid out again. Periodically collapse the runs back into one.
+            if (shownReasoning.Length > 0 && value.Length > shownReasoning.Length && ThinkingBody.Inlines.Count < 256
+                && value.StartsWith(shownReasoning, StringComparison.Ordinal))
+                ThinkingBody.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = value[shownReasoning.Length..] });
+            else ThinkingBody.Text = value;
+            shownReasoning = value;
         }
         public string CurrentText { get; private set; } = "";
         public Func<string, Task>? OpenFile { get; init; }
@@ -732,22 +780,25 @@ public sealed partial class MainWindow : Window
         }
         public void Flush()
         {
-            if (pendingText is { } text) { pendingText = null; RenderContent(text); }
+            if (pendingText is { } text) { pendingText = null; RenderContent(text, renderedStreaming); }
             if (pendingThinking is { } thinking) { pendingThinking = null; UpdateThinking(thinking.Text, thinking.Complete); }
         }
 
+        bool renderedStreaming;
         public void UpdateContent(string text, bool streaming = false)
         {
-            if (CurrentText == text && pendingText == null) return;
+            // The final update re-parses the whole reply even when its text did not change.
+            if (CurrentText == text && pendingText == null && (streaming || !renderedStreaming)) return;
             CurrentText = text;
-            if ((streaming || pendingText != null) && !CanPaint()) { pendingText = text; return; }
+            if ((streaming || pendingText != null) && !CanPaint()) { pendingText = text; renderedStreaming = streaming; return; }
             pendingText = null;
-            RenderContent(text);
+            RenderContent(text, streaming);
         }
-        void RenderContent(string text)
+        void RenderContent(string text, bool streaming = false)
         {
             if (Container is { } card) card.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
-            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu,ReadImage,FilePath);
+            MarkdownRenderer.RenderTo(BodyContainer, text, OpenFile, FileMenu,ReadImage,FilePath, streaming: streaming);
+            renderedStreaming = streaming;
             ContentRendered?.Invoke(BodyContainer);
         }
 
@@ -763,7 +814,7 @@ public sealed partial class MainWindow : Window
             ThinkingCard.Visibility = Visibility.Visible;
             reasoningText = reasoning;
             ThinkingFollower?.BeforeTextChange();
-            ThinkingBody.Text = Preference == ReasoningDetailLevel.None ? "" : reasoning;
+            ShowReasoning(Preference == ReasoningDetailLevel.None ? "" : reasoning);
             ThinkingFollower?.AfterTextChange();
             Group?.Update(reasoning);
             reasoningComplete = isComplete;
@@ -1879,6 +1930,8 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(async () => { using var callbackScope = BrowserScope(owner.Id, owner.TabId); await Guard(async () => { await OpenLocalPreviewAsync(uri.LocalPath, CancellationToken.None); }); });
             }
             else if (uri == null || uri.Scheme is not ("https" or "http" or "about")) e.Cancel = true;
+            if (!e.Cancel) owner.IsNavigating = true;
+            RefreshBrowserNavigation();
         };
         owner.View.CoreWebView2.NewWindowRequested += (_, e) => { e.Handled = true; var target = e.Uri; DispatcherQueue.TryEnqueue(async () => { await Guard(async () => { var opened = NewBrowserTab(owner.Id); using var callbackScope = BrowserScope(owner.Id, opened.TabId); await NavigateAsync(target, CancellationToken.None); }); }); };
 #if WINDOWS
@@ -1888,8 +1941,10 @@ public sealed partial class MainWindow : Window
         owner.View.CoreWebView2.DownloadStarting += (_, e) => e.Cancel = true;
         owner.View.CoreWebView2.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
 #endif
+        owner.View.CoreWebView2.HistoryChanged += (_, _) => RefreshBrowserNavigation();
         owner.View.CoreWebView2.NavigationCompleted += (_, _) =>
         {
+            owner.IsNavigating = false;
             if (!owner.Ready || owner.View.CoreWebView2 == null) return;
             owner.Address = owner.View.CoreWebView2.Source;
             if (owner.PreviewFolder != null && Uri.TryCreate(owner.Address, UriKind.Absolute, out var displayed) && displayed.Host == owner.PreviewHost)
@@ -1897,9 +1952,10 @@ public sealed partial class MainWindow : Window
                 try { owner.Address = LocalPreview.ResolveResource(owner.PreviewFolder, displayed.AbsolutePath); } catch { }
             }
             if (chat?.Id == owner.Id && SelectedBrowserTab(owner.Id) == owner.TabId) address.Text = owner.Address;
-            SyncWebTabs();
+            SyncWebTabs(); RefreshBrowserNavigation();
         };
         owner.Ready = true;
+        RefreshBrowserNavigation();
     }
     async Task<string> NavigateAsync(string url, CancellationToken ct)
     {
@@ -2205,25 +2261,29 @@ public sealed partial class MainWindow : Window
     }
     void PopulateModelSelector(List<string>? extraModels = null)
     {
-        updatingModelSelector=true;
+        updatingModelSelector = updatingProviderSelector = true;
         try
         {
-            var available=db.Providers.Local.Where(x=>db.Entry(x).State!=EntityState.Deleted).ToList();
-            var choices=available.SelectMany(p=>ProviderModels.Visible(p).Select(m=>new ModelChoice(p.Id,p.Name+" #"+p.Id,m))).ToList();
-            modelSelector.ItemsSource=choices;modelSelector.IsEnabled=choices.Count>0;
-            var choice=choices.FirstOrDefault(x=>x.ProviderId==provider?.Id && x.Model==provider.Model)
-                ?? choices.FirstOrDefault(x=>x.ProviderId==provider?.Id) ?? choices.FirstOrDefault();
-            modelSelector.SelectedItem=choice;
-            if(choice!=null)
-            {
-                provider=available.Single(x=>x.Id==choice.ProviderId);ModelContexts.Select(provider,choice.Model);state.ProviderId=provider.Id;
-                var previousLoading=loading;loading=true;providers.SelectedItem=provider;loading=previousLoading;
-            }
-            refreshModelsBtn.IsEnabled=!refreshingModels && provider!=null && !provider.IsComposite && ActiveRun==null;
-            RefreshContextInfo();
-            RefreshModelOptions();
+            var available = db.Providers.Local.Where(x => db.Entry(x).State != EntityState.Deleted && ProviderModels.CanChat(x)).ToList();
+            var connections = available.Select(x => new ProviderChoice(x.Id, x.Name)).OrderBy(x => x.Caption, StringComparer.OrdinalIgnoreCase).ToList();
+            providerSelector.ItemsSource = connections;
+            var connection = connections.FirstOrDefault(x => x.Id == provider?.Id)
+                ?? connections.FirstOrDefault(x => x.Id == state.ProviderId) ?? connections.FirstOrDefault();
+            providerSelector.SelectedItem = connection;
+            provider = connection == null ? null : available.Single(x => x.Id == connection.Id);
+            if (provider != null) state.ProviderId = provider.Id;
+            var choices = provider == null ? new List<ModelChoice>() : ProviderModels.Visible(provider)
+                .Select(model => new ModelChoice(provider.Id, provider.Name + " #" + provider.Id, model)).ToList();
+            modelSelector.ItemsSource = choices;
+            var choice = choices.FirstOrDefault(x => x.Model == provider?.Model) ?? choices.FirstOrDefault();
+            modelSelector.SelectedItem = choice;
+            if (choice != null && provider != null) ModelContexts.Select(provider, choice.Model);
+            var previousLoading = loading; loading = true;
+            try { providers.SelectedItem = provider; } finally { loading = previousLoading; }
+            refreshModelsBtn.IsEnabled = !refreshingModels && provider != null && !provider.IsComposite && ActiveRun == null;
+            RefreshContextInfo(); RefreshModelOptions();
         }
-        finally { updatingModelSelector=false; }
+        finally { updatingModelSelector = updatingProviderSelector = false; }
     }
     async Task OnModelSelectedAsync(string newModel)
     {
@@ -2415,15 +2475,18 @@ public sealed partial class MainWindow : Window
                         assistantUi.UpdateThinking("", isComplete: false); run.Tracker = new GenerationSpeedTracker(); lastPaint = DateTime.MinValue;
                         return;
                     }
-                    ModelProgress(run, update);
-                    SetRunStatus(run, update.ResumeAttempt > 0 ? WorkflowText($"Poursuite de la réponse · {update.ResumeAttempt}/2…", $"Continuing the response · {update.ResumeAttempt}/2…") : T("Le modèle réfléchit…"));
-                    if (update.CompatibilityNotice.Length > 0) { active.CompatibilityNotice = update.CompatibilityNotice; compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible; }
+                    // Record every update, but refresh the interface at most once per paint interval.
+                    var paint = (DateTime.UtcNow - lastPaint).TotalMilliseconds >= 70;
+                    ModelProgress(run, update, refresh: paint);
+                    var runStatus = update.ResumeAttempt > 0 ? WorkflowText($"Poursuite de la réponse · {update.ResumeAttempt}/2…", $"Continuing the response · {update.ResumeAttempt}/2…") : T("Le modèle réfléchit…");
+                    if (paint || !run.WaitingForModel || run.Status != runStatus) SetRunStatus(run, runStatus);
+                    if (update.CompatibilityNotice.Length > 0 && active.CompatibilityNotice != update.CompatibilityNotice) { active.CompatibilityNotice = update.CompatibilityNotice; compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible; }
                     run.ExportProgress = new(active.Id, update);
                     active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
                     ShareStream(chat, active.Id, update.Text, update.Reasoning);
                     var currentTokens = update.OutputTokens ?? Math.Ceiling((update.Text.Length + update.Reasoning.Length) / 4.0);
                     run.Tracker?.AddSample(update.Seconds, currentTokens);
-                    if ((DateTime.UtcNow - lastPaint).TotalMilliseconds < 70) return;
+                    if (!paint) return;
                     if (update.Reasoning.Length > 0)
                     {
                         assistantUi.UpdateThinking(update.Reasoning, isComplete: update.Text.Length > 0, streaming: true);

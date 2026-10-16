@@ -83,7 +83,9 @@ public sealed partial class MainWindow
         {
             settingsSaveInProgress = false;
             if (ReferenceEquals(settingsWindow, window)) window.Close();
-            ApplyTheme(MonolithHarness.Core.FeatureSettings.Read(state.FeaturesJson).Theme);
+            var savedAppearance = MonolithHarness.Core.FeatureSettings.Read(state.FeaturesJson);
+            ApplyTheme(savedAppearance.Theme);
+            ConfigureChatBackground(savedAppearance);
         }
     }
 

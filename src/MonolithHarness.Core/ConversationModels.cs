@@ -73,6 +73,7 @@ public sealed class Attachment
 public sealed class Provider
 {
     public string LocalModelsJson { get; set; } = "{}";
+    public bool IsVertex => Kind.Equals("vertex", StringComparison.OrdinalIgnoreCase);
     public bool IsLocal => Kind.Equals("local", StringComparison.OrdinalIgnoreCase);
     public string DetectedModelsJson { get; set; } = "[]";
     public string SelectedModelsJson { get; set; } = "";

@@ -103,8 +103,13 @@ internal sealed class ContentTailFollower
             queued = false;
             if (!scroll.IsLoaded || changing > 0 || dragging && !pendingUpdate) return;
             // Read the current state, not a stale position captured before a user's gesture.
-            changing++;
-            try { scroll.UpdateLayout(); } finally { changing--; }
+            // UpdateLayout measures the whole window, so only a held reading position needs it:
+            // while following, LayoutUpdated queues the tail again after the next layout pass.
+            if (!follow)
+            {
+                changing++;
+                try { scroll.UpdateLayout(); } finally { changing--; }
+            }
             pendingUpdate = false;
             target = follow ? scroll.ScrollableHeight : Math.Min(offset, scroll.ScrollableHeight);
             if (Math.Abs(scroll.VerticalOffset - target) > 1) scroll.ChangeView(null, target, null, true);

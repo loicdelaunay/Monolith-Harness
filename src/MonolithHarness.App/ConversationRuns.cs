@@ -79,11 +79,26 @@ public sealed partial class MainWindow
         RefreshModelActivity();
     }
 
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, Dictionary<string, FrameworkElement>> conversationElements = new();
     static TElement? FindConversationElement<TElement>(DependencyObject parent, string tag) where TElement : FrameworkElement
+    {
+        // Rows are refreshed often; remember each tagged element while it stays inside its row.
+        var cache = conversationElements.GetOrCreateValue(parent);
+        if (cache.TryGetValue(tag, out var known) && known is TElement cached && Equals(cached.Tag, tag) && IsInside(cached, parent)) return cached;
+        var found = SearchConversationElement<TElement>(parent, tag);
+        if (found != null) cache[tag] = found; else cache.Remove(tag);
+        return found;
+    }
+    static bool IsInside(DependencyObject element, DependencyObject parent)
+    {
+        for (var node = element; node != null; node = VisualTreeHelper.GetParent(node)) if (ReferenceEquals(node, parent)) return true;
+        return false;
+    }
+    static TElement? SearchConversationElement<TElement>(DependencyObject parent, string tag) where TElement : FrameworkElement
     {
         if (parent is TElement found && Equals(found.Tag, tag)) return found;
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-            if (FindConversationElement<TElement>(VisualTreeHelper.GetChild(parent, i), tag) is { } child) return child;
+            if (SearchConversationElement<TElement>(VisualTreeHelper.GetChild(parent, i), tag) is { } child) return child;
         return default;
     }
 
@@ -102,7 +117,8 @@ public sealed partial class MainWindow
             favorite.Visibility = Visibility.Visible;
             favorite.IsHitTestVisible = item.IsFavorite || hover;
             favorite.IsTabStop = item.IsFavorite || hover;
-            favorite.Content = new FontIcon { Glyph = item.IsFavorite ? "\uE735" : "\uE734", FontSize = 14 };
+            var glyph = item.IsFavorite ? "\uE735" : "\uE734";
+            if (favorite.Content is not FontIcon { Glyph: var shown } || shown != glyph) favorite.Content = new FontIcon { Glyph = glyph, FontSize = 14 };
             ToolTipService.SetToolTip(favorite, WorkflowText(item.IsFavorite ? "Retirer des favoris" : "Ajouter aux favoris", item.IsFavorite ? "Remove favorite" : "Add favorite"));
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(favorite, WorkflowText("Favori", "Favorite"));
             favorite.Click -= FavoriteClick; favorite.Click += FavoriteClick;
@@ -113,41 +129,50 @@ public sealed partial class MainWindow
     {
         RefreshIndependentChatRows();
         RefreshSubagentSidebar();
+        var bell = ReadOnlyFeatures.NotificationBell;
         foreach (var list in new[] { chats, archivedChats })
         foreach (var item in list.Items.OfType<Chat>())
+            if (list.ContainerFromItem(item) is ListViewItem container) RefreshConversationRow(list, item, container, bell);
+    }
+
+    /// <summary>Refreshes one realized row, as its container is (re)used while the list scrolls.</summary>
+    void RefreshConversationRow(ListView list, ListViewItem container)
+    {
+        if (list.ItemFromContainer(container) is Chat item) RefreshConversationRow(list, item, container, ReadOnlyFeatures.NotificationBell);
+    }
+
+    void RefreshConversationRow(ListView list, Chat item, ListViewItem container, bool bell)
+    {
+        RefreshConversationCard(container);
+        if (FindConversationElement<Border>(container, "conversation-selection") is { } selection)
+            selection.Visibility = list.SelectedItems.Contains(item) ? Visibility.Visible : Visibility.Collapsed;
+        if (FindConversationElement<ProgressBar>(container, "conversation-progress") is { } bar)
         {
-            if (list.ContainerFromItem(item) is not ListViewItem container) continue;
-            RefreshConversationCard(container);
-            if (FindConversationElement<Border>(container, "conversation-selection") is { } selection)
-                selection.Visibility = list.SelectedItems.Contains(item) ? Visibility.Visible : Visibility.Collapsed;
-            if (FindConversationElement<ProgressBar>(container, "conversation-progress") is { } bar)
-            {
-                bar.Visibility = conversationRuns.ContainsKey(item.Id) ? Visibility.Visible : Visibility.Collapsed;
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(bar, T("Le modèle réfléchit…") + " " + item.Title);
-            }
-            if (FindConversationElement<TextBlock>(container, "conversation-title") is { } label)
-            {
-                label.Text = item.Title;
-                label.Visibility = namingChats.Contains(item.Id) ? Visibility.Collapsed : Visibility.Visible;
-                ToolTipService.SetToolTip(label, item.Title);
-            }
-            if (FindConversationElement<StackPanel>(container, "conversation-naming") is { } naming)
-                naming.Visibility = namingChats.Contains(item.Id) ? Visibility.Visible : Visibility.Collapsed;
-            if (FindConversationElement<Border>(container, "conversation-naming-spinner") is { } spinnerHost)
-            {
-                if (spinnerHost.Child is not BusySpinner) spinnerHost.Child = new BusySpinner();
-                ((BusySpinner)spinnerHost.Child).IsActive = namingChats.Contains(item.Id);
-            }
-            if (FindConversationElement<TextBlock>(container, "conversation-naming-label") is { } namingLabel)
-                namingLabel.Text = WorkflowText("Nommage…", "Naming…");
-            if (FindConversationElement<TextBlock>(container, "conversation-age") is { } age)
-            {
-                age.Text = ConversationAge(item);
-                ToolTipService.SetToolTip(age, item.UpdatedUtc?.ToLocalTime().ToString("g") ?? "");
-            }
-            if (FindConversationElement<FontIcon>(container, "conversation-notice") is { } notice)
-                notice.Visibility = FeatureSettings.Read(state.FeaturesJson).NotificationBell && chatNotices.Any(x => x.ChatId == item.Id) ? Visibility.Visible : Visibility.Collapsed;
+            bar.Visibility = conversationRuns.ContainsKey(item.Id) ? Visibility.Visible : Visibility.Collapsed;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(bar, T("Le modèle réfléchit…") + " " + item.Title);
         }
+        if (FindConversationElement<TextBlock>(container, "conversation-title") is { } label)
+        {
+            label.Text = item.Title;
+            label.Visibility = namingChats.Contains(item.Id) ? Visibility.Collapsed : Visibility.Visible;
+            ToolTipService.SetToolTip(label, item.Title);
+        }
+        if (FindConversationElement<StackPanel>(container, "conversation-naming") is { } naming)
+            naming.Visibility = namingChats.Contains(item.Id) ? Visibility.Visible : Visibility.Collapsed;
+        if (FindConversationElement<Border>(container, "conversation-naming-spinner") is { } spinnerHost)
+        {
+            if (spinnerHost.Child is not BusySpinner) spinnerHost.Child = new BusySpinner();
+            ((BusySpinner)spinnerHost.Child).IsActive = namingChats.Contains(item.Id);
+        }
+        if (FindConversationElement<TextBlock>(container, "conversation-naming-label") is { } namingLabel)
+            namingLabel.Text = WorkflowText("Nommage…", "Naming…");
+        if (FindConversationElement<TextBlock>(container, "conversation-age") is { } age)
+        {
+            age.Text = ConversationAge(item);
+            ToolTipService.SetToolTip(age, item.UpdatedUtc?.ToLocalTime().ToString("g") ?? "");
+        }
+        if (FindConversationElement<FontIcon>(container, "conversation-notice") is { } notice)
+            notice.Visibility = bell && chatNotices.Any(x => x.ChatId == item.Id) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void SetRunStatus(ConversationRun run, string text, StatusKind kind = StatusKind.Activity)
@@ -231,7 +256,7 @@ public sealed partial class MainWindow
         }
         var run = new ConversationRun(chat, project, provider, state, composer.Text.Trim(), pendingImages,db.Providers.Local) { Messages = messages };
         var secret = KeyVault.Decrypt(run.Provider.ProtectedKey);
-        if ((!run.Provider.IsExternalAgent && !run.Provider.IsLocal && secret.Length == 0) || string.IsNullOrWhiteSpace(run.Provider.Model))
+        if ((!run.Provider.IsExternalAgent && !run.Provider.IsLocal && (!run.Provider.IsVertex || VertexAi.UsesApiKey(run.Provider.BaseUrl)) && secret.Length == 0) || string.IsNullOrWhiteSpace(run.Provider.Model))
         { run.Dispose();await Settings(); return; }
         conversationRuns.Add(run.Chat.Id, run); // Reserve before the first await, preventing duplicate sends.
         composer.Text = ""; pendingImages.Clear(); UpdateAttachments();

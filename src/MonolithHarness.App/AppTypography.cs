@@ -23,12 +23,18 @@ static class AppTypography
     {
         scopes.Remove(node); scopes.Add(node, new(area));
     }
-    public static void Apply(DependencyObject root)
+    public static void Apply(DependencyObject root) => Walk(root, AreaOf(root));
+    /// <summary>Applies the scope of <paramref name="root"/> to some of its children only.</summary>
+    public static void Apply(DependencyObject root, IEnumerable<DependencyObject> children)
     {
-        var area = FontArea.Interface;
+        var area = AreaOf(root);
+        foreach (var child in children) Walk(child, area);
+    }
+    static FontArea AreaOf(DependencyObject root)
+    {
         for (DependencyObject? parent = root; parent != null; parent = VisualTreeHelper.GetParent(parent))
-            if (scopes.TryGetValue(parent, out var scope)) { area = scope.Area; break; }
-        Walk(root, area);
+            if (scopes.TryGetValue(parent, out var scope)) return scope.Area;
+        return FontArea.Interface;
     }
     static bool FixedFont(FontFamily font) => font.Source.Contains("MaterialFileIcons", StringComparison.OrdinalIgnoreCase) || font.Source.Contains("MDL2", StringComparison.OrdinalIgnoreCase)
         || font.Source.Contains("Fluent Icons", StringComparison.OrdinalIgnoreCase)

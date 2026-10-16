@@ -105,7 +105,7 @@ public sealed partial class MainWindow
                     if (turns.Count % 64 == 0) await Task.Delay(1, ct);
                 }
             // Measure the recent edge before jumping to the bottom. Older slots load on demand.
-            var initial = FeatureSettings.Read(owner.state.FeaturesJson).VirtualizeChat ? turns.TakeLast(2) : turns;
+            var initial = owner.ReadOnlyFeatures.VirtualizeChat ? turns.TakeLast(2) : turns;
             var mounted = 0;
             foreach (var turn in initial) { turn.Wanted = true; await turn.MountAsync(ct); if (++mounted % 4 == 0) await Task.Delay(1, ct); }
         }
@@ -165,12 +165,14 @@ public sealed partial class MainWindow
             {
                 var viewport = Math.Max(240, owner.scroll.ViewportHeight);
                 var margin = Math.Max(800, viewport * 2);
-                var enabled = FeatureSettings.Read(owner.state.FeaturesJson).VirtualizeChat;
+                var enabled = owner.ReadOnlyFeatures.VirtualizeChat;
                 var wanted = new List<VirtualTurn>();
+                // One transform for the host; each turn's position is its layout slot within it.
+                var hostTop = host.TransformToVisual(owner.scroll).TransformPoint(new Point()).Y;
                 foreach (var turn in turns)
                 {
                     if (!ReferenceEquals(turn.Frame.Parent, host)) continue;
-                    var y = turn.Frame.TransformToVisual(owner.scroll).TransformPoint(new Point()).Y;
+                    var y = hostTop + Microsoft.UI.Xaml.Controls.Primitives.LayoutInformation.GetLayoutSlot(turn.Frame).Y + turn.Frame.Margin.Top;
                     turn.Wanted = !enabled || turn.IsLive || turn.KeepUntil > Environment.TickCount64 || y <= viewport + margin && y + turn.Frame.ActualHeight >= -margin;
                     if (turn.Wanted) { if (turn.Content == null) wanted.Add(turn); }
                     else turn.Release();

@@ -5,6 +5,7 @@ namespace MonolithHarness.Core;
 
 public sealed record CloudProviderPreset(string Id, string Name, string BaseUrl, string DescriptionFr, string DescriptionEn, string DocumentationUrl, string KeysUrl)
 {
+    public string Kind { get; init; } = "openai";
     public bool ImageGeneration { get; init; }
     public string DefaultModel { get; init; } = "";
     public IReadOnlyList<string> SuggestedChatModels { get; init; } = [];
@@ -28,6 +29,14 @@ public static class ProviderPresets
             "Texte, vision et raisonnement. Certains modèles disposent d’un quota gratuit ; les modèles d’image ont leurs propres conditions.",
             "Text, vision and reasoning. Some models have a free quota; image models have their own conditions.",
             "https://ai.google.dev/gemini-api/docs/openai", "https://aistudio.google.com/apikey") { ImageGeneration = true },
+        new CloudProviderPreset("vertex", "Vertex AI · Google Cloud", VertexAi.DefaultBaseUrl,
+            "Gemini via votre projet Google Cloud. Authentification ADC avec renouvellement OAuth automatique, ou clé API Google Cloud (projet ou Express). Les crédits s’appliquent uniquement aux usages éligibles du compte de facturation associé.",
+            "Gemini through your Google Cloud project. ADC authentication with automatic OAuth refresh, or a Google Cloud API key (project or Express). Credits apply only to eligible usage on the linked billing account.",
+            "https://cloud.google.com/vertex-ai/generative-ai/docs/start/openai", VertexAi.AuthenticationHelp)
+        {
+            Kind = "vertex", DefaultModel = "google/gemini-4-argon",
+            SuggestedChatModels = ["google/gemini-4-argon", "google/gemini-2.5-flash", "google/gemini-2.5-pro"]
+        },
         new CloudProviderPreset("mistral", "Mistral", "https://api.mistral.ai/v1",
             "Accès direct aux modèles Mistral, avec un mode gratuit limité et des offres payantes.",
             "Direct access to Mistral models, with limited free access and paid plans.",
@@ -50,6 +59,7 @@ public static class ProviderPresets
     public static CloudProviderPreset? Find(string? id) => Cloud.FirstOrDefault(x => x.Id == id);
     public static CloudProviderPreset? Resolve(string? baseUrl)
     {
+        if (VertexAi.IsEndpoint(baseUrl)) return Find("vertex");
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var endpoint)) return null;
         return Cloud.FirstOrDefault(preset =>
         {
@@ -60,7 +70,7 @@ public static class ProviderPresets
         });
     }
 
-    public static bool CanGenerateImages(Provider provider) => provider.IsLocal || (!provider.IsComposite && !provider.IsOpenCode && (Resolve(provider.BaseUrl)?.ImageGeneration ?? true));
+    public static bool CanGenerateImages(Provider provider) => !provider.IsVertex && (provider.IsLocal || (!provider.IsComposite && !provider.IsOpenCode && (Resolve(provider.BaseUrl)?.ImageGeneration ?? true)));
 
     public static void ConfigureRequest(Provider provider, JsonObject payload, HttpRequestMessage request)
     {
@@ -95,7 +105,7 @@ public static class ProviderPresets
         }
     }
 
-    public static string NormalizeModelId(Provider provider, string model) => Resolve(provider.BaseUrl)?.Id == "gemini" && model.StartsWith("models/", StringComparison.Ordinal)
+    public static string NormalizeModelId(Provider provider, string model) => provider.IsVertex ? VertexAi.NormalizeModel(model) : Resolve(provider.BaseUrl)?.Id == "gemini" && model.StartsWith("models/", StringComparison.Ordinal)
         ? model[7..] : model;
 
     public static string ReasoningNotice(Provider provider, string? effort)

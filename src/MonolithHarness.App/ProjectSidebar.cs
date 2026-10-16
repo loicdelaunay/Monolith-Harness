@@ -15,22 +15,15 @@ public sealed partial class MainWindow
 
     Grid BuildConversationNavigation()
     {
-        var panel = new Grid { Padding = new(14, 18, 14, 14), RowSpacing = 8, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
+        var panel = new Grid { Padding = new(14, 8, 14, 14), RowSpacing = 0, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
+        foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
             panel.RowDefinitions.Add(new RowDefinition { Height = height });
-        var brand = new Grid { ColumnSpacing = 10, Margin = new(8, 0, 8, 14) };
-        brand.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        brand.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        brand.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        brand.Children.Add(brandLogo); Grid.SetColumn(brandName, 1); brand.Children.Add(brandName);
-        var version = BuildVersionChip();
-        Grid.SetColumn(version, 2); brand.Children.Add(version);
-        panel.Children.Add(brand);
         chatSearch.PlaceholderText = UiText.T("Rechercher une conversation…"); chatSearch.FontSize = 12;
         chatSearch.Visibility = Visibility.Collapsed;
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chatSearch, UiText.T("Rechercher une conversation"));
-        Grid.SetRow(chatSearch, 1); panel.Children.Add(chatSearch);
-        sidebarScroll.Content = projectNavigation; Grid.SetRow(sidebarScroll, 2); panel.Children.Add(sidebarScroll);
+        chatSearch.Margin = new(0, 0, 0, 8);
+        Grid.SetRow(chatSearch, 0); panel.Children.Add(chatSearch);
+        sidebarScroll.Content = projectNavigation; Grid.SetRow(sidebarScroll, 1); panel.Children.Add(sidebarScroll);
         conversationArea.RowDefinitions.Add(new() { Height = GridLength.Auto });
         conversationArea.RowDefinitions.Add(new() { Height = GridLength.Auto });
         foreach (var list in new[] { chats, archivedChats })
@@ -100,7 +93,7 @@ public sealed partial class MainWindow
             projectNavigation.Children.Add(pinnedHeading);
             foreach (var item in pinned) projectNavigation.Children.Add(BuildIndependentChatRow(item, true));
         }
-        var heading = new Grid { Margin = new(8, pinned.Count > 0 ? 16 : 4, 0, 6) };
+        var heading = new Grid { Tag = "sidebar-projects-heading", Margin = new(8, pinned.Count > 0 ? 16 : 0, 0, 6) };
         heading.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         for (int i = 0; i < 3; i++) heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var label = Label(CloudView ? WorkflowText("Projets cloud", "Cloud projects") : WorkflowText("Projets", "Projects"), 12); label.Foreground = FluentDesign.Secondary;

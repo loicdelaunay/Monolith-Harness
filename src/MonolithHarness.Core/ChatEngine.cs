@@ -42,6 +42,11 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
     public async Task<List<string>> ModelsAsync(Provider provider, string key, CancellationToken ct)
     {
         if (provider.IsAcp || provider.IsLocal) return await platform.ModelsAsync(provider, ct);
+        if (provider.IsVertex)
+        {
+            if (ProviderGuard?.Invoke(provider) is { } refused) throw new InvalidOperationException(refused);
+            return await VertexAi.ModelsAsync(http, provider, ct, key);
+        }
         using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint(provider.BaseUrl, "models"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         using var response = await http.SendAsync(request, ct);
@@ -167,18 +172,25 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             var actual = (JsonObject)payload.DeepClone();
             var compatibilityNotice = string.Join("\n", new[] { profile.NoticeFor(actual), ProviderPresets.ReasoningNotice(provider, profile.NoEffort ? null : reasoningEffort) }.Where(x => x.Length > 0));
             profile.Apply(actual);
-            using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint(baseUrl, "chat/completions"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
-            ProviderPresets.ConfigureRequest(provider, actual, request);
-            if (requireNoReasoning) ChatReasoning.Disable(provider, actual);
-            request.Content = new StringContent(actual.ToJsonString(), Encoding.UTF8, "application/json");
-            progress = progress with { Stage = ContextRequestStage.Sending, PayloadBytes = request.Content.Headers.ContentLength };
+            var nativeVertex = provider.IsVertex && VertexAi.UsesApiKey(provider.BaseUrl);
+            if (nativeVertex && requireNoReasoning) ChatReasoning.Disable(provider, actual);
+            using var request = nativeVertex ? VertexApiKey.CreateRequest(provider, actual)
+                : new HttpRequestMessage(HttpMethod.Post, Endpoint(baseUrl, "chat/completions"));
+            if (provider.IsVertex) key = await VertexAi.AuthorizeAsync(request, provider, ct, key);
+            else request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            if (!nativeVertex)
+            {
+                ProviderPresets.ConfigureRequest(provider, actual, request);
+                if (requireNoReasoning) ChatReasoning.Disable(provider, actual);
+                request.Content = new StringContent(actual.ToJsonString(), Encoding.UTF8, "application/json");
+            }
+            progress = progress with { Stage = ContextRequestStage.Sending, PayloadBytes = request.Content!.Headers.ContentLength };
             requestProgress?.Invoke(progress);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await ProviderErrorDetails.ReadAsync(response, key, ct);
-                if ((int)response.StatusCode is 400 or 422 && !RequestRetry.IsIncompleteJsonBadRequest(response.StatusCode, detail) && attempt < 4 && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase)))
+                if ((int)response.StatusCode is 400 or 422 && !RequestRetry.IsIncompleteJsonBadRequest(response.StatusCode, detail) && attempt < 4 && !nativeVertex && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase)))
                 {
                     if (requireNoReasoning && profile.NoEffort) throw ChatReasoning.Unsupported(provider.Model, detail);
                     continue;
@@ -188,14 +200,20 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             requestProgress?.Invoke(progress with { Stage = ContextRequestStage.AwaitingOutput });
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
             compatibility[compatibilityKey] = profile.Copy();
-            return await ParseStreamAsync(reader, value =>
+            return await ParseLinesAsync(nativeVertex ? VertexApiKey.OpenAiLinesAsync(reader, provider.Model, ct) : ReadLinesAsync(reader, ct), value =>
             {
                 if (requireNoReasoning && value.Reasoning.Length > 0) throw ChatReasoning.Unsupported(provider.Model);
                 update(value with { CompatibilityNotice = compatibilityNotice });
             }, ct);
         }
     }
-    public static async Task<Completion> ParseStreamAsync(TextReader reader, Action<GenerationUpdate> update, CancellationToken ct)
+    public static Task<Completion> ParseStreamAsync(TextReader reader, Action<GenerationUpdate> update, CancellationToken ct)
+        => ParseLinesAsync(ReadLinesAsync(reader, ct), update, ct);
+    static async IAsyncEnumerable<string> ReadLinesAsync(TextReader reader, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        while (await reader.ReadLineAsync(ct) is { } line) yield return line;
+    }
+    public static async Task<Completion> ParseLinesAsync(IAsyncEnumerable<string> lines, Action<GenerationUpdate> update, CancellationToken ct)
     {
         var text = new StringBuilder(); var reasoning = new StringBuilder(); var refusal = new StringBuilder();
         var reasoningDetails = new JsonArray(); var extraContent = new JsonObject();
@@ -260,7 +278,7 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             { HasModelOutput = hasModelOutput, CachedInputTokens = cachedInput,
                 Termination = finishReason == null ? null : GenerationTermination.Observe(finishReason, true, text.ToString(), calls.Count > 0) with { StreamCompleted = null } });
         }
-        while (await reader.ReadLineAsync(ct) is { } line)
+        await foreach (var line in lines.WithCancellation(ct))
         {
             if (line.Length == 0)
             {

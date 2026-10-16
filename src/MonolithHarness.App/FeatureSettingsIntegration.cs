@@ -7,6 +7,20 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
+    string cachedFeaturesJson = "";
+    FeatureSettings? cachedFeatures;
+    /// <summary>Read-only settings for frequent UI paths; never modify the returned instance.</summary>
+    FeatureSettings ReadOnlyFeatures
+    {
+        get
+        {
+            var json = state.FeaturesJson;
+            if (cachedFeatures == null || !string.Equals(json, cachedFeaturesJson, StringComparison.Ordinal))
+            { cachedFeatures = FeatureSettings.Read(json); cachedFeaturesJson = json; }
+            return cachedFeatures;
+        }
+    }
+
     (StackPanel Browser, StackPanel Rag, StackPanel Vision, Func<string> Save) BuildFeatureSettings()
     {
         var config = FeatureSettings.Read(state.FeaturesJson);

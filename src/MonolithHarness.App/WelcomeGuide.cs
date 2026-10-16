@@ -211,7 +211,7 @@ public sealed partial class MainWindow
         Provider? prepared = null;
         if (draft != null)
         {
-            prepared = new Provider(); ApplyProviderDraft(draft, prepared);
+            prepared = new Provider { ProtectedKey = [.. draft.ProtectedKey] }; ApplyProviderDraft(draft, prepared);
             ProviderModels.Select(prepared, ProviderModels.Visible(prepared).Append(prepared.Model));
         }
         var previousFeatures = state.FeaturesJson; var previousSkills = state.EnabledSkills; var previousProvider = state.ProviderId;

@@ -13,8 +13,12 @@ public sealed partial class MainWindow
     readonly TextBlock selectedModelName = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
         Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock selectedThinking = new() { FontSize = 11, Foreground = FluentDesign.Primary };
-    readonly TextBlock modelPickerProvider = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary };
     readonly TextBlock thinkingDescription = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary };
+    readonly ProviderPicker providerSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
+    readonly SegmentedOptions thinkingSegments = new();
+    FrameworkElement? modelOptionsFooter, modelHeaderActions;
+    Button? modelResetButton;
+    bool updatingProviderSelector, changingModelProvider;
     readonly ProgressRing modelRefreshProgress = new() { Width = 18, Height = 18 };
     readonly ModelContextEditor modelContextEditor = new(compact: true);
     object? modelRefreshIcon;
@@ -31,105 +35,131 @@ public sealed partial class MainWindow
         var thinkingSummary = Row(composerThinkingIcon, composerThinkingMarker); thinkingSummary.Spacing = 2;
         var badge = new Border { Child = thinkingSummary, CornerRadius = new(6), Padding = new(4, 2, 4, 2),
             Background = FluentDesign.Resource("ControlSelectedBrush"), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(badge, 1); selection.Children.Add(badge);
-        modelOptionsButton.Content = selection;
-        var panel = modelOptionsPanel = new Grid { RowSpacing = 10 };
+        Grid.SetColumn(badge, 1); selection.Children.Add(badge); modelOptionsButton.Content = selection;
+        var panel = modelOptionsPanel = new Grid { RowSpacing = 12 };
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        var heading = new TextBlock { FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap };
-        panel.Children.Add(BuildQuickModelHeader(heading));
-        var sections = new StackPanel { Spacing = 10 };
-        var body = new ScrollViewer { Content = sections, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetRow(body, 1); panel.Children.Add(body);
-        sections.Children.Add(BuildQuickLevelPicker());
-        var modelSection = modelAdvancedSection = new StackPanel { Spacing = 4 };
-        var modelHeader = new Grid { ColumnSpacing = 10 };
-        modelHeader.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        modelHeader.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        modelHeader.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var modelHeading = new TextBlock { FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
-        modelHeader.Children.Add(modelHeading);
-        var providerSettings = new Button { Name = "ProviderSettingsButton", Width = 32, Height = 32, Padding = new(0) };
+        var heading = new TextBlock { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = FluentDesign.Primary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        var header = new Grid { ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        header.Children.Add(BuildQuickModelHeader(heading));
+        var providerSettings = new Button { Name = "ProviderSettingsButton", Width = 34, Height = 34, Padding = new(0) };
         FluentDesign.IconButton(providerSettings, "\uE713", WorkflowText("Réglages des fournisseurs", "Provider settings"), false);
-        Grid.SetColumn(providerSettings, 1); modelHeader.Children.Add(providerSettings);
         providerSettings.Click += async (_, _) =>
         {
-            modelOptionsFlyout?.Hide();
-            await Guard(async () => await Settings(showProviders: true));
+            modelOptionsFlyout?.Hide(); await Guard(async () => await Settings(showProviders: true));
         };
-        refreshModelsBtn.Width = refreshModelsBtn.Height = 32;
-        FluentDesign.IconButton(refreshModelsBtn, "\uE72C", WorkflowText("Actualiser les modèles", "Refresh models"), false);
-        modelRefreshIcon = refreshModelsBtn.Content;
-        Grid.SetColumn(refreshModelsBtn, 2); modelHeader.Children.Add(refreshModelsBtn);
-        modelSelector.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
+        var more = new Button { Width = 34, Height = 34, Padding = new(0) };
+        FluentDesign.IconButton(more, "\uE712", WorkflowText("Options du modèle", "Model options"), false);
+        var refreshLabel = new TextBlock { FontSize = 13 };
+        var refreshContent = Row(FluentDesign.Icon("\uE72C", 15), refreshLabel);
+        refreshModelsBtn.MinHeight = 36; refreshModelsBtn.Padding = new(10, 6, 10, 6);
+        refreshModelsBtn.HorizontalContentAlignment = HorizontalAlignment.Left;
+        refreshModelsBtn.Content = refreshContent; modelRefreshIcon = refreshContent;
+        var moreFlyout = new Flyout { Content = refreshModelsBtn }; more.Flyout = moreFlyout;
+        refreshModelsBtn.Click += (_, _) => moreFlyout.Hide();
+        modelHeaderActions = Row(providerSettings, more); Grid.SetColumn(modelHeaderActions, 1); header.Children.Add(modelHeaderActions);
+        panel.Children.Add(header);
+
+        var sections = new StackPanel { Spacing = 14 };
+        var body = new ScrollViewer { Content = sections, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetRow(body, 1); panel.Children.Add(body); sections.Children.Add(BuildQuickLevelPicker());
+        var modelSection = modelAdvancedSection = new StackPanel { Spacing = 12 };
+        var providerHeading = ModelOptionHeading(); var modelHeading = ModelOptionHeading();
+        var providerSection = new StackPanel { Spacing = 6 };
+        providerSection.Children.Add(providerHeading); providerSection.Children.Add(providerSelector); modelSection.Children.Add(providerSection);
+        var modelField = new StackPanel { Spacing = 6 };
+        modelField.Children.Add(modelHeading); modelField.Children.Add(modelSelector); modelSection.Children.Add(modelField);
+        providerSelector.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
             <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                <StackPanel Spacing="3" Padding="0,4">
-                    <TextBlock Text="{Binding Model}" FontSize="14" TextWrapping="Wrap" TextTrimming="None" />
-                    <TextBlock Text="{Binding ProviderName}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
+                <TextBlock Text="{Binding Caption}" FontSize="14" Padding="0,4" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
             </DataTemplate>
             """);
-        modelSection.Children.Add(modelHeader); modelSection.Children.Add(modelSelector);
-        // A grid lets long connection names wrap without forcing a horizontal scrollbar.
-        var providerRow = new Grid { ColumnSpacing = 6 };
-        providerRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        providerRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        providerRow.Children.Add(new FontIcon { Glyph = "\uE968", FontSize = 12, Foreground = FluentDesign.Secondary,
-            VerticalAlignment = VerticalAlignment.Center });
-        Grid.SetColumn(modelPickerProvider, 1); providerRow.Children.Add(modelPickerProvider);
-        modelSection.Children.Add(providerRow); sections.Children.Add(modelSection);
-        var thinkingSection = thinkingAdvancedSection = new Grid { ColumnSpacing = 10 };
-        thinkingSection.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        thinkingSection.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        var thinkingHeading = new TextBlock { FontSize = 13, Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
-        thinkingSelector.MinHeight = 32; thinkingSelector.Padding = new(8, 3, 8, 3); thinkingSelector.FontSize = 13;
-        thinkingSection.Children.Add(thinkingHeading); Grid.SetColumn(thinkingSelector, 1); thinkingSection.Children.Add(thinkingSelector);
-        sections.Children.Add(thinkingSection);
+        modelSelector.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
+            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                <TextBlock Text="{Binding Model}" FontSize="14" Padding="0,4" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+            </DataTemplate>
+            """);
+        sections.Children.Add(modelSection);
+        var thinkingSection = thinkingAdvancedSection = new Grid { RowSpacing = 8 };
+        thinkingSection.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        thinkingSection.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        thinkingSection.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        thinkingSection.Children.Add(new Border { Height = 1, Background = FluentDesign.Stroke, Margin = new(0, 0, 0, 4) });
+        var thinkingHeading = ModelOptionHeading(); Grid.SetRow(thinkingHeading, 1); thinkingSection.Children.Add(thinkingHeading);
+        Grid.SetRow(thinkingSegments, 2); thinkingSection.Children.Add(thinkingSegments); sections.Children.Add(thinkingSection);
+        thinkingSegments.SetLabels("Auto", "Faible", "Moyenne", "Élevée", "Sans");
+        thinkingSegments.SelectionChanged += (_, _) =>
+        {
+            if (loading || updatingThinkingSelector || applyingQuickLevel || ActiveRun != null) return;
+            if (thinkingSegments.SelectedIndex != thinkingSelector.SelectedIndex) thinkingSelector.SelectedIndex = thinkingSegments.SelectedIndex;
+        };
         sections.Children.Add(modelContextEditor);
-        var done = new Button { HorizontalAlignment = HorizontalAlignment.Right, MinHeight = 32, Padding = new(12, 4, 12, 4), FontSize = 13,
-            Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
-        modelDoneButton = done;
-        var footer = Row(done); footer.HorizontalAlignment = HorizontalAlignment.Right;
-        Grid.SetRow(footer, 2); panel.Children.Add(footer);
+
+        var done = modelDoneButton = new Button { HorizontalAlignment = HorizontalAlignment.Right, MinHeight = 36,
+            Padding = new(14, 6, 14, 6), FontSize = 14, Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
+        var resetLabel = new TextBlock { FontSize = 11, Foreground = FluentDesign.Secondary, TextWrapping = TextWrapping.Wrap };
+        var reset = modelResetButton = new Button { Content = resetLabel, MinWidth = 0, MinHeight = 36, Padding = new(0, 6, 8, 6),
+            HorizontalContentAlignment = HorizontalAlignment.Left, BorderThickness = new(0), Background = FluentDesign.Resource("TransparentBrush") };
+        reset.Click += async (_, _) => await Guard(async () =>
+        {
+            if (provider == null || ActiveRun != null || applyingQuickLevel) return;
+            modelContextEditor.ResetToAutomatic(notify: false);
+            if (ChatInteraction) state.ChatThinkingLevel = "none"; else state.ThinkingLevel = "auto";
+            PopulateThinkingSelector(); await db.SaveChangesAsync(); RefreshContextInfo(); RefreshModelOptions();
+        });
+        var footer = new Grid { ColumnSpacing = 12 };
+        footer.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        footer.Children.Add(reset); Grid.SetColumn(done, 1); footer.Children.Add(done);
+        modelOptionsFooter = new Border { Child = footer, BorderThickness = new(0, 1, 0, 0), BorderBrush = FluentDesign.Stroke, Padding = new(0, 12, 0, 0) };
+        Grid.SetRow(modelOptionsFooter, 2); panel.Children.Add(modelOptionsFooter);
         TextZoom.Observe(panel);
         modelOptionsFlyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.TopEdgeAlignedRight };
         modelOptionsFlyout.FlyoutPresenterStyle = new Style { TargetType = typeof(FlyoutPresenter) };
-        modelOptionsFlyout.FlyoutPresenterStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(12)));
+        modelOptionsFlyout.FlyoutPresenterStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16)));
         modelOptionsFlyout.FlyoutPresenterStyle.Setters.Add(new Setter(FrameworkElement.MaxWidthProperty, double.PositiveInfinity));
         modelOptionsButton.Flyout = modelOptionsFlyout;
         modelOptionsFlyout.Opening += (_, _) =>
         {
             modelOptionsIsOpen = true; previewQuickLevelId = null;
-            var scale = TextZoom.ForWindow(root) / 100d;
-            ResizeModelPicker();
+            var scale = TextZoom.ForWindow(root) / 100d; ResizeModelPicker();
             panel.MaxHeight = Math.Max(180, root.ActualHeight - 96);
-            modelSelector.MaxSuggestionListHeight = Math.Max(100, Math.Min(260 * scale, root.ActualHeight / 2));
+            modelSelector.MaxSuggestionListHeight = providerSelector.MaxSuggestionListHeight = Math.Max(100, Math.Min(260 * scale, root.ActualHeight / 2));
             heading.Text = WorkflowText("Modèle et réflexion", "Model and thinking");
-            modelHeading.Text = WorkflowText("Modèle", "Model");
-            modelSelector.RefreshLanguage();
-            thinkingSelector.Header = null;
+            providerHeading.Text = WorkflowText("Fournisseur", "Provider"); modelHeading.Text = WorkflowText("Modèle", "Model");
+            modelSelector.RefreshLanguage(); providerSelector.RefreshLanguage();
             thinkingHeading.Text = WorkflowText("Réflexion", "Thinking");
+            thinkingSegments.SetLabels("Auto", WorkflowText("Faible", "Low"), WorkflowText("Moyenne", "Medium"), WorkflowText("Élevée", "High"), WorkflowText("Sans", "Off"));
             done.Content = WorkflowText("Terminer", "Done");
-            var providerSettingsLabel = WorkflowText("Réglages des fournisseurs", "Provider settings");
-            ToolTipService.SetToolTip(providerSettings, providerSettingsLabel);
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(providerSettings, providerSettingsLabel);
-            ToolTipService.SetToolTip(refreshModelsBtn, WorkflowText("Actualiser les modèles", "Refresh models"));
-            RefreshModelOptions();
-            TextZoom.SetWindow(panel, TextZoom.ForWindow(root));
+            resetLabel.Text = WorkflowText("Rétablir les valeurs par défaut", "Restore defaults");
+            ToolTipService.SetToolTip(reset, WorkflowText("Rétablir la réflexion et le contexte par défaut, sans changer le fournisseur ni le modèle.", "Restore default thinking and context without changing the provider or model."));
+            refreshLabel.Text = WorkflowText("Actualiser les modèles", "Refresh models");
+            var settingsLabel = WorkflowText("Réglages des fournisseurs", "Provider settings");
+            ToolTipService.SetToolTip(providerSettings, settingsLabel);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(providerSettings, settingsLabel);
+            var moreLabel = WorkflowText("Options du modèle", "Model options"); ToolTipService.SetToolTip(more, moreLabel);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(more, moreLabel);
+            ToolTipService.SetToolTip(refreshModelsBtn, refreshLabel.Text);
+            RefreshModelOptions(); TextZoom.SetWindow(panel, TextZoom.ForWindow(root));
         };
         modelOptionsFlyout.Opened += (_, _) =>
         {
-            if (!chooseModelOnOpen) return;
-            chooseModelOnOpen = false;
-            modelSelector.OpenSuggestions();
+            if (!chooseModelOnOpen) return; chooseModelOnOpen = false;
+            if (providerSelector.SelectedItem == null) providerSelector.OpenSuggestions(); else modelSelector.OpenSuggestions();
         };
-        modelOptionsFlyout.Closed += (_, _) => { modelOptionsIsOpen = false; chooseModelOnOpen = false; modelSelector.ResetSearch(); };
+        modelOptionsFlyout.Closed += (_, _) =>
+        {
+            modelOptionsIsOpen = false; chooseModelOnOpen = false; modelSelector.ResetSearch(); providerSelector.ResetSearch(); moreFlyout.Hide();
+        };
         done.Click += (_, _) => modelOptionsFlyout.Hide();
     }
+
+    static TextBlock ModelOptionHeading() => new() { FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        Foreground = FluentDesign.Primary, VerticalAlignment = VerticalAlignment.Center };
 
     async void OpenModelOptions(bool chooseModel = false)
     {
@@ -147,8 +177,7 @@ public sealed partial class MainWindow
         var choice = modelSelector.SelectedItem as ModelChoice;
         selectedModelName.Text = choice?.Model ?? WorkflowText("Choisir un modèle", "Choose a model");
         selectedThinking.Text = thinkingSelector.SelectedItem?.ToString() ?? "🧠 Auto";
-        modelPickerProvider.Text = choice?.ProviderName ?? WorkflowText("Aucun modèle sélectionné", "No model selected");
-        ToolTipService.SetToolTip(modelPickerProvider, modelPickerProvider.Text);
+        thinkingSegments.SelectedIndex = thinkingSelector.SelectedIndex;
         thinkingDescription.Text = thinkingSelector.SelectedIndex switch
         {
             1 => WorkflowText("Demande une réflexion courte pour privilégier la rapidité.", "Requests brief thinking to favor speed."),
@@ -163,6 +192,7 @@ public sealed partial class MainWindow
             "Support for thinking levels depends on the provider and model."));
         ToolTipService.SetToolTip(thinkingSelector, thinkingDescription.Text + "\n" + WorkflowText("La prise en charge des niveaux de réflexion dépend du fournisseur et du modèle.",
             "Support for thinking levels depends on the provider and model."));
+        ToolTipService.SetToolTip(thinkingSegments, thinkingDescription.Text + "\n" + WorkflowText("La prise en charge dépend du fournisseur et du modèle.", "Support depends on the provider and model."));
         var details = selectedModelName.Text + (choice == null ? "" : "\n" + choice.ProviderName) + "\n" +
             WorkflowText("Réflexion : ", "Thinking: ") + selectedThinking.Text;
         ToolTipService.SetToolTip(modelOptionsButton, details);
@@ -177,5 +207,6 @@ public sealed partial class MainWindow
         modelRefreshProgress.IsActive = busy;
         refreshModelsBtn.Content = busy ? modelRefreshProgress : modelRefreshIcon;
         refreshModelsBtn.IsEnabled = !busy && provider != null && !provider.IsComposite && ActiveRun == null;
+        RefreshQuickModelUi();
     }
 }

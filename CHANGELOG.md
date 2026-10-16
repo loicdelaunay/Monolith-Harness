@@ -1,5 +1,88 @@
 # Changelog
 
+## 1.104.1 — 2026-10-16
+
+### Performances · interface plus fluide pendant les réponses
+
+- Pendant le streaming, seule la fin de la réponse est analysée à chaque rafraîchissement : les blocs Markdown terminés ne sont plus relus. Sur une réponse de 19 000 caractères, le temps d’analyse par rafraîchissement passe d’environ 5,5 ms à moins de 0,1 ms. Le rendu final reste identique à celui d’une réponse affichée en une fois.
+- Le raisonnement en cours s’ajoute au texte déjà affiché au lieu de le remplacer entièrement, ce qui évite de recalculer la mise en page de tout le raisonnement à chaque rafraîchissement.
+- Le suivi automatique du bas du chat ne force plus de recalcul synchrone de la mise en page de la fenêtre à chaque rafraîchissement.
+- Les mises à jour d’état, de statut et de partage serveur ne sont plus traitées à chaque token, mais au rythme de l’affichage (environ 10 à 14 fois par seconde).
+- Barre latérale : faire défiler la liste des conversations ne rafraîchit plus toutes les lignes à chaque ligne affichée ; seule la ligne concernée est mise à jour.
+- Les messages de l’historique ne sont plus recalculés après chaque passe de mise en page, mais seulement lors d’un défilement ou d’un changement de taille.
+
+## 1.104.0 — 2026-10-16
+
+### Apparence · fonds animés personnalisables
+
+- L’opacité des animations du fond du chat se règle de 0 à 100 %. La valeur par défaut préserve l’intensité discrète des effets existants ; 0 % suspend leur animation.
+- La couleur peut suivre le thème ou être personnalisée avec un sélecteur et un code #RRGGBB. Le choix s’applique à tous les effets.
+- Ajout de deux animations : Particules, un mouvement de points flottants, et Grille lumineuse, un quadrillage parcouru par une lueur.
+- L’aperçu dans Apparence et le fond du chat reflètent les modifications immédiatement. Enregistrer conserve les choix, Annuler restaure les valeurs précédentes. Les scènes restent limitées et respectent la désactivation des animations système.
+
+## 1.103.0 — 2026-10-16
+
+### Apparence · Fluent sombre V2 et fonds animés
+
+- Nouveau thème « Fluent sombre V2 » : fond presque noir, surfaces grises plus foncées, contours discrets et accent/actions en bleu #1D6FC8. Les messages utilisateur, assistant et outils disposent de couleurs adaptées ; le thème existant reste disponible.
+- Ajout d’une liste « Animation de fond du chat » dans Apparence : Désactivé, Code flottant, Aurore, Constellation et Ondulations. Le choix est désactivé par défaut pour les nouveaux profils et les réglages existants.
+- Aperçu immédiat du fond dans les réglages et derrière les messages. Enregistrer conserve le choix ; Annuler restaure le fond enregistré.
+- Les animations suivent la palette active, ne capturent aucun clic et utilisent des scènes natives de taille limitée. Elles s’arrêtent quand la fenêtre est réduite, quand le chat est masqué ou quand les animations système Windows sont désactivées.
+- Pied de sidebar compact sur une surface commune : débit global sur une ligne, état du serveur avec interrupteur natif, puis Réglages et Outils alignés. La ligne serveur conserve l’accès aux détails de connexion et l’interrupteur est grisé tant qu’aucun compte n’est connecté.
+
+## 1.102.1 — 2026-10-15
+
+### Fournisseurs · vérification de connexion
+
+- Correction du filtre local qui refusait les clés Google Cloud Express contenant un point. Les clés restent masquées et chiffrées ; leur format est traité comme opaque, avec contrôle des caractères interdits dans un en-tête HTTP.
+- Le résultat du bouton « Tester la connexion » s’affiche directement sous les boutons : vérification en cours, succès, erreur détaillée ou délai dépassé. Les messages suivent le thème et restent associés au fournisseur concerné.
+- Pour Vertex AI, le contrôle appelle désormais le comptage de jetons du modèle choisi, y compris en Express, sans générer de réponse ni dépendre du catalogue de modèles. La génération et l’éligibilité des crédits ne sont pas garanties par cette vérification.
+
+## 1.102.0 — 2026-10-15
+
+### Vertex AI · clés API Google Cloud
+
+- Le fournisseur Vertex AI propose désormais trois modes d’authentification dans les réglages desktop, l’assistant initial, le CLI et le serveur : ADC, clé API Google Cloud pour un projet et clé Vertex AI Express. ADC reste le choix par défaut.
+- Les clés sont saisies dans un champ masqué, conservées chiffrées et envoyées par l’en-tête Google prévu à cet effet. Les modes par clé utilisent l’API Gemini native, sans dépendre d’une connexion ADC.
+- L’adaptateur natif conserve le streaming, les images d’entrée, les appels d’outils et leurs signatures de raisonnement, ainsi que les compteurs de jetons. Le relais serveur expose toujours le format habituel aux clients sans leur transmettre la clé.
+- Express fonctionne sans projet ni région à renseigner et nécessite la saisie manuelle d’un identifiant Gemini ; l’absence de catalogue est signalée explicitement. Les crédits restent soumis aux règles de facturation et d’éligibilité Google.
+
+## 1.101.0 — 2026-10-15
+
+### Vertex AI · Google Cloud
+
+- Nouveau fournisseur Vertex AI dans les réglages desktop, l’assistant initial, le CLI et l’administration des fournisseurs partagés du serveur. Configuration explicite du projet Google Cloud et de la région, globale par défaut.
+- Authentification officielle Google Cloud via les identifiants ADC de la machine exécutant les requêtes. Les jetons OAuth sont renouvelés automatiquement ; aucune clé AI Studio ni copie de jeton temporaire n’est nécessaire. Les identifiants Google restent gérés par Google Cloud et ne sont pas ajoutés à la base Monolith.
+- Requêtes compatibles OpenAI adressées directement au projet choisi, y compris les outils et le streaming existants. Catalogue Gemini avec pagination et saisie manuelle des identifiants, notamment `google/gemini-4-argon` ; le catalogue ne garantit pas les droits d’inférence, les quotas ou l’éligibilité des crédits.
+- Les connexions Vertex sont limitées aux adresses Google Cloud correspondant à leur région. Le projet de quota est explicite ; les crédits restent soumis aux conditions du compte de facturation associé. La génération d’images reste réservée aux fournisseurs déjà compatibles avec cet outil.
+
+## 1.100.0 — 2026-10-15
+
+### Desktop · sélection du fournisseur et du modèle
+
+- Le menu « Modèle et réflexion » sépare les listes Fournisseur et Modèle : chacune conserve la recherche pendant la saisie, les suggestions et la navigation au clavier. Les modèles sont limités au fournisseur sélectionné ; deux connexions de même nom restent distinguées par leur identifiant.
+- Présentation simplifiée avec accès aux réglages des fournisseurs en en-tête, actualisation dans le menu « … », niveaux de réflexion accessibles directement et contexte Automatique / Manuel. Le nombre de tokens n’est éditable qu’en mode manuel ; la capacité reste visible en mode automatique.
+- Actions stables en bas du menu : « Terminer » et rétablissement des valeurs par défaut pour la réflexion et le contexte, sans changer la sélection du fournisseur ou du modèle. Les niveaux rapides restent disponibles, les boutons s’adaptent aux petites fenêtres et les couleurs suivent le thème de l’application.
+
+## 1.99.1 — 2026-10-15
+
+### Desktop · corrections de la barre et de la navigation
+
+- Suppression des commandes Réduire / Agrandir / Fermer en double : la fenêtre réutilise celles fournies par Uno et réserve leur largeur réelle dans la barre.
+- Correction des raccourcis des panneaux du chat : la zone de déplacement de la fenêtre est définie explicitement et ne recouvre plus les icônes Web, Terminal, Git, Fichiers, Assets et Aperçu.
+- La section Projets remonte à hauteur de la section du chat. Les lignes vides de l’ancien en-tête ont été supprimées et la recherche conserve son espacement lorsqu’elle est ouverte.
+- Le menu déroulant des outils dédiés (Traducteur, Correcteur, Benchmark, tâches planifiées, Dashboard et diagnostics) retrouve sa place à côté de Réglages. La barre supérieure reste dédiée aux panneaux du chat.
+- Ajout de vérifications dans une vraie fenêtre : contrôles de zones de clic Windows et XAML, activation répétée des panneaux, commandes système uniques et alignements sur plusieurs largeurs et niveaux de zoom.
+
+## 1.99.0 — 2026-10-15
+
+### Desktop · barre de titre et outils
+
+- Barre de titre compacte aux couleurs du thème, avec une seule identité visuelle et les raccourcis Navigateur, Terminal, Git, Fichiers, Assets et Aperçu. Le panneau actif est mis en évidence ; les outils supplémentaires, les réglages et le changelog restent accessibles dans le menu « … », y compris dans une petite fenêtre.
+- Les accès Outils ont quitté l’en-tête du chat et le bas de la navigation. Les commandes de fenêtre, le déplacement et l’ancrage Windows sont conservés ; les plateformes sans personnalisation de titre gardent leur barre système.
+- Navigateur réorganisé avec les onglets au-dessus d’une barre d’adresse compacte, les boutons précédent / suivant / actualiser, un indicateur de chargement et un menu pour ouvrir un fichier ou choisir le format Desktop / Mobile.
+- En-têtes et commandes harmonisés pour les panneaux Terminal, Git, Fichiers, Assets et Aperçu : icônes discrètes, séparateurs fins, champs arrondis et onglets adaptés au thème. Les sessions Web et Terminal sont conservées lorsque l’on change d’outil ; une navigation Web met les titres d’onglets à jour sans recréer leur barre.
+
 ## 1.98.0 — 2026-10-15
 
 - Réglages desktop : nouvelle section Détection de boucle pour activer ou désactiver la surveillance des appels identiques, ajuster le seuil (3 par défaut) et choisir une confirmation ou un arrêt automatique. La configuration s’applique aussi aux sous-agents et au moteur partagé.

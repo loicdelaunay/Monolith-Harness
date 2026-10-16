@@ -21,6 +21,9 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
     public string AiDetectorModel { get; set; } = "";
     public string AiDetectorEndpoint { get; set; } = SlopTotalClient.DefaultEndpoint;
     public string Theme { get; set; } = "fluent-dark";
+    public string ChatBackgroundAnimation { get; set; } = ChatBackgroundStyles.Disabled;
+    public int ChatBackgroundOpacityPercent { get; set; } = ChatBackgroundStyles.DefaultOpacityPercent;
+    public string? ChatBackgroundColor { get; set; }
     public List<AppearanceTheme> CustomThemes { get; set; } = [];
     public string ResponseStyle { get; set; } = "default";
     public ReasoningDetailLevel? ReasoningDisplay { get; set; }
@@ -166,6 +169,9 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
                     if (!document.RootElement.TryGetProperty("ShowComposerContext", out _)) settings.ShowComposerContext = previous.GetBoolean();
                 }
             }
+            settings.ChatBackgroundAnimation = ChatBackgroundStyles.Normalize(settings.ChatBackgroundAnimation);
+            settings.ChatBackgroundOpacityPercent = ChatBackgroundStyles.NormalizeOpacity(settings.ChatBackgroundOpacityPercent);
+            settings.ChatBackgroundColor = ChatBackgroundStyles.NormalizeColor(settings.ChatBackgroundColor);
             settings.ApplicationName = BrandingAssets.DisplayName(settings.ApplicationName);
             settings.SidebarProjectOrder = (settings.SidebarProjectOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
             settings.SidebarChatOrder = (settings.SidebarChatOrder ?? []).Where(id => id > 0).Distinct().Take(100000).ToList();
@@ -190,6 +196,10 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
     }
     public string Json()
     {
+        if (!ChatBackgroundStyles.IsValid(ChatBackgroundAnimation))
+            throw new ArgumentException("Animation de fond du chat invalide / Invalid chat background animation.");
+        if (ChatBackgroundOpacityPercent is < 0 or > 100 || ChatBackgroundColor != null && !AppearanceThemes.IsColor(ChatBackgroundColor))
+            throw new ArgumentException("Opacité ou couleur de fond du chat invalide / Invalid chat background opacity or color.");
         if (Information == null) throw new ArgumentException("Information skill settings required.");
         Information.Validate();
         if (LoopDetection == null) throw new ArgumentException("Loop detection settings required.");

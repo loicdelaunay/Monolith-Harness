@@ -287,35 +287,16 @@ public sealed partial class MainWindow
 
     void BuildToolsPane()
     {
-        var container = new Grid { Padding = new(10) };
-        var actions = Row(ToolAction("\uE740", T("Agrandir / restaurer le panneau"), () => { toolsMaximized = !toolsMaximized; ResizeLayout(); return Task.CompletedTask; }),
-            ToolAction("\uE711", T("Fermer"), ToggleBrowser));
-        actions.Spacing = 4; toolTabs.SetHeaderActions(actions);
-        var web = new Grid { RowSpacing = 8 };
-        web.RowDefinitions.Add(new() { Height = GridLength.Auto }); web.RowDefinitions.Add(new() { Height = GridLength.Auto }); web.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        var go = ToolAction("\uE72A", WorkflowText("Ouvrir l’adresse", "Open address"), async () => { await NavigateAsync(address.Text, CancellationToken.None); });
-        var local = ToolAction("\uE8B7", T("Ouvrir un fichier local"), PickPreviewAsync, true);
-        var nav = ToolToolbar(address, browserViewportMode, go, local);
-        InitializeBrowserViewportSelector();
-        address.KeyDown += async (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { e.Handled = true; await Guard(async () => { await NavigateAsync(address.Text, CancellationToken.None); }); } };
-        Grid.SetRow(nav, 0); web.Children.Add(nav);
-        webTabs.Height = 44;
-        webTabs.AddTabButtonClick += (_, _) => { NewBrowserTab(chat?.Id ?? 0); };
-        webTabs.SelectionChanged += (_, _) =>
-        {
-            if (populatingWebTabs || webTabs.SelectedItem is not TabViewItem item || item.Tag is not string tabId) return;
-            SelectBrowserTab(chat?.Id ?? 0, tabId);
-        };
-        webTabs.TabCloseRequested += (_, e) =>
-        {
-            if (e.Tab.Tag is string tabId) CloseBrowserTab(chat?.Id ?? 0, tabId);
-        };
-        Grid.SetRow(webTabs, 1); web.Children.Add(webTabs);
-        Grid.SetRow(browserHost, 2); web.Children.Add(browserHost);
-        idleOnly.Add(address); idleOnly.Add(go);
-        toolTabs.AddTab("Web", web);
+        var container = new Grid();
+        panelSizeButton = ToolAction("\uE740", T("Agrandir / restaurer le panneau"), () => { toolsMaximized = !toolsMaximized; ResizeLayout(); return Task.CompletedTask; });
+        var options = ToolAction("\uE712", WorkflowText("Options du panneau", "Panel options"), () => Task.CompletedTask);
+        options.Click += (_, _) => BuildPanelOptionsMenu().ShowAt(options);
+        var actions = Row(options, panelSizeButton, ToolAction("\uE711", T("Fermer"), ToggleBrowser));
+        actions.Spacing = 2; toolTabs.SetHeaderActions(actions);
+        var web = BuildBrowserPage();
+        toolTabs.AddTab("Web", web, WorkspaceToolsChrome[0].Glyph, webTabs);
 
-        toolTabs.AddTab("Terminal", BuildTerminals());
+        toolTabs.AddTab("Terminal", BuildTerminals(), WorkspaceToolsChrome[1].Glyph);
 
         var git = new Grid { RowSpacing = 6 };
         foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(2, GridUnitType.Star) }) git.RowDefinitions.Add(new() { Height = height });
@@ -337,10 +318,20 @@ public sealed partial class MainWindow
             RenderGitPreview(file, GitWorkspace.ParseDiff(text));
             diffScroll.ChangeView(0, 0, null);
         });
-        toolTabs.AddTab("Git", git);
+        toolTabs.AddTab("Git", git, WorkspaceToolsChrome[2].Glyph);
 
         foreach (var height in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), new GridLength(1, GridUnitType.Star) }) filePanel.RowDefinitions.Add(new() { Height = height });
-        filePanel.RowSpacing = 6;
+        filePanel.RowSpacing = 8;
+        fileList.Margin = fileContent.Margin = new(8, 0, 8, 8);
+        fileContent.CornerRadius = new(6); fileContent.Padding = new(12);
+        fileList.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
+            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                <StackPanel Orientation="Horizontal" Spacing="10" Padding="2,5">
+                    <FontIcon Glyph="{Binding Glyph}" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DataTemplate>
+            """);
         fileLocation.TextWrapping = TextWrapping.NoWrap; fileLocation.TextTrimming = TextTrimming.CharacterEllipsis;
         fileLocation.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ToolTipService.SetToolTip(fileLocation, fileLocation.Text));
         var fileUp = ToolAction("\uE74A", WorkflowText("Dossier parent", "Parent folder"), async () =>
@@ -387,16 +378,18 @@ public sealed partial class MainWindow
                 }
             }
         });
-        toolTabs.AddTab(T("Fichiers"), filePanel);
-        toolTabs.AddTab("Assets", BuildAssetsPane());
-        toolTabs.AddTab("Preview", BuildFilePreviewPane());
-        toolTabs.SelectionChanged += async (_, _) => { SyncBrowserPresentation(); if (browserVisible) await Guard(ActivateToolAsync); };
+        toolTabs.AddTab(T("Fichiers"), filePanel, WorkspaceToolsChrome[3].Glyph);
+        toolTabs.AddTab("Assets", BuildAssetsPane(), WorkspaceToolsChrome[4].Glyph);
+        toolTabs.AddTab("Preview", BuildFilePreviewPane(), WorkspaceToolsChrome[5].Glyph);
+        toolTabs.SelectionChanged += async (_, _) => { RefreshWorkspaceToolChrome(); SyncBrowserPresentation(); if (browserVisible) await Guard(ActivateToolAsync); };
         container.Children.Add(toolTabs);
         browserPanel.Child = container; Grid.SetColumn(browserPanel, 1); workspace.Children.Add(browserPanel);
     }
     void RefreshToolLanguage()
     {
-        if (toolTabs.Count >= 4) toolTabs.SetTitle(3, T("Fichiers"));
+        for (var i = 0; i < Math.Min(toolTabs.Count, WorkspaceToolsChrome.Length); i++)
+            toolTabs.SetTitle(i, WorkflowText(WorkspaceToolsChrome[i].French, WorkspaceToolsChrome[i].English));
+        RefreshPanelSizeAction(); RefreshBrowserChromeLanguage();
     }
     async Task ActivateToolAsync()
     {
@@ -450,7 +443,9 @@ public sealed partial class MainWindow
     }
     record FileEntry(string Path, bool Directory)
     {
-        public override string ToString() => (Directory ? "📁 " : "📄 ") + (System.IO.Path.GetFileName(Path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)) is var n && !string.IsNullOrEmpty(n) ? n : Path);
+        public string Name => System.IO.Path.GetFileName(Path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)) is { Length: > 0 } name ? name : Path;
+        public string Glyph => Directory ? "\uE8B7" : "\uE8A5";
+        public override string ToString() => Name;
     }
     async Task LoadFilesAsync(string? directory)
     {

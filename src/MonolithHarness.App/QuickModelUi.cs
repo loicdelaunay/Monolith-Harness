@@ -65,8 +65,8 @@ public sealed partial class MainWindow
     {
         if (modelOptionsPanel == null) return;
         var scale = TextZoom.ForWindow(root) / 100d;
-        modelOptionsPanel.Width = Math.Max(120, Math.Min((compactModelPicker ? 260 : 350) * scale, root.ActualWidth - 48));
-        modelOptionsPanel.RowSpacing = compactModelPicker ? 0 : 10;
+        modelOptionsPanel.Width = Math.Max(120, Math.Min((compactModelPicker ? 260 : 440) * scale, root.ActualWidth - 48));
+        modelOptionsPanel.RowSpacing = compactModelPicker ? 0 : 12;
     }
 
     async Task SetQuickSelectionModeAsync(string mode)
@@ -96,7 +96,15 @@ public sealed partial class MainWindow
         var switchLabel = WorkflowText(simple ? "Passer à la sélection détaillée" : "Passer aux niveaux rapides", simple ? "Switch to detailed selection" : "Switch to quick levels");
         ToolTipService.SetToolTip(composerSelectionModeToggle, switchLabel);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(composerSelectionModeToggle, switchLabel);
-        modelOptionsButton.IsEnabled = modelSelector.IsEnabled = !applyingQuickLevel && ActiveRun == null;
+        var editable = !applyingQuickLevel && !changingQuickMode && !changingModelProvider && !refreshingModels && ActiveRun == null;
+        modelOptionsButton.IsEnabled = !applyingQuickLevel && ActiveRun == null;
+        modelSelector.IsEnabled = editable && modelSelector.Items.Count > 0;
+        providerSelector.IsEnabled = editable && providerSelector.Items.Count > 0;
+        thinkingSegments.IsEnabled = editable && thinkingSelector.IsEnabled;
+        modelContextEditor.IsEnabled = editable;
+        if (modelResetButton != null) modelResetButton.IsEnabled = editable && provider != null;
+        if (modelOptionsFooter != null) modelOptionsFooter.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
+        if (modelHeaderActions != null) modelHeaderActions.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;
         quickLevelPanel.Visibility = simple ? Visibility.Visible : Visibility.Collapsed;
         quickLevelSelect.Visibility = quickLevelDetails.Visibility = simple ? Visibility.Visible : Visibility.Collapsed;
         if (modelAdvancedSection != null) modelAdvancedSection.Visibility = simple ? Visibility.Collapsed : Visibility.Visible;

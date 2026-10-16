@@ -56,7 +56,7 @@ public sealed partial class MainWindow
                 Check(composerContextIndicator.Visibility == Visibility.Visible, prefix + ": context ring remains available.");
                 Check(composerContextText.Visibility != Visibility.Collapsed || composerSpeedIndicator.Visibility == Visibility.Collapsed, prefix + ": speed hides before context percentage.");
                 Check(composerResponsiveStage < 3 || composerContextText.Visibility == Visibility.Collapsed && composerSpeedIndicator.Visibility == Visibility.Collapsed, prefix + ": compact controls follow metric hiding.");
-                foreach (var button in new FrameworkElement[] { chatNavigationButton, chatExportButton, chatToolsButton, autoScrollButton })
+                foreach (var button in new FrameworkElement[] { chatNavigationButton, chatExportButton, autoScrollButton })
                 {
                     var bounds = button.TransformToVisual(chatHeader).TransformBounds(new Rect(0, 0, button.ActualWidth, button.ActualHeight));
                     Check(bounds.Left >= -.8 && bounds.Right <= chatHeader.ActualWidth + .8, prefix + ": header action stays visible.");

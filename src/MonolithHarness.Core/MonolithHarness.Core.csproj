@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyTitle>Monolith Harness Shared Engine</AssemblyTitle></PropertyGroup>
-  <ItemGroup><PackageReference Include="AngleSharp" Version="1.8.4" /></ItemGroup>
+  <ItemGroup><PackageReference Include="AngleSharp" Version="1.8.4" /><PackageReference Include="Google.Apis.Auth" Version="1.77.0" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="MonolithHarness.Core.Desktop" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="WebAssets/*" LogicalName="MonolithHarness.WebAssets.%(Filename)%(Extension)" /></ItemGroup>
 </Project>

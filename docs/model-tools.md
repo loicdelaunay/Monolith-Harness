@@ -1,6 +1,6 @@
 # Outils dédiés
 
-Le menu **Outils**, à côté de **Tâches planifiées**, ouvre trois fenêtres indépendantes. Le modèle choisi ne change pas celui du chat ; chaque fenêtre conserve son brouillon tant qu’elle reste ouverte. Les actions principales sont accentuées, en bas à droite.
+Dans la GUI desktop, le menu déroulant **Outils**, à côté de **Réglages** en bas à gauche, donne accès au Traducteur, au Correcteur et au Benchmark dans trois fenêtres indépendantes. Il regroupe aussi les tâches planifiées, le Dashboard, le détecteur IA et les diagnostics. Le modèle choisi ne change pas celui du chat ; chaque fenêtre conserve son brouillon tant qu’elle reste ouverte. Les actions principales sont accentuées, en bas à droite.
 
 Choisir un modèle direct parmi les modèles cochés des fournisseurs configurés. **Actualiser** recharge la liste après une modification dans Réglages. Les connexions compatibles OpenAI, DeepSeek et OpenCode utilisent les mêmes moteurs que le chat. Les requêtes sont isolées, sans historique du chat ni outils agent.
 

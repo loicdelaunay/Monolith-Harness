@@ -37,6 +37,9 @@ public sealed partial class MainWindow
         public int ModelPage { get; set; }
         public bool ModelsLoading { get; set; }
         public string ModelStatus { get; set; } = "";
+        public string ConnectionStatus { get; set; } = "";
+        public InfoBarSeverity ConnectionSeverity { get; set; } = InfoBarSeverity.Informational;
+        public int ConnectionRevision { get; set; }
         public override string ToString() => string.IsNullOrWhiteSpace(Model) ? Name : $"{Name} · {Model}";
     }
 
@@ -70,6 +73,7 @@ public sealed partial class MainWindow
         var url = new TextBox { Header = T("URL de base de l’API") };
         var key = new PasswordBox { Header = T("Clé API (vide : conserver la clé enregistrée)") };
         var model = new ComboBox { Header = T("Identifiant du modèle"), IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var vertexFields = new VertexProviderFields { Visibility = Visibility.Collapsed };
         var limit = new ModelContextEditor();
         var vision = new CheckBox { Content = T("Ce modèle accepte les images") };
         var deleteKey = new CheckBox { Content = T("Supprimer la clé enregistrée") };
@@ -92,6 +96,9 @@ public sealed partial class MainWindow
         ToolTipService.SetToolTip(bypassFreeLimitation, T("Permet d’utiliser les modèles gratuits sur un autre harnais"));
         var info = Label(T("Créez autant de connexions que nécessaire. Chaque instance conserve sa propre clé, son URL, son modèle et sa limite de contexte."), 12); info.Tag = null;
         var testConnection = new Button { Content = T("Tester la connexion") };
+        var connectionResult = new InfoBar { Name = "ProviderConnectionResult", IsOpen = false, IsClosable = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetLiveSetting(connectionResult, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var importModels = new Button { Content = T("Importer les modèles OpenCode") };
         var editorBusy = new ProgressRing { Width = 22, Height = 22, IsActive = false, Visibility = Visibility.Collapsed };
         var addOpenAi = new MenuFlyoutItem { Text = T("+ OpenAI compatible") };
@@ -111,8 +118,27 @@ public sealed partial class MainWindow
         var localPanel = new StackPanel();
         var duplicate = new Button { Content = T("Dupliquer") };
         var remove = new Button { Content = T("Supprimer le fournisseur") };
-        bool refreshing = false;
+        bool refreshing = false, connectionBusy = false;
 
+        void RenderConnectionResult(ProviderDraft? draft)
+        {
+            connectionResult.Message = draft?.ConnectionStatus ?? "";
+            connectionResult.Severity = draft?.ConnectionSeverity ?? InfoBarSeverity.Informational;
+            connectionResult.IsOpen = !string.IsNullOrEmpty(draft?.ConnectionStatus);
+        }
+        void ShowConnectionResult(ProviderDraft draft, string message, InfoBarSeverity severity)
+        {
+            // A provider response must never echo the credential typed into this form.
+            if (!string.IsNullOrWhiteSpace(draft.PendingKey)) message = message.Replace(draft.PendingKey.Trim(), "[secret]", StringComparison.Ordinal);
+            draft.ConnectionStatus = message; draft.ConnectionSeverity = severity;
+            if (state.Selected == draft) RenderConnectionResult(draft);
+        }
+        void InvalidateConnectionResult()
+        {
+            if (refreshing || state.Selected is not { } draft) return;
+            draft.ConnectionRevision++; draft.ConnectionStatus = "";
+            RenderConnectionResult(draft);
+        }
         string NextName(string baseName)
         {
             var index = 1; var candidate = baseName;
@@ -131,9 +157,11 @@ public sealed partial class MainWindow
         void Select(ProviderDraft? draft)
         {
             refreshing = true; state.Selected = draft;
+            RenderConnectionResult(draft);
             editorTitle.Text = draft?.Name ?? "";
             var enabled = draft != null;
             foreach (var control in new Control[] { name, url, key, model, limit, vision, deleteKey, testConnection, importModels, username, executable, browseExecutable, autoStart, openCodeTools, bypassFreeLimitation }) control.IsEnabled = enabled;
+            if (connectionBusy) testConnection.IsEnabled = importModels.IsEnabled = connectAccount.IsEnabled = false;
             remove.IsEnabled = duplicate.IsEnabled = enabled;
             name.Text = draft?.Name ?? ""; url.Text = draft?.BaseUrl ?? ""; model.Text = draft?.Model ?? "";
             model.ItemsSource = draft == null ? null : ModelCatalog.GetModelsForProvider(AsProvider(draft));
@@ -143,6 +171,9 @@ public sealed partial class MainWindow
             openCodeTools.IsChecked = draft?.OpenCodeTools ?? false;
             bypassFreeLimitation.IsChecked = draft?.BypassFreeLimitation ?? false;
             acpArguments.Text = draft?.AcpArgumentsJson ?? "[]";
+            var vertex = draft?.Kind == "vertex";
+            vertexFields.Visibility = vertex ? Visibility.Visible : Visibility.Collapsed;
+            if (vertex) vertexFields.Bind(draft!.BaseUrl);
             var acp = AcpProviders.Find(draft?.Kind) != null;
             var openCode = draft?.Kind == "opencode";
             connectionLaunch.Visibility = acp || openCode ? Visibility.Visible : Visibility.Collapsed; connectionLaunch.IsExpanded = openCode;
@@ -161,7 +192,8 @@ public sealed partial class MainWindow
             var composite=draft?.Kind=="composite";
             ShowProviderHelp(draft);
             foreach(var control in new UIElement[]{url,key,model,limit,vision,deleteKey,testConnection,importModels})control.Visibility=composite?Visibility.Collapsed:Visibility.Visible;
-            if (acp) foreach (var control in new UIElement[] { url, key, deleteKey }) control.Visibility = Visibility.Collapsed;
+            if (acp || vertex) url.Visibility = Visibility.Collapsed;
+            if (acp || vertex && !VertexAi.UsesApiKey(draft!.BaseUrl)) key.Visibility = deleteKey.Visibility = Visibility.Collapsed;
             compositePanel.Children.Clear();if(composite)compositePanel.Children.Add(BuildCompositeModelEditor(draft!,drafts));
             localPanel.Children.Clear();
             if (draft?.Kind == "local")
@@ -194,7 +226,7 @@ public sealed partial class MainWindow
                 RefreshLimit(state.Selected);
                 return;
             }
-            state.Selected.Name = name.Text; state.Selected.BaseUrl = url.Text; state.Selected.Model = model.Text;
+            state.Selected.Name = name.Text; state.Selected.BaseUrl = url.Text; state.Selected.Model = state.Selected.Kind == "vertex" ? VertexAi.NormalizeModel(model.Text) : model.Text;
             RefreshLimit(state.Selected);
             state.Selected.SupportsImages = vision.IsChecked == true; state.Selected.DeleteKey = deleteKey.IsChecked == true; state.Selected.PendingKey = key.Password;
             state.Selected.AcpArgumentsJson = acpArguments.Text;
@@ -203,6 +235,13 @@ public sealed partial class MainWindow
             state.Selected.BypassFreeLimitation = bypassFreeLimitation.IsChecked == true;
         };
 
+        vertexFields.EndpointChanged += value =>
+        {
+            if (refreshing || state.Selected?.Kind != "vertex") return;
+            url.Text = value; state.Selected.BaseUrl = value;
+            key.Visibility = deleteKey.Visibility = vertexFields.UsesApiKey ? Visibility.Visible : Visibility.Collapsed;
+            ShowProviderHelp(state.Selected);
+        };
         chooser.SelectionChanged += (_, _) => { if (refreshing) return; state.Commit(); Select(chooser.SelectedItem as ProviderDraft); };
         name.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.Name = name.Text; };
         name.LostFocus += (_, _) =>
@@ -211,14 +250,14 @@ public sealed partial class MainWindow
             model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected));
             editorTitle.Text = state.Selected.Name; RenderCards();
         };
-        url.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.BaseUrl = url.Text; };
+        url.TextChanged += (_, _) => { if (!refreshing && state.Selected != null && state.Selected.BaseUrl != url.Text) { state.Selected.BaseUrl = url.Text; InvalidateConnectionResult(); } };
         url.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { model.ItemsSource = ModelCatalog.GetModelsForProvider(AsProvider(state.Selected)); ShowProviderHelp(state.Selected); } };
-        key.PasswordChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.PendingKey = key.Password; };
+        key.PasswordChanged += (_, _) => { if (!refreshing && state.Selected != null && state.Selected.PendingKey != key.Password) { state.Selected.PendingKey = key.Password; InvalidateConnectionResult(); } };
         model.TextSubmitted += (_, args) =>
         {
             if (!refreshing && state.Selected != null)
             {
-                state.Selected.Model = args.Text;
+                if (state.Selected.Model != args.Text) { state.Selected.Model = args.Text; InvalidateConnectionResult(); }
                 RefreshLimit(state.Selected);
             }
         };
@@ -226,15 +265,15 @@ public sealed partial class MainWindow
         {
             if (!refreshing && state.Selected != null && model.SelectedItem is string selected)
             {
-                state.Selected.Model = selected;
+                if (state.Selected.Model != selected) { state.Selected.Model = selected; InvalidateConnectionResult(); }
                 RefreshLimit(state.Selected);
             }
         };
-        model.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { state.Selected.Model = model.Text; RefreshLimit(state.Selected); } };
+        model.LostFocus += (_, _) => { if (!refreshing && state.Selected != null) { if (state.Selected.Model != model.Text) { state.Selected.Model = model.Text; InvalidateConnectionResult(); } RefreshLimit(state.Selected); } };
         vision.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.SupportsImages = true; };
         vision.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.SupportsImages = false; };
-        deleteKey.Checked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.DeleteKey = true; };
-        deleteKey.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.DeleteKey = false; };
+        deleteKey.Checked += (_, _) => { if (!refreshing && state.Selected != null) { state.Selected.DeleteKey = true; InvalidateConnectionResult(); } };
+        deleteKey.Unchecked += (_, _) => { if (!refreshing && state.Selected != null) { state.Selected.DeleteKey = false; InvalidateConnectionResult(); } };
         username.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.Username = username.Text; };
         acpArguments.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.AcpArgumentsJson = acpArguments.Text; };
         executable.TextChanged += (_, _) => { if (!refreshing && state.Selected != null) state.Selected.ExecutablePath = executable.Text; };
@@ -277,8 +316,8 @@ public sealed partial class MainWindow
             {
                 state.Commit();
                 var preset = cloud.Preset;
-                var draft = new ProviderDraft { Name = NextName(preset.Name), BaseUrl = preset.BaseUrl, Model = preset.DefaultModel, ContextLimit = ModelContexts.DefaultContextLimit, SupportsImages = true };
-                drafts.Add(draft); Refresh(draft); key.Focus(FocusState.Programmatic);
+                var draft = new ProviderDraft { Name = NextName(preset.Name), Kind = preset.Kind, BaseUrl = preset.BaseUrl, Model = preset.DefaultModel, ContextLimit = ModelContexts.DefaultContextLimit, SupportsImages = true };
+                drafts.Add(draft); Refresh(draft); if (preset.Kind == "vertex") vertexFields.FocusProject(); else key.Focus(FocusState.Programmatic);
             };
         foreach (var (preset, item) in acpItems) item.Click += (_, _) => { state.Commit(); var target = AcpProviders.Create(preset); var draft = new ProviderDraft { Name = NextName(target.Name), Kind = target.Kind, BaseUrl = "", Model = target.Model, SupportsImages = false, OpenCodeTools = true, DetectedModelsJson = target.DetectedModelsJson, SelectedModelsJson = target.SelectedModelsJson }; drafts.Add(draft); Refresh(draft); };
         addOpenCode.Click += (_, _) =>
@@ -323,39 +362,82 @@ public sealed partial class MainWindow
         };
         testConnection.Click += async (_, _) =>
         {
-            if (state.Selected is not { } draft) return;
-            testConnection.IsEnabled = false;
+            if (connectionBusy || state.Selected is not { } draft) return;
+            connectionBusy = true;
+            testConnection.IsEnabled = importModels.IsEnabled = connectAccount.IsEnabled = false;
             editorBusy.IsActive = true; editorBusy.Visibility = Visibility.Visible;
-            info.Text = T("Test de connexion en cours…");
+            ShowConnectionResult(draft, T("Test de connexion en cours…"), InfoBarSeverity.Informational);
+            var secret = "";
             try
             {
-                var list = await Discover(draft, selectAll: true);
-                if (list == null) { info.Text = WorkflowText("URL modifiée pendant le test : recommencez.", "URL changed during the test: try again."); return; }
-                if (list.Count == 0) { info.Text = WorkflowText("Connexion établie, mais aucun modèle détecté. Les choix existants sont conservés.", "Connected, but no models were found. Existing selections were kept."); return; }
+                state.Commit();
+                var revision = draft.ConnectionRevision;
+                var target = AsProvider(draft);
+                List<string>? list = null;
+                if (target.IsVertex)
+                {
+                    secret = draft.PendingKey.Length > 0 ? draft.PendingKey : draft.DeleteKey ? "" : KeyVault.Decrypt(draft.ProtectedKey);
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+                    await VertexAi.ProbeAsync(http, target, secret, timeout.Token);
+                }
+                else list = await Discover(draft, selectAll: true);
+                if (!drafts.Contains(draft)) return;
+                if (revision != draft.ConnectionRevision || !target.IsVertex && list == null)
+                {
+                    ShowConnectionResult(draft, WorkflowText("Configuration modifiée pendant le test : recommencez.", "Configuration changed during the check: try again."), InfoBarSeverity.Warning);
+                    return;
+                }
+                if (list is { Count: 0 })
+                {
+                    ShowConnectionResult(draft, WorkflowText("Connexion établie, mais aucun modèle détecté. Les choix existants sont conservés.", "Connected, but no models were found. Existing selections were kept."), InfoBarSeverity.Warning);
+                    return;
+                }
                 if (string.IsNullOrWhiteSpace(draft.Name)) throw new ArgumentException(T("Le nom du fournisseur est requis."));
                 var saved = await SaveTestedProviderAsync(draft);
                 if (state.Selected == draft) Select(draft);
                 provider = saved; this.state.ProviderId = saved.Id;
-                loading = true;
-                providers.ItemsSource = db.Providers.Local.Where(x => db.Entry(x).State != EntityState.Deleted).ToList();
-                providers.SelectedItem = saved;
-                loading = false;
+                var wasLoading = loading;
+                try
+                {
+                    loading = true;
+                    providers.ItemsSource = db.Providers.Local.Where(x => db.Entry(x).State != EntityState.Deleted).ToList();
+                    providers.SelectedItem = saved;
+                }
+                finally { loading = wasLoading; }
                 PopulateModelSelector();
                 await db.SaveChangesAsync();
-                info.Text = this.state.Language == "en" ? $"Connection successful · {list.Count} models selected and saved." : $"Connexion réussie · {list.Count} modèles cochés et enregistrés.";
+                ShowConnectionResult(draft, target.IsVertex
+                    ? WorkflowText($"Connexion Vertex AI réussie · {target.Model}. Le comptage de jetons est accessible ; la génération et les crédits ne sont pas vérifiés par ce contrôle.",
+                        $"Vertex AI connected · {target.Model}. Token counting is accessible; generation and credit eligibility are not verified by this check.")
+                    : WorkflowText($"Connexion réussie · {list!.Count} modèles sélectionnés et enregistrés.", $"Connected · {list!.Count} models selected and saved."),
+                    InfoBarSeverity.Success);
             }
-            catch (Exception ex) { info.Text = ex.Message; }
-            finally { testConnection.IsEnabled = true; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
+            catch (OperationCanceledException)
+            {
+                ShowConnectionResult(draft, WorkflowText("Le test de connexion a été annulé ou le délai de réponse est dépassé.", "Connection check cancelled or timed out."), InfoBarSeverity.Warning);
+            }
+            catch (Exception ex)
+            {
+                var detail = string.IsNullOrWhiteSpace(secret) ? ex.Message : ex.Message.Replace(secret.Trim(), "[secret]", StringComparison.Ordinal);
+                ShowConnectionResult(draft, WorkflowText("Échec de la connexion : ", "Connection failed: ") + detail, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                connectionBusy = false;
+                testConnection.IsEnabled = importModels.IsEnabled = connectAccount.IsEnabled = state.Selected != null;
+                editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed;
+            }
         };
         connectAccount.Click += async (_, _) =>
         {
-            if (state.Selected is not { } draft) return;
+            if (connectionBusy || state.Selected is not { } draft) return;
+            connectionBusy = true;
             connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = false;
             editorBusy.IsActive = true; editorBusy.Visibility = Visibility.Visible;
             info.Text = WorkflowText("Connexion OpenAI : terminez l’authentification dans le navigateur…", "OpenAI sign-in: complete authentication in your browser…");
             try { await Discover(draft, selectAll: true, authenticate: true); await SaveTestedProviderAsync(draft); info.Text = WorkflowText("Compte connecté · modèles enregistrés.", "Account connected · models saved."); }
             catch (Exception ex) { info.Text = ex.Message; }
-            finally { connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = true; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
+            finally { connectionBusy = false; connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = state.Selected != null; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
         };
         async Task<List<string>?> Discover(ProviderDraft draft, bool selectAll = false, bool authenticate = false)
         {
@@ -393,17 +475,26 @@ public sealed partial class MainWindow
             ModelContexts.Select(target, draft.Model);
             draft.LocalModelsJson = target.LocalModelsJson;
             draft.ModelContextsJson = target.ModelContextsJson; draft.ContextLimit = target.ContextLimit;
-            if (state.Selected == draft) { model.ItemsSource = list; model.SelectedItem = draft.Model; model.Text = draft.Model; RefreshLimit(draft); }
-            info.Text = $"{list.Count} modèles détectés / models detected";
+            if (state.Selected == draft)
+            {
+                var wasRefreshing = refreshing;
+                try { refreshing = true; model.ItemsSource = list; model.SelectedItem = draft.Model; model.Text = draft.Model; RefreshLimit(draft); }
+                finally { refreshing = wasRefreshing; }
+            }
+            ShowConnectionResult(draft, WorkflowText($"{list.Count} modèles détectés.", $"{list.Count} models detected."), InfoBarSeverity.Success);
             return list;
         }
         importModels.Click += async (_, _) =>
         {
-            if (state.Selected is not { } draft) return;
-            importModels.IsEnabled = false;
+            if (connectionBusy || state.Selected is not { } draft) return;
+            connectionBusy = true;
+            importModels.IsEnabled = testConnection.IsEnabled = connectAccount.IsEnabled = false;
             editorBusy.IsActive = true; editorBusy.Visibility = Visibility.Visible;
-            try { await Discover(draft); } catch (Exception ex) { info.Text = ex.Message; }
-            finally { importModels.IsEnabled = true; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
+            ShowConnectionResult(draft, WorkflowText("Recherche des modèles…", "Finding models…"), InfoBarSeverity.Informational);
+            try { await Discover(draft); }
+            catch (OperationCanceledException) { ShowConnectionResult(draft, WorkflowText("Recherche annulée ou délai de réponse dépassé.", "Model lookup cancelled or timed out."), InfoBarSeverity.Warning); }
+            catch (Exception ex) { ShowConnectionResult(draft, ex.Message, draft.Kind == "vertex" && VertexAi.TryRead(draft.BaseUrl, out var config) && config!.Authentication == VertexAi.Express ? InfoBarSeverity.Warning : InfoBarSeverity.Error); }
+            finally { connectionBusy = false; importModels.IsEnabled = testConnection.IsEnabled = connectAccount.IsEnabled = state.Selected != null; editorBusy.IsActive = false; editorBusy.Visibility = Visibility.Collapsed; }
         };
 
         void ShowProviderHelp(ProviderDraft? draft)
@@ -411,13 +502,18 @@ public sealed partial class MainWindow
             providerHelp.Children.Clear();
             var acpPreset = AcpProviders.Find(draft?.Kind);
             if (acpPreset != null) { providerHelp.Visibility = Visibility.Visible; providerHelp.Children.Add(Label(WorkflowText(acpPreset.DescriptionFr, acpPreset.DescriptionEn), 12)); providerHelp.Children.Add(new HyperlinkButton { Content = WorkflowText("Installation et connexion", "Installation and sign-in"), NavigateUri = new Uri(acpPreset.Documentation) }); return; }
-            var preset = draft == null || draft.Kind is "local" or "opencode" or "composite" ? null : ProviderPresets.Resolve(draft.BaseUrl);
+            var preset = draft?.Kind == "vertex" ? ProviderPresets.Find("vertex") : draft == null || draft.Kind is "local" or "opencode" or "composite" ? null : ProviderPresets.Resolve(draft.BaseUrl);
             providerHelp.Visibility = preset == null ? Visibility.Collapsed : Visibility.Visible;
             if (preset == null) return;
             providerHelp.Children.Add(Label(WorkflowText(preset.DescriptionFr, preset.DescriptionEn), 12));
             providerHelp.Children.Add(Row(
-                new HyperlinkButton { Content = WorkflowText("Obtenir une clé API", "Get an API key"), NavigateUri = new Uri(preset.KeysUrl) },
+                new HyperlinkButton { Content = preset.Id == "vertex" ? WorkflowText("Accès Google Cloud", "Google Cloud access") : WorkflowText("Obtenir une clé API", "Get an API key"), NavigateUri = new Uri(preset.Id == "vertex" && VertexAi.UsesApiKey(draft?.BaseUrl) ? VertexAi.ApiKeyHelp : preset.KeysUrl) },
                 new HyperlinkButton { Content = WorkflowText("Documentation", "Documentation"), NavigateUri = new Uri(preset.DocumentationUrl) }));
+            if (preset.Id == "vertex")
+            {
+                providerHelp.Children.Add(Label(WorkflowText("Le catalogue Google ne garantit pas l’accès à chaque modèle. L’API doit être activée, les droits IAM accordés et les crédits éligibles sur ce projet. Vous pouvez aussi saisir google/gemini-4-argon manuellement.", "The Google catalogue does not guarantee access to every model. Enable the API, grant IAM access and check eligible credits for this project. You can also enter google/gemini-4-argon manually."), 12));
+                return;
+            }
             providerHelp.Children.Add(Label(WorkflowText("Renseignez votre clé, puis importez les modèles accessibles à votre compte ou saisissez leur identifiant exact. Ajustez le contexte et la case Images au modèle choisi.",
                 "Enter your key, then import models accessible to your account or enter their exact identifier. Adjust context and the Images checkbox for the selected model."), 12));
             if (preset.SuggestedChatModels.Count > 0)
@@ -547,7 +643,7 @@ public sealed partial class MainWindow
         state.Panel.Spacing = 12;
         state.Header.Children.Add(add); state.Header.Children.Add(back);
         state.Panel.Children.Add(cards); state.Panel.Children.Add(editor); state.Panel.Children.Add(state.Error);
-        foreach (var item in new UIElement[] { editorTitle, info, name, compositePanel, providerHelp, connectAccount, url, username, key, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), limit, vision, deleteKey, localPanel, connectionLaunch, Row(duplicate, remove) }) editor.Children.Add(item);
+        foreach (var item in new UIElement[] { editorTitle, info, name, compositePanel, providerHelp, connectAccount, vertexFields, url, username, key, autoStart, openCodeTools, bypassFreeLimitation, model, Row(testConnection, importModels, editorBusy), connectionResult, limit, vision, deleteKey, localPanel, connectionLaunch, Row(duplicate, remove) }) editor.Children.Add(item);
         Refresh(null);
         return state;
     }
@@ -573,6 +669,7 @@ public sealed partial class MainWindow
                 catch(Exception ex){return draft.Name+" : "+ex.Message;}continue;
             }
             if (AcpProviders.Find(draft.Kind) != null) { try { AcpProviders.Validate(new Provider { Kind = draft.Kind, ExecutablePath = draft.ExecutablePath, AcpArgumentsJson = draft.AcpArgumentsJson }); } catch (Exception ex) { return draft.Name + " : " + ex.Message; } if (string.IsNullOrWhiteSpace(draft.Model)) return T("Modèle requis."); continue; }
+            if (draft.Kind == "vertex") { try { VertexAi.Read(draft.BaseUrl); if (VertexAi.UsesApiKey(draft.BaseUrl) && (draft.DeleteKey || draft.ProtectedKey.Length == 0) && string.IsNullOrWhiteSpace(draft.PendingKey)) VertexAi.RequireApiKey(""); } catch (ArgumentException ex) { return draft.Name + " : " + ex.Message; } }
             try { ChatEngine.Endpoint(draft.BaseUrl.Trim(), draft.Kind == "opencode" ? "global/health" : "chat/completions"); }
             catch { return T("URL HTTP(S) invalide.") + " " + draft.Name; }
             if (string.IsNullOrWhiteSpace(draft.Model) || draft.ContextLimit < 1024) return T("Modèle et limite de contexte requis.") + " " + draft.Name;
@@ -582,11 +679,12 @@ public sealed partial class MainWindow
 
     void ApplyProviderDraft(ProviderDraft draft, Provider entity)
     {
-        entity.Name = draft.Name.Trim(); entity.BaseUrl = draft.BaseUrl.Trim().TrimEnd('/'); entity.Model = draft.Model.Trim();
+        entity.Name = draft.Name.Trim(); entity.BaseUrl = draft.BaseUrl.Trim().TrimEnd('/'); entity.Model = draft.Kind == "vertex" ? VertexAi.NormalizeModel(draft.Model) : draft.Model.Trim();
         entity.SupportsImages = draft.SupportsImages;
         entity.Kind = draft.Kind; entity.Username = draft.Username.Trim(); entity.ExecutablePath = draft.ExecutablePath.Trim(); entity.AutoStart = draft.AutoStart;
         entity.AcpArgumentsJson = draft.AcpArgumentsJson;
         if (entity.IsAcp) { entity.ProtectedKey = []; entity.BaseUrl = ""; }
+        if (entity.IsVertex && !VertexAi.UsesApiKey(entity.BaseUrl)) entity.ProtectedKey = [];
         entity.OpenCodeTools = draft.OpenCodeTools;
         entity.BypassFreeLimitation = draft.BypassFreeLimitation;
         entity.CompositeJson = draft.CompositeJson;
@@ -598,7 +696,7 @@ public sealed partial class MainWindow
             var config = CompositeModel.Read(entity.CompositeJson); var target = CompositeModel.Resolve(config.Orchestrator, db.Providers.Local);
             entity.Model = target.Model; entity.ContextLimit = target.ContextLimit; entity.SupportsImages = target.SupportsImages; entity.BaseUrl = ""; entity.ProtectedKey = [];
         }
-        if (!entity.IsAcp && !string.IsNullOrWhiteSpace(draft.PendingKey)) entity.ProtectedKey = KeyVault.Encrypt(draft.PendingKey.Trim());
+        if (!entity.IsAcp && (!entity.IsVertex || VertexAi.UsesApiKey(entity.BaseUrl)) && !string.IsNullOrWhiteSpace(draft.PendingKey)) entity.ProtectedKey = KeyVault.Encrypt(draft.PendingKey.Trim());
         else if (draft.DeleteKey) entity.ProtectedKey = [];
     }
 

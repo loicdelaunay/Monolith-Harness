@@ -8,42 +8,47 @@ using static MonolithHarness.App.UiText;
 namespace MonolithHarness.App;
 
 /// <summary>
-/// The server mode in one click: a power button beside the connection chip turns everything that talks to the server on or off (synchronization,
+/// The server mode in one click: a switch beside the connection state turns everything that talks to the server on or off (synchronization,
 /// live channel, cloud view, shared providers, cloud requests) without signing out; the account and the links are kept. And what a local
 /// conversation waiting in the server's queue shows: its position.
 /// </summary>
 public sealed partial class MainWindow
 {
-    ToggleButton? serverModeToggle;
-    bool settingServerMode;
+    ToggleSwitch? serverModeToggle;
+    bool settingServerMode, changingServerMode;
 
     FrameworkElement BuildServerModeToggle()
     {
-        serverModeToggle = new ToggleButton
+        serverModeToggle = new ToggleSwitch
         {
-            Content = FluentDesign.Icon("", 14), Padding = new(8, 8, 8, 8), VerticalAlignment = VerticalAlignment.Stretch, Visibility = Visibility.Collapsed
+            OnContent = "", OffContent = "", MinWidth = 0, Width = 44, MinHeight = 32,
+            Padding = new(0), Margin = new(0, 0, 8, 1), VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right
         };
-        serverModeToggle.Click += async (_, _) =>
+        serverModeToggle.Toggled += async (_, _) =>
         {
-            if (settingServerMode) return;
-            var wanted = serverModeToggle.IsChecked == true;
-            await Guard(() => SetServerModeAsync(wanted));
-            RefreshServerModeToggle();
+            if (settingServerMode || changingServerMode) return;
+            var wanted = serverModeToggle.IsOn;
+            changingServerMode = true; serverModeToggle.IsEnabled = false;
+            try { await Guard(() => SetServerModeAsync(wanted)); }
+            finally { changingServerMode = false; RefreshServerModeToggle(); }
         };
         RefreshServerModeToggle();
         return serverModeToggle;
     }
 
-    /// <summary>Visible once an account is signed in; pressed = the server mode is on.</summary>
+    /// <summary>The switch mirrors the saved mode and stays disabled until an account is signed in.</summary>
     void RefreshServerModeToggle()
     {
         if (serverModeToggle == null) return;
         var link = Server.Link;
-        serverModeToggle.Visibility = link.Configured && link.SignedIn ? Visibility.Visible : Visibility.Collapsed;
+        var available = link.Configured && link.SignedIn;
+        serverModeToggle.IsEnabled = available && !changingServerMode;
         settingServerMode = true;
-        try { serverModeToggle.IsChecked = link.Enabled; }
+        try { serverModeToggle.IsOn = available && link.Enabled; }
         finally { settingServerMode = false; }
-        var label = link.Enabled ? WorkflowText("Mode serveur activé : cliquez pour le désactiver", "Server mode on: click to turn it off")
+        var label = !available ? WorkflowText("Connectez un compte dans Réglages › Serveur pour activer le mode serveur.", "Sign in under Settings › Server to enable server mode.")
+            : link.Enabled ? WorkflowText("Mode serveur activé : cliquez pour le désactiver", "Server mode on: click to turn it off")
             : WorkflowText("Mode serveur désactivé : cliquez pour l'activer", "Server mode off: click to turn it on");
         ToolTipService.SetToolTip(serverModeToggle, label);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(serverModeToggle, label);

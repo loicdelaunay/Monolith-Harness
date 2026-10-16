@@ -12,7 +12,7 @@ public sealed partial class ProviderConnectionWizard(HttpClient http,
     public static IReadOnlyList<ProviderPreset> Presets { get; } = new ProviderPreset[] {
         new("openai", "OpenAI", "https://api.openai.com/v1", "openai", false),
         new("deepseek", "DeepSeek", "https://api.deepseek.com", "openai", false),
-    }.Concat(ProviderPresets.Cloud.Select(x => new ProviderPreset(x.Id, x.Name, x.BaseUrl, "openai", false))).Concat(new ProviderPreset[] {
+    }.Concat(ProviderPresets.Cloud.Select(x => new ProviderPreset(x.Id, x.Name, x.BaseUrl, x.Kind, x.Kind == "vertex"))).Concat(new ProviderPreset[] {
         new("compatible", "Autre API compatible OpenAI / Other compatible API", "", "openai", true),
         new("local-model", "Local · GGUF · Beta", "model/", "local", true),
         new("local", "API locale compatible OpenAI / Local compatible API", "", "openai", true),
@@ -31,22 +31,40 @@ public sealed partial class ProviderConnectionWizard(HttpClient http,
         if (preset.Kind == "local") return await LocalAsync(ct);
         var draft = new Provider { Name = preset.Name.Split(" / ")[0], Kind = preset.Kind, BaseUrl = preset.Url, Model = "", Username = preset.Kind == "opencode" ? "opencode" : "" };
         // Credentials stay in memory until the final confirmation, including during discovery.
-        var key = await prompt(new("2/4 · " + (draft.IsOpenCode ? "Mot de passe serveur / Server password" : "Clé API / API key"),
-            preset.OptionalKey ? "Saisie masquée. Vide si aucune authentification. / Masked. Empty if no authentication."
-                : "Saisie masquée ; clé chiffrée après validation. / Masked; encrypted after confirmation." +
-                    (cloudPreset == null ? "" : "\n" + cloudPreset.DescriptionFr + "\n" + cloudPreset.DescriptionEn + "\nClé API / API key: " + cloudPreset.KeysUrl), Secret: true));
-        if (key == null) return null;
-        while (!preset.OptionalKey && string.IsNullOrWhiteSpace(key))
+        string? key = "";
+        if (!draft.IsVertex)
         {
-            key = await prompt(new("2/4 · Clé API requise / API key required", Secret: true));
+            key = await prompt(new("2/4 · " + (draft.IsOpenCode ? "Mot de passe serveur / Server password" : "Clé API / API key"),
+                preset.OptionalKey ? "Saisie masquée. Vide si aucune authentification. / Masked. Empty if no authentication."
+                    : "Saisie masquée ; clé chiffrée après validation. / Masked; encrypted after confirmation." +
+                        (cloudPreset == null ? "" : "\n" + cloudPreset.DescriptionFr + "\n" + cloudPreset.DescriptionEn + "\nClé API / API key: " + cloudPreset.KeysUrl), Secret: true));
             if (key == null) return null;
+            while (!preset.OptionalKey && string.IsNullOrWhiteSpace(key))
+            {
+                key = await prompt(new("2/4 · Clé API requise / API key required", Secret: true));
+                if (key == null) return null;
+            }
+            while (true)
+            {
+                var url = await prompt(new("2/4 · URL de l’API / API URL", "HTTP(S), avec /v1 si nécessaire. / Include /v1 when required.", Initial: draft.BaseUrl));
+                if (url == null) return null;
+                try { _ = ChatEngine.Endpoint(url.Trim(), "models"); draft.BaseUrl = url.Trim().TrimEnd('/'); break; }
+                catch (ArgumentException) { progress?.Invoke("URL HTTP(S) invalide / Invalid HTTP(S) URL"); }
+            }
         }
-        while (true)
+        else
         {
-            var url = await prompt(new("2/4 · URL de l’API / API URL", "HTTP(S), avec /v1 si nécessaire. / Include /v1 when required.", Initial: draft.BaseUrl));
-            if (url == null) return null;
-            try { _ = ChatEngine.Endpoint(url.Trim(), "models"); draft.BaseUrl = url.Trim().TrimEnd('/'); break; }
-            catch (ArgumentException) { progress?.Invoke("URL HTTP(S) invalide / Invalid HTTP(S) URL"); }
+            if (!await ConfigureVertexAsync(draft, ct)) return null;
+            if (VertexAi.UsesApiKey(draft.BaseUrl))
+            {
+                do
+                {
+                    key = await prompt(new("2/4 · Clé API Google Cloud / Google Cloud API key",
+                        "Saisie masquée ; clé chiffrée après confirmation. / Masked; encrypted after confirmation.", Secret: true));
+                    if (key == null) return null;
+                } while (string.IsNullOrWhiteSpace(key));
+                VertexAi.RequireApiKey(key);
+            }
         }
         if (draft.IsOpenCode)
         {
@@ -103,7 +121,7 @@ public sealed partial class ProviderConnectionWizard(HttpClient http,
         if (name == null) return null;
         if (!string.IsNullOrWhiteSpace(name)) draft.Name = name.Trim();
         var bypassInfo = draft.IsOpenCode && draft.BypassFreeLimitation ? " · [BETA bypass]" : "";
-        var decision = await prompt(new("4/4 · Valider la connexion / Confirm connection", $"{draft.Name}\n{draft.BaseUrl}\n{models.Count} modèle(s) · {draft.Model}{bypassInfo}\n" + (key.Length == 0 ? "Sans clé / No key" : "Clé fournie (masquée) / Key provided (hidden)"),
+        var decision = await prompt(new("4/4 · Valider la connexion / Confirm connection", $"{draft.Name}\n{draft.BaseUrl}\n{models.Count} modèle(s) · {draft.Model}{bypassInfo}\n" + (draft.IsVertex && !VertexAi.UsesApiKey(draft.BaseUrl) ? "Google Cloud ADC · jetons renouvelés automatiquement / automatically refreshed tokens" : key.Length == 0 ? "Sans clé / No key" : "Clé fournie (masquée) / Key provided (hidden)"),
             [new("save", "Valider et utiliser / Save and use"), new("cancel", "Annuler / Cancel")]));
         if (decision != "save") return null;
         ct.ThrowIfCancellationRequested();

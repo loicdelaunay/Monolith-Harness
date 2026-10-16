@@ -98,8 +98,9 @@ public sealed partial class MainWindow
         scroll.LayoutUpdated += (_, _) =>
         {
             // Content can grow or shrink without any user gesture (streaming, images, resize).
+            // LayoutUpdated fires for any layout in the window: virtualization is queued by the
+            // scroll position and turn/host size changes instead, not by every layout pass.
             if (followChatTail && scroll.ScrollableHeight - scroll.VerticalOffset > 1) QueueChatTail();
-            QueueMessageVirtualization();
         };
     }
 

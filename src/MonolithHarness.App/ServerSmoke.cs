@@ -43,7 +43,7 @@ public sealed partial class MainWindow
         // Without a server the application is local and the settings page builds.
         Check(!ServerLink.Configured && !ServerLink.SignedIn, "A fresh profile has no server link and stays local.");
         RefreshServerChip();
-        Check(serverChipText?.Text == "Serveur : aucun" && serverChipBadge?.Visibility == Visibility.Collapsed, "Without a server the chip says so, without a badge.");
+        Check(serverChipText?.Text == "Non configuré" && serverChipBadge?.Visibility == Visibility.Collapsed, "Without a server the chip says so, without a badge.");
         RebuildProjectNavigation();
         Check(!Descendants(projectNavigation).OfType<ToggleButton>().Any(), "Without a server there is no Local/Cloud toggle.");
         var toolsMenu = Descendants(root).OfType<DropDownButton>().Single(b => b.Content?.ToString() == "Outils");
@@ -62,7 +62,7 @@ public sealed partial class MainWindow
         ServerLinkChanged();
         await Wait(() => Sync.Snapshot.State == LinkState.Online && Sync.Snapshot.LastSyncUtc != null, 30, "The automatic synchronization did not complete.");
         RefreshServerChip();
-        Check(serverChipText?.Text == "Serveur · connecté", "Once synchronized the chip shows the connection.");
+        Check(serverChipText?.Text == "Connecté", "Once synchronized the chip shows the connection.");
         Check(ServerLink.SignedIn && synced.Count >= 1 && db.Providers.Local.Any(x => x.Name.EndsWith(ServerSync.ServerProviderSuffix)), "Signing in synchronizes the shared providers as local providers.");
         Check(!File.ReadAllText(ServerLinkStore.PathFor(HarnessDb.DatabasePath)).Contains("mhs_"), "The session token is protected on disk.");
         var shared = db.Providers.Local.First(x => x.Name.EndsWith(ServerSync.ServerProviderSuffix));
@@ -188,11 +188,11 @@ public sealed partial class MainWindow
 
         // The server mode in one click: a power button beside the connection state.
         RefreshServerChip();
-        Check(serverModeToggle is { Visibility: Visibility.Visible, IsChecked: true }, "A power button beside the server state shows that the server mode is on.");
+        Check(serverModeToggle is { Visibility: Visibility.Visible, IsOn: true }, "A power button beside the server state shows that the server mode is on.");
         var linkedShared = db.Providers.Local.First(x => x.Name.EndsWith(ServerSync.ServerProviderSuffix));
         await SetServerModeAsync(false);
         root.UpdateLayout(); await Task.Delay(300);
-        Check(serverChipText?.Text == "Serveur · désactivé" && serverModeToggle!.IsChecked == false && !Server.Link.Enabled && Server.Link.SignedIn, "Turning the mode off: the chip says so, the button is released and the account is kept.");
+        Check(serverChipText?.Text == "Désactivé" && serverModeToggle!.IsOn == false && !Server.Link.Enabled && Server.Link.SignedIn, "Turning the mode off: the chip says so, the button is released and the account is kept.");
         SetSidebarView(true);
         Check(!CloudView && !Descendants(projectNavigation).OfType<ToggleButton>().Any(), "With the mode off only the Local view exists.");
         SetSidebarView(false);
@@ -202,7 +202,7 @@ public sealed partial class MainWindow
         await SetServerModeAsync(true);
         await Wait(() => Sync.Snapshot.State == LinkState.Online, 30, "The server mode did not come back online.");
         RefreshServerChip();
-        Check(serverModeToggle!.IsChecked == true && serverChipText?.Text == "Serveur · connecté" && ServerSync.BlockedReason(Server.Link, linkedShared) == null, "Turning it back on reconnects and reopens the providers.");
+        Check(serverModeToggle!.IsOn == true && serverChipText?.Text == "Connecté" && ServerSync.BlockedReason(Server.Link, linkedShared) == null, "Turning it back on reconnects and reopens the providers.");
 
         // A call of a local conversation waiting in the server's queue shows its position.
         using (var waiting = new ConversationRun(localChat, local, linkedShared, state, "test", []) { Messages = CreateMessagePanel() })
@@ -293,7 +293,7 @@ public sealed partial class MainWindow
         ServerLinkChanged();
         await Wait(() => Sync.Snapshot.State == LinkState.SignedOut, 15, "The state did not become signed out.");
         RefreshServerChip();
-        Check(serverChipText?.Text == "Serveur · non connecté", "After signing out the chip says so.");
+        Check(serverChipText?.Text == "Non connecté", "After signing out the chip says so.");
         Check(!ServerLink.SignedIn && !db.Providers.Local.Any(x => x.Name.EndsWith(ServerSync.ServerProviderSuffix) || x.Name.EndsWith(ServerSync.CloudProviderSuffix)), "Signing out removes the shared providers.");
         Check(IsCloudProject(created.Id), "Cloud projects stay linked after signing out.");
         File.WriteAllLines(Path.Combine(output, "smoke-ok.txt"), passed);

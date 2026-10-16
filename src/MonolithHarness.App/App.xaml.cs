@@ -29,6 +29,8 @@ public partial class App : Application
                 var fixtureState = fixture.States.Single();
                 var fixtureSettings = FeatureSettings.Read(fixtureState.FeaturesJson);
                 fixtureSettings.WelcomeCompleted = true;
+                if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_CHROME_SMOKE") == "1")
+                    fixtureSettings.GuiUpdateMode = AutomaticUpdateMode.Disabled;
                 fixtureState.FeaturesJson = fixtureSettings.Json();
                 await fixture.SaveChangesAsync();
             }

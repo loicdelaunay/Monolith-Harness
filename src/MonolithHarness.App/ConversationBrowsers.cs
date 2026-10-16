@@ -19,6 +19,7 @@ public sealed partial class MainWindow
 #endif
         public Task? Initialization;
         public bool Ready;
+        public bool IsNavigating;
         public bool Closed;
         public string? PreviewFolder, PreviewHost;
         public double? PointerX, PointerY;
@@ -103,11 +104,19 @@ public sealed partial class MainWindow
         try
         {
             var id = chat?.Id ?? 0;
-            webTabs.TabItems.Clear();
-            foreach (var item in conversationBrowsers.Values.Where(item => item.Id == id))
+            var browsers = conversationBrowsers.Values.Where(item => item.Id == id).ToArray();
+            // Update existing headers in place: navigation must not rebuild the strip,
+            // drop keyboard focus or cause the selected native view to flash.
+            foreach (var stale in webTabs.TabItems.OfType<TabViewItem>().Where(tab => !browsers.Any(item => item.TabId == (string)tab.Tag)).ToArray())
+                webTabs.TabItems.Remove(stale);
+            foreach (var item in browsers)
             {
+                var tab = webTabs.TabItems.OfType<TabViewItem>().FirstOrDefault(tab => (string)tab.Tag == item.TabId);
+                if (tab == null) { tab = new TabViewItem { Tag = item.TabId, FontSize = 12 }; webTabs.TabItems.Add(tab); }
                 var title = BrowserTabTitle(item);
-                webTabs.TabItems.Add(new TabViewItem { Tag = item.TabId, Header = title.Length > 25 ? title[..24] + "…" : title });
+                var header = title.Length > 25 ? title[..24] + "…" : title;
+                if (!Equals(tab.Header, header)) tab.Header = header;
+                ToolTipService.SetToolTip(tab, item.Address);
             }
             webTabs.SelectedItem = webTabs.TabItems.OfType<TabViewItem>().FirstOrDefault(item => (string)item.Tag == SelectedBrowserTab(id));
         }
@@ -128,7 +137,7 @@ public sealed partial class MainWindow
         RefreshBrowserViewportSelector(current?.ViewportMode ?? "desktop");
         if (current?.Ready == true) browserHost.Children.Remove(browserNotice);
         else if (browserVisible && toolTabs.SelectedIndex == 0) ShowBrowserNotice();
-        SyncWebTabs();
+        SyncWebTabs(); RefreshBrowserNavigation();
     }
     void DisposeBrowser(ConversationBrowser item)
     {

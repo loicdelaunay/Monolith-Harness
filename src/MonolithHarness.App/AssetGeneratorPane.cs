@@ -102,7 +102,7 @@ public sealed partial class MainWindow
             await RefreshAssetsAsync(doc.Id);
         });
         foreach (var button in new[] { paletteButton, exportButton, assetPlay })
-        { button.Width = button.Height = 32; button.MinWidth = button.MinHeight = 0; button.Padding = new(0); }
+        { StyleChromeAction(button); }
         FluentDesign.IconButton(paletteButton, "\uE790", WorkflowText("Palette", "Palette"), false);
         FluentDesign.IconButton(exportButton, "\uE74E", WorkflowText("Exporter…", "Export…"), false);
         ToolTipService.SetToolTip(assetPlay, WorkflowText("Lire / arrêter l’animation", "Play / stop animation"));

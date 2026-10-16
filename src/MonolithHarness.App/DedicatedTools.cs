@@ -11,6 +11,7 @@ public sealed partial class MainWindow
     readonly HashSet<ModelToolKind> openingTools = [];
     DashboardWindow? dashboardWindow;
     AiDetectorWindow? aiDetectorWindow;
+    DropDownButton dedicatedToolsMenuButton = null!;
 
     Grid BuildDedicatedToolsRow(Button settingsButton)
     {
@@ -19,10 +20,30 @@ public sealed partial class MainWindow
         row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         row.RowDefinitions.Add(new() { Height = GridLength.Auto });
         row.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        row.RowSpacing = 12;
-        // The server connection chip takes the place of the former "Scheduled tasks" button, which moved into the Tools menu.
+        row.RowSpacing = 6;
+        // A shared footer surface keeps the server state separate from Settings and the existing Tools menu.
+        var separator = new Border { Height = 1, Background = FluentDesign.Stroke, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false };
+        Grid.SetColumnSpan(separator, 2); row.Children.Add(separator);
         var serverState = BuildServerChip();
-        var menu = new MenuFlyout();
+        var modeToggle = BuildServerModeToggle();
+        row.Children.Add(serverState); Grid.SetColumn(modeToggle, 1); row.Children.Add(modeToggle);
+        var menu = new MenuFlyout(); AddDedicatedToolMenuItems(menu);
+        dedicatedToolsMenuButton = new DropDownButton
+        {
+            Content = WorkflowText("Outils", "Tools"), Flyout = menu, FontSize = 13, Padding = new(8, 6, 8, 6),
+            MinHeight = 36, Background = FluentDesign.Resource("TransparentBrush"), BorderThickness = new(0), CornerRadius = new(6)
+        };
+        settingsButton.FontSize = 13; settingsButton.MinHeight = 36; settingsButton.Padding = new(8, 6, 8, 6);
+        settingsButton.Background = FluentDesign.Resource("TransparentBrush"); settingsButton.BorderThickness = new(0); settingsButton.CornerRadius = new(6);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dedicatedToolsMenuButton, WorkflowText("Outils dédiés", "Dedicated tools"));
+        Grid.SetRow(settingsButton, 1); row.Children.Add(settingsButton);
+        Grid.SetRow(dedicatedToolsMenuButton, 1); Grid.SetColumn(dedicatedToolsMenuButton, 1); row.Children.Add(dedicatedToolsMenuButton);
+        Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); diagnosticsWindow?.Close(); foreach (var approval in authorizationWindows.ToArray()) approval.Close(); };
+        return row;
+    }
+
+    void AddDedicatedToolMenuItems(MenuFlyout menu)
+    {
         var scheduled = new MenuFlyoutItem { Text = WorkflowText("Tâches planifiées", "Scheduled tasks"), Icon = FluentDesign.Icon("") };
         scheduled.Click += async (_, _) => await Guard(ShowScheduledTasks);
         menu.Items.Add(scheduled); menu.Items.Add(new MenuFlyoutSeparator());
@@ -39,14 +60,6 @@ public sealed partial class MainWindow
         detector.Click += async (_, _) => await Guard(ShowAiDetectorAsync); menu.Items.Add(detector);
         var debug = new MenuFlyoutItem { Text = WorkflowText("Débug · Diagnostics", "Debug · Diagnostics"), Icon = FluentDesign.Icon("\uE9D9") };
         debug.Click += async (_, _) => await Guard(ShowDiagnosticsAsync); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(debug);
-        var tools = new DropDownButton { Content = WorkflowText("Outils", "Tools"), Flyout = menu, FontSize = 12, Padding = new(8, 8, 8, 8) };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tools, WorkflowText("Outils dédiés", "Dedicated tools"));
-        var modeToggle = BuildServerModeToggle();
-        row.Children.Add(serverState); Grid.SetColumn(modeToggle, 1); row.Children.Add(modeToggle);
-        Grid.SetRow(settingsButton, 1); row.Children.Add(settingsButton);
-        Grid.SetRow(tools, 1); Grid.SetColumn(tools, 1); row.Children.Add(tools);
-        Closed += (_, _) => { foreach (var window in dedicatedTools.Values.ToArray()) window.Close(); dashboardWindow?.Close(); aiDetectorWindow?.Close(); diagnosticsWindow?.Close(); foreach (var approval in authorizationWindows.ToArray()) approval.Close(); };
-        return row;
     }
 
     async Task ShowDashboardAsync()

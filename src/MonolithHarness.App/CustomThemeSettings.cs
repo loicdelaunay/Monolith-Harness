@@ -18,6 +18,7 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 16 };
         var selector = new ComboBox { Header = WorkflowText("Thème actif", "Active theme"), HorizontalAlignment = HorizontalAlignment.Stretch };
         bool refreshing = false, editing = false;
+        Action refreshBackgroundPreview = () => { };
         void Refresh()
         {
             refreshing = true;
@@ -29,7 +30,7 @@ public sealed partial class MainWindow
         selector.SelectionChanged += (_, _) =>
         {
             if (refreshing || selector.SelectedItem is not ThemeChoice choice) return;
-            selected = choice.Id; ApplyTheme(selected, custom);
+            selected = choice.Id; ApplyTheme(selected, custom); refreshBackgroundPreview();
         };
         var themeTabs = new TabView { IsAddTabButtonVisible = false, CanDragTabs = false, CanReorderTabs = false, TabWidthMode = TabViewWidthMode.Equal };
         themeTabs.TabItems.Add(new TabViewItem { Header = WorkflowText("Thème", "Theme"), IsClosable = false, Content = selector });
@@ -48,7 +49,7 @@ public sealed partial class MainWindow
                 if (result is { } accepted && ReferenceEquals(settingsWindow, owner))
                 {
                     custom = accepted.Themes; selected = accepted.Selected;
-                    Refresh(); ApplyTheme(selected, custom);
+                    Refresh(); ApplyTheme(selected, custom); refreshBackgroundPreview();
                 }
             }
             finally { editing = false; themeTabs.SelectedIndex = 0; }
@@ -57,6 +58,8 @@ public sealed partial class MainWindow
         themeTabs.SelectionChanged += async (_, _) => { if (themeTabs.SelectedIndex == 1) await Guard(Edit); };
         panel.Children.Add(FluentDesign.Surface(themeTabs, 16));
         panel.Children.Add(Label(WorkflowText("Le thème est prévisualisé immédiatement. Enregistrez les réglages pour conserver les changements.", "Themes preview immediately. Save settings to keep your changes."), 12));
+        var background = BuildChatBackgroundSettings(owner, settings, () => AppearanceThemes.Get(selected, custom));
+        panel.Children.Add(background.Panel); refreshBackgroundPreview = background.RefreshTheme;
         var density = BuildChatDensitySettings(); panel.Children.Add(density.Panel);
         var fonts = BuildFontSettings(); panel.Children.Add(fonts.Panel);
         var globalSpeed = new ToggleSwitch { IsOn = settings.ShowGlobalTokenSpeed };
@@ -64,6 +67,7 @@ public sealed partial class MainWindow
             WorkflowText("Au-dessus de Tâches planifiées et Outils : somme des débits des conversations en cours sur les deux dernières secondes. Désactivé par défaut.", "Above Scheduled tasks and Tools: combined token speed of active conversations over the last two seconds. Disabled by default."), globalSpeed));
         return (panel, target => {
             target.CustomThemes = custom.Select(CopyTheme).ToList(); target.Theme = selected;
+            background.Save(target);
             if (AppearanceThemes.IsCustomId(target.CliTheme) && !custom.Any(x => x.Id == target.CliTheme)) target.CliTheme = "shared";
             density.Save(target); fonts.Save(target);
             target.ShowGlobalTokenSpeed = globalSpeed.IsOn;

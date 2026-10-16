@@ -6,16 +6,31 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly Border globalTokenSpeed = new() { Visibility = Visibility.Collapsed, CornerRadius = new(8), Padding = new(10, 7, 10, 7) };
-    readonly TextBlock globalTokenSpeedValue = Label("0,0 tok/s", 14);
-    readonly TextBlock globalTokenSpeedChats = Label("", 11);
+    readonly Border globalTokenSpeed = new() { Visibility = Visibility.Collapsed, Padding = new(8, 8, 8, 8), BorderThickness = new(0, 0, 0, 1) };
+    readonly TextBlock globalTokenSpeedValue = Label("0,0 tok/s", 12);
+    readonly TextBlock globalTokenSpeedChats = Label("· 0 chats", 11);
     bool globalTokenSpeedEnabled;
 
     UIElement BuildGlobalTokenSpeed()
     {
-        var panel = new StackPanel { Spacing = 2 };
-        panel.Children.Add(Label(WorkflowText("Débit global", "Combined token speed"), 11));
-        panel.Children.Add(Row(FluentDesign.Icon("\uE945", 14), globalTokenSpeedValue, globalTokenSpeedChats));
+        var panel = new Grid { ColumnSpacing = 8, MinHeight = 24 };
+        panel.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        panel.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        panel.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var icon = FluentDesign.Icon("\uE945", 16); icon.VerticalAlignment = VerticalAlignment.Center;
+        panel.Children.Add(icon);
+        var caption = Label(WorkflowText("Débit global", "Token speed"), 12);
+        caption.TextWrapping = TextWrapping.NoWrap; caption.TextTrimming = TextTrimming.CharacterEllipsis;
+        caption.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(caption, 1); panel.Children.Add(caption);
+        globalTokenSpeedValue.VerticalAlignment = globalTokenSpeedChats.VerticalAlignment = VerticalAlignment.Center;
+        globalTokenSpeedValue.TextWrapping = globalTokenSpeedChats.TextWrapping = TextWrapping.NoWrap;
+        globalTokenSpeedChats.Foreground = FluentDesign.Secondary;
+        var values = Row(globalTokenSpeedValue, globalTokenSpeedChats); values.Spacing = 4;
+        values.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(values, 2); panel.Children.Add(values);
+        globalTokenSpeed.Background = FluentDesign.Resource("TransparentBrush");
+        globalTokenSpeed.BorderBrush = FluentDesign.Stroke;
         globalTokenSpeed.Child = panel;
         ToolTipService.SetToolTip(globalTokenSpeed, WorkflowText("Somme des débits des modèles des conversations en cours, sur les deux dernières secondes. Les valeurs sans compteur fournisseur sont estimées.", "Combined speed of models in active conversations over the last two seconds. Values without provider token counters are estimated."));
         return globalTokenSpeed;
@@ -25,7 +40,6 @@ public sealed partial class MainWindow
     {
         globalTokenSpeedEnabled = enabled;
         globalTokenSpeed.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
-        globalTokenSpeed.Background = FluentDesign.Card;
         RefreshGlobalTokenSpeed();
         if (enabled) { EnsureComposerSpeedTimer(); composerSpeedTimer.Start(); }
     }

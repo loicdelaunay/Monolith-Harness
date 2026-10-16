@@ -1,21 +1,51 @@
 @using System.Globalization
+@using Vertex = MonolithHarness.Core.VertexAi
 @inject UiContext Ui
 @inject ProviderService Providers
 
 <MudDialog>
     <DialogContent>
-        <MudTextField Immediate="true" @bind-Value="_name" Label="Nom" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
-        <MudTextField Immediate="true" @bind-Value="_url" Label="Adresse de l’API (compatible OpenAI)" Placeholder="https://api.openai.com/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2"
-                      HelperText="Reste sur le serveur: jamais transmise aux clients." />
-        <MudTextField Immediate="true" @bind-Value="_secret" Label="@(Existing is { HasSecret: true } ? "Clé d’API (laisser vide pour conserver l’actuelle)" : "Clé d’API")" InputType="InputType.Password"
-                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1" HelperText="Chiffrée sur le serveur; elle ne peut plus être relue ensuite." />
-        @if (Existing is { HasSecret: true })
+        <MudSelect T="string" Value="_type" ValueChanged="ProviderTypeChanged" Label="Type de fournisseur" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+            <MudSelectItem T="string" Value='@("openai")'>API compatible OpenAI</MudSelectItem>
+            <MudSelectItem T="string" Value='@("vertex")'>Vertex AI · Google Cloud</MudSelectItem>
+        </MudSelect>
+        @if (_type == "vertex")
         {
-            <MudCheckBox T="bool" @bind-Value="_clearSecret" Dense="true" Color="Color.Primary" Label="Supprimer la clé enregistrée" />
+            <MudSelect T="string" Value="_auth" ValueChanged="AuthenticationChanged" Label="Authentification Google Cloud" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+                <MudSelectItem T="string" Value="@Vertex.Adc">Google Cloud ADC</MudSelectItem>
+                <MudSelectItem T="string" Value="@Vertex.ApiKey">Clé API Google Cloud · projet</MudSelectItem>
+                <MudSelectItem T="string" Value="@Vertex.Express">Clé API Google Cloud · Express</MudSelectItem>
+            </MudSelect>
+            @if (_auth != Vertex.Express)
+            {
+                <MudTextField Immediate="true" @bind-Value="_project" Label="Identifiant du projet Google Cloud" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+                <MudTextField Immediate="true" @bind-Value="_region" Label="Région" Placeholder="global" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+            }
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                @(_auth == Vertex.Adc ? "ADC doit être configuré sur la machine du serveur. Les jetons sont renouvelés automatiquement."
+                    : _auth == Vertex.Express ? "Clé Vertex AI Express : aucun ADC requis. Saisissez les modèles manuellement, Express ne propose pas de catalogue."
+                    : "Clé Google Cloud autorisée pour Vertex AI et le projet, avec les droits IAM requis. Aucun ADC nécessaire.")
+                L’éligibilité des crédits est définie par Google.
+            </MudAlert>
+        }
+        <MudTextField Immediate="true" @bind-Value="_name" Label="Nom" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+        @if (_type != "vertex")
+        {
+            <MudTextField Immediate="true" @bind-Value="_url" Label="Adresse de l’API (compatible OpenAI)" Placeholder="https://api.openai.com/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2"
+                          HelperText="Reste sur le serveur: jamais transmise aux clients." />
+        }
+        @if (_type != "vertex" || _auth != Vertex.Adc)
+        {
+            <MudTextField Immediate="true" @bind-Value="_secret" Label="@(Existing is { HasSecret: true } ? "Clé d’API (laisser vide pour conserver l’actuelle)" : "Clé d’API")" InputType="InputType.Password"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1" HelperText="Chiffrée sur le serveur; elle ne peut plus être relue ensuite." />
+            @if (Existing is { HasSecret: true })
+            {
+                <MudCheckBox T="bool" @bind-Value="_clearSecret" Dense="true" Color="Color.Primary" Label="Supprimer la clé enregistrée" />
+            }
         }
         <div class="d-flex flex-wrap gap-2 align-center mt-2">
-            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.NetworkCheck" Disabled="@(_busy || _url.Trim().Length == 0)" OnClick="Test">Tester la connexion</MudButton>
-            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ManageSearch" Disabled="@(_busy || _url.Trim().Length == 0)" OnClick="Detect">Détecter les modèles</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.NetworkCheck" Disabled="@(_busy || ProbeUrl.Trim().Length == 0)" OnClick="Test">Tester la connexion</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ManageSearch" Disabled="@(_busy || ProbeUrl.Trim().Length == 0)" OnClick="Detect">Détecter les modèles</MudButton>
             @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" aria-label="Appel du provider en cours" /> }
         </div>
         @if (_probe != null)
@@ -40,6 +70,7 @@
     public sealed record Result(string Name, string BaseUrl, string? Secret, List<ProviderModel> Models, bool Enabled, bool AllowLocalUse);
 
     string _name = "", _url = "", _secret = "", _models = "";
+    string _type = "openai", _project = "", _region = "global", _auth = Vertex.Adc;
     bool _enabled = true, _local, _clearSecret, _busy;
     ProviderProbe? _probe;
 
@@ -50,7 +81,25 @@
         _url = Existing.BaseUrl;
         _enabled = Existing.IsEnabled;
         _local = Existing.AllowLocalUse;
+        if (Vertex.TryRead(Existing.BaseUrl, out var vertex) && (!Existing.HasSecret || vertex!.UsesApiKey))
+        { _type = "vertex"; _project = vertex!.Project; _region = vertex.Location; _auth = vertex.Authentication; }
         _models = string.Join('\n', Existing.Models.Select(x => $"{x.Id} ; {x.ContextLimit} ; {(x.SupportsImages ? "oui" : "non")}"));
+    }
+
+    void ProviderTypeChanged(string value)
+    {
+        _type = value; _probe = null;
+        if (value == "vertex" && _models.Length == 0) _models = "google/gemini-4-argon ; 256000 ; oui";
+    }
+    void AuthenticationChanged(string value) { _auth = value; _probe = null; }
+    string ProbeUrl
+    {
+        get
+        {
+            if (_type != "vertex") return _url;
+            try { return Vertex.Endpoint(_project, _region, _auth); }
+            catch (ArgumentException) { return ""; }
+        }
     }
 
     static List<ProviderModel> Parse(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(line =>
@@ -62,7 +111,7 @@
     }).ToList();
 
     // The typed key is used when there is one; otherwise the stored key of the provider being edited (never shown, never sent to the browser).
-    string? ProbeSecret => _clearSecret ? "" : string.IsNullOrEmpty(_secret) ? (Existing == null ? "" : null) : _secret;
+    string? ProbeSecret => _type == "vertex" && _auth == Vertex.Adc ? "" : _clearSecret ? "" : string.IsNullOrEmpty(_secret) ? (Existing == null ? "" : null) : _secret;
 
     async Task<ProviderProbe?> Probe()
     {
@@ -72,7 +121,7 @@
             _probe = await Ui.Try(user =>
             {
                 if (!Ui.Can(user, Permissions.ProvidersManage)) throw ApiException.Forbidden("missing_permission");
-                return Providers.ProbeAsync(_url, ProbeSecret, Existing?.Id);
+                return Providers.ProbeAsync(ProbeUrl, ProbeSecret, Existing?.Id);
             });
             return _probe;
         }
@@ -91,7 +140,8 @@
             _models = string.Join('\n', new[] { _models.TrimEnd() }.Where(x => x.Length > 0).Concat(added.Select(x => $"{x.Id} ; {x.ContextLimit} ; {(x.SupportsImages ? "oui" : "non")}")));
         _probe = probe with
         {
-            Message = added.Count == 0
+            Message = _type == "vertex" ? probe.Message + $" {added.Count} ajouté(s) à la liste; vérifiez contexte et images."
+                : added.Count == 0
                 ? $"{probe.Models.Count} modèle(s) détecté(s) · tous figurent déjà dans la liste."
                 : $"{probe.Models.Count} modèle(s) détecté(s) · {added.Count} ajouté(s) à la liste (vérifiez le contexte et les images avant d’enregistrer)."
         };
@@ -100,5 +150,13 @@
     void Cancel() => MudDialog.Cancel();
 
     // null keeps the stored key, an empty string removes it.
-    void Submit() => MudDialog.Close(DialogResult.Ok(new Result(_name, _url, _clearSecret ? "" : string.IsNullOrEmpty(_secret) ? (Existing == null ? "" : null) : _secret, Parse(_models), _enabled, _local)));
+    void Submit()
+    {
+        try
+        {
+            var url = _type == "vertex" ? Vertex.Endpoint(_project, _region, _auth) : _url;
+            MudDialog.Close(DialogResult.Ok(new Result(_name, url, ProbeSecret, Parse(_models), _enabled, _local)));
+        }
+        catch (ArgumentException error) { _probe = new(false, 0, 0, error.Message, []); }
+    }
 }

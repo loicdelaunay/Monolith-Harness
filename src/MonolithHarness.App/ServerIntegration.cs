@@ -246,9 +246,14 @@ public sealed partial class MainWindow
         _ = ForwardSafely(share, "tool", new { chatId = target.Id, id = callId, name, arguments = arguments.Length > 4000 ? arguments[..4000] + "…" : arguments });
     }
 
+    readonly Dictionary<int, long> sharedStreamTicks = [];
     void ShareStream(Chat target, int messageId, string text, string reasoning)
     {
         if (!sharedChats.TryGetValue(target.Id, out var share)) return;
+        // Each event carries the whole reply; the completed message is forwarded separately.
+        var now = Environment.TickCount64;
+        if (sharedStreamTicks.TryGetValue(target.Id, out var last) && now - last < 100) return;
+        sharedStreamTicks[target.Id] = now;
         _ = ForwardSafely(share, "stream", new { chatId = target.Id, messageId, text, reasoning });
     }
 

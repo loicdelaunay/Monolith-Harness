@@ -30,12 +30,15 @@ public sealed partial class MainWindow
         drafts.Add(new ProviderDraft { Name = WorkflowText("Autre API compatible", "Other compatible API"), Kind = "openai", SupportsImages = false });
         drafts.Add(new ProviderDraft { Name = "OpenCode", Kind = "opencode", BaseUrl = "http://127.0.0.1:4096", Username = "opencode", OpenCodeTools = true });
         foreach (var preset in AcpProviders.Presets) { var p = AcpProviders.Create(preset); drafts.Add(new ProviderDraft { Name = p.Name, Kind = p.Kind, Model = p.Model, SupportsImages = false, OpenCodeTools = true, DetectedModelsJson = p.DetectedModelsJson, SelectedModelsJson = p.SelectedModelsJson }); }
+        var vertexPreset = ProviderPresets.Find("vertex")!;
+        drafts.Add(new ProviderDraft { Name = vertexPreset.Name, Kind = vertexPreset.Kind, BaseUrl = vertexPreset.BaseUrl, Model = vertexPreset.DefaultModel });
         var selected = drafts.FirstOrDefault(x => x.Id == state.ProviderId) ?? drafts[0];
         var panel = new StackPanel { Spacing = 12 };
         var host = new ContentControl { Content = panel, HorizontalContentAlignment = HorizontalAlignment.Stretch };
         var choice = new ComboBox { Header = WorkflowText("Choisir un fournisseur", "Choose a provider"), ItemsSource = drafts, HorizontalAlignment = HorizontalAlignment.Stretch };
         var name = new TextBox { Header = T("Nom du fournisseur"), MaxLength = 100 };
         var endpoint = new TextBox { Header = T("URL de base de l’API"), MaxLength = 2000, PlaceholderText = "https://…/v1" };
+        var vertexFields = new VertexProviderFields { Visibility = Visibility.Collapsed };
         var key = new PasswordBox { Header = T("Clé API (vide : conserver la clé enregistrée)") };
         var model = new ComboBox { Header = T("Identifiant du modèle"), IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch };
         var info = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary, FontSize = 12 };
@@ -59,7 +62,7 @@ public sealed partial class MainWindow
         }
         ProviderDraft Read()
         {
-            selected.Name = name.Text; selected.BaseUrl = endpoint.Text; selected.Model = model.Text;
+            selected.Name = name.Text; selected.BaseUrl = endpoint.Text; selected.Model = selected.Kind == "vertex" ? VertexAi.NormalizeModel(model.Text) : model.Text;
             selected.PendingKey = key.Password; selected.Username = username.Text; selected.ExecutablePath = executable.Text;
             selected.AcpArgumentsJson = acpArguments.Text;
             selected.AutoStart = autoStart.IsChecked == true; selected.SupportsImages = vision.IsChecked == true;
@@ -71,6 +74,7 @@ public sealed partial class MainWindow
             var draft = Read();
             if (string.IsNullOrWhiteSpace(draft.Name)) return T("Le nom du fournisseur est requis.");
             if (AcpProviders.Find(draft.Kind) != null) { try { AcpProviders.Validate(new Provider { Kind = draft.Kind, ExecutablePath = draft.ExecutablePath, AcpArgumentsJson = draft.AcpArgumentsJson }); } catch (Exception ex) { return ex.Message; } return string.IsNullOrWhiteSpace(draft.Model) ? T("Modèle requis.") : null; }
+            if (draft.Kind == "vertex") { try { VertexAi.Read(draft.BaseUrl); if (VertexAi.UsesApiKey(draft.BaseUrl) && draft.ProtectedKey.Length == 0 && string.IsNullOrWhiteSpace(draft.PendingKey)) VertexAi.RequireApiKey(""); } catch (ArgumentException ex) { return ex.Message; } }
             try { ChatEngine.Endpoint(draft.BaseUrl.Trim(), draft.Kind == "opencode" ? "global/health" : "models"); }
             catch { return T("URL HTTP(S) invalide."); }
             if (string.IsNullOrWhiteSpace(draft.Model) || draft.ContextLimit is < 1024 or > 10_000_000)
@@ -87,7 +91,11 @@ public sealed partial class MainWindow
             username.Text = draft.Username; executable.Text = draft.ExecutablePath; autoStart.IsChecked = draft.AutoStart;
             foreach (var control in new UIElement[] { username, executable, autoStart }) control.Visibility = draft.Kind == "opencode" ? Visibility.Visible : Visibility.Collapsed;
             var acp = AcpProviders.Find(draft.Kind);
-            endpoint.Visibility = key.Visibility = acp == null ? Visibility.Visible : Visibility.Collapsed;
+            var vertex = draft.Kind == "vertex";
+            vertexFields.Visibility = vertex ? Visibility.Visible : Visibility.Collapsed;
+            if (vertex) vertexFields.Bind(draft.BaseUrl);
+            endpoint.Visibility = acp == null && !vertex ? Visibility.Visible : Visibility.Collapsed;
+            key.Visibility = acp == null && (!vertex || VertexAi.UsesApiKey(draft.BaseUrl)) ? Visibility.Visible : Visibility.Collapsed;
             if (acp != null) executable.Visibility = acpArguments.Visibility = Visibility.Visible; else acpArguments.Visibility = Visibility.Collapsed;
             executable.Header = acp != null ? WorkflowText("Exécutable ACP personnalisé (facultatif)", "Custom ACP executable (optional)") : T("Chemin vers opencode.exe (facultatif)");
             acpArguments.Text = draft.AcpArgumentsJson;
@@ -96,6 +104,12 @@ public sealed partial class MainWindow
                 "Enter your details, then load models or type a model ID directly. A local API may work without a key.");
             refreshing = false;
         }
+        vertexFields.EndpointChanged += value =>
+        {
+            if (refreshing || selected.Kind != "vertex") return;
+            endpoint.Text = value; selected.BaseUrl = value;
+            key.Visibility = vertexFields.UsesApiKey ? Visibility.Visible : Visibility.Collapsed;
+        };
         choice.SelectionChanged += (_, _) => { if (refreshing || choice.SelectedItem is not ProviderDraft draft) return; Read(); Select(draft); };
         model.SelectionChanged += (_, _) =>
         {
@@ -104,7 +118,7 @@ public sealed partial class MainWindow
         };
         model.TextSubmitted += (_, args) => { if (!refreshing) { selected.Model = args.Text; BindLimit(); } };
         model.LostFocus += (_, _) => { if (!refreshing) { selected.Model = model.Text; BindLimit(); } };
-        foreach (var control in new UIElement[] { choice, name, endpoint, key, model, Row(load, progress), info,
+        foreach (var control in new UIElement[] { choice, name, vertexFields, endpoint, key, model, Row(load, progress), info,
             new Expander { Header = WorkflowText("Options du modèle et du serveur", "Model and server options"), Content = advanced,
                 HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch } }) panel.Children.Add(control);
         var form = new WelcomeProviderForm { Panel = host, Read = Read, Validate = Validate };
@@ -143,7 +157,8 @@ public sealed partial class MainWindow
                 draft.ModelContextsJson = target.ModelContextsJson; draft.LocalModelsJson = target.LocalModelsJson;
                 refreshing = true; model.ItemsSource = models; model.Text = draft.Model; refreshing = false;
                 BindLimit();
-                info.Text = WorkflowText($"Connexion réussie · {models.Count} modèles disponibles. Choisissez celui à utiliser.", $"Connected · {models.Count} models available. Choose a model to use.");
+                info.Text = draft.Kind == "vertex" ? WorkflowText("Catalogue Google chargé. Les droits d’inférence et les crédits restent à vérifier sur votre projet.", "Google catalogue loaded. Check inference access and credits on your project.")
+                    : WorkflowText($"Connexion réussie · {models.Count} modèles disponibles. Choisissez celui à utiliser.", $"Connected · {models.Count} models available. Choose a model to use.");
             }
             catch (OperationCanceledException) { info.Text = WorkflowText("Recherche interrompue ou délai dépassé. Vous pouvez réessayer.", "Search cancelled or timed out. You can retry."); }
             catch (Exception ex) { info.Text = ex.Message; }

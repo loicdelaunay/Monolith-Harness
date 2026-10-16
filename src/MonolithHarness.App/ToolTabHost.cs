@@ -3,12 +3,17 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace MonolithHarness.App;
 
-/// <summary>Only the selected tool page is kept visible, including its native WebView.</summary>
+/// <summary>Switch pages without recreating native views or their conversation sessions.</summary>
 internal sealed class ToolTabHost : Grid
 {
-    readonly Grid headerBar = new() { ColumnSpacing = 6 };
-    readonly StackPanel headers = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
-    readonly List<(TextBlock Label, Border Indicator, FrameworkElement Page)> tabs = [];
+    readonly Grid headerBar = new() { ColumnSpacing = 4, Padding = new(6, 3, 4, 3), MinHeight = 38,
+        BorderBrush = FluentDesign.Stroke, BorderThickness = new(0, 0, 0, 1) };
+    readonly Grid heading = new();
+    readonly StackPanel caption = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    readonly FontIcon icon = FluentDesign.Icon("\uE774", 14);
+    readonly TextBlock label = new() { FontSize = 12, Foreground = FluentDesign.Secondary, VerticalAlignment = VerticalAlignment.Center,
+        TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+    readonly List<(string Title, string Glyph, FrameworkElement Page, FrameworkElement? Header)> tabs = [];
     int selectedIndex;
 
     public event EventHandler? SelectionChanged;
@@ -19,9 +24,7 @@ internal sealed class ToolTabHost : Grid
         set
         {
             if (value < 0 || value >= tabs.Count || value == selectedIndex) return;
-            selectedIndex = value;
-            UpdateSelection();
-            SelectionChanged?.Invoke(this, EventArgs.Empty);
+            selectedIndex = value; UpdateSelection(); SelectionChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -29,13 +32,10 @@ internal sealed class ToolTabHost : Grid
     {
         RowDefinitions.Add(new() { Height = GridLength.Auto });
         RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        var headerScroll = new ScrollViewer { Content = headers,
-            HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         headerBar.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         headerBar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        headerBar.Children.Add(headerScroll); Children.Add(headerBar);
-        RowSpacing = 6;
+        caption.Children.Add(icon); caption.Children.Add(label); heading.Children.Add(caption);
+        headerBar.Children.Add(heading); Children.Add(headerBar);
     }
 
     public void SetHeaderActions(FrameworkElement actions)
@@ -43,27 +43,17 @@ internal sealed class ToolTabHost : Grid
         actions.VerticalAlignment = VerticalAlignment.Center; SetColumn(actions, 1); headerBar.Children.Add(actions);
     }
 
-    public void AddTab(string title, FrameworkElement page)
+    public void AddTab(string title, FrameworkElement page, string glyph, FrameworkElement? header = null)
     {
-        var index = tabs.Count;
-        var label = new TextBlock { Text = title, FontSize = 15 };
-        var indicator = new Border { Height = 2, CornerRadius = new(1), Background = FluentDesign.Resource("AccentFillColorDefaultBrush") };
-        var headerContent = new StackPanel { Spacing = 3 };
-        headerContent.Children.Add(label);
-        headerContent.Children.Add(indicator);
-        var button = new Button { Content = headerContent, Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            BorderThickness = new(0), Padding = new(10, 6, 10, 3), MinWidth = 0 };
-        button.Click += (_, _) => SelectedIndex = index;
-        headers.Children.Add(button);
-        SetRow(page, 1);
-        Children.Add(page);
-        tabs.Add((label, indicator, page));
-        UpdateSelection();
+        SetRow(page, 1); Children.Add(page);
+        if (header != null) heading.Children.Add(header);
+        tabs.Add((title, glyph, page, header)); UpdateSelection();
     }
 
     public void SetTitle(int index, string title)
     {
-        if ((uint)index < tabs.Count) tabs[index].Label.Text = title;
+        if ((uint)index >= tabs.Count) return;
+        var tab = tabs[index]; tabs[index] = (title, tab.Glyph, tab.Page, tab.Header); UpdateSelection();
     }
 
     void UpdateSelection()
@@ -71,8 +61,11 @@ internal sealed class ToolTabHost : Grid
         for (var i = 0; i < tabs.Count; i++)
         {
             tabs[i].Page.Visibility = i == selectedIndex ? Visibility.Visible : Visibility.Collapsed;
-            tabs[i].Label.Foreground = i == selectedIndex ? FluentDesign.Primary : FluentDesign.Secondary;
-            tabs[i].Indicator.Visibility = i == selectedIndex ? Visibility.Visible : Visibility.Collapsed;
+            if (tabs[i].Header is { } custom) custom.Visibility = i == selectedIndex ? Visibility.Visible : Visibility.Collapsed;
         }
+        if (tabs.Count == 0) return;
+        var selected = tabs[selectedIndex];
+        caption.Visibility = selected.Header == null ? Visibility.Visible : Visibility.Collapsed;
+        icon.Glyph = selected.Glyph; icon.Foreground = FluentDesign.Secondary; label.Text = selected.Title;
     }
 }

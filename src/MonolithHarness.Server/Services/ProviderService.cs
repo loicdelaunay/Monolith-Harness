@@ -46,6 +46,7 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         var provider = new SharedProvider { IsEnabled = enabled, AllowLocalUse = allowLocalUse };
         Apply(provider, name, baseUrl, models);
         if (!string.IsNullOrEmpty(secret)) provider.ProtectedSecret = protector.Protect(System.Text.Encoding.UTF8.GetBytes(secret));
+        ValidateVertexKey(provider);
         await using var db = await factory.CreateDbContextAsync();
         if (await db.Providers.AnyAsync(x => x.Name == provider.Name)) throw ApiException.Conflict("provider_exists", "A provider with this name already exists.");
         db.Providers.Add(provider);
@@ -62,6 +63,7 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         var provider = await db.Providers.SingleOrDefaultAsync(x => x.Id == id) ?? throw ApiException.NotFound("Provider not found.");
         Apply(provider, name ?? provider.Name, baseUrl ?? provider.BaseUrl, models ?? ParseModels(provider.ModelsJson));
         if (secret != null) provider.ProtectedSecret = secret.Length == 0 ? [] : protector.Protect(System.Text.Encoding.UTF8.GetBytes(secret));
+        ValidateVertexKey(provider);
         if (enabled != null) provider.IsEnabled = enabled.Value;
         if (allowLocalUse != null) provider.AllowLocalUse = allowLocalUse.Value;
         if (await db.Providers.AnyAsync(x => x.Name == provider.Name && x.Id != id)) throw ApiException.Conflict("provider_exists", "A provider with this name already exists.");
@@ -118,9 +120,16 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         var clock = Stopwatch.StartNew();
         using var request = new HttpRequestMessage(HttpMethod.Get, uri.ToString().TrimEnd('/') + "/models");
         request.Headers.Accept.ParseAdd("application/json");
-        if (key.Length > 0) request.Headers.Authorization = new("Bearer", key);
+        if (key.Length > 0 && !MonolithHarness.Core.VertexAi.UsesApiKey(uri.ToString())) request.Headers.Authorization = new("Bearer", key);
         try
         {
+            if (MonolithHarness.Core.VertexAi.IsEndpoint(uri.ToString()) && (key.Length == 0 || MonolithHarness.Core.VertexAi.UsesApiKey(uri.ToString())))
+            {
+                var target = new MonolithHarness.Core.Provider { Kind = "vertex", BaseUrl = uri.ToString().TrimEnd('/') };
+                var ids = await MonolithHarness.Core.VertexAi.ModelsAsync(clients.CreateClient(ProviderRelay.ClientName), target, timeout.Token, key);
+                var found = ids.Select(id => new ProviderModel(id, MonolithHarness.Core.ModelContexts.For(target, id).Limit, true)).ToList();
+                return new(true, 200, clock.ElapsedMilliseconds, $"Catalogue Google chargé · {found.Count} modèles. Droits d’inférence et éligibilité des crédits non vérifiés.", found);
+            }
             using var response = await clients.CreateClient(ProviderRelay.ClientName).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             var status = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)
@@ -148,6 +157,7 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(false, 0, clock.ElapsedMilliseconds, "Le provider n’a pas répondu dans les 15 secondes.", []); }
         catch (HttpRequestException ex) { return new(false, 0, clock.ElapsedMilliseconds, "Provider injoignable: " + (ex.InnerException?.Message ?? ex.Message), []); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { return new(false, 0, clock.ElapsedMilliseconds, ex.Message, []); }
     }
 
     static readonly string[] ContextKeys = ["context_length", "context_window", "max_context_length", "max_model_len", "context_size", "n_ctx_train", "max_input_tokens"];
@@ -263,6 +273,12 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         new(provider.Id, provider.Name, provider.BaseUrl, provider.ProtectedSecret.Length > 0, ParseModels(provider.ModelsJson), provider.IsEnabled, provider.AllowLocalUse,
             entries.Select(x => new AccessEntry(x.SubjectKind, x.SubjectId, names.GetValueOrDefault(x.SubjectId, "?"))).OrderBy(x => x.Kind).ThenBy(x => x.Name).ToList());
 
+    void ValidateVertexKey(SharedProvider provider)
+    {
+        if (!MonolithHarness.Core.VertexAi.UsesApiKey(provider.BaseUrl)) return;
+        try { MonolithHarness.Core.VertexAi.RequireApiKey(Secret(provider)); }
+        catch (ArgumentException error) { throw ApiException.BadRequest("invalid_vertex_key", error.Message); }
+    }
     static void Apply(SharedProvider provider, string? name, string? baseUrl, IEnumerable<ProviderModel>? models)
     {
         name = (name ?? "").Trim();
@@ -270,6 +286,12 @@ public sealed class ProviderService(IDbContextFactory<ServerDb> factory, IDataPr
         if (!Uri.TryCreate((baseUrl ?? "").Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query))
             throw ApiException.BadRequest("invalid_provider", "The base URL must be an absolute http(s) address without credentials or query.");
         var list = (models ?? []).Where(x => !string.IsNullOrWhiteSpace(x.Id)).Select(x => x with { Id = x.Id.Trim(), ContextLimit = Math.Clamp(x.ContextLimit, 1024, 10_000_000) }).DistinctBy(x => x.Id).ToList();
+        if (MonolithHarness.Core.VertexAi.IsEndpoint(uri.ToString()))
+        {
+            try { MonolithHarness.Core.VertexAi.Read(uri.ToString()); }
+            catch (ArgumentException ex) { throw ApiException.BadRequest("invalid_vertex_project", ex.Message); }
+            list = list.Select(x => x with { Id = MonolithHarness.Core.VertexAi.NormalizeModel(x.Id) }).DistinctBy(x => x.Id).ToList();
+        }
         provider.Name = name;
         provider.BaseUrl = uri.ToString().TrimEnd('/');
         provider.ModelsJson = JsonSerializer.Serialize(list, Json);
