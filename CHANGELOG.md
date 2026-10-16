@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.0 — 2026-10-16
+
+### Version majeure · consolidation et correctifs Vertex AI
+
+- Passage de la GUI, du CLI, du Server et de Flutter Android à la version 2.0.0, avec liens de téléchargement alignés.
+- Inclusion du correctif Vertex AI avec Gemini 3 et plus : les images produites par les outils sont jointes à leur réponse native et les tours d’outils restent séparés du texte et des images, afin de corriger l’erreur HTTP 400 « Requests ending with a model turn are not supported ».
+- Le rejeu des images d’outils est partagé entre le moteur, le compactage de contexte de la GUI et les générations hébergées. Les pièces jointes sont conservées lors de la reconstruction de l’historique.
+- Cette version regroupe les évolutions récentes de l’interface, des thèmes et fonds animés, du fournisseur Vertex AI et des performances de rendu.
+
+## 1.104.5 — 2026-10-16
+
+### Correctif · captures d’écran avec Gemini 3 et plus sur Vertex AI (clé API)
+
+- Correction de l’erreur « Requests ending with a model turn are not supported » (HTTP 400) qui arrêtait la conversation dès qu’un outil renvoyait une image, par exemple une capture d’écran, avec Gemini 3 ou plus récent (dont Gemini 4) sur Vertex AI. L’erreur persistait ensuite à chaque message, même après « continue ».
+- L’image est désormais jointe à la réponse de l’outil qui l’a produite, et les réponses d’outils ne partagent plus leur tour avec un texte ou une image, comme l’attend la nouvelle API Gemini. Les conversations déjà bloquées repartent sans modification.
+
 ## 1.104.3 — 2026-10-16
 
 ### Performances · rendu sans attente active du processeur (Windows)

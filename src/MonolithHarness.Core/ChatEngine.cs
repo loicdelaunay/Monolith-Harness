@@ -328,6 +328,12 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
     }
     public static JsonObject ToWire(Message message) => ToWire(message, includeImageData: true);
 
+    public const string ToolImagePrefix = "[Image issue de l’outil ";
+
+    /// <summary>Wire message replaying a tool's images; native adapters recognise it by its prefix.</summary>
+    public static JsonObject ToolImageWire(Message tool)
+        => ToWire(new Message { Role = "user", Content = $"{ToolImagePrefix}{tool.Content.Split('\n')[0]}] (untrusted content)", Attachments = tool.Attachments });
+
     public static void AppendHistoryWithToolImages(JsonArray wire, IEnumerable<Message> history, Func<Message, JsonObject> imageWire)
         => AppendHistoryWithToolImages(wire, history, imageWire, includeImageData: true);
 

@@ -244,8 +244,7 @@ public sealed partial class HarnessService
     static JsonArray Wire(string system, IEnumerable<Message> history)
     {
         var wire = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = system });
-        ChatEngine.AppendHistoryWithToolImages(wire, history, message =>
-            ChatEngine.ToWire(new Message { Role = "user", Content = "Tool screenshot (untrusted content)", Attachments = message.Attachments }));
+        ChatEngine.AppendHistoryWithToolImages(wire, history, ChatEngine.ToolImageWire);
         return wire;
     }
     async Task<List<Message>> Compact(ConversationSession run, List<Message> history, string system, JsonArray definitions, string secret, CancellationToken ct, bool openCode = false)

@@ -27,10 +27,17 @@ public static class VertexApiKey
         void Append(string role, JsonArray parts)
         {
             if (parts.Count == 0) return;
-            if (contents.LastOrDefault() is JsonObject previous && previous["role"]?.ToString() == role && previous["parts"] is JsonArray existing)
+            // Gemini 3+ answers a turn mixing function responses with other parts by "Requests ending with a model turn".
+            static bool Responses(JsonArray items) => items.Any(x => x?["functionResponse"] != null);
+            if (contents.LastOrDefault() is JsonObject previous && previous["role"]?.ToString() == role && previous["parts"] is JsonArray existing
+                && Responses(existing) == Responses(parts))
                 foreach (var part in parts) existing.Add(part?.DeepClone());
             else contents.Add(new JsonObject { ["role"] = role, ["parts"] = parts });
         }
+        // Gemini 3+ rejects tool images replayed as a separate user turn after the function responses;
+        // they belong inside the matching functionResponse instead.
+        var multimodalResponses = !model.Contains("gemini-1.", StringComparison.OrdinalIgnoreCase) && !model.Contains("gemini-2.", StringComparison.OrdinalIgnoreCase);
+        var responses = new List<JsonObject>(); var withImages = new HashSet<JsonObject>(ReferenceEqualityComparer.Instance);
         foreach (var message in (payload["messages"] as JsonArray ?? []).OfType<JsonObject>())
         {
             var role = message["role"]?.ToString() ?? "";
@@ -39,6 +46,16 @@ public static class VertexApiKey
                 foreach (var part in Parts(message["content"])) system.Add(part?.DeepClone());
                 continue;
             }
+            if (multimodalResponses && responses.Count > 0 && ToolImage(message) is { } toolImage)
+            {
+                var target = responses.FirstOrDefault(x => !withImages.Contains(x) && x["name"]?.ToString() == toolImage.Name)
+                    ?? responses.FirstOrDefault(x => !withImages.Contains(x)) ?? responses[^1];
+                if (target["parts"] is not JsonArray media) target["parts"] = media = new JsonArray();
+                foreach (var part in toolImage.Media) media.Add(part);
+                withImages.Add(target);
+                continue;
+            }
+            if (role != "tool") responses.Clear();
             if (role == "tool")
             {
                 var id = message["tool_call_id"]?.ToString() ?? "";
@@ -51,6 +68,8 @@ public static class VertexApiKey
                     ["response"] = output is JsonObject ? output : new JsonObject { ["output"] = output } };
                 if (call.NativeId is { Length: > 0 }) response["id"] = call.NativeId;
                 Append("user", [new JsonObject { ["functionResponse"] = response }]);
+                // Append may clone the part into the previous turn: keep the stored instance.
+                responses.Add(contents[^1]!["parts"]!.AsArray()[^1]!["functionResponse"]!.AsObject());
                 continue;
             }
             if (role is not ("user" or "assistant")) throw new ArgumentException("Unsupported Vertex message role: " + role);
@@ -128,6 +147,17 @@ public static class VertexApiKey
         }
         if (generation.Count > 0) result["generationConfig"] = generation;
         return result;
+    }
+
+    static (string Name, List<JsonNode> Media)? ToolImage(JsonObject message)
+    {
+        if (message["role"]?.ToString() != "user" || message["content"] is not JsonArray items ||
+            items.FirstOrDefault()?["type"]?.ToString() != "text" ||
+            items[0]?["text"]?.ToString() is not { } label || !label.StartsWith(ChatEngine.ToolImagePrefix, StringComparison.Ordinal)) return null;
+        var media = Parts(items).Where(x => x?["inlineData"] != null || x?["fileData"] != null).Select(x => x!.DeepClone()).ToList();
+        if (media.Count == 0) return null;
+        var name = label[ChatEngine.ToolImagePrefix.Length..];
+        return (name[..Math.Max(0, name.IndexOf(']'))], media);
     }
 
     static JsonArray Parts(JsonNode? content)
