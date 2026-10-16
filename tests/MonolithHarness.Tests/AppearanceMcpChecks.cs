@@ -6,7 +6,7 @@ static class AppearanceMcpChecks
 {
     public static async Task Run(Action<bool,string> check)
     {
-        check(AppearanceThemes.All.Count == 10 && AppearanceThemes.All.Count(x=>x.Dark)==5, "Dix thèmes, cinq sombres et cinq clairs");
+        check(AppearanceThemes.All.Count == 11 && AppearanceThemes.All.Count(x=>x.Dark)==6, "Onze thèmes, six sombres et cinq clairs");
         foreach (var theme in AppearanceThemes.All)
         {
             check(ThemeContrast.Ratio(theme.Text, theme.Surface) >= 4.5 && ThemeContrast.Ratio(theme.Muted, theme.Surface) >= 4.5,
