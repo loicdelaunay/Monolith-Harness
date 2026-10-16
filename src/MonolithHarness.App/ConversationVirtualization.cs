@@ -62,6 +62,30 @@ public sealed partial class MainWindow
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++) if (HasSelectedText(VisualTreeHelper.GetChild(element, i))) return true;
         return false;
     }
+    // A chat text selection starts with a pointer press; remembering where avoids walking
+    // every released turn to look for one. Keyboard selection needs focus, checked separately.
+    readonly List<WeakReference<DependencyObject>> selectionSources = [];
+    void TrackSelectionSource(object source)
+    {
+        for (var node = source as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is not (TextBlock or AdvancedMarkdownView
+#if WINDOWS
+                or RichTextBlock
+#endif
+                )) continue;
+            selectionSources.RemoveAll(x => !x.TryGetTarget(out var known) || ReferenceEquals(known, node));
+            selectionSources.Add(new(node));
+            if (selectionSources.Count > 16) selectionSources.RemoveAt(0);
+            return;
+        }
+    }
+    bool HasTrackedSelection(DependencyObject body)
+    {
+        foreach (var reference in selectionSources)
+            if (reference.TryGetTarget(out var source) && ContainsVisual(body, source) && HasSelectedText(source)) return true;
+        return MarkdownRenderer.SelectedVisuals().Any(view => ContainsVisual(body, view));
+    }
     static IEnumerable<Expander> Expanders(DependencyObject element)
     {
         if (element is Expander expander) yield return expander;
@@ -199,6 +223,7 @@ public sealed partial class MainWindow
             bool? activityExpanded;
             ReasoningDetailLevel? reasoningPreference;
             bool[] expanderState = [];
+            Expander[]? expanders;
             public VirtualTurn(VirtualConversation view, List<Message> records, Project? project, bool live)
             {
                 this.view = view; Records = records; Project = project; IsLive = live;
@@ -237,7 +262,8 @@ public sealed partial class MainWindow
                     var body = NewContent(); view.owner.RenderHistory(Records, body, Project);
                     if (activityExpanded.HasValue && reasoningPreference == view.owner.CurrentReasoningDisplay && view.owner.activityGroups.TryGetValue(body, out var activity))
                         activity.SetExpanded(activityExpanded.Value);
-                    var i = 0; foreach (var expander in Expanders(body)) { if (i < expanderState.Length) expander.IsExpanded = expanderState[i]; i++; }
+                    expanders = Expanders(body).ToArray();
+                    for (var i = 0; i < expanders.Length && i < expanderState.Length; i++) expanders[i].IsExpanded = expanderState[i];
                     Frame.Child = body; Frame.Height = double.NaN;
                     view.owner.ApplyChatTextHighlights(body);
                 }
@@ -271,12 +297,14 @@ public sealed partial class MainWindow
                 if (Content is not { } body) { cancellation?.Cancel(); return; }
                 if (!force)
                 {
-                    if (HasSelectedText(body) || ContainsVisual(body, view.owner.highlightedSearchCard)) return;
+                    if (view.owner.HasTrackedSelection(body) || ContainsVisual(body, view.owner.highlightedSearchCard)) return;
                     var focus = view.owner.root.XamlRoot == null ? null : FocusManager.GetFocusedElement(view.owner.root.XamlRoot) as DependencyObject;
                     if (ContainsVisual(body, focus)) return;
                 }
                 if (view.owner.activityGroups.TryGetValue(body, out var activity)) { activityExpanded = activity.Expanded; reasoningPreference = view.owner.CurrentReasoningDisplay; }
-                expanderState = Expanders(body).Select(x => x.IsExpanded).ToArray();
+                // Turns mounted here captured their expanders; a sealed live turn was built in place.
+                expanderState = (expanders ?? Expanders(body)).Select(x => x.IsExpanded).ToArray();
+                expanders = null;
                 if (Frame.ActualHeight > 0) height = Frame.ActualHeight; Frame.Height = height; Frame.Child = null;
                 ReleaseImages();
             }

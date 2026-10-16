@@ -24,7 +24,7 @@ public sealed partial class MainWindow
 
     void RefreshAttentionSection()
     {
-        var settings = FeatureSettings.Read(state.FeaturesJson);
+        var settings = ReadOnlyFeatures;
         var ids = pendingChatAttention.Keys.Concat(failedUnreadChats).ToHashSet();
         var items = settings.ShowAttentionSection ? navigationChats.Select(CurrentSidebarChat).Where(x => ids.Contains(x.Id) && MatchesSidebarSearch(x)).OrderByDescending(x => x.UpdatedUtc).ThenByDescending(x => x.Id).ToList() : [];
         var signature = settings.ShowAttentionSection + "|" + state.Language + "|" + string.Join(",", items.Select(x => x.Id));
@@ -169,7 +169,7 @@ public sealed partial class MainWindow
     }
     void RefreshProjectBadges()
     {
-        var settings = FeatureSettings.Read(state.FeaturesJson);
+        var settings = ReadOnlyFeatures;
         var theme = AppearanceThemes.Get(settings.Theme, settings.CustomThemes);
         foreach (var (projectId, host) in projectBadgeHosts)
         {

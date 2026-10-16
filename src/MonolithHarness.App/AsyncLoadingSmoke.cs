@@ -36,25 +36,21 @@ public sealed partial class MainWindow
         if (ticks == 0 || conversationLoading || !conversationReady) throw new Exception("UI did not process events during conversation loading.");
         if (conversationHistory[other.Id][0].Attachments[0].Data.Length != 0)
             throw new Exception("An offscreen image was eagerly loaded.");
-        if (messages.Children.OfType<Border>().Count() != HistoryPageSize)
-            throw new Exception("Initial history rendering was not limited to the recent page.");
-        var seen = 0;
+        // Virtualization keeps one lightweight frame per turn and only mounts the recent edge.
+        var frames = messages.Children.OfType<Border>().ToList();
+        if (frames.Count != fixtures.Count || frames.Count(x => x.Child != null) > HistoryPageSize || frames[^1].Child == null || frames[0].Child != null)
+            throw new Exception($"Initial history rendering was not limited to the recent turns: {frames.Count(x => x.Child != null)}/{frames.Count} mounted.");
         await Task.Delay(100);
         SetChatFollow(false);
-        while (historyPagination.TryGetValue(messages, out var page))
-        {
-            var before = messages.Children.OfType<Border>().Count();
-            scroll.UpdateLayout();
-            scroll.ChangeView(null, 0, null, true);
-            await Task.Delay(30);
-            for (var attempt = 0; attempt < 100 && (page.Loading || messages.Children.OfType<Border>().Count() == before); attempt++) await Task.Delay(20);
-            if (page.Loading || messages.Children.OfType<Border>().Count() <= before || ++seen > 4)
-                throw new Exception("Scrolling to the top did not load older history.");
-            if (scroll.VerticalOffset <= 64 || followChatTail)
-                throw new Exception("History prepend lost the reading position or resumed auto-scroll.");
-        }
-        if (messages.Children.OfType<Border>().Count() != fixtures.Count || conversationHistory[other.Id][0].Attachments[0].Data.Length == 0)
-            throw new Exception("History pagination lost messages or attachments.");
+        scroll.UpdateLayout();
+        scroll.ChangeView(null, 0, null, true);
+        for (var attempt = 0; attempt < 150 && (frames[0].Child == null || frames[^1].Child != null); attempt++) await Task.Delay(20);
+        if (frames[0].Child == null || conversationHistory[other.Id][0].Attachments[0].Data.Length == 0)
+            throw new Exception("Scrolling to the top did not mount the oldest turn and its attachment.");
+        if (frames[^1].Child != null || followChatTail)
+            throw new Exception("Scrolling to the top kept offscreen turns mounted or resumed auto-scroll.");
+        if (messages.Children.OfType<Border>().Count() != fixtures.Count)
+            throw new Exception("History virtualization lost messages.");
         var first = Select(original);
         var second = Select(other);
         var third = Select(original);

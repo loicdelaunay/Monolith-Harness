@@ -98,7 +98,7 @@ public sealed partial class MainWindow
     void SelectTerminalTab(ConversationRun run, string? terminalId, bool legacyTerminal = false)
     {
         if (!IsVisible(run) || !browserVisible || toolTabs.SelectedIndex != 1 ||
-            !FeatureSettings.Read(state.FeaturesJson).AutoFocusTool) return;
+            !ReadOnlyFeatures.AutoFocusTool) return;
         RefreshTerminals();
         if (legacyTerminal)
         {

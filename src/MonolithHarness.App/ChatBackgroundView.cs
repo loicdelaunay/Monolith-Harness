@@ -23,7 +23,7 @@ internal sealed class ChatBackgroundView : Grid
     AppearanceTheme palette = AppearanceThemes.All[0];
     string effect = ChatBackgroundStyles.Disabled;
     string? customColor;
-    bool loaded, suspended, running, disposed;
+    bool loaded, suspended, running, paused, disposed;
 
     public ChatBackgroundView()
     {
@@ -73,15 +73,19 @@ internal sealed class ChatBackgroundView : Grid
     void StopMotion()
     {
         if (!running) return;
-        motion.Stop(); running = false;
+        motion.Stop(); running = paused = false;
     }
 
     void RefreshMotion()
     {
-        if (disposed || !loaded || suspended || Opacity <= 0 || effect == ChatBackgroundStyles.Disabled ||
+        if (disposed || !loaded || Opacity <= 0 || effect == ChatBackgroundStyles.Disabled ||
             motion.Children.Count == 0 || !SystemMotionEnabled())
         { StopMotion(); return; }
-        if (!running) { motion.Begin(); running = true; }
+        // Suspension pauses in place (generation, scrolling, hidden chat), so the scene does
+        // not jump back to its first frame each time it resumes.
+        if (suspended) { if (running && !paused) { motion.Pause(); paused = true; } return; }
+        if (!running) { motion.Begin(); running = true; paused = false; }
+        else if (paused) { motion.Resume(); paused = false; }
     }
 
     void Rebuild()

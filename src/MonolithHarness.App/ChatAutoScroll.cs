@@ -56,6 +56,7 @@ public sealed partial class MainWindow
             if (!IsChatScrollInput(e.OriginalSource)) return;
             chatScrollMayResume = false;
             selectingChatText = e.Pointer.PointerDeviceType == PointerDeviceType.Mouse;
+            TrackSelectionSource(e.OriginalSource);
             draggingChatScroll = e.Pointer.PointerDeviceType is PointerDeviceType.Touch or PointerDeviceType.Pen;
             for (var node = e.OriginalSource as DependencyObject; node != null && node != scroll; node = VisualTreeHelper.GetParent(node))
                 if (node is ScrollBar) draggingChatScroll = true;

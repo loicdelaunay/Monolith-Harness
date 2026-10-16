@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.104.3 — 2026-10-16
+
+### Performances · rendu sans attente active du processeur (Windows)
+
+- Correction d’une consommation d’un cœur de processeur complet par le thread de rendu. Chaque image était présentée avec la synchronisation verticale, et certains pilotes OpenGL (notamment NVIDIA) attendent cette synchronisation en occupant le processeur. L’effet était surtout visible sur l’écran d’accueil d’un nouveau profil, qui ne revenait jamais au repos, mais il touchait aussi le streaming, le défilement et les animations.
+- Les images sont désormais cadencées par un minuteur réglé sur la fréquence de l’écran principal (entre 60 et 240 Hz). Sur l’écran d’accueil, la consommation passe d’environ 20 s de processeur pour 20 s d’affichage à moins de 5 s, et l’application revient au repos en quelques secondes.
+
+## 1.104.2 — 2026-10-16
+
+### Performances · démarrage et animations
+
+- Démarrage plus rapide sous Windows : le code de l’interface est précompilé (ReadyToRun). La fenêtre s’ouvre en environ 0,85 s au lieu de 1,6 s, l’application est prête en environ 3,6 s au lieu de 4,9 s, et les écrans ouverts pour la première fois ne saccadent plus. L’exécutable de la GUI grossit d’environ 35 %.
+- Le fond animé du chat se met en pause pendant qu’une réponse s’écrit et pendant le défilement, puis reprend là où il s’était arrêté.
+- Le halo du statut pendant une activité est rafraîchi environ 12 fois par seconde au lieu de chaque image de l’écran, sans changement visible notable.
+- Faire défiler une longue conversation ne parcourt plus tout le contenu des messages qui sortent de l’écran pour y chercher une sélection ou des sections repliées.
+- Les réglages sont relus depuis un cache dans les chemins fréquents (redimensionnement, barre latérale, sélecteur de modèle, outils).
+- Diagnostics : une ligne « Rendu de l’interface » indique si l’affichage utilise le GPU ou le rendu logiciel, nettement plus lent.
+
 ## 1.104.1 — 2026-10-16
 
 ### Performances · interface plus fluide pendant les réponses

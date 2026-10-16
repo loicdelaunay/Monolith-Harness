@@ -19,7 +19,7 @@ public sealed partial class MainWindow
 
     IEnumerable<T> SidebarOrder<T>(IEnumerable<T> rows, bool projectsOrder, Func<T, int> id)
     {
-        var settings = FeatureSettings.Read(state.FeaturesJson);
+        var settings = ReadOnlyFeatures;
         var order = projectsOrder ? settings.SidebarProjectOrder : settings.SidebarChatOrder;
         return rows.OrderBy(row => { var index = order.IndexOf(id(row)); return index < 0 ? int.MaxValue : index; });
     }

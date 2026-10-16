@@ -34,6 +34,7 @@ public sealed partial class MainWindow
         imageTile.LoadPreview(_ => Task.FromResult(attachmentPng));
         assetsBar.Children.Add(documentTile); assetsBar.Children.Add(imageTile); RefreshComposerAttachments();
         var attachmentTiles = assetsBar.Children.OfType<ComposerResourceTile>().ToArray();
+        var wideAttachmentSize = 96.0;
         foreach (var zoom in new[] { 100, 150 })
         {
             var stages = new HashSet<int>();
@@ -68,10 +69,13 @@ public sealed partial class MainWindow
                     var preview = tile.PreviewButton.TransformToVisual(tile).TransformBounds(new Rect(0, 0, tile.PreviewButton.ActualWidth, tile.PreviewButton.ActualHeight));
                     Check(preview.Left >= -.8 && preview.Top >= -.8 && preview.Right <= tile.ActualWidth + .8 && preview.Bottom <= tile.ActualHeight + .8,
                         prefix + ": preview content remains inside its resized tile.");
-                    if (width <= 580) Check(tile.ActualHeight <= 64, prefix + ": narrow windows reduce attachment height.");
+                    // Tiles follow the composer width (18 %), so compare with the wide layout instead of a fixed size.
+                    if (width <= 580) Check(tile.ActualHeight <= Math.Max(48, composerAttachments.ActualWidth * .18) + .8 && tile.ActualHeight < wideAttachmentSize - 8,
+                        prefix + $": narrow windows reduce attachment height ({tile.ActualHeight:0.#} vs {wideAttachmentSize:0.#}).");
                 }
                 Check(imageTile.Thumbnail.Source != null, prefix + ": image preview is retained when resizing.");
                 if (width == 2200) Check(attachmentTiles.All(tile => Math.Abs(tile.ActualWidth - Math.Clamp(root.ActualHeight * .14, 48, 96)) < .8), prefix + ": attachment size returns when widening.");
+                if (width == 2200) wideAttachmentSize = attachmentTiles[0].ActualHeight;
                 if (width <= 580) Check(compactChatHeader && chatHeaderLabels.All(item => item.Label.Visibility == Visibility.Collapsed), prefix + ": header actions use icons only.");
                 if (width == 2200 && zoom == 100) Check(composerResponsiveStage == 0 && composerSpeedIndicator.Visibility == Visibility.Visible && composerContextText.Visibility == Visibility.Visible, prefix + ": widening restores metrics.");
                 measurements.Add(new { width, zoom, stage = composerResponsiveStage, footerWidth = composerFooterViewport.ActualWidth,

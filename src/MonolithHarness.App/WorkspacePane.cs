@@ -1447,7 +1447,7 @@ public sealed partial class MainWindow
         if (Skills.Enabled(state.EnabledSkills, "keyboard_control"))
             Add("keyboard_keys", "Lists all supported keyboard keys, aliases and shortcut examples for desktop_keyboard and browser_keyboard. Call this to discover valid input. Standalone ALT, CTRL, SHIFT and WIN are supported. Read-only; does not inject input.", []);
         if (Skills.Enabled(state.EnabledSkills, "web")) Add("open_local_file", "Requests user approval, then previews a local file and reads its page. Use a project-relative or absolute path. Never bypass a refusal.", new() { ["path"] = StringProperty() }, "path");
-        if (Skills.Enabled(state.EnabledSkills, "web") && BrowserSkillAccess.Enabled(state.EnabledSkills) && FeatureSettings.Read(state.FeaturesJson).BrowserMode == "embedded")
+        if (Skills.Enabled(state.EnabledSkills, "web") && BrowserSkillAccess.Enabled(state.EnabledSkills) && ReadOnlyFeatures.BrowserMode == "embedded")
         {
             MonolithHarness.Core.BrowserViewport.AddDefinition(definitions);
             Add("browser_tabs", "Lists all browser tabs in this conversation, with their IDs, URLs and selected state. Read-only.", []);
@@ -1495,6 +1495,6 @@ public sealed partial class MainWindow
             });
         }
         ApplicationTools.AddDefinitions(definitions, state.EnabledSkills);
-        DesktopControlTools.AddDefinitions(definitions, state.EnabledSkills, FeatureSettings.Read(state.FeaturesJson));
+        DesktopControlTools.AddDefinitions(definitions, state.EnabledSkills, ReadOnlyFeatures);
     }
 }

@@ -11,14 +11,16 @@
     <Product>Monolith Harness</Product>
     <ApplicationId>com.monolithharness.app</ApplicationId>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <ApplicationDisplayVersion>1.104.1</ApplicationDisplayVersion>
-    <ApplicationVersion>146</ApplicationVersion>
+    <ApplicationDisplayVersion>1.104.3</ApplicationDisplayVersion>
+    <ApplicationVersion>148</ApplicationVersion>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-desktop'">
     <UseMonoRuntime>false</UseMonoRuntime>
+    <!-- Precompiled code: the window opens about twice as fast and new screens do not stutter on first use (about +35 % executable size). -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
   </PropertyGroup>
   <PropertyGroup Condition="$(TargetFramework.Contains('windows10'))">
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion><UseWinUI>true</UseWinUI>

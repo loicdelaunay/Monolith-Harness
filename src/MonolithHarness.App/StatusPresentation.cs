@@ -11,6 +11,8 @@ public sealed partial class MainWindow
 
     readonly DispatcherTimer statusPulseTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     Storyboard? statusGlowAnimation;
+    readonly DispatcherTimer statusActivityGlow = new() { Interval = TimeSpan.FromMilliseconds(80) };
+    DateTimeOffset statusActivityGlowStarted;
     bool statusActivityAnimating;
     Grid? statusGlowLayer;
     Border? statusChipView;
@@ -30,7 +32,8 @@ public sealed partial class MainWindow
         statusGlowLayer = glow;
         glow.Opacity = 0;
         statusPulseTimer.Tick += (_, _) => AnimateStatus();
-        Closed += (_, _) => { statusPulseTimer.Stop(); statusGlowAnimation?.Stop(); };
+        statusActivityGlow.Tick += (_, _) => PulseActivityGlow();
+        Closed += (_, _) => { statusPulseTimer.Stop(); statusActivityGlow.Stop(); statusGlowAnimation?.Stop(); };
     }
 
     void ShowStatus(string text, StatusKind kind = StatusKind.Notice, int? chatId = null, DateTimeOffset? expiresAt = null)
@@ -51,7 +54,7 @@ public sealed partial class MainWindow
 
     void ClearStatus()
     {
-        statusPulseTimer.Stop(); statusGlowAnimation?.Stop(); statusActivityAnimating = false;
+        statusPulseTimer.Stop(); statusActivityGlow.Stop(); statusGlowAnimation?.Stop(); statusActivityAnimating = false;
         status.Text = "";
         visibleStatusExpiresAt = null;
         visibleStatusChatId = null;
@@ -73,21 +76,34 @@ public sealed partial class MainWindow
     void StartStatusGlow(StatusKind kind)
     {
         if (statusGlowLayer == null) return;
-        if (kind == StatusKind.Activity && statusActivityAnimating && statusGlowAnimation != null) return;
-        statusGlowAnimation?.Stop(); statusActivityAnimating = kind == StatusKind.Activity;
+        if (kind == StatusKind.Activity && statusActivityAnimating) return;
+        statusGlowAnimation?.Stop(); statusActivityGlow.Stop(); statusActivityAnimating = kind == StatusKind.Activity;
         statusGlowLayer.Opacity = kind == StatusKind.Activity ? .18 : 0;
-        var cycle = kind == StatusKind.Activity ? 2.4 : 1.4;
-        var low = kind == StatusKind.Activity ? .18 : 0;
+        if (kind == StatusKind.Activity)
+        {
+            // An activity can last minutes: pulse at about 12 steps per second instead of a
+            // storyboard that repaints the window on every display frame.
+            statusActivityGlowStarted = DateTimeOffset.UtcNow; statusActivityGlow.Start();
+            return;
+        }
+        var cycle = 1.4;
         var pulse = new DoubleAnimationUsingKeyFrames {
-            Duration = new Duration(TimeSpan.FromSeconds(cycle)),
-            RepeatBehavior = kind == StatusKind.Activity ? RepeatBehavior.Forever : new RepeatBehavior(1), EnableDependentAnimation = true };
-        pulse.KeyFrames.Add(new EasingDoubleKeyFrame { Value = low, KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero) });
-        pulse.KeyFrames.Add(new EasingDoubleKeyFrame { Value = kind == StatusKind.Activity ? .72 : .85,
+            Duration = new Duration(TimeSpan.FromSeconds(cycle)), RepeatBehavior = new RepeatBehavior(1), EnableDependentAnimation = true };
+        pulse.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero) });
+        pulse.KeyFrames.Add(new EasingDoubleKeyFrame { Value = .85,
             KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromSeconds(cycle / 2)), EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
-        pulse.KeyFrames.Add(new EasingDoubleKeyFrame { Value = low, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromSeconds(cycle)),
+        pulse.KeyFrames.Add(new EasingDoubleKeyFrame { Value = 0, KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromSeconds(cycle)),
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } });
         Storyboard.SetTarget(pulse, statusGlowLayer); Storyboard.SetTargetProperty(pulse, "Opacity");
         statusGlowAnimation = new(); statusGlowAnimation.Children.Add(pulse); statusGlowAnimation.Begin();
+    }
+
+    void PulseActivityGlow()
+    {
+        if (statusGlowLayer == null || !statusActivityAnimating) { statusActivityGlow.Stop(); return; }
+        const double cycle = 2.4, low = .18, high = .72;
+        var phase = (DateTimeOffset.UtcNow - statusActivityGlowStarted).TotalSeconds / cycle;
+        statusGlowLayer.Opacity = low + (high - low) * (.5 - .5 * Math.Cos(2 * Math.PI * phase));
     }
 
     void AnimateStatus()

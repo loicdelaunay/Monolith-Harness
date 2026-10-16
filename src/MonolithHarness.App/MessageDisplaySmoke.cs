@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.EntityFrameworkCore;
 using MonolithHarness.Core;
 using System.Text.Json;
@@ -24,21 +25,28 @@ public sealed partial class MainWindow
         var group = first.Group!;
         if (!ReferenceEquals(group, final.Group) || group.Expanded || group.Details.Visibility != Visibility.Collapsed || !group.Summary.Text.Contains("Dernière réflexion")) throw new Exception("Collapsed activity group does not summarize the latest step.");
         if (host.Children.OfType<Border>().Count(x => ReferenceEquals(x, group.Card)) != 1 || !group.Details.Children.Contains(first.Container!) || !host.Children.Contains(final.Container!)) throw new Exception("Intermediate messages and final response are not grouped correctly.");
-        var visual = final.BodyContainer.Children.OfType<AdvancedMarkdownView>().Single();
-        JsonDocument? rendered = null;
+        // Chat WebViews are opt-in (AllowWebViewInChat); by default math and Mermaid render natively.
+        static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+        {
+            yield return parent;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+                foreach (var child in Descendants(VisualTreeHelper.GetChild(parent, i))) yield return child;
+        }
+        static bool Rendered(NativeMathView view) => view.Content is Image || view.Content is ScrollViewer { Content: Image };
+        List<NativeMathView> math = []; var diagrams = 0; var webViews = 0;
         for (int attempt = 0; attempt < 80; attempt++)
         {
-            await Task.Delay(250);
-            var raw = await visual.InspectAsync();
-            rendered?.Dispose(); rendered = JsonDocument.Parse(raw.StartsWith('"') ? JsonSerializer.Deserialize<string>(raw)! : raw);
-            if (rendered.RootElement.TryGetProperty("diagrams", out var diagrams) && diagrams.GetInt32() == 1) break;
+            await Task.Delay(100);
+            var tree = Descendants(final.BodyContainer).ToList();
+            math = tree.OfType<NativeMathView>().ToList(); webViews = tree.OfType<AdvancedMarkdownView>().Count();
+            diagrams = tree.OfType<TextBlock>().Count(x => x.Text is "Diagramme Mermaid · aperçu natif simplifié" or "Mermaid diagram · simplified native preview");
+            if (math.Count == 2 && math.All(Rendered) && diagrams == 1) break;
         }
-        using (rendered)
-        {
-            if (rendered == null || !rendered.RootElement.TryGetProperty("math", out var math) || math.GetInt32() != 2 || rendered.RootElement.GetProperty("diagrams").GetInt32() != 1 || rendered.RootElement.GetProperty("errors").GetInt32() != 0)
-                throw new Exception("Embedded math/mermaid did not render: " + rendered?.RootElement.ToString());
-            await File.WriteAllTextAsync(Path.Combine(output, "visual-render.json"), rendered.RootElement.ToString());
-        }
+        var nodes = Descendants(final.BodyContainer).OfType<Canvas>().Sum(x => x.Children.Count);
+        var report = new { renderer = "native", math = math.Count, renderedMath = math.Count(Rendered), diagrams, diagramElements = nodes, webViews };
+        if (math.Count != 2 || !math.All(Rendered) || diagrams != 1 || nodes == 0 || webViews != 0)
+            throw new Exception("Embedded math/mermaid did not render natively: " + JsonSerializer.Serialize(report));
+        await File.WriteAllTextAsync(Path.Combine(output, "visual-render.json"), JsonSerializer.Serialize(report));
         await Capture(root, Path.Combine(output, "messages-collapsed.png"));
         state.ShowReasoningDetails = true; group.Refresh(true);
         if (!group.Expanded || group.Details.Visibility != Visibility.Visible) throw new Exception("Reasoning preference did not expand the group.");
@@ -47,7 +55,7 @@ public sealed partial class MainWindow
         group.Refresh(false); state.ShowReasoningDetails = true; final.RefreshReasoningPreference();
         if (!group.Expanded) throw new Exception("Enabled preference did not apply.");
         await Task.Delay(200); await Capture(root, Path.Combine(output, "messages-expanded.png"));
-        await File.WriteAllTextAsync(Path.Combine(output, "smoke-ok.txt"), "Single activity group, latest summary, default and manual expansion, two math expressions and one Mermaid SVG passed.");
+        await File.WriteAllTextAsync(Path.Combine(output, "smoke-ok.txt"), "Single activity group, latest summary, default and manual expansion, two native math expressions and one native Mermaid diagram passed.");
         host.Children.Clear();
         AddAssistantMessage("# Android 17 QPR3 Beta 1 — Release notes\n\n**Date de sortie :** 2 octobre 2026\n**Builds :** DP11.260918.005 / DP11.260918.006\n**Support émulateur :** x86 (64-bit), ARM (v8-A)\n\nLes QPR sont livrées trimestriellement via les Feature Drops. Ces mises à jour **n’incluent pas de changements d’API impactant les apps**.\n\n## Principaux problèmes corrigés\n\n- Sortie audio : impossible de changer de périphérique de sortie pendant la lecture.\n- Crash d’apps au démarrage d’un service de premier plan depuis les réglages rapides.\n- Icônes d’apps trop espacées dans le menu des applications.\n\nSource : https://developer.android.com", target: host);
         await Task.Delay(200); await Capture(root, Path.Combine(output, "markdown-spacing.png"));

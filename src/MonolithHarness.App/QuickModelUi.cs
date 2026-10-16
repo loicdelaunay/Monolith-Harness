@@ -83,7 +83,7 @@ public sealed partial class MainWindow
 
     void RefreshQuickModelUi()
     {
-        var config = FeatureSettings.Read(state.FeaturesJson);
+        var config = ReadOnlyFeatures;
         var enabled = config.QuickModelLevelsEnabled && config.QuickModelLevels.Count > 0;
         var simple = enabled && config.QuickModelSelectionMode == "simple";
         compactModelPicker = simple;
@@ -124,7 +124,7 @@ public sealed partial class MainWindow
 
     void RefreshQuickLevelPreview()
     {
-        var config = FeatureSettings.Read(state.FeaturesJson); var levels = config.QuickModelLevels;
+        var config = ReadOnlyFeatures; var levels = config.QuickModelLevels;
         if (levels.Count == 0) return;
         var match = levels.FindIndex(level => QuickModelShortcuts.Matches(level, provider, state, chat));
         var index = modelOptionsIsOpen ? levels.FindIndex(l => l.Id == previewQuickLevelId) : match;

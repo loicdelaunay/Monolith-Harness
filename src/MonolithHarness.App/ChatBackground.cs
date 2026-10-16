@@ -22,15 +22,28 @@ public sealed partial class MainWindow
     void ConfigureChatBackground(FeatureSettings settings) =>
         ConfigureChatBackground(settings.ChatBackgroundAnimation, settings.ChatBackgroundOpacityPercent, settings.ChatBackgroundColor);
 
+    readonly Microsoft.UI.Xaml.DispatcherTimer chatBackgroundScrollIdle = new() { Interval = TimeSpan.FromMilliseconds(450) };
+    bool chatBackgroundScrolling;
+
+    // The scene pauses while a reply streams or the chat scrolls: both already repaint the
+    // window, and an animated background would add a full frame on every display refresh.
+    void RefreshChatBackgroundMotion() => animatedChatBackground.SetSuspended(mainArea is null ||
+        mainArea.Visibility != Microsoft.UI.Xaml.Visibility.Visible ||
+        AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } ||
+        ActiveRun != null || chatBackgroundScrolling);
+
     void InitializeChatBackground()
     {
-        void RefreshMotion() => animatedChatBackground.SetSuspended(
-            mainArea.Visibility != Microsoft.UI.Xaml.Visibility.Visible ||
-            AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized });
-        mainArea.RegisterPropertyChangedCallback(Microsoft.UI.Xaml.UIElement.VisibilityProperty, (_, _) => RefreshMotion());
-        AppWindow.Changed += (_, _) => DispatcherQueue.TryEnqueue(RefreshMotion);
-        Activated += (_, _) => RefreshMotion();
-        Closed += (_, _) => animatedChatBackground.Shutdown();
+        mainArea.RegisterPropertyChangedCallback(Microsoft.UI.Xaml.UIElement.VisibilityProperty, (_, _) => RefreshChatBackgroundMotion());
+        AppWindow.Changed += (_, _) => DispatcherQueue.TryEnqueue(RefreshChatBackgroundMotion);
+        Activated += (_, _) => RefreshChatBackgroundMotion();
+        chatBackgroundScrollIdle.Tick += (_, _) => { chatBackgroundScrollIdle.Stop(); chatBackgroundScrolling = false; RefreshChatBackgroundMotion(); };
+        scroll.ViewChanged += (_, _) =>
+        {
+            if (!chatBackgroundScrolling) { chatBackgroundScrolling = true; RefreshChatBackgroundMotion(); }
+            chatBackgroundScrollIdle.Stop(); chatBackgroundScrollIdle.Start();
+        };
+        Closed += (_, _) => { chatBackgroundScrollIdle.Stop(); animatedChatBackground.Shutdown(); };
         ConfigureChatBackground(FeatureSettings.Read(state.FeaturesJson));
     }
 }

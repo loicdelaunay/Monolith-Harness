@@ -13,13 +13,13 @@ public sealed partial class MainWindow
 {
     readonly Image brandLogo = new() { Width = 28, Height = 28, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center };
     readonly AdaptiveApplicationTitle brandName = new();
-    string DisplayApplicationName => BrandingAssets.DisplayName(FeatureSettings.Read(state.FeaturesJson).ApplicationName);
+    string DisplayApplicationName => BrandingAssets.DisplayName(ReadOnlyFeatures.ApplicationName);
     static string DefaultLogo => Path.Combine(AppContext.BaseDirectory, "Assets", "logo-32.png");
     void ApplyBrandingIcon(Window window)
     {
         if (!OperatingSystem.IsWindows()) return;
         var custom = Path.Combine(PortableStorage.Folder("branding"), "window-icon.ico");
-        var path = !string.IsNullOrWhiteSpace(FeatureSettings.Read(state.FeaturesJson).LogoForTheme(root.RequestedTheme == ElementTheme.Dark)) && File.Exists(custom)
+        var path = !string.IsNullOrWhiteSpace(ReadOnlyFeatures.LogoForTheme(root.RequestedTheme == ElementTheme.Dark)) && File.Exists(custom)
             ? custom : Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
         try { if (File.Exists(path)) window.AppWindow.SetIcon(path); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("Window icon: " + ex.Message); }

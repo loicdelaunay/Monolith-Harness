@@ -92,7 +92,7 @@ public sealed partial class MainWindow
     void RefreshNotificationBell()
     {
         if (notificationBell == null) return;
-        notificationBell.Visibility = FeatureSettings.Read(state.FeaturesJson).NotificationBell ? Visibility.Visible : Visibility.Collapsed;
+        notificationBell.Visibility = ReadOnlyFeatures.NotificationBell ? Visibility.Visible : Visibility.Collapsed;
         var content = Row(FluentDesign.Icon("\uEA8F", 16));
         if (chatNotices.Count > 0) content.Children.Add(Label(chatNotices.Count.ToString(), 11));
         notificationBell.Content = content;
@@ -102,7 +102,7 @@ public sealed partial class MainWindow
     void NotifyChat(ConversationRun run, bool actionRequired)
     {
         MarkProjectChatNotification(run, actionRequired);
-        var settings = FeatureSettings.Read(state.FeaturesJson);
+        var settings = ReadOnlyFeatures;
         if (actionRequired ? !settings.NotifyActionRequired : !settings.NotifyCompleted) return;
         chatNotices.RemoveAll(x => x.ChatId == run.Chat.Id);
         if (settings.NotificationBell) chatNotices.Add(new(run.Chat.Id, run.Chat.Title, actionRequired, DateTime.UtcNow));

@@ -69,6 +69,12 @@ public sealed class MarkdownRenderer
         if (visualViews.Count % 64 == 0) visualViews.RemoveAll(x => !x.TryGetTarget(out _));
         visualViews.Add(new(view));
     }
+    /// <summary>Web previews holding a selection; their pointer input may not reach XAML.</summary>
+    internal static IEnumerable<AdvancedMarkdownView> SelectedVisuals()
+    {
+        foreach (var reference in visualViews.ToArray())
+            if (reference.TryGetTarget(out var view) && view.HasSelection) yield return view;
+    }
     static int visualRevision;
     static bool refreshingDensity, refreshAgain;
     internal static bool RenderMermaid { get; private set; } = true;

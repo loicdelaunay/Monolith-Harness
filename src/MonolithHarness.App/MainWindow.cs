@@ -2128,7 +2128,7 @@ public sealed partial class MainWindow : Window
                 return await NavigateAsync(url, ct);
 
             case "browser_viewport":
-                if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills) || FeatureSettings.Read(state.FeaturesJson).BrowserMode != "embedded")
+                if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills) || ReadOnlyFeatures.BrowserMode != "embedded")
                     return T("Outil navigateur non autorisé.");
                 await ShowToolAsync(0);
                 return await SetBrowserViewportAsync(argsObj["mode"]?.GetValue<string>() ?? "", ct);
@@ -2137,7 +2137,7 @@ public sealed partial class MainWindow : Window
             case "browser_tab_new":
             case "browser_tab_select":
             case "browser_tab_close":
-                if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills) || FeatureSettings.Read(state.FeaturesJson).BrowserMode != "embedded")
+                if (!Skills.Enabled(state.EnabledSkills, "web") || !BrowserSkillAccess.Enabled(state.EnabledSkills) || ReadOnlyFeatures.BrowserMode != "embedded")
                     return T("Outil navigateur non autorisé.");
                 var tabChatId = run.Chat.Id;
                 if (name == "browser_tab_new")
@@ -2423,7 +2423,7 @@ public sealed partial class MainWindow : Window
         SourceTools.AddDefinitions(definitions, sourceFolders.Count > 0, run.Options.EnabledSkills);
         if (run.Chat.ExecutionMode == "propose" && hasSources && !run.Chat.SandboxEnabled) FileProposals.AddDefinition(definitions);
         AddWorkspaceToolDefinitions(definitions, run);
-        FeatureSettings.Read(state.FeaturesJson).FilterBrowser(definitions);
+        ReadOnlyFeatures.FilterBrowser(definitions);
         agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
         SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
         if (provider.IsAcp) definitions.Clear();

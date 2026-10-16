@@ -20,13 +20,24 @@ public sealed partial class MainWindow
         static void Click(Button button) => (new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke) as IInvokeProvider
             ?? throw new InvalidOperationException("Button invocation unavailable")).Invoke();
         var navigation = Find(settingsRoot).OfType<SettingsNavigation>().Single();
-        navigation.SelectedIndex = 3;
-        await Task.Delay(150);
-        var memory = Find(settingsRoot).Single(x => Equals(x.Tag, "memory-settings"));
+        // Find the Memory page by content: its position changes as settings pages are added.
+        FrameworkElement? memory = null;
+        for (var page = 0; page < 64 && memory == null; page++)
+        {
+            navigation.SelectedIndex = page;
+            if (navigation.SelectedIndex != page) break;
+            await Task.Delay(50);
+            memory = Find(settingsRoot).SingleOrDefault(x => Equals(x.Tag, "memory-settings"));
+        }
+        if (memory == null) throw new Exception("Memory settings page was not found.");
+        await Task.Delay(100);
         Click(Find(memory).OfType<Button>().Single(x => x.Content?.ToString() == "Voir la mémoire"));
         for (var attempt = 0; attempt < 100 && memoryDatabaseWindow?.Content is not DependencyObject; attempt++) await Task.Delay(20);
         if (memoryDatabaseWindow?.Content is not DependencyObject viewer) throw new Exception("Memory database window did not open.");
-        if (!Find(viewer).OfType<TextBox>().Any(x => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(x) == "Filtrer Content")) throw new Exception("Memory database filters are missing.");
+        // The filter row lives in a ScrollViewer, which only exposes its content once the window is laid out.
+        bool HasFilters() => Find(viewer).OfType<TextBox>().Any(x => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(x) == "Filtrer Content");
+        for (var attempt = 0; attempt < 100 && !HasFilters(); attempt++) await Task.Delay(20);
+        if (!HasFilters()) throw new Exception("Memory database filters are missing.");
         Click(Find(viewer).OfType<Button>().Single(x => x.Content?.ToString() == "Fermer"));
         Click(Find(memory).OfType<Button>().Single(x => x.Content?.ToString() == "Modifier les mémoires…"));
         for (var attempt = 0; attempt < 100 && !Find(memory).OfType<TextBlock>().Any(x => x.Text == "Aucune mémoire trouvée."); attempt++) await Task.Delay(20);

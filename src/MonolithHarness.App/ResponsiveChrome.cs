@@ -36,7 +36,7 @@ public sealed partial class MainWindow
             var width = composerFooterHost.ActualWidth;
             composerFooterViewport.Width = width;
             var scale = TextZoom.ForWindow(root) / 100d;
-            var settings = FeatureSettings.Read(state.FeaturesJson);
+            var settings = ReadOnlyFeatures;
             // Start from saved preferences on every resize; width-based hiding never changes them.
             composerSpeedIndicator.Visibility = settings.ShowComposerSpeed ? Visibility.Visible : Visibility.Collapsed;
             composerContextIndicator.Visibility = settings.ShowComposerContext ? Visibility.Visible : Visibility.Collapsed;

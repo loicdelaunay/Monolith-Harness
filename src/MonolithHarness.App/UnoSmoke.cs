@@ -257,13 +257,21 @@ public sealed partial class MainWindow
             if (settingsWindow != null) throw new Exception("Closing settings during loading left an orphan window.");
             var settingsRun = EditSettingsAsync();
             if (settingsWindow?.Content is not Border) throw new Exception("Settings did not immediately show its loading placeholder.");
-            for (var attempt = 0; attempt < 100 && !Descendants(settingsWindow?.Content).OfType<ComboBox>()
-                    .Any(box => box.Items.Count == AppearanceThemes.All.Count && box.Items.OfType<string>().Contains("Fly dark")); attempt++) await Task.Delay(50);
+            for (var attempt = 0; attempt < 100 && !Descendants(settingsWindow?.Content).OfType<SettingsNavigation>().Any(); attempt++) await Task.Delay(50);
             if (settingsWindow?.Content is not FrameworkElement settingsRoot) throw new Exception("Settings window did not open for theme preview.");
             await SmokeMemorySettingsAsync(settingsRoot, output);
-            var previewPicker = Descendants(settingsRoot).OfType<ComboBox>()
-                .FirstOrDefault(box => box.Items.Count == AppearanceThemes.All.Count && box.Items.OfType<string>().Contains("Fly dark"));
-            if (previewPicker == null) throw new Exception("Theme picker is missing from General settings.");
+            // The theme picker lives on the Appearance page and lists ThemeChoice items.
+            static bool IsThemePicker(ComboBox box) => box.Items.Count == AppearanceThemes.All.Count && box.Items.Any(item => item?.ToString()?.EndsWith("Fly dark") == true);
+            var settingsPages = Descendants(settingsRoot).OfType<SettingsNavigation>().Single();
+            ComboBox? previewPicker = null;
+            for (var page = 0; page < 64 && previewPicker == null; page++)
+            {
+                settingsPages.SelectedIndex = page;
+                if (settingsPages.SelectedIndex != page) break;
+                await Task.Delay(50);
+                previewPicker = Descendants(settingsRoot).OfType<ComboBox>().FirstOrDefault(IsThemePicker);
+            }
+            if (previewPicker == null) throw new Exception("Theme picker is missing from Appearance settings.");
             previewPicker.SelectedIndex = AppearanceThemes.All.ToList().FindIndex(item => item.Id == previewId);
             await Task.Delay(150);
             var previewElementTheme = AppearanceThemes.Get(previewId).Dark ? ElementTheme.Dark : ElementTheme.Light;

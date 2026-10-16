@@ -53,7 +53,7 @@ public sealed partial class MainWindow
         db.Entry(p).State != Microsoft.EntityFrameworkCore.EntityState.Deleted && QuickModelShortcuts.Available(level, p));
     QuickModelLevel? PreviewComposerLevel()
     {
-        var levels = FeatureSettings.Read(state.FeaturesJson).QuickModelLevels;
+        var levels = ReadOnlyFeatures.QuickModelLevels;
         var index = (int)Math.Round(composerLevelSlider.Value) - 1;
         if (index < 0 || index >= levels.Count) return null;
         var level = levels[index]; previewQuickLevelId = level.Id;

@@ -168,7 +168,7 @@ public sealed partial class MainWindow
     }
     async Task FocusLatestToolAsync(ConversationRun run, string name, System.Text.Json.Nodes.JsonObject? args = null)
     {
-        if (!IsVisible(run) || !FeatureSettings.Read(state.FeaturesJson).AutoFocusTool) return;
+        if (!IsVisible(run) || !ReadOnlyFeatures.AutoFocusTool) return;
         int tab = name.StartsWith("asset_",StringComparison.Ordinal) ? 4 : name.Contains("terminal") ? 1 : name.StartsWith("git") ? 2 : name.Contains("source") || name.StartsWith("rag_") ? 3 : name.Contains("browser") || name is "browse" or "read_page" or "inspect_dom" or "open_local_file" ? 0 : -1;
         if (tab >= 0)
         {
