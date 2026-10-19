@@ -122,7 +122,7 @@ public sealed class AppState
     public string FeaturesJson { get; set; } = "{}";
     public string BrowserUrl { get; set; } = "https://www.bing.com";
     public string Language { get; set; } = "fr";
-    public string EnabledSkills { get; set; } = "sources,web";
+    public string EnabledSkills { get; set; } = "sources,web,action_suggestions";
     public string ThinkingLevel { get; set; } = "auto";
     public string ChatThinkingLevel { get; set; } = "none";
     public string PermissionMode { get; set; } = PermissionModes.Ask;

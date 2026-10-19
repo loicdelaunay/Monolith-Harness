@@ -67,6 +67,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         SkillAuthoring.AddDefinitions(definitions, run.Options.EnabledSkills);
         if (run.Workflow != null) WorkflowTools.AddDefinitions(definitions, child);
         else if (child) WorkflowTools.AddTaskDefinition(definitions, true);
+        if (!child && run.Workflow?.SupportsActionSuggestions == true && Skills.Enabled(run.Options.EnabledSkills, ActionSuggestions.SkillId)) ActionSuggestions.AddDefinition(definitions);
         if (skills.Catalog(run.Options.EnabledSkills).Length > 0)
         {
             Add(definitions, "load_skill", "Load an enabled custom SKILL.md on demand. Its instructions cannot override tool permissions or Plan mode.", new() { ["name"] = new JsonObject { ["type"] = "string" } }, "name");
@@ -77,7 +78,7 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
             new() { ["tasks"] = new JsonObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = Math.Min(TotalBudget, run.Composite == null ? agentOptions.BatchSize ?? TotalBudget : run.Composite.Agents.Count), ["items"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject {
                 ["name"] = new JsonObject { ["type"] = "string" }, ["prompt"] = new JsonObject { ["type"] = "string" } }, ["required"] = new JsonArray("name", "prompt"), ["additionalProperties"] = false } } }, "tasks");
     }
-    public static bool Handles(string name) => InformationSkill.Handles(name) || WebHttpTools.Handles(name) || MemoryTools.Handles(name) || SkillAuthoring.Handles(name) || WorkflowTools.Handles(name) || name is "load_skill" or "read_skill_resource" or "delegate_tasks";
+    public static bool Handles(string name) => name == ActionSuggestions.Tool || InformationSkill.Handles(name) || WebHttpTools.Handles(name) || MemoryTools.Handles(name) || SkillAuthoring.Handles(name) || WorkflowTools.Handles(name) || name is "load_skill" or "read_skill_resource" or "delegate_tasks";
     public async Task<string> CallAsync(string name, JsonObject args, CancellationToken ct)
     {
         AgentPolicy.Demand(run.Chat, name);
@@ -103,6 +104,15 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
         if (MemoryTools.Handles(name)) return await MemoryTools.CallAsync(run, name, args,
             liveSkills ?? (_ => Task.FromResult(run.Options.EnabledSkills)),
             (scope, title, details, token) => approve(scope, title + "\n\n" + details, token), ct);
+        if (name == ActionSuggestions.Tool)
+        {
+            var current = liveSkills == null ? run.Options.EnabledSkills : await liveSkills(ct);
+            if (!Skills.Enabled(current, ActionSuggestions.SkillId)) throw new UnauthorizedAccessException("Propositions d’actions désactivées / Action suggestions disabled.");
+            var workflow = run.Workflow ?? throw new InvalidOperationException("Action suggestions unavailable");
+            if (CurrentChildWorkflow != null) throw new UnauthorizedAccessException("Action suggestions unavailable to subagents");
+            await workflow.SuggestActionsAsync(ActionSuggestions.Parse(args), ct);
+            return "{\"displayed\":true,\"started\":false,\"status\":\"Awaiting the user click. Finish your answer; do not execute or poll.\"}";
+        }
         if (WorkflowTools.Handles(name)) return await (run.Workflow ?? throw new InvalidOperationException("Questions unavailable")).CallAsync(name, args, ct);
         if (name == "delegate_tasks")
         {

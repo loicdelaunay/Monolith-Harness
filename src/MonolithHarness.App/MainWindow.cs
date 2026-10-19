@@ -607,6 +607,7 @@ public sealed partial class MainWindow : Window
             var item = history[i];
             Border? actionCard = null;
             if (item.Role == "tasks") { RenderTasks(item.Content, messages); }
+            else if (ActionSuggestions.Read(item) != null) { RenderActionSuggestion(item, messages); }
             else if (item.Role == "user")
             {
                 actionCard = AddMessage("user", item.Content, item.Attachments, messages, sourceProject, MonolithHarness.Core.Remote.ServerSync.AuthorOf(item));

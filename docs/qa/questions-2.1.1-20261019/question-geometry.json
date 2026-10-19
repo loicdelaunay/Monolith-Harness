@@ -1,0 +1,932 @@
+[
+  {
+    "stage": "dark wide",
+    "label": "Mode Clair",
+    "height": 80.80000305175781,
+    "center": 40.80000305175781,
+    "bulletCenter": 40.80000305175781,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 224,
+        "ActualHeight": 32.79999923706055,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "dark wide",
+    "label": "Mode Sombre",
+    "height": 80.80000305175781,
+    "center": 40.80000305175781,
+    "bulletCenter": 40.80000305175781,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 225.60000610351562,
+        "ActualHeight": 32.79999923706055,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "dark wide",
+    "label": "Automatique",
+    "height": 80.80000305175781,
+    "center": 40.80000305175781,
+    "bulletCenter": 40.80000305175781,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 212.8000030517578,
+        "ActualHeight": 32.79999923706055,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "multiple choice",
+    "label": "Recherche",
+    "height": 80.80000305175781,
+    "center": 40.79998779296875,
+    "bulletCenter": 41.199981689453125,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE8B7",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Recherche",
+        "ActualWidth": 71.19999694824219,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Rechercher rapidement dans tous les documents du projet.",
+        "ActualWidth": 209.60000610351562,
+        "ActualHeight": 32.79999923706055,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "multiple choice",
+    "label": "Notifications",
+    "height": 80.80000305175781,
+    "center": 40.79998779296875,
+    "bulletCenter": 41.199981689453125,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE7BA",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Notifications",
+        "ActualWidth": 87.19999694824219,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Signaler les \u00E9v\u00E9nements importants.",
+        "ActualWidth": 204,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "multiple choice",
+    "label": "Export",
+    "height": 80.80000305175781,
+    "center": 40.79998779296875,
+    "bulletCenter": 41.199981689453125,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE73E",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Export",
+        "ActualWidth": 44.79999923706055,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Enregistrer les r\u00E9sultats dans un fichier.",
+        "ActualWidth": 221.60000610351562,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 1200",
+    "label": "Mode Clair",
+    "height": 80,
+    "center": 40.00001525878906,
+    "bulletCenter": 40.00001525878906,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 315.20001220703125,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 1200",
+    "label": "Mode Sombre",
+    "height": 80,
+    "center": 40.00001525878906,
+    "bulletCenter": 40.00001525878906,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 256.79998779296875,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 1200",
+    "label": "Automatique",
+    "height": 80,
+    "center": 40,
+    "bulletCenter": 40,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 265.6000061035156,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 720",
+    "label": "Mode Clair",
+    "height": 80,
+    "center": 40.00001525878906,
+    "bulletCenter": 40.00001525878906,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 315.20001220703125,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 720",
+    "label": "Mode Sombre",
+    "height": 80,
+    "center": 40,
+    "bulletCenter": 40,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 256.79998779296875,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 720",
+    "label": "Automatique",
+    "height": 80,
+    "center": 40,
+    "bulletCenter": 40,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 265.6000061035156,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 420",
+    "label": "Mode Clair",
+    "height": 97.5999984741211,
+    "center": 48.79998779296875,
+    "bulletCenter": 48.79998779296875,
+    "contentCenter": 48.79998779296875,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 107.19999694824219,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 420",
+    "label": "Mode Sombre",
+    "height": 97.5999984741211,
+    "center": 48.79998779296875,
+    "bulletCenter": 48.79998779296875,
+    "contentCenter": 48.79998779296875,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 104,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-light 420",
+    "label": "Automatique",
+    "height": 113.5999984741211,
+    "center": 56.79998779296875,
+    "bulletCenter": 56.79998779296875,
+    "contentCenter": 56.79998779296875,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FF202020"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 102.4000015258789,
+        "ActualHeight": 65.5999984741211,
+        "Opacity": 1,
+        "color": "#FF606060"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 1200",
+    "label": "Mode Clair",
+    "height": 80,
+    "center": 40.00001525878906,
+    "bulletCenter": 40.00001525878906,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 315.20001220703125,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 1200",
+    "label": "Mode Sombre",
+    "height": 80,
+    "center": 40.00001525878906,
+    "bulletCenter": 40.00001525878906,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 256.79998779296875,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 1200",
+    "label": "Automatique",
+    "height": 80,
+    "center": 40,
+    "bulletCenter": 40,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 265.6000061035156,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 720",
+    "label": "Mode Clair",
+    "height": 80,
+    "center": 40.00001525878906,
+    "bulletCenter": 40.00001525878906,
+    "contentCenter": 40.40000343322754,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 315.20001220703125,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 720",
+    "label": "Mode Sombre",
+    "height": 80,
+    "center": 40,
+    "bulletCenter": 40,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 256.79998779296875,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 720",
+    "label": "Automatique",
+    "height": 80,
+    "center": 40,
+    "bulletCenter": 40,
+    "contentCenter": 40.39998817443848,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 265.6000061035156,
+        "ActualHeight": 16.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 420",
+    "label": "Mode Clair",
+    "height": 97.5999984741211,
+    "center": 48.79998779296875,
+    "bulletCenter": 48.79998779296875,
+    "contentCenter": 48.79998779296875,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 72.80000305175781,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 107.19999694824219,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 420",
+    "label": "Mode Sombre",
+    "height": 97.5999984741211,
+    "center": 48.79998779296875,
+    "bulletCenter": 48.79998779296875,
+    "contentCenter": 48.79998779296875,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 94.4000015258789,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 104,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "fluent-dark-v2 420",
+    "label": "Automatique",
+    "height": 113.5999984741211,
+    "center": 56.79998779296875,
+    "bulletCenter": 56.79998779296875,
+    "contentCenter": 56.79998779296875,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 89.5999984741211,
+        "ActualHeight": 19.200000762939453,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 102.4000015258789,
+        "ActualHeight": 65.5999984741211,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "150 percent zoom",
+    "label": "Mode Clair",
+    "height": 107.19999694824219,
+    "center": 53.5999755859375,
+    "bulletCenter": 53.5999755859375,
+    "contentCenter": 53.5999870300293,
+    "texts": [
+      {
+        "Text": "\uE706",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Clair",
+        "ActualWidth": 109.5999984741211,
+        "ActualHeight": 28.799999237060547,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Th\u00E8me lumineux, uniquement parmi les choix propos\u00E9s.",
+        "ActualWidth": 336,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "150 percent zoom",
+    "label": "Mode Sombre",
+    "height": 107.19999694824219,
+    "center": 53.5999755859375,
+    "bulletCenter": 53.5999755859375,
+    "contentCenter": 53.5999870300293,
+    "texts": [
+      {
+        "Text": "\uE708",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Mode Sombre",
+        "ActualWidth": 141.60000610351562,
+        "ActualHeight": 28.799999237060547,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Id\u00E9al pour reposer les yeux, sans champ libre.",
+        "ActualWidth": 337.6000061035156,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "150 percent zoom",
+    "label": "Automatique",
+    "height": 107.19999694824219,
+    "center": 53.600006103515625,
+    "bulletCenter": 53.600006103515625,
+    "contentCenter": 53.60001754760742,
+    "texts": [
+      {
+        "Text": "\uE7F4",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Automatique",
+        "ActualWidth": 133.60000610351562,
+        "ActualHeight": 28.799999237060547,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Suit automatiquement les r\u00E9glages du syst\u00E8me.",
+        "ActualWidth": 319.20001220703125,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "150 percent zoom multiple",
+    "label": "Recherche",
+    "height": 107.19999694824219,
+    "center": 53.5999755859375,
+    "bulletCenter": 53.999969482421875,
+    "contentCenter": 53.5999870300293,
+    "texts": [
+      {
+        "Text": "\uE8B7",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Recherche",
+        "ActualWidth": 106.4000015258789,
+        "ActualHeight": 28.799999237060547,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Rechercher rapidement dans tous les documents du projet.",
+        "ActualWidth": 313.6000061035156,
+        "ActualHeight": 49.599998474121094,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "150 percent zoom multiple",
+    "label": "Notifications",
+    "height": 82.4000015258789,
+    "center": 40.79998779296875,
+    "bulletCenter": 41.199981689453125,
+    "contentCenter": 41.19998741149902,
+    "texts": [
+      {
+        "Text": "\uE7BA",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Notifications",
+        "ActualWidth": 130.39999389648438,
+        "ActualHeight": 28.799999237060547,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Signaler les \u00E9v\u00E9nements importants.",
+        "ActualWidth": 305.6000061035156,
+        "ActualHeight": 24.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  },
+  {
+    "stage": "150 percent zoom multiple",
+    "label": "Export",
+    "height": 82.4000015258789,
+    "center": 40.800018310546875,
+    "bulletCenter": 41.200042724609375,
+    "contentCenter": 41.20001792907715,
+    "texts": [
+      {
+        "Text": "\uE73E",
+        "ActualWidth": 24,
+        "ActualHeight": 24,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Export",
+        "ActualWidth": 67.19999694824219,
+        "ActualHeight": 28.799999237060547,
+        "Opacity": 1,
+        "color": "#FFEFEFEF"
+      },
+      {
+        "Text": "Enregistrer les r\u00E9sultats dans un fichier.",
+        "ActualWidth": 332.79998779296875,
+        "ActualHeight": 24.799999237060547,
+        "Opacity": 1,
+        "color": "#FFA6A6A6"
+      }
+    ]
+  }
+]

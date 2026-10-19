@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.1 — 2026-10-19
+
+### Finition et vérification des questions du desktop
+
+- Sélecteurs radio et cases à cocher centrés avec l’icône et le texte, y compris lorsque les descriptions occupent plusieurs lignes. Toute la tuile reste cliquable et les sélecteurs natifs conservent leur comportement.
+- Suppression de la numérotation affichée en double lorsqu’elle était déjà fournie par le modèle. L’indicateur à points s’efface lorsque la fenêtre est trop étroite.
+- Barre de validation sur deux lignes dans les petites fenêtres et avec le texte agrandi pour conserver tous les boutons accessibles. La hauteur des questions suit celle du chat et la navigation amène la question active dans la zone visible. Les erreurs de validation disparaissent dès qu’une réponse valide est saisie ou sélectionnée.
+- Scénario de régression dans une vraie fenêtre Uno avec base isolée : thèmes clair et sombre, plusieurs largeurs, choix unique et multiple, réponses libres, navigation, réduction, annulation et restitution des réponses.
+
+## 2.1.0 — 2026-10-19
+
+### Questions guidées et propositions d’actions
+
+- Desktop : choix en tuiles adaptatives, icônes Fluent facultatives et accordéon récapitulatif lorsqu’il y a plusieurs questions. Les réponses libres disposent directement d’un champ de texte. Les contrôles suivent le thème actif.
+- Nouveau skill « Propositions d’actions », désactivable dans Réglages → Skills : l’IA peut afficher des boutons pour travailler ici, lancer un agent dans une discussion dédiée, créer une nouvelle discussion ou mettre une tâche en file.
+- Les propositions restent inactives jusqu’au clic, sont conservées dans l’historique et ne peuvent être déclenchées qu’une fois. Les consignes sont consultables avant sélection. Les discussions créées conservent les ressources et le mode de travail ; les autorisations des outils continuent de s’appliquer.
+- Le choix unique reste le comportement par défaut du tool question ; les choix multiples exigent toujours multiple=true. Les interfaces CLI et serveur restent compatibles avec le même schéma de questions.
+
 ## 2.0.0 — 2026-10-16
 
 ### Version majeure · consolidation et correctifs Vertex AI

@@ -1,0 +1,145 @@
+Isolated chat, project and provider available.
+Language refresh preserves question headers and their controls.
+Language refresh does not display internal test identifiers.
+dark wide: selector centered · Mode Clair
+dark wide: bullet and content aligned · Mode Clair
+dark wide: tile within card bounds
+dark wide: selector centered · Mode Sombre
+dark wide: bullet and content aligned · Mode Sombre
+dark wide: tile within card bounds
+dark wide: selector centered · Automatique
+dark wide: bullet and content aligned · Automatique
+dark wide: tile within card bounds
+dark wide: footer actions within card bounds
+dark wide: whole card fits the chat viewport
+Model-supplied numbering is not duplicated in presentation.
+Empty answers cannot advance.
+Native single selection stays exclusive.
+Validation errors clear when a valid answer is selected.
+Custom selection opens its text field.
+An empty custom answer cannot advance.
+Choosing a predefined option hides the custom field.
+Returning to custom preserves its draft.
+Multiple selection retains two native checkboxes.
+multiple choice: selector centered · Recherche
+multiple choice: bullet and content aligned · Recherche
+multiple choice: tile within card bounds
+multiple choice: selector centered · Notifications
+multiple choice: bullet and content aligned · Notifications
+multiple choice: tile within card bounds
+multiple choice: selector centered · Export
+multiple choice: bullet and content aligned · Export
+multiple choice: tile within card bounds
+multiple choice: footer actions within card bounds
+multiple choice: whole card fits the chat viewport
+Previous navigation preserves the answer.
+Pure free text has no redundant toggle.
+An empty free-text answer cannot submit.
+Typing a valid free answer clears its validation error.
+Collapsing the whole question card hides its form.
+Expanding restores the form and its draft.
+fluent-light 1200: selector centered · Mode Clair
+fluent-light 1200: bullet and content aligned · Mode Clair
+fluent-light 1200: tile within card bounds
+fluent-light 1200: selector centered · Mode Sombre
+fluent-light 1200: bullet and content aligned · Mode Sombre
+fluent-light 1200: tile within card bounds
+fluent-light 1200: selector centered · Automatique
+fluent-light 1200: bullet and content aligned · Automatique
+fluent-light 1200: tile within card bounds
+fluent-light 1200: footer actions within card bounds
+fluent-light 1200: whole card fits the chat viewport
+fluent-light free-text 1200: footer actions within card bounds
+fluent-light free-text 1200: whole card fits the chat viewport
+fluent-light 720: selector centered · Mode Clair
+fluent-light 720: bullet and content aligned · Mode Clair
+fluent-light 720: tile within card bounds
+fluent-light 720: selector centered · Mode Sombre
+fluent-light 720: bullet and content aligned · Mode Sombre
+fluent-light 720: tile within card bounds
+fluent-light 720: selector centered · Automatique
+fluent-light 720: bullet and content aligned · Automatique
+fluent-light 720: tile within card bounds
+fluent-light 720: footer actions within card bounds
+fluent-light 720: whole card fits the chat viewport
+fluent-light free-text 720: footer actions within card bounds
+fluent-light free-text 720: whole card fits the chat viewport
+fluent-light 420: selector centered · Mode Clair
+fluent-light 420: bullet and content aligned · Mode Clair
+fluent-light 420: tile within card bounds
+fluent-light 420: selector centered · Mode Sombre
+fluent-light 420: bullet and content aligned · Mode Sombre
+fluent-light 420: tile within card bounds
+fluent-light 420: selector centered · Automatique
+fluent-light 420: bullet and content aligned · Automatique
+fluent-light 420: tile within card bounds
+fluent-light 420: footer actions within card bounds
+fluent-light 420: whole card fits the chat viewport
+fluent-light free-text 420: footer actions within card bounds
+fluent-light free-text 420: whole card fits the chat viewport
+fluent-dark-v2 1200: selector centered · Mode Clair
+fluent-dark-v2 1200: bullet and content aligned · Mode Clair
+fluent-dark-v2 1200: tile within card bounds
+fluent-dark-v2 1200: selector centered · Mode Sombre
+fluent-dark-v2 1200: bullet and content aligned · Mode Sombre
+fluent-dark-v2 1200: tile within card bounds
+fluent-dark-v2 1200: selector centered · Automatique
+fluent-dark-v2 1200: bullet and content aligned · Automatique
+fluent-dark-v2 1200: tile within card bounds
+fluent-dark-v2 1200: footer actions within card bounds
+fluent-dark-v2 1200: whole card fits the chat viewport
+fluent-dark-v2 free-text 1200: footer actions within card bounds
+fluent-dark-v2 free-text 1200: whole card fits the chat viewport
+fluent-dark-v2 720: selector centered · Mode Clair
+fluent-dark-v2 720: bullet and content aligned · Mode Clair
+fluent-dark-v2 720: tile within card bounds
+fluent-dark-v2 720: selector centered · Mode Sombre
+fluent-dark-v2 720: bullet and content aligned · Mode Sombre
+fluent-dark-v2 720: tile within card bounds
+fluent-dark-v2 720: selector centered · Automatique
+fluent-dark-v2 720: bullet and content aligned · Automatique
+fluent-dark-v2 720: tile within card bounds
+fluent-dark-v2 720: footer actions within card bounds
+fluent-dark-v2 720: whole card fits the chat viewport
+fluent-dark-v2 free-text 720: footer actions within card bounds
+fluent-dark-v2 free-text 720: whole card fits the chat viewport
+fluent-dark-v2 420: selector centered · Mode Clair
+fluent-dark-v2 420: bullet and content aligned · Mode Clair
+fluent-dark-v2 420: tile within card bounds
+fluent-dark-v2 420: selector centered · Mode Sombre
+fluent-dark-v2 420: bullet and content aligned · Mode Sombre
+fluent-dark-v2 420: tile within card bounds
+fluent-dark-v2 420: selector centered · Automatique
+fluent-dark-v2 420: bullet and content aligned · Automatique
+fluent-dark-v2 420: tile within card bounds
+fluent-dark-v2 420: footer actions within card bounds
+fluent-dark-v2 420: whole card fits the chat viewport
+fluent-dark-v2 free-text 420: footer actions within card bounds
+fluent-dark-v2 free-text 420: whole card fits the chat viewport
+150 percent zoom: selector centered · Mode Clair
+150 percent zoom: bullet and content aligned · Mode Clair
+150 percent zoom: tile within card bounds
+150 percent zoom: selector centered · Mode Sombre
+150 percent zoom: bullet and content aligned · Mode Sombre
+150 percent zoom: tile within card bounds
+150 percent zoom: selector centered · Automatique
+150 percent zoom: bullet and content aligned · Automatique
+150 percent zoom: tile within card bounds
+150 percent zoom: footer actions within card bounds
+150 percent zoom: whole card fits the chat viewport
+150 percent zoom multiple: selector centered · Recherche
+150 percent zoom multiple: bullet and content aligned · Recherche
+150 percent zoom multiple: tile within card bounds
+150 percent zoom multiple: selector centered · Notifications
+150 percent zoom multiple: bullet and content aligned · Notifications
+150 percent zoom multiple: tile within card bounds
+150 percent zoom multiple: selector centered · Export
+150 percent zoom multiple: bullet and content aligned · Export
+150 percent zoom multiple: tile within card bounds
+150 percent zoom multiple: footer actions within card bounds
+150 percent zoom multiple: whole card fits the chat viewport
+150 percent zoom final footer: footer actions within card bounds
+150 percent zoom final footer: whole card fits the chat viewport
+Final submission returns all selected and typed answers.
+Submitting releases the interactive card.
+Cancellation remains distinct from approval.

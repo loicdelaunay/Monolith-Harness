@@ -14,7 +14,7 @@ public static class ResourceAccessPolicy
             or "glob_sources" or "grep_sources" or "patch_sources" or FileProposals.Tool
             or "rag_index" or "rag_search" or "rag_sources" or "rag_read"
             or "list_images" or "analyze_image" or "load_skill" or "read_skill_resource" or "skill_locations"
-            or "delegate_tasks" or "todowrite" or "question";
+            or "delegate_tasks" or "todowrite" or "question" or ActionSuggestions.Tool;
 
     public static void Demand(Chat chat, string tool)
     {

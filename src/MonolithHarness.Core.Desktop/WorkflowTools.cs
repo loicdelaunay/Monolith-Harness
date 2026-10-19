@@ -2,21 +2,24 @@ using System.Text.Json.Nodes;
 
 namespace MonolithHarness.Core;
 
-public sealed record AgentOption(string Label, string Description);
+public sealed record AgentOption(string Label, string Description, string Icon = "");
 public sealed record AgentQuestion(string Question, IReadOnlyList<AgentOption> Options, bool Multiple, bool Custom);
 public sealed record AgentAnswer(bool Cancelled, IReadOnlyList<IReadOnlyList<string>> Answers);
 
 /// <summary>User decisions are never permission grants and must never be auto-accepted.</summary>
 public sealed class WorkflowTools(Func<IReadOnlyList<AgentQuestion>, CancellationToken, Task<AgentAnswer>> ask,
-    Func<JsonArray, CancellationToken, Task> saveTasks)
+    Func<JsonArray, CancellationToken, Task> saveTasks,
+    Func<ActionSuggestion, CancellationToken, Task>? suggestActions = null)
 {
-    public const string Instructions = "\nUse todowrite to maintain a structured task list for multi-step work (pending, in_progress, completed, cancelled). Update it as work progresses; never mark unperformed work completed. Use question to ask the user for necessary decisions with options or a free-text form. A question selects one answer by default; set multiple=true when the user may select several compatible options, such as features to include. Explain that several choices are allowed. The tool returns an array of selected answers for each question. The tool waits for the user's actual answer. Cancellation is not approval. Avoid repeating identical tool calls without new information.";
+    public bool SupportsActionSuggestions => suggestActions != null;
+    public Task SuggestActionsAsync(ActionSuggestion suggestion, CancellationToken ct) => (suggestActions ?? throw new InvalidOperationException("Action suggestions unavailable"))(suggestion, ct);
+    public const string Instructions = "\nUse todowrite to maintain a structured task list for multi-step work (pending, in_progress, completed, cancelled). Update it as work progresses; never mark unperformed work completed. Use question to ask the user for necessary decisions with options or a free-text form. A question selects one answer by default; set multiple=true when the user may select several compatible options, such as features to include. Explain that several choices are allowed. The tool returns an array of selected answers for each question. Options may include an optional icon (sun, moon, system, code, edit, folder, check, warning) when it helps recognize the choice. The tool waits for the user's actual answer. Cancellation is not approval. Avoid repeating identical tool calls without new information.";
     public static bool Handles(string name) => name is "todowrite" or "question";
     public static void AddDefinitions(JsonArray definitions, bool child = false)
     {
         AddTaskDefinition(definitions, child);
         definitions.Add(JsonNode.Parse("""
-        {"type":"function","function":{"name":"question","description":"Wait for the user to answer 1 to 8 questions. Set multiple=true on a question to let the user select several options; omit it or use false for exactly one answer. Options can be empty for a free-text form. custom defaults to true. Each answer is returned as an array of selected labels and optional custom text. Do not use this as a substitute for tool access permissions.","parameters":{"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"object","properties":{"question":{"type":"string"},"options":{"type":"array","maxItems":12,"items":{"type":"object","properties":{"label":{"type":"string"},"description":{"type":"string"}},"required":["label","description"],"additionalProperties":false}},"multiple":{"type":"boolean","description":"False by default: choose exactly one answer (radio buttons). True: choose one or more answers (checkboxes); the answer contains all selected labels."},"custom":{"type":"boolean"}},"required":["question","options"],"additionalProperties":false}}},"required":["questions"],"additionalProperties":false}}}
+        {"type":"function","function":{"name":"question","description":"Wait for the user to answer 1 to 8 questions. Set multiple=true on a question to let the user select several options; omit it or use false for exactly one answer. Options can be empty for a free-text form. custom defaults to true. Each answer is returned as an array of selected labels and optional custom text. Do not use this as a substitute for tool access permissions.","parameters":{"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"object","properties":{"question":{"type":"string"},"options":{"type":"array","maxItems":12,"items":{"type":"object","properties":{"label":{"type":"string"},"description":{"type":"string"},"icon":{"type":"string","enum":["sun","moon","system","code","edit","folder","check","warning"]}},"required":["label","description"],"additionalProperties":false}},"multiple":{"type":"boolean","description":"False by default: choose exactly one answer (radio buttons). True: choose one or more answers (checkboxes); the answer contains all selected labels."},"custom":{"type":"boolean"}},"required":["question","options"],"additionalProperties":false}}},"required":["questions"],"additionalProperties":false}}}
         """));
     }
     public static void AddTaskDefinition(JsonArray definitions, bool child = false)
@@ -52,9 +55,9 @@ public sealed class WorkflowTools(Func<IReadOnlyList<AgentQuestion>, Cancellatio
         if (items.Count is < 1 or > 8) throw new ArgumentException("1 à 8 questions requises.");
         return items.Select(item => {
             var title = item?["question"]?.GetValue<string>()?.Trim() ?? "";
-            var options = (item?["options"] as JsonArray ?? []).Select(x => new AgentOption(x?["label"]?.GetValue<string>() ?? "", x?["description"]?.GetValue<string>() ?? "")).ToList();
+            var options = (item?["options"] as JsonArray ?? []).Select(x => new AgentOption(x?["label"]?.GetValue<string>() ?? "", x?["description"]?.GetValue<string>() ?? "", x?["icon"]?.GetValue<string>() ?? "")).ToList();
             var custom = item?["custom"]?.GetValue<bool>() ?? true;
-            if (title.Length is < 1 or > 4000 || options.Count > 12 || options.Any(x => x.Label.Length is < 1 or > 200 || x.Description.Length > 1000) || options.Select(x => x.Label).Distinct().Count() != options.Count || options.Count == 0 && !custom)
+            if (title.Length is < 1 or > 4000 || options.Count > 12 || options.Any(x => x.Label.Length is < 1 or > 200 || x.Description.Length > 1000 || x.Icon is not ("" or "sun" or "moon" or "system" or "code" or "edit" or "folder" or "check" or "warning")) || options.Select(x => x.Label).Distinct().Count() != options.Count || options.Count == 0 && !custom)
                 throw new ArgumentException("Question invalide / Invalid question.");
             return new AgentQuestion(title, options, item?["multiple"]?.GetValue<bool>() ?? false, custom);
         }).ToList();
