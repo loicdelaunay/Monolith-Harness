@@ -1475,7 +1475,7 @@ public sealed partial class MainWindow : Window
         var agentAutomationSettings = BuildAgentAutomationSettings();
         var compactionSettings = BuildCompactionSettings();
         var retentionSettings = BuildConversationRetentionSettings();
-        var renderingSettings = BuildRenderingGpuSettings();
+        var renderingSettings = BuildAdvancedSettings();
         appearance.Panel.Children.Insert(0, branding.Panel);
         language.Header = null;
         general.Children.Add(FluentDesign.Setting(T("Langue de l’application"), "", language));
@@ -1547,7 +1547,6 @@ public sealed partial class MainWindow : Window
         var attentionSection = new ToggleSwitch { IsOn = FeatureSettings.Read(state.FeaturesJson).ShowAttentionSection };
         general.Children.Add(FluentDesign.Setting(WorkflowText("Section Attention requise", "Needs attention section"), WorkflowText("Regroupe au-dessus des discussions épinglées les chats attendant une réponse, une autorisation ou présentant une erreur non lue.", "Group chats waiting for an answer, approval or with an unread error above pinned conversations."), attentionSection));
         general.Children.Add(retentionSettings.Panel);
-        general.Children.Add(renderingSettings.Panel);
         var about = new StackPanel { Spacing = 20 };
         about.Children.Add(FluentDesign.Surface(updates.Panel, 16));
         about.Children.Add(conversationPreferences.Logs);
@@ -1663,6 +1662,7 @@ public sealed partial class MainWindow : Window
         tabs.Add(WorkflowText("Notifications", "Notifications"), notificationSettings.Panel, "\uE767");
         var serverTab = tabs.Add(WorkflowText("Serveur", "Server"), BuildServerSettings(loadingWindow), "\uE753");
         tabs.Add(WorkflowText("Test", "Test"), BuildModelTestSettings(loadingWindow), "\uE9D9");
+        var advancedTab = tabs.Add(WorkflowText("Avancé", "Advanced"), renderingSettings.Panel, "\uE9E9");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
         settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab; settingsServerTab = serverTab;
@@ -1700,7 +1700,7 @@ public sealed partial class MainWindow : Window
                 var imageDraft = FeatureSettings.Read(state.FeaturesJson); imageGenerationSettings.Save(imageDraft); imageDraft.Json();
             }
             catch (ArgumentException ex) { providerEditor.Error.Text = ex.Message; tabs.SelectedIndex = providerTab; valid = false; }
-            if (valid && !renderingSettings.Apply()) { tabs.SelectedIndex = 0; valid = false; }
+            if (valid && !renderingSettings.Apply()) { tabs.SelectedIndex = advancedTab; valid = false; }
             return valid;
         }))
         {
@@ -2520,7 +2520,7 @@ public sealed partial class MainWindow : Window
                     assistantUi.UpdateThinking(finalReasoning, isComplete: true);
                 }
                 var toolResults = new List<Message>();
-                if (completion.Message["tool_calls"] is JsonArray { Count: > 0 }) MoveToActivity(assistantUi);
+                if (completion.Message["tool_calls"] is JsonArray { Count: > 0 } activityCalls && !ContainsActionSuggestion(activityCalls)) MoveToActivity(assistantUi);
                 if (completion.Message["tool_calls"] is JsonArray calls)
                     foreach (var call in calls)
                     {

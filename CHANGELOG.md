@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2.1 — 2026-10-20
+
+### Réglages avancés et propositions d’actions
+
+- Onglet Avancé déplacé juste avant Réinitialisation. Affichage du GPU observé pour le processus lorsque les compteurs Windows permettent de l’identifier, de la fréquence de l’écran de la fenêtre principale et de la cadence de rendu appliquée au démarrage. Les informations indisponibles sont signalées explicitement.
+- Les réponses accompagnant des propositions d’actions restent dans le chat, y compris lorsque le même message contient aussi un outil technique, après réouverture et lors du remontage des bulles virtualisées. Les étapes techniques des outils restent regroupées dans la réflexion.
+
+## 2.2.0 — 2026-10-20
+
+### Réglages avancés du rendu desktop
+
+- Nouvel onglet Avancé : moteur automatique, OpenGL ou Vulkan ; accélération matérielle désactivable pour utiliser le rendu logiciel. Les choix sont appliqués au prochain démarrage de l’édition Uno Desktop, avec repli du moteur si nécessaire.
+- Déplacement de la préférence de consommation GPU de Général vers Avancé, sans perdre le choix enregistré.
+- Rafraîchissement Auto, synchronisé avec l’écran ou manuel entre 15 et 500 images/s. Les réglages affectent l’interface ; ils ne modifient pas la fréquence système de l’écran ni le calcul des modèles IA.
+
 ## 2.1.1 — 2026-10-19
 
 ### Finition et vérification des questions du desktop

@@ -37,13 +37,14 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(Label(WorkflowText("Carte graphique du rendu", "Rendering graphics card"), 16));
         panel.Children.Add(selector);
+        panel.Children.Add(BuildActiveGraphicsStatus());
         panel.Children.Add(Label(OperatingSystem.IsWindows()
             ? WorkflowText("S’applique à cet exécutable après redémarrage. Windows et les pilotes choisissent la carte disponible correspondant à cette préférence. Ce réglage concerne l’interface, pas le calcul des modèles IA.", "Applies to this executable after restart. Windows and drivers choose an available GPU matching the preference. This affects the interface, not AI model computation.")
             : WorkflowText("Ce choix est disponible sous Windows. Le système gère le GPU sur cette plateforme.", "This choice is available on Windows. The system manages the GPU on this platform."), 12));
         var error = Label("", 12); error.Foreground = FluentDesign.Resource("ToolMessageErrorStrokeBrush"); panel.Children.Add(error);
         string Selected() => values[Math.Clamp(selector.SelectedIndex, 0, values.Length - 1)];
         return (FluentDesign.Surface(panel, 16), target => target.RenderingGpuPreference = Selected(), () => {
-            if (!OperatingSystem.IsWindows() || Selected() == "auto" && config.RenderingGpuPreference == "auto") return true;
+            if (!OperatingSystem.IsWindows() || Selected() == config.RenderingGpuPreference) return true;
             try { RenderingGpuSettings.Apply(Selected()); error.Text = ""; return true; }
             catch (Exception ex) { error.Text = ex.Message; return false; }
         });

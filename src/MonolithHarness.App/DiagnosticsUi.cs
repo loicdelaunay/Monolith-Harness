@@ -19,11 +19,27 @@ public sealed partial class MainWindow
                 WorkflowText("Mode d’autorisation", "Permission mode") + " : " + PermissionModes.Normalize(state.PermissionMode) + "\n" +
                 WorkflowText("Thème", "Theme") + " : " + ReadOnlyFeatures.Theme + "\n" +
                 WorkflowText("Rendu de l’interface", "Interface rendering") + " : " + RenderingBackend() + "\n" +
+                RenderingStartupDescription() +
                 WorkflowText("Base de données", "Database") + " : " + db.FilePath;
         }
         var window = new DiagnosticsWindow(db.FilePath, root.RequestedTheme, LiveState) { Title = DisplayApplicationName + " · " + WorkflowText("Débug · Diagnostics", "Debug · Diagnostics") };
         diagnosticsWindow = window; window.Closed += (_, _) => diagnosticsWindow = null;
         ApplyBrandingIcon(window); ObserveTextZoom(window.Panel); window.Activate(); return Task.CompletedTask;
+    }
+
+    string RenderingStartupDescription()
+    {
+#if WINDOWS
+        return "";
+#else
+        var config = DesktopRendering.StartupSettings;
+        var backend = !config.HardwareAcceleration ? WorkflowText("logiciel (CPU)", "software (CPU)")
+            : OperatingSystem.IsMacOS() ? "Metal" : config.RenderingBackend switch
+            { "vulkan" => "Vulkan", "opengl" => "OpenGL", _ => WorkflowText("automatique", "automatic") };
+        var refresh = DesktopRendering.FollowsDisplay ? WorkflowText("suit l’écran", "follows display")
+            : DesktopRendering.TargetFrameRate + WorkflowText(" images/s (cible)", " frames/s (target)");
+        return WorkflowText("Configuration demandée au démarrage", "Configuration requested at startup") + " : " + backend + " · " + refresh + "\n";
+#endif
     }
 
     /// <summary>Whether Skia draws with the GPU or fell back to the much slower software renderer.</summary>
@@ -32,18 +48,10 @@ public sealed partial class MainWindow
 #if WINDOWS
         return WorkflowText("GPU (WinUI natif)", "GPU (native WinUI)");
 #else
-        try
-        {
-            // Uno only exposes the software fallback internally; read it without depending on it.
-            var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(root).Compositor;
-            var property = compositor.GetType().GetProperty("IsSoftwareRenderer",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
-            if (property?.GetValue(compositor) is bool software)
-                return software
-                    ? WorkflowText("logiciel (CPU) — interface plus lente : vérifiez le pilote graphique ou la carte choisie dans Réglages", "software (CPU) — slower interface: check the graphics driver or the card selected in Settings")
-                    : WorkflowText("GPU (accélération matérielle)", "GPU (hardware acceleration)");
-        }
-        catch (Exception ex) { AppLog.Write(AppLogLevel.Debug, "diagnostics.rendering_backend", ex); }
+        if (SoftwareRendering() is { } software)
+            return software
+                ? WorkflowText("logiciel (CPU) — interface plus lente : vérifiez le pilote graphique ou la carte choisie dans Réglages", "software (CPU) — slower interface: check the graphics driver or the card selected in Settings")
+                : WorkflowText("GPU (accélération matérielle)", "GPU (hardware acceleration)");
         return WorkflowText("inconnu", "unknown");
 #endif
     }

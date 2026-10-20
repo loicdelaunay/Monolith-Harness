@@ -87,12 +87,22 @@ public sealed partial class MainWindow
         group.Host.Children.Remove(card); group.Details.Children.Add(card);
         group.Update(ui.CurrentText);
     }
+    static bool ContainsActionSuggestion(System.Text.Json.Nodes.JsonArray calls) => calls.Any(call =>
+        string.Equals(call?["function"]?["name"]?.ToString(), ActionSuggestions.Tool, StringComparison.Ordinal));
+
     static bool IntermediateMessage(List<Message> history, int index)
     {
-        try { if (System.Text.Json.Nodes.JsonNode.Parse(history[index].WireJson)?["tool_calls"] is System.Text.Json.Nodes.JsonArray { Count: > 0 }) return true; } catch { }
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(history[index].WireJson)?["tool_calls"] is System.Text.Json.Nodes.JsonArray { Count: > 0 } calls)
+                return !ContainsActionSuggestion(calls);
+        }
+        catch { }
         foreach (var next in history.Skip(index + 1))
         {
             if (next.Role == "user") break;
+            // A persisted proposal can also follow text from providers that omit tool metadata.
+            if (ActionSuggestions.Read(next) != null) return false;
             if (next.Role == "assistant") return true;
         }
         return false;

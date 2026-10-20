@@ -59,6 +59,10 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
     public int FontZoomPercent { get; set; } = 100;
     public string ChatMessageDensity { get; set; } = "normal";
     public string RenderingGpuPreference { get; set; } = "auto";
+    public string RenderingBackend { get; set; } = "auto";
+    public bool HardwareAcceleration { get; set; } = true;
+    public string RenderingRefreshMode { get; set; } = "auto";
+    public int RenderingFrameRate { get; set; } = 60;
     public bool ShowAttentionSection { get; set; } = true;
     public bool VirtualizeChat { get; set; } = true;
     public List<int> SidebarProjectOrder { get; set; } = [];
@@ -189,6 +193,9 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
             settings.GuiUpdateVersion = GitHubUpdates.NormalizeTargetVersion(settings.GuiUpdateVersion);
             settings.CommandGuardMode = settings.CommandGuardMode == "model" ? "model" : "lancet";
             settings.CommandGuardModel ??= "";
+            if (settings.RenderingBackend is not ("auto" or "opengl" or "vulkan")) settings.RenderingBackend = "auto";
+            if (settings.RenderingRefreshMode is not ("auto" or "screen" or "manual")) settings.RenderingRefreshMode = "auto";
+            if (settings.RenderingFrameRate is < 15 or > 500) settings.RenderingFrameRate = 60;
             QuickModelShortcuts.Normalize(settings);
             return settings;
         }
@@ -229,6 +236,8 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
             throw new ArgumentException("Densité, GPU ou moment du nommage invalide / Invalid density, GPU or naming timing.");
         if (AutoArchiveDays is < 1 or > 3650 || AutoDeleteDays is < 1 or > 3650 || AutoArchiveConversations && AutoDeleteConversations && AutoDeleteDays <= AutoArchiveDays)
             throw new ArgumentException("La suppression doit survenir après l’archivage, avec des délais de 1 à 3650 jours / Deletion must follow archiving, with delays from 1 to 3650 days.");
+        if (RenderingBackend is not ("auto" or "opengl" or "vulkan") || RenderingRefreshMode is not ("auto" or "screen" or "manual") || RenderingFrameRate is < 15 or > 500)
+            throw new ArgumentException("Réglages de rendu invalides : de 15 à 500 images/s / Invalid rendering settings: 15 to 500 frames/s.");
         QuickModelShortcuts.Validate(QuickModelLevels, QuickModelLevelsEnabled);
         if (QuickModelSelectionMode is not ("simple" or "advanced")) throw new ArgumentException("Invalid model selection mode.");
         ResponseStyle = ResponseStyles.Get(ResponseStyle).Id;
