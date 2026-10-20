@@ -113,4 +113,4 @@ Conserver la réponse destinée à l’utilisateur à côté des propositions d�
 - Compilation Uno Desktop Release réussie, sans avertissement ni erreur.
 - Aucun scénario automatisé ni essai interactif ajouté ou exécuté pour cette demande.
 - Publications locales GUI, CLI et Server réussies dans artifacts/GUI, artifacts/CLI et artifacts/SERVER. Les trois exécutables ont été vérifiés : version 2.2.1, publications réussies.
-- Contrôle des différences Git sans erreur d’espacement. Les changements de code et le rapport restent locaux.
+- Contrôle des différences Git sans erreur d’espacement. Le code et le rapport ont ensuite été poussés sur GitHub à la demande de l’utilisateur. Les quatre releases 2.2.1 sont publiques ; leurs 13 fichiers et les empreintes SHA-256 ont été vérifiés. Le build de release a réussi après reprise d’un téléversement interrompu par une erreur réseau 408.
