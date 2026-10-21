@@ -7,12 +7,18 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    readonly DispatcherTimer conversationRetentionTimer = new() { Interval = TimeSpan.FromHours(1) };
+    readonly CoalescedTimer conversationRetentionTimer = new() { Interval = TimeSpan.FromHours(1) };
     bool conversationRetentionBusy;
     void InitializeConversationRetention()
     {
-        conversationRetentionTimer.Tick += async (_, _) => await Guard(MaintainConversationsAsync);
+        conversationRetentionTimer.Tick += async (_, _) => { RecordUiWork("maintenance"); await Guard(MaintainConversationsAsync); };
         Closed += (_, _) => conversationRetentionTimer.Stop();
+    }
+    void ConfigureConversationMaintenance()
+    {
+        var config = FeatureSettings.Read(state.FeaturesJson);
+        if (config.AutoArchiveConversations || config.AutoDeleteConversations || config.AutoCleanArtifacts) conversationRetentionTimer.Start();
+        else conversationRetentionTimer.Stop();
     }
     (FrameworkElement Panel, Action<FeatureSettings> Save, Func<bool> Validate) BuildConversationRetentionSettings()
     {

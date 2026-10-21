@@ -118,11 +118,11 @@ public sealed partial class MainWindow : Window
         frame.Children.Add(shell);
         root.Children.Add(frame);
         BuildSidebar(); BuildWorkspace();
-        InitializeModelActivity(); InitializeConversationRetention();
+        InitializeModelActivity(); InitializeConversationRetention(); InitializeIdleOptimization();
         ObserveTextZoom(root);
         root.Loaded += async (_, _) => await Guard(InitializeAsync);
         root.SizeChanged += (_, _) => ResizeLayout();
-        Closed += (_, _) => { conversationLoad?.Cancel(); statusPulseTimer.Stop(); localModelsWindow?.Close(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var reviewWindow in proposalReviewWindows.Values.ToArray()) reviewWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
+        Closed += (_, _) => { idleClosed = true; conversationLoad?.Cancel(); statusPulseTimer.Stop(); localModelsWindow?.Close(); settingsWindow?.Close(); foreach (var agentWindow in agentSettingsWindows.Values.ToArray()) agentWindow.Close(); foreach (var reviewWindow in proposalReviewWindows.Values.ToArray()) reviewWindow.Close(); foreach (var run in conversationRuns.Values) run.Cancellation.Cancel(); foreach (var id in conversationBrowsers.Keys.Select(key => key.ChatId).Distinct().ToArray()) CloseConversationBrowser(id); terminals.Dispose(); StopOpenCodeProcesses(); http.Dispose(); };
     }
     void BuildSidebar()
     {
@@ -559,7 +559,7 @@ public sealed partial class MainWindow : Window
         await SelectProject();
         if (!FeatureSettings.Read(state.FeaturesJson).WelcomeCompleted) await ShowWelcomeAsync();
         StartScheduler();
-        conversationRetentionTimer.Start(); await MaintainConversationsAsync();
+        ConfigureConversationMaintenance(); await MaintainConversationsAsync();
         StartUpdateCheck();
         _ = ResumeSharesAsync();
         StartServerSync();
@@ -1878,7 +1878,7 @@ public sealed partial class MainWindow : Window
     {
         if (FeatureSettings.Read(state.FeaturesJson).BrowserMode != "embedded") throw new InvalidOperationException("Utilisez Chrome DevTools MCP ou activez WebView2 dans les réglages.");
         var owner = CurrentBrowser;
-        try { await (owner.Initialization ??= InitializeConversationBrowser(owner)).WaitAsync(TimeSpan.FromSeconds(30)); SyncBrowserPresentation(); }
+        try { await (owner.Initialization ??= InitializeConversationBrowser(owner)).WaitAsync(TimeSpan.FromSeconds(30)); await WakeBrowserAsync(owner).WaitAsync(TimeSpan.FromSeconds(30)); SyncBrowserPresentation(); }
         catch (Exception ex)
         {
             CloseBrowserTab(owner.Id, owner.TabId);
@@ -1953,7 +1953,7 @@ public sealed partial class MainWindow : Window
                 try { owner.Address = LocalPreview.ResolveResource(owner.PreviewFolder, displayed.AbsolutePath); } catch { }
             }
             if (chat?.Id == owner.Id && SelectedBrowserTab(owner.Id) == owner.TabId) address.Text = owner.Address;
-            SyncWebTabs(); RefreshBrowserNavigation();
+            SyncWebTabs(); RefreshBrowserNavigation(); RefreshBrowserPower();
         };
         owner.Ready = true;
         RefreshBrowserNavigation();
@@ -1970,6 +1970,7 @@ public sealed partial class MainWindow : Window
     async Task<string> NavigateCoreAsync(Uri uri, CancellationToken ct)
     {
         using var scope = BrowserScope();
+        await EnsureBrowser();
         var core = browser.CoreWebView2 ?? throw new IOException("Navigateur arrêté.");
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         void Done(CoreWebView2 _, CoreWebView2NavigationCompletedEventArgs e) { if (e.IsSuccess) completion.TrySetResult(true); else completion.TrySetException(new IOException("Navigation : " + e.WebErrorStatus)); }

@@ -19,12 +19,14 @@ public sealed partial class MainWindow
         ("\uE943", "Git", "Git"), ("\uE8B7", "Fichiers", "Files"),
         ("\uE790", "Assets", "Assets"), ("\uE8A5", "Aperçu", "Preview")
     ];
-    readonly Grid desktopTitleBar = new() { MinHeight = 32, ColumnSpacing = 6, Padding = new(0, 6, 0, 3) };
+    readonly Grid desktopTitleBar = new() { MinHeight = 32, ColumnSpacing = 6, Padding = new(0, 6, 0, 1) };
     readonly Grid titleDragRegion = new() { Background = new SolidColorBrush(Colors.Transparent), MinWidth = 40 };
     readonly StackPanel titleToolButtons = new() { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
     readonly List<Button> workspaceToolButtons = [];
     readonly ColumnDefinition titleLeftInset = new() { Width = new(0) }, titleRightInset = new() { Width = new(0) };
     Button titleToolsMenu = null!;
+    Button? hoveredTitleTool;
+    bool desktopTitleBarHovered;
     bool customDesktopTitleBar, layingOutTitleBar, desktopChromeClosed;
 
     FrameworkElement BuildDesktopTitleBar()
@@ -50,14 +52,23 @@ public sealed partial class MainWindow
         {
             var selected = index; var definition = WorkspaceToolsChrome[index];
             var button = ToolAction(definition.Glyph, WorkflowText(definition.French, definition.English), () => ToggleWorkspaceToolAsync(selected));
-            StyleChromeAction(button); workspaceToolButtons.Add(button); titleToolButtons.Children.Add(button);
+            StyleChromeAction(button); ObserveTitleToolHover(button); workspaceToolButtons.Add(button); titleToolButtons.Children.Add(button);
         }
         titleToolsMenu = ToolAction("\uE712", WorkflowText("Panneaux du chat", "Chat panels"), () => Task.CompletedTask);
-        StyleChromeAction(titleToolsMenu);
+        StyleChromeAction(titleToolsMenu); ObserveTitleToolHover(titleToolsMenu);
         titleToolsMenu.Click += (_, _) => BuildTitleToolsMenu().ShowAt(titleToolsMenu);
         titleToolButtons.Children.Add(titleToolsMenu);
         titleToolButtons.Margin = new(0, 0, 8, 0);
         Grid.SetColumn(titleToolButtons, 3); desktopTitleBar.Children.Add(titleToolButtons);
+        desktopTitleBar.PointerEntered += (_, _) => { desktopTitleBarHovered = true; RefreshDesktopTitleBarHover(); };
+        desktopTitleBar.PointerExited += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(desktopTitleBar).Position;
+            if (point.X >= 0 && point.X < desktopTitleBar.ActualWidth && point.Y >= 0 && point.Y < desktopTitleBar.ActualHeight) return;
+            desktopTitleBarHovered = false; hoveredTitleTool = null; RefreshDesktopTitleBarHover();
+        };
+        desktopTitleBar.PointerCanceled += (_, _) => { desktopTitleBarHovered = false; hoveredTitleTool = null; RefreshDesktopTitleBarHover(); };
+        desktopTitleBar.Unloaded += (_, _) => { desktopTitleBarHovered = false; hoveredTitleTool = null; RefreshDesktopTitleBarHover(); };
         desktopTitleBar.Loaded += (_, _) => { ConfigureDesktopTitleBar(); LayoutDesktopTitleBar(); };
         desktopTitleBar.SizeChanged += (_, _) => LayoutDesktopTitleBar();
         titleToolButtons.SizeChanged += (_, _) => LayoutDesktopTitleBar();
@@ -130,6 +141,7 @@ public sealed partial class MainWindow
 
     void ApplyDesktopTitleBarTheme()
     {
+        RefreshDesktopTitleBarHover();
         if (!customDesktopTitleBar) return;
 #if WINDOWS
         var bar = AppWindow.TitleBar;
@@ -216,15 +228,43 @@ public sealed partial class MainWindow
             var button = workspaceToolButtons[i]; var item = WorkspaceToolsChrome[i];
             var selected = browserVisible && toolTabs.SelectedIndex == i;
             var caption = WorkflowText(item.French, item.English);
-            button.Background = FluentDesign.Resource(selected ? "ControlSelectedBrush" : "TransparentBrush");
-            button.Foreground = selected ? FluentDesign.Resource("AccentTextFillColorPrimaryBrush") : FluentDesign.Secondary;
             AutomationProperties.SetName(button, caption);
             AutomationProperties.SetHelpText(button, selected ? WorkflowText("Panneau ouvert · cliquer pour masquer", "Panel open · click to hide") : WorkflowText("Ouvrir le panneau", "Open panel"));
             ToolTipService.SetToolTip(button, caption);
         }
         var options = WorkflowText("Panneaux du chat", "Chat panels");
         if (titleToolsMenu != null) { AutomationProperties.SetName(titleToolsMenu, options); ToolTipService.SetToolTip(titleToolsMenu, options); }
+        RefreshDesktopTitleBarHover();
         LayoutDesktopTitleBar();
+    }
+
+    void ObserveTitleToolHover(Button button)
+    {
+        button.PointerEntered += (_, _) => { hoveredTitleTool = button; desktopTitleBarHovered = true; RefreshDesktopTitleBarHover(); };
+        void Leave()
+        {
+            if (!ReferenceEquals(hoveredTitleTool, button)) return;
+            hoveredTitleTool = null; RefreshDesktopTitleBarHover();
+        }
+        button.PointerExited += (_, _) => Leave();
+        button.PointerCanceled += (_, _) => Leave();
+    }
+
+    void RefreshDesktopTitleBarHover()
+    {
+        desktopTitleBar.Background = FluentDesign.Resource(desktopTitleBarHovered ? "TitleBarHoverBrush" : "SolidBackgroundFillColorBaseBrush");
+        void Paint(Button button, bool selected)
+        {
+            var hovered = ReferenceEquals(hoveredTitleTool, button);
+            var hoverBrush = FluentDesign.Resource(selected ? "ControlSelectedHoverBrush" : "ControlHoverBrush");
+            button.Background = hovered ? hoverBrush : FluentDesign.Resource(selected ? "ControlSelectedBrush" : "TransparentBrush");
+            button.Foreground = selected ? FluentDesign.Resource("AccentTextFillColorPrimaryBrush") : hovered ? FluentDesign.Primary : FluentDesign.Secondary;
+            button.Resources["ButtonBackgroundPointerOver"] = hoverBrush;
+            button.Resources["ButtonForegroundPointerOver"] = selected ? FluentDesign.Resource("AccentTextFillColorPrimaryBrush") : FluentDesign.Primary;
+            button.Resources["ButtonBackgroundPressed"] = FluentDesign.Resource("ControlPressedBrush");
+        }
+        for (var i = 0; i < workspaceToolButtons.Count; i++) Paint(workspaceToolButtons[i], browserVisible && toolTabs.SelectedIndex == i);
+        if (titleToolsMenu != null) Paint(titleToolsMenu, false);
     }
 
     MenuFlyout BuildTitleToolsMenu()

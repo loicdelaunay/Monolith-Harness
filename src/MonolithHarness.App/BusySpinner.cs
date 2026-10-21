@@ -10,6 +10,20 @@ namespace MonolithHarness.App;
 // A small native spinner that does not depend on the optional Lottie renderer.
 sealed class BusySpinner : Grid
 {
+    sealed class RootActivity { public bool Active = true; }
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<XamlRoot, RootActivity> roots = new();
+    static readonly List<WeakReference<BusySpinner>> instances = [];
+    bool tracked;
+    public static void SetRootActive(XamlRoot? root, bool active)
+    {
+        if (root == null) return;
+        var state = roots.GetValue(root, _ => new());
+        if (state.Active == active) return;
+        state.Active = active;
+        for (var i = instances.Count - 1; i >= 0; i--)
+            if (!instances[i].TryGetTarget(out var spinner)) instances.RemoveAt(i);
+            else if (spinner.XamlRoot == root) spinner.Refresh();
+    }
     readonly Storyboard animation = new();
     bool running;
     readonly RotateTransform rotation = new() { CenterX = 8, CenterY = 8 };
@@ -30,13 +44,14 @@ sealed class BusySpinner : Grid
             StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, RenderTransform = rotation });
         var turn = new DoubleAnimation { From = 0, To = 360, Duration = new Duration(TimeSpan.FromSeconds(1)), RepeatBehavior = RepeatBehavior.Forever, EnableDependentAnimation = true };
         Storyboard.SetTarget(turn, rotation); Storyboard.SetTargetProperty(turn, "Angle"); animation.Children.Add(turn);
-        Loaded += (_, _) => Refresh();
+        Loaded += (_, _) => { if (!tracked) { tracked = true; instances.Add(new(this)); } Refresh(); };
+        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => Refresh());
         Unloaded += (_, _) => { animation.Stop(); running = false; };
     }
 
     void Refresh()
     {
-        if (active && IsLoaded) { if (!running) { animation.Begin(); running = true; } }
+        if (active && IsLoaded && Visibility == Visibility.Visible && (XamlRoot == null || roots.GetValue(XamlRoot, _ => new()).Active)) { if (!running) { animation.Begin(); running = true; } }
         else if (running) { animation.Stop(); running = false; }
     }
 }

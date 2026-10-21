@@ -27,7 +27,7 @@ public sealed partial class MainWindow
 
     // The scene pauses while a reply streams or the chat scrolls: both already repaint the
     // window, and an animated background would add a full frame on every display refresh.
-    void RefreshChatBackgroundMotion() => animatedChatBackground.SetSuspended(mainArea is null ||
+    void RefreshChatBackgroundMotion() => animatedChatBackground.SetSuspended(!VisualUpdatesAllowed || mainArea is null ||
         mainArea.Visibility != Microsoft.UI.Xaml.Visibility.Visible ||
         AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } ||
         ActiveRun != null || chatBackgroundScrolling);
@@ -44,6 +44,6 @@ public sealed partial class MainWindow
             chatBackgroundScrollIdle.Stop(); chatBackgroundScrollIdle.Start();
         };
         Closed += (_, _) => { chatBackgroundScrollIdle.Stop(); animatedChatBackground.Shutdown(); };
-        ConfigureChatBackground(FeatureSettings.Read(state.FeaturesJson));
+        ConfigureChatBackground(FeatureSettings.Read(state.FeaturesJson)); RefreshChatBackgroundMotion();
     }
 }

@@ -19,10 +19,10 @@ public sealed partial class MainWindow
                 WorkflowText("Mode d’autorisation", "Permission mode") + " : " + PermissionModes.Normalize(state.PermissionMode) + "\n" +
                 WorkflowText("Thème", "Theme") + " : " + ReadOnlyFeatures.Theme + "\n" +
                 WorkflowText("Rendu de l’interface", "Interface rendering") + " : " + RenderingBackend() + "\n" +
-                RenderingStartupDescription() +
+                RenderingStartupDescription() + IdleDiagnostics() +
                 WorkflowText("Base de données", "Database") + " : " + db.FilePath;
         }
-        var window = new DiagnosticsWindow(db.FilePath, root.RequestedTheme, LiveState) { Title = DisplayApplicationName + " · " + WorkflowText("Débug · Diagnostics", "Debug · Diagnostics") };
+        var window = new DiagnosticsWindow(db.FilePath, root.RequestedTheme, LiveState, MeasureIdleAsync) { Title = DisplayApplicationName + " · " + WorkflowText("Débug · Diagnostics", "Debug · Diagnostics") };
         diagnosticsWindow = window; window.Closed += (_, _) => diagnosticsWindow = null;
         ApplyBrandingIcon(window); ObserveTextZoom(window.Panel); window.Activate(); return Task.CompletedTask;
     }

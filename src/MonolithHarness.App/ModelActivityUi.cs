@@ -13,7 +13,7 @@ public sealed partial class MainWindow
     int? goalChatSnapshot;
     void InitializeModelActivity()
     {
-        modelActivityTimer.Tick += (_, _) => RefreshModelActivity(); modelActivityTimer.Start();
+        modelActivityTimer.Tick += (_, _) => { RecordUiWork("activity"); RefreshModelActivity(); };
         Closed += (_, _) => modelActivityTimer.Stop();
     }
     void ContextRequestProgressed(ConversationRun run, ContextRequestProgress progress)
@@ -38,22 +38,32 @@ public sealed partial class MainWindow
         // The one-second activity timer also refreshes it between paints.
         if (refresh || retrying) RefreshModelActivity();
     }
+    void UpdateModelActivityTimer()
+    {
+        var needed = VisualUpdatesAllowed && selectedSubagent == null &&
+            (ActiveRun is { WaitingForModel: true } or { CurrentTool: not null } ||
+             chat != null && commandVerifications.Values.Any(item => item.ChatId == chat.Id));
+        if (needed) { if (!modelActivityTimer.IsEnabled) modelActivityTimer.Start(); }
+        else modelActivityTimer.Stop();
+    }
     void RefreshModelActivity()
     {
+        UpdateModelActivityTimer();
+        if (!VisualUpdatesAllowed) return;
         RefreshCommandVerification();
-        foreach (var conversation in conversationRuns.Values)
+        foreach (var conversation in conversationRuns.Values.Where(IsVisible))
             if (conversation.CurrentTool is { } running)
                 running.Message.UpdateProgress(running.Timer.Elapsed.TotalSeconds, running.Phase);
         var run = selectedSubagent == null ? ActiveRun : null;
         if (run?.CurrentTool is { } tool && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
-            status.Text = ToolActivityText(tool);
+            SetTextIfChanged(status, ToolActivityText(tool));
         string? details = null;
         if (run?.WaitingForModel == true && run.StatusMode == StatusKind.Activity && !IsTransientOverlayVisible)
         {
             if (run.ContextRequest is { } preload)
             {
                 var elapsed = run.ContextRequestTimer.Elapsed.TotalSeconds;
-                status.Text = preload.Caption(state.Language, elapsed);
+                SetTextIfChanged(status, preload.Caption(state.Language, elapsed));
                 details = preload.Details(state.Language, run.Provider.ContextLimit, elapsed);
             }
             else
@@ -61,12 +71,12 @@ public sealed partial class MainWindow
                 var idle = ModelActivity.IdleSeconds(run.LastModelProgress, DateTimeOffset.UtcNow);
                 var responding = run.ProgressText.Length > 0;
                 var activity = responding ? WorkflowText("Réponse en cours", "Response in progress") : WorkflowText("🧠 Le modèle réfléchit", "🧠 Model thinking");
-                status.Text = responding
+                SetTextIfChanged(status, responding
                     ? activity + (idle > 30 ? " · " + WorkflowText($"Pas de réponse depuis {idle} secondes", $"No response for {idle} seconds") : "…")
-                    : activity;
+                    : activity);
             }
         }
-        ToolTipService.SetToolTip(statusChipView ?? (FrameworkElement)status, details);
+        SetTooltipIfChanged(statusChipView ?? (FrameworkElement)status, details);
         if (goalSettingsSnapshot != state.FeaturesJson || goalChatSnapshot != chat?.Id)
         {
             goalSettingsSnapshot = state.FeaturesJson; goalChatSnapshot = chat?.Id;
@@ -74,8 +84,8 @@ public sealed partial class MainWindow
             visibleGoal = chat != null ? config.ChatGoals.GetValueOrDefault(chat.Id, "") : "";
         }
         var goal = visibleGoal;
-        goalLabel.Text = WorkflowText("Objectif : ", "Goal: ") + goal;
-        goalLabel.Visibility = goal.Length > 0 && selectedSubagent == null ? Visibility.Visible : Visibility.Collapsed;
-        ToolTipService.SetToolTip(goalLabel, goal);
+        SetTextIfChanged(goalLabel, WorkflowText("Objectif : ", "Goal: ") + goal);
+        SetVisualValue(goalLabel, UIElement.VisibilityProperty, goal.Length > 0 && selectedSubagent == null ? Visibility.Visible : Visibility.Collapsed);
+        SetTooltipIfChanged(goalLabel, goal);
     }
 }

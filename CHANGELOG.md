@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.3.0 — 2026-10-21
+
+### Consommation au repos et diagnostics
+
+- Arrêt des actualisations de débit sans génération et des indicateurs d’activité sans travail visible. Mise à jour des textes, infobulles et propriétés des indicateurs seulement quand leur valeur change.
+- Les terminaux signalent leurs changements : les mises à jour visibles sont regroupées, sans sondage continu ni reconstruction des sorties inchangées.
+- Planification à la prochaine échéance, réveil lors des modifications de tâches et arrêt sans échéance active. Les vérifications de maintenance partagent un même minuteur ; l’entretien désactivé ne le réveille pas.
+- Pause des animations, des indicateurs et des actualisations des terminaux lorsque la fenêtre principale est inactive ou minimisée. Suspension native des pages masquées quand le moteur Windows la prend en charge, avec reprise à l’affichage ; les pages utilisées par un agent ou en navigation restent actives.
+- Débug : compteurs des actualisations, dispositions et images dessinées observées passivement sur Uno, et mesure CPU/repos de 30 secondes sans sondage du diagnostic pendant le relevé. Les mesures indisponibles et les limites de périmètre sont indiquées.
+- Barre du haut : marge inférieure réduite de 2 pixels et effet de survol adapté au thème sur la barre et les boutons des panneaux du chat.
+
 ## 2.2.1 — 2026-10-20
 
 ### Réglages avancés et propositions d’actions

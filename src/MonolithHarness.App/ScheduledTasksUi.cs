@@ -7,19 +7,17 @@ namespace MonolithHarness.App;
 public sealed partial class MainWindow
 {
     TaskSchedulerService? scheduler;
-    readonly DispatcherTimer scheduleTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    readonly DispatcherTimer scheduleTimer = new();
     Window? tasksWindow;
     void StartScheduler()
     {
         if (scheduler != null) return;
         scheduler = new(HarnessDb.DatabasePath, ExecuteScheduledTask);
-        scheduleTimer.Tick += async (_, _) =>
-        {
-            try { await scheduler.TickAsync(DateTime.UtcNow); }
-            catch (Exception ex) { ShowStatus("Planification : " + ex.Message, StatusKind.Error); }
-        };
-        scheduleTimer.Start();
-        Closed += (_, _) => { scheduleTimer.Stop(); scheduler.Dispose(); tasksWindow?.Close(); };
+        scheduleTimer.Tick += async (_, _) => await WakeSchedulerAsync();
+        scheduler.Completed += QueueSchedulerWake;
+        WatchScheduleChanges(); QueueSchedulerWake();
+        Activated += (_, _) => { if (scheduler.NextWakeUtc <= DateTime.UtcNow) QueueSchedulerWake(); };
+        Closed += (_, _) => { scheduleTimer.Stop(); scheduleWatcher?.Dispose(); scheduler.Completed -= QueueSchedulerWake; scheduler.Dispose(); tasksWindow?.Close(); };
     }
     async Task<string> ExecuteScheduledTask(ScheduledTask task, CancellationToken ct)
     {
@@ -159,13 +157,13 @@ public sealed partial class MainWindow
             {
                 var edit = new Button { Content = "Modifier / Edit" }; edit.Click += (_, _) => Edit(item);
                 var toggle = new ToggleSwitch { IsOn = item.Enabled, OnContent = "Active", OffContent = "Pause" };
-                toggle.Toggled += async (_, _) => { using var update = new HarnessDb(); var active = toggle.IsOn; var due = item.Next(DateTime.UtcNow); await update.ScheduledTasks.Where(x=>x.Id==item.Id).ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Enabled,active).SetProperty(x=>x.NextRunUtc,due)); };
+                toggle.Toggled += async (_, _) => { using var update = new HarnessDb(); var active = toggle.IsOn; var due = item.Next(DateTime.UtcNow); await update.ScheduledTasks.Where(x=>x.Id==item.Id).ExecuteUpdateAsync(s=>s.SetProperty(x=>x.Enabled,active).SetProperty(x=>x.NextRunUtc,due)); NotifyScheduleChanged(); };
                 var delete = new Button { Content = "Supprimer / Delete" };
                 delete.Click += async (_, _) =>
                 {
                     var confirm = new ContentDialog { XamlRoot = scroller.XamlRoot, Title = "Supprimer la tâche ? / Delete task?", Content = item.Name, PrimaryButtonText = "Supprimer / Delete", CloseButtonText = "Annuler / Cancel" };
                     if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
-                    using var update = new HarnessDb(); await update.ScheduledTasks.Where(x=>x.Id==item.Id).ExecuteDeleteAsync(); await Reload();
+                    using var update = new HarnessDb(); await update.ScheduledTasks.Where(x=>x.Id==item.Id).ExecuteDeleteAsync(); NotifyScheduleChanged(); await Reload();
                 };
                 var detail = new StackPanel { Spacing = 8 }; detail.Children.Add(Label(item.Cron + " · " + item.TimeZoneId,12));
                 detail.Children.Add(Label((item.NextRunUtc?.ToLocalTime().ToString("g") ?? "—") + " · " + item.LastResult,12)); detail.Children.Add(Row(edit,delete));
@@ -214,7 +212,7 @@ public sealed partial class MainWindow
                     store.Entry(existing).CurrentValues.SetValues(draft);
                     existing.LastChatId=lastChat; existing.LastRunUtc=lastRun; existing.LastResult=lastResult;
                 }
-                await store.SaveChangesAsync(); form.Visibility=Visibility.Collapsed; list.Visibility=add.Visibility=Visibility.Visible; await Reload();
+                await store.SaveChangesAsync(); NotifyScheduleChanged(); form.Visibility=Visibility.Collapsed; list.Visibility=add.Visibility=Visibility.Visible; await Reload();
             }
             catch(Exception ex) { error.Text=ex.Message; }
         };

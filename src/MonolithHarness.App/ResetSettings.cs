@@ -62,7 +62,7 @@ public sealed partial class MainWindow
                 }
             }
             catch (Exception ex) { information.Text = ex.Message; AppLog.Write(AppLogLevel.Error, "database.maintenance_failed", ex); }
-            finally { databaseMaintenanceBusy = false; optimize.IsEnabled = reset.IsEnabled = true; shell.IsEnabled = true; scheduleTimer.Start(); }
+            finally { databaseMaintenanceBusy = false; optimize.IsEnabled = reset.IsEnabled = true; shell.IsEnabled = true; NotifyScheduleChanged(); }
         }
         optimize.Click += async (_, _) => await Perform(false);
         reset.Click += async (_, _) => await Perform(true);

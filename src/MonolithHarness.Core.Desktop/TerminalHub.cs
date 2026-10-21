@@ -31,6 +31,13 @@ public sealed class TerminalHub : IDisposable
     readonly object sync = new();
     readonly Dictionary<string, Terminal> terminals = [];
     bool disposed;
+    public event Action<int>? Changed;
+    void NotifyChanged(int chatId)
+    {
+        if (Changed is not { } handlers) return;
+        foreach (Action<int> handler in handlers.GetInvocationList())
+            try { handler(chatId); } catch (Exception ex) { System.Diagnostics.Trace.TraceError("Terminal observer: " + ex.Message); }
+    }
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     static string Serialize(object value) => JsonSerializer.Serialize(value, Json);
     Terminal Find(int chatId, bool? sandbox, string id)
@@ -55,7 +62,7 @@ public sealed class TerminalHub : IDisposable
             if (terminals.Count >= 64 || terminals.Values.Count(t => t.ChatId == chatId) >= 12) throw new InvalidOperationException("Limite : 12 terminaux par conversation, 64 au total.");
             if (name.Length > 80) throw new ArgumentException("Nom trop long (80 caractères).");
             var t = new Terminal(chatId, sandbox, string.IsNullOrWhiteSpace(name) ? "Terminal " + (List(chatId).Count + 1) : name.Trim(), Path.GetFullPath(directory));
-            terminals.Add(t.Id, t); return Snapshot(t);
+            terminals.Add(t.Id, t); NotifyChanged(chatId); return Snapshot(t);
         }
     }
     public View Read(int chatId, bool? sandbox, string id, string? jobId = null)
@@ -82,7 +89,12 @@ public sealed class TerminalHub : IDisposable
             if (t.Jobs.Count > 10) t.Jobs.RemoveAt(0);
             // Execute outside the UI thread and independently of the tool dispatcher.
             _ = Task.Run(async () => {
-                void Append(string value) { lock (sync) { var room = 100000 - job.Output.Length; if (room > 0) job.Output.Append(value.AsSpan(0, Math.Min(room, value.Length))); } }
+                void Append(string value)
+                {
+                    bool changed;
+                    lock (sync) { var count = Math.Min(100000 - job.Output.Length, value.Length); changed = count > 0; if (changed) job.Output.Append(value.AsSpan(0, count)); }
+                    if (changed) NotifyChanged(chatId);
+                }
                 try
                 {
                     using var deadline = CancellationTokenSource.CreateLinkedTokenSource(job.Cancel.Token);
@@ -93,9 +105,9 @@ public sealed class TerminalHub : IDisposable
                 }
                 catch (OperationCanceledException) { lock (sync) { job.Status = job.Cancel.IsCancellationRequested ? "cancelled" : "timed_out"; } Append("\n[Arrêt ou délai atteint / Stopped or timed out]"); }
                 catch (Exception ex) { lock (sync) job.Status = "failed"; Append("\n" + ex.Message); }
-                finally { lock (sync) { job.Cancel.Dispose(); job.Done.TrySetResult(); } }
+                finally { lock (sync) { job.Cancel.Dispose(); job.Done.TrySetResult(); } NotifyChanged(chatId); }
             });
-            return Snapshot(t, job);
+            NotifyChanged(chatId); return Snapshot(t, job);
         }
     }
     public async Task<View> WaitAsync(int chatId, bool? sandbox, string id, string? jobId, int timeoutMs, CancellationToken ct)
@@ -125,6 +137,7 @@ public sealed class TerminalHub : IDisposable
         }
         if (done != null) await done;
         lock (sync) terminals.Remove(t.Id);
+        NotifyChanged(chatId);
     }
     public async Task StopChatAsync(int chatId, bool? sandbox = null)
     {
@@ -138,6 +151,7 @@ public sealed class TerminalHub : IDisposable
     {
         await StopChatAsync(chatId);
         lock (sync) foreach (var id in terminals.Values.Where(t => t.ChatId == chatId).Select(t => t.Id).ToList()) terminals.Remove(id);
+        NotifyChanged(chatId);
     }
     public void Dispose()
     { lock (sync) { disposed = true; foreach (var t in terminals.Values) if (t.Jobs.LastOrDefault() is { Status: "running" } j) j.Cancel.Cancel(); } }

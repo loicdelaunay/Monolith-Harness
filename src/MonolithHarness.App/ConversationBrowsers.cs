@@ -21,6 +21,9 @@ public sealed partial class MainWindow
         public bool Ready;
         public bool IsNavigating;
         public bool Closed;
+        public bool Suspended, DesiredSuspended, SuspensionUnavailable, Shown;
+        public Task? PowerOperation;
+        public CancellationTokenSource PowerLifetime { get; } = new();
         public string? PreviewFolder, PreviewHost;
         public double? PointerX, PointerY;
         public string Address = "about:blank";
@@ -133,7 +136,9 @@ public sealed partial class MainWindow
             (item.Frame.Parent as Panel)?.Children.Remove(item.Frame);
             destination.Children.Add(item.Frame);
         }
-        address.Text = conversationBrowsers.TryGetValue((shownId, selected), out var current) ? current.Address : "about:blank";
+        var nextAddress = conversationBrowsers.TryGetValue((shownId, selected), out var current) ? current.Address : "about:blank";
+        if (address.Text != nextAddress) address.Text = nextAddress;
+        RefreshTerminalPresentation(); RefreshBrowserPower();
         RefreshBrowserViewportSelector(current?.ViewportMode ?? "desktop");
         if (current?.Ready == true) browserHost.Children.Remove(browserNotice);
         else if (browserVisible && toolTabs.SelectedIndex == 0) ShowBrowserNotice();
@@ -141,7 +146,7 @@ public sealed partial class MainWindow
     }
     void DisposeBrowser(ConversationBrowser item)
     {
-        item.Closed = true; item.Ready = false;
+        item.Closed = true; item.Ready = false; item.PowerLifetime.Cancel();
         try { (item.Frame.Parent as Panel)?.Children.Remove(item.Frame);
 #if WINDOWS
             item.View.Close();

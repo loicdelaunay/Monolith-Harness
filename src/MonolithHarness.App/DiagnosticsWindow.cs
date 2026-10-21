@@ -19,6 +19,8 @@ public sealed class DiagnosticsWindow : Window
     readonly ListView logRows = new() { SelectionMode = ListViewSelectionMode.Single };
     readonly StackPanel errors = new() { Spacing = 10 };
     readonly Func<string> uiState;
+    readonly TextBlock idleMeasurement = Text("");
+    bool measuring, active = true;
     readonly string database;
     string[] persisted = [];
     string lastLogs = "", lastErrors = "";
@@ -31,7 +33,7 @@ public sealed class DiagnosticsWindow : Window
     { Text = value, FontSize = size, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Foreground = FluentDesign.Primary };
     static StackPanel Stack(params UIElement[] children)
     { var stack = new StackPanel { Spacing = 8 }; foreach (var child in children) stack.Children.Add(child); return stack; }
-    public DiagnosticsWindow(string database, ElementTheme theme, Func<string> uiState)
+    public DiagnosticsWindow(string database, ElementTheme theme, Func<string> uiState, Func<CancellationToken, Task<string>> measureIdle)
     {
         this.database = database; this.uiState = uiState;
         Title = "Monolith · " + L("Débug · Diagnostics", "Debug · Diagnostics");
@@ -57,6 +59,7 @@ public sealed class DiagnosticsWindow : Window
             for (int i = 0; i < cards.Length; i++) { Grid.SetColumn(cards[i], i % count); Grid.SetRow(cards[i], i / count); }
         };
         statePanel.Children.Add(stats); statePanel.Children.Add(FluentDesign.Surface(stateText, 16));
+        statePanel.Children.Add(idleMeasurement);
         statePanel.Children.Add(Text(L("CPU exprimé en pourcentage de la capacité totale des processeurs logiques. Les mesures concernent Monolith ; les processus externes (modèles locaux, serveurs, terminaux) ne sont pas inclus.",
             "CPU is a percentage of total logical processor capacity. Measurements cover Monolith; external processes (local models, servers, terminals) are not included."), 12));
         tabs.TabItems.Add(new TabViewItem { Header = L("État", "State"), IsClosable = false, Content = Scroll(statePanel) });
@@ -73,9 +76,25 @@ public sealed class DiagnosticsWindow : Window
         Grid.SetRow(tabs, 2); Panel.Children.Add(tabs);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(Action(L("Copier le diagnostic", "Copy diagnostics"), () =>
-        { var data = new DataPackage(); data.SetText(stateText.Text + "\n\n" + logDetail.Text); Clipboard.SetContent(data); }));
+        { var data = new DataPackage(); data.SetText(stateText.Text + "\n\n" + idleMeasurement.Text + "\n\n" + logDetail.Text); Clipboard.SetContent(data); }));
         actions.Children.Add(Action(L("Dossier des logs", "Logs folder"), () =>
         { try { if (Directory.Exists(AppLog.DirectoryPath)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = AppLog.DirectoryPath, UseShellExecute = true }); } catch (Exception ex) { notice.Text = ToolAuthorization.Clean(ex.Message); } }));
+        var measure = new Button { Content = L("Mesurer le repos (30 s)", "Measure idle (30 s)") };
+        measure.Click += async (_, _) =>
+        {
+            if (measuring) return;
+            measuring = true; measure.IsEnabled = false; timer.Stop(); filterDelay.Stop();
+            idleMeasurement.Text = L("Mesure en cours : laissez l’application au repos pendant 30 secondes. Les relevés du débug sont suspendus.", "Measuring: leave the app idle for 30 seconds. Debug sampling is paused.");
+            try
+            {
+                while (refreshing && !closed) await Task.Delay(50, lifetime.Token);
+                idleMeasurement.Text = await measureIdle(lifetime.Token);
+            }
+            catch (OperationCanceledException) when (closed) { }
+            catch (Exception ex) { idleMeasurement.Text = ToolAuthorization.Clean(ex.Message); }
+            finally { measuring = false; measure.IsEnabled = true; if (!closed && active) timer.Start(); }
+        };
+        actions.Children.Add(measure);
         actions.Children.Add(Action(L("Actualiser", "Refresh"), async () => await RefreshAsync(true), true));
         actions.Children.Add(Action(L("Fermer", "Close"), Close));
         Grid.SetRow(actions, 3); Panel.Children.Add(actions);
@@ -85,8 +104,14 @@ public sealed class DiagnosticsWindow : Window
         severity.SelectionChanged += (_, _) => RenderLogs();
         source.SelectionChanged += async (_, _) => { RenderLogs(); await RefreshAsync(true); };
         logRows.SelectionChanged += (_, _) => { if (logRows.SelectedItem is LogRow entry) logDetail.Text = Pretty(entry.Json); };
-        timer.Tick += async (_, _) => await RefreshAsync(++ticks % 5 == 0);
-        Panel.Loaded += async (_, _) => { await RefreshAsync(true); if (!closed) timer.Start(); };
+        timer.Tick += async (_, _) => { if (active && !measuring) await RefreshAsync(++ticks % 5 == 0); };
+        Panel.Loaded += async (_, _) => { await RefreshAsync(true); if (!closed && active && !measuring) timer.Start(); };
+        Activated += async (_, args) =>
+        {
+            active = args.WindowActivationState != Windows.UI.Core.CoreWindowActivationState.Deactivated;
+            if (!active) { timer.Stop(); filterDelay.Stop(); }
+            else if (!closed && !measuring) { await RefreshAsync(); if (!closed && active && !measuring) timer.Start(); }
+        };
         Closed += (_, _) => { closed = true; timer.Stop(); filterDelay.Stop(); lifetime.Cancel(); if (!refreshing) sampler.Dispose(); };
     }
     static Border Card(string label, TextBlock value) => FluentDesign.Surface(Stack(Text(label, 12), value), 12);
@@ -101,7 +126,7 @@ public sealed class DiagnosticsWindow : Window
     { try { using var doc = JsonDocument.Parse(json); return ToolAuthorization.Clean(JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true }), 16000); } catch (JsonException) { return ToolAuthorization.Clean(json, 16000); } }
     public async Task RefreshAsync(bool readHistory = false)
     {
-        if (refreshing || closed) return; refreshing = true;
+        if (refreshing || closed || measuring) return; refreshing = true;
         try
         {
             var ui = uiState();

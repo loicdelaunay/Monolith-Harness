@@ -46,10 +46,10 @@ public sealed partial class MainWindow
         if (!continuing) visibleStatusStarted = now;
         visibleStatusExpiresAt = expiresAt ?? StatusExpiry(text, kind);
         visibleStatusChatId = chatId;
-        status.Text = text;
+        SetTextIfChanged(status, text);
         if (statusChipView != null) statusChipView.Opacity = 1;
         if (!continuing) StartStatusGlow(kind);
-        if (kind == StatusKind.Notice) statusPulseTimer.Start(); else statusPulseTimer.Stop();
+        if (kind == StatusKind.Notice && VisualUpdatesAllowed) statusPulseTimer.Start(); else statusPulseTimer.Stop();
     }
 
     void ClearStatus()
@@ -79,6 +79,7 @@ public sealed partial class MainWindow
         if (kind == StatusKind.Activity && statusActivityAnimating) return;
         statusGlowAnimation?.Stop(); statusActivityGlow.Stop(); statusActivityAnimating = kind == StatusKind.Activity;
         statusGlowLayer.Opacity = kind == StatusKind.Activity ? .18 : 0;
+        if (!VisualUpdatesAllowed) return;
         if (kind == StatusKind.Activity)
         {
             // An activity can last minutes: pulse at about 12 steps per second instead of a
@@ -98,9 +99,18 @@ public sealed partial class MainWindow
         statusGlowAnimation = new(); statusGlowAnimation.Children.Add(pulse); statusGlowAnimation.Begin();
     }
 
+    void RefreshStatusMotion()
+    {
+        if (!VisualUpdatesAllowed)
+        { statusPulseTimer.Stop(); statusActivityGlow.Stop(); statusGlowAnimation?.Stop(); return; }
+        AnimateStatus();
+        if (visibleStatusKind == StatusKind.Notice && visibleStatusExpiresAt > DateTimeOffset.UtcNow) statusPulseTimer.Start();
+        if (statusActivityAnimating && !string.IsNullOrWhiteSpace(status.Text) && !statusActivityGlow.IsEnabled)
+        { statusActivityGlowStarted = DateTimeOffset.UtcNow; statusActivityGlow.Start(); }
+    }
     void PulseActivityGlow()
     {
-        if (statusGlowLayer == null || !statusActivityAnimating) { statusActivityGlow.Stop(); return; }
+        if (!VisualUpdatesAllowed || statusGlowLayer == null || !statusActivityAnimating) { statusActivityGlow.Stop(); return; }
         const double cycle = 2.4, low = .18, high = .72;
         var phase = (DateTimeOffset.UtcNow - statusActivityGlowStarted).TotalSeconds / cycle;
         statusGlowLayer.Opacity = low + (high - low) * (.5 - .5 * Math.Cos(2 * Math.PI * phase));
@@ -121,7 +131,7 @@ public sealed partial class MainWindow
                 RestoreConversationStatus();
                 return;
             }
-            if (statusChipView != null) statusChipView.Opacity = Math.Clamp(remaining / .35, 0, 1);
+            if (statusChipView != null) SetVisualValue(statusChipView, UIElement.OpacityProperty, Math.Clamp(remaining / .35, 0, 1));
         }
 
     }

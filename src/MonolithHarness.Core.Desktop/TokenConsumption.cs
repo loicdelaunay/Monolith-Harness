@@ -59,7 +59,7 @@ public static partial class TokenConsumption
         var timer = Stopwatch.StartNew();
         var liveId = Guid.NewGuid();
         var liveSpeed = scope.ChatId is { } chatId ? new LiveSpeed(scope.Database, chatId) : null;
-        if (liveSpeed != null) liveSpeeds[liveId] = liveSpeed;
+        if (liveSpeed != null) { liveSpeeds[liveId] = liveSpeed; NotifyLiveActivity(scope.Database); }
         GenerationUpdate? latest = null; Completion? result = null;
         void Update(GenerationUpdate update) { if (update.Retry == null) latest = update; liveSpeed?.Observe(update); progress(update); }
         try { result = await request(Update); return result; }
@@ -67,7 +67,7 @@ public static partial class TokenConsumption
         catch { entry.Status = "error"; throw; }
         finally
         {
-            liveSpeeds.TryRemove(liveId, out _);
+            if (liveSpeeds.TryRemove(liveId, out _)) NotifyLiveActivity(scope.Database);
             entry.CompletedUtc = DateTime.UtcNow; entry.Seconds = timer.Elapsed.TotalSeconds;
             // Failed requests with no returned text or counters have no known consumption.
             if (result != null || latest is { InputTokens: not null } or { OutputTokens: not null } ||

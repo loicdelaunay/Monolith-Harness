@@ -28,7 +28,7 @@ public sealed partial class MainWindow
         ApplyTheme(config.Theme);
         ConfigureChatBackground(config);
         ApplyBranding();
-        ConfigureGlobalTokenSpeed(config.ShowGlobalTokenSpeed);
+        ConfigureGlobalTokenSpeed(config.ShowGlobalTokenSpeed); ConfigureConversationMaintenance();
         RefreshComposerModelSummary();
         QueueMessageVirtualization(); RefreshChatTextHighlights();
     }

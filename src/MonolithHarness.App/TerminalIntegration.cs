@@ -11,8 +11,24 @@ public sealed partial class MainWindow
     sealed record TerminalUi(int ChatId, TabViewItem Tab, TextBlock Info, TextBox Command, TextBox Output, Button Run, Button Stop)
     { public ContentTailFollower? Follower { get; set; } }
     readonly Dictionary<string, TerminalUi> terminalViews = [];
-    readonly DispatcherTimer terminalRefresh = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    readonly DispatcherTimer terminalRefresh = new() { Interval = TimeSpan.FromMilliseconds(100) };
     int? terminalVisibleChat;
+    int terminalChangeQueued, terminalDirty = 1, terminalPresentationChat;
+    volatile bool terminalPresentationActive;
+    bool TerminalVisualsAvailable => VisualUpdatesAllowed && browserVisible && toolTabs.SelectedIndex == 1 && terminalTabs.IsLoaded;
+    void TerminalChanged(int changedChat)
+    {
+        Interlocked.Exchange(ref terminalDirty, 1);
+        if (idleClosed || !terminalPresentationActive || changedChat != Volatile.Read(ref terminalPresentationChat) || Interlocked.Exchange(ref terminalChangeQueued, 1) != 0) return;
+        if (!DispatcherQueue.TryEnqueue(() => { if (TerminalVisualsAvailable) { if (!terminalRefresh.IsEnabled) terminalRefresh.Start(); } else Interlocked.Exchange(ref terminalChangeQueued, 0); }))
+            Interlocked.Exchange(ref terminalChangeQueued, 0);
+    }
+    void RefreshTerminalPresentation()
+    {
+        terminalPresentationActive = TerminalVisualsAvailable; terminalPresentationChat = chat?.Id ?? 0;
+        terminalRefresh.Stop(); Interlocked.Exchange(ref terminalChangeQueued, 0);
+        if (TerminalVisualsAvailable && (Volatile.Read(ref terminalDirty) != 0 || terminalVisibleChat != chat?.Id)) RefreshTerminals();
+    }
 
     FrameworkElement BuildTerminals()
     {
@@ -29,13 +45,19 @@ public sealed partial class MainWindow
             await terminals.DeleteAsync(view.ChatId, null, id);
             RefreshTerminals();
         });
-        terminalRefresh.Tick += (_, _) => RefreshTerminals();
-        terminalTabs.Loaded += (_, _) => { RefreshTerminals(); terminalRefresh.Start(); };
-        terminalTabs.Unloaded += (_, _) => terminalRefresh.Stop();
+        terminals.Changed += TerminalChanged;
+        terminalRefresh.Tick += (_, _) => { terminalRefresh.Stop(); Interlocked.Exchange(ref terminalChangeQueued, 0); if (Volatile.Read(ref terminalDirty) != 0) RefreshTerminals(); };
+        terminalTabs.Loaded += (_, _) => { Interlocked.Exchange(ref terminalDirty, 1); RefreshTerminalPresentation(); };
+        terminalTabs.Unloaded += (_, _) => { terminalPresentationActive = false; terminalRefresh.Stop(); Interlocked.Exchange(ref terminalChangeQueued, 0); };
+        Closed += (_, _) => { terminals.Changed -= TerminalChanged; terminalRefresh.Stop(); };
         return terminalTabs;
     }
     void RefreshTerminals()
     {
+        if (!TerminalVisualsAvailable) { Interlocked.Exchange(ref terminalDirty, 1); terminalRefresh.Stop(); return; }
+        terminalPresentationActive = true; terminalPresentationChat = chat?.Id ?? 0;
+        terminalRefresh.Stop(); Interlocked.Exchange(ref terminalChangeQueued, 0);
+        Interlocked.Exchange(ref terminalDirty, 0); RecordUiWork("terminal");
         var rows = chat == null ? [] : terminals.List(chat.Id);
         if (terminalVisibleChat != chat?.Id) { terminalTabs.TabItems.Clear(); terminalVisibleChat = chat?.Id; }
         foreach (var item in terminalTabs.TabItems.OfType<TabViewItem>().ToList())
@@ -68,9 +90,10 @@ public sealed partial class MainWindow
                 ui = new(row.ChatId, tab, info, command, output, start, stop); terminalViews[row.Id] = ui;
             }
             if (!terminalTabs.TabItems.Contains(ui.Tab)) terminalTabs.TabItems.Add(ui.Tab);
-            ui.Tab.Header = row.Name + (row.Status == "running" ? " ●" : "") + (row.Sandbox ? " · Sandbox" : "");
-            ui.Info.Text = row.Shell + " · " + row.Status + " · " + row.Directory;
-            ToolTipService.SetToolTip(ui.Info, ui.Info.Text);
+            var header = row.Name + (row.Status == "running" ? " ●" : "") + (row.Sandbox ? " · Sandbox" : "");
+            if (!Equals(ui.Tab.Header, header)) ui.Tab.Header = header;
+            SetTextIfChanged(ui.Info, row.Shell + " · " + row.Status + " · " + row.Directory);
+            SetTooltipIfChanged(ui.Info, ui.Info.Text);
             var text = (row.Command.Length == 0 ? "" : "> " + row.Command + "\n") + row.Output;
             if (ui.Output.Text != text)
             {
@@ -84,8 +107,8 @@ public sealed partial class MainWindow
                     if (FindTerminalScroll(ui.Output) is { } view) { ui.Follower ??= new ContentTailFollower(view); ui.Follower.Queue(); }
                 });
             }
-            ui.Run.IsEnabled = row.Status != "running" && !row.Sandbox;
-            ui.Stop.IsEnabled = row.Status == "running";
+            SetVisualValue(ui.Run, Control.IsEnabledProperty, row.Status != "running" && !row.Sandbox);
+            SetVisualValue(ui.Stop, Control.IsEnabledProperty, row.Status == "running");
         }
     }
     static ScrollViewer? FindTerminalScroll(DependencyObject parent)

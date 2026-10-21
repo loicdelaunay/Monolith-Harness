@@ -13,6 +13,16 @@ public static partial class TokenConsumption
         .Where(speed => PlatformSupport.PathComparer.Equals(speed.Database, database))
         .Select(speed => new LiveRate(speed.ChatId, speed.Read())).ToArray();
 
+    /// <summary>Start/end notifications only; observers must not affect model execution.</summary>
+    public static event Action<string>? LiveActivityChanged;
+    public static bool HasLiveGenerations(string database) => liveSpeeds.Values.Any(speed => PlatformSupport.PathComparer.Equals(speed.Database, database));
+    static void NotifyLiveActivity(string database)
+    {
+        if (LiveActivityChanged is not { } handlers) return;
+        foreach (Action<string> handler in handlers.GetInvocationList())
+            try { handler(database); } catch (Exception ex) { System.Diagnostics.Trace.TraceError("Live activity observer: " + ex.Message); }
+    }
+
     sealed class LiveSpeed(string database, int chatId)
     {
         public string Database { get; } = database;

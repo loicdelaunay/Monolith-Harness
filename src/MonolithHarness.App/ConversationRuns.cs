@@ -77,7 +77,7 @@ public sealed partial class MainWindow
         composer.IsEnabled = selectedSubagent == null;
         RefreshConversationProgress();
         RefreshModelActivity();
-        RefreshChatBackgroundMotion();
+        RefreshChatBackgroundMotion(); RefreshSpeedTimer(); RefreshBrowserPower();
     }
 
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, Dictionary<string, FrameworkElement>> conversationElements = new();

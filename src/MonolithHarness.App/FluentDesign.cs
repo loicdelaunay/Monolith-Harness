@@ -29,6 +29,7 @@ internal static partial class FluentDesign
         "DiffRemovedFillBrush" => Blend(Color(theme.Surface), Color(theme.Dark ? "#FF9292" : "#B32C2C"), theme.Dark ? .16 : .10),
         "DiffAddedTextBrush" => Color(theme.Dark ? "#83E8A3" : "#176A35"),
         "DiffRemovedTextBrush" => Color(theme.Dark ? "#FFA0A0" : "#A52A2A"),
+        "TitleBarHoverBrush" => Blend(Color(theme.Background), Color(theme.Text), .035),
         "ControlHoverBrush" => Blend(Color(theme.Surface), Color(theme.Text), .07),
         "ControlPressedBrush" => Blend(Color(theme.Surface), Color(theme.Text), .11),
         "ControlSelectedBrush" => Blend(Color(theme.Surface), Color(theme.Accent), theme.Dark ? .18 : .13),

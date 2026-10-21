@@ -46,6 +46,12 @@ public sealed class TaskSchedulerService(string database, Func<ScheduledTask, Ca
     readonly SemaphoreSlim tickGate = new(1, 1);
     readonly CancellationTokenSource lifetime = new();
     FileStream? lease;
+    public DateTime? NextWakeUtc { get; private set; }
+    public event Action? Completed;
+    void RememberWake(DateTime? next)
+    {
+        if (next.HasValue && (!NextWakeUtc.HasValue || next < NextWakeUtc)) NextWakeUtc = next;
+    }
     public async Task<bool> TryRunMaintenanceAsync(Func<Task> operation)
     {
         if (!await tickGate.WaitAsync(0)) return false;
@@ -69,31 +75,32 @@ public sealed class TaskSchedulerService(string database, Func<ScheduledTask, Ca
     }
     public async Task TickAsync(DateTime nowUtc)
     {
-        if (!await tickGate.WaitAsync(0)) return;
+        if (!await tickGate.WaitAsync(0)) { NextWakeUtc = nowUtc.AddSeconds(1); return; }
         try
         {
+            using var db = new HarnessDb(database);
+            var candidates = await db.ScheduledTasks.AsNoTracking().Where(x => x.Enabled).ToListAsync(lifetime.Token);
+            NextWakeUtc = null;
             bool acquired = false;
             if (lease == null)
             {
                 try { lease = new FileStream(database + ".scheduler.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); acquired = true; }
-                catch (IOException) { return; } // Another application instance owns the scheduler.
+                catch (IOException) { if (candidates.Count > 0) NextWakeUtc = nowUtc.AddSeconds(30); return; } // Another instance owns the scheduler.
             }
-            using var db = new HarnessDb(database);
             if (acquired) await db.ScheduledTasks.Where(x => x.LastResult == "En cours / Running")
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastResult, "Interrompue à la fermeture / Interrupted on exit"), lifetime.Token);
-            var candidates = await db.ScheduledTasks.AsNoTracking().Where(x => x.Enabled).ToListAsync(lifetime.Token);
             foreach (var task in candidates)
             {
                 if (running.ContainsKey(task.Id)) continue;
                 if (task.NextRunUtc == null)
                 {
-                    var next = task.Next(nowUtc);
+                    var next = task.Next(nowUtc); RememberWake(next);
                     await db.ScheduledTasks.Where(x => x.Id == task.Id && x.NextRunUtc == null)
                         .ExecuteUpdateAsync(s => s.SetProperty(x => x.NextRunUtc, next), lifetime.Token);
                     continue;
                 }
-                if (task.NextRunUtc > nowUtc) continue;
-                var nextRun = task.Next(nowUtc);
+                if (task.NextRunUtc > nowUtc) { RememberWake(task.NextRunUtc); continue; }
+                var nextRun = task.Next(nowUtc); RememberWake(nextRun);
                 // Conditional update prevents two application instances from claiming the same occurrence.
                 var claimed = await db.ScheduledTasks.Where(x => x.Id == task.Id && x.Enabled && x.NextRunUtc == task.NextRunUtc)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.NextRunUtc, nextRun)
@@ -117,7 +124,13 @@ public sealed class TaskSchedulerService(string database, Func<ScheduledTask, Ca
             await db.ScheduledTasks.Where(x => x.Id == task.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.LastResult, result));
         }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Scheduled task persistence: " + ex.Message); }
-        finally { running.TryRemove(task.Id, out _); }
+        finally
+        {
+            running.TryRemove(task.Id, out _);
+            if (!lifetime.IsCancellationRequested && Completed is { } handlers)
+                foreach (Action handler in handlers.GetInvocationList())
+                    try { handler(); } catch (Exception ex) { System.Diagnostics.Trace.TraceError("Scheduler observer: " + ex.Message); }
+        }
     }
     public void Dispose() { lifetime.Cancel(); lease?.Dispose(); }
 }

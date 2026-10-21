@@ -36,10 +36,12 @@ public sealed partial class MainWindow
     }
     void RefreshCommandVerification()
     {
+        UpdateModelActivityTimer();
+        if (!VisualUpdatesAllowed) return;
         var visible = selectedSubagent == null && chat != null ? commandVerifications.Values.Where(x => x.ChatId == chat.Id).ToList() : [];
-        commandVerificationChip.Visibility = visible.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        SetVisualValue(commandVerificationChip, UIElement.VisibilityProperty, visible.Count > 0 ? Visibility.Visible : Visibility.Collapsed);
         commandVerificationSpinner.IsActive = visible.Count > 0;
-        commandVerificationLabel.Text = WorkflowText("Vérification…", "Checking…") + (visible.Count > 1 ? $" ({visible.Count})" : "");
+        SetTextIfChanged(commandVerificationLabel, WorkflowText("Vérification…", "Checking…") + (visible.Count > 1 ? $" ({visible.Count})" : ""));
         if (visible.Count == 0) return;
         var activity = visible.First();
         var stage = activity.Stage switch {
@@ -48,8 +50,8 @@ public sealed partial class MainWindow
             "checking" => WorkflowText("Contrôle de la décision", "Checking decision"),
             _ => WorkflowText("Attente du validateur", "Waiting for validator") };
         var details = stage + $" · {activity.Clock.Elapsed.TotalSeconds:F0} s" + "\n" + WorkflowText("Le validateur ne fournit pas de pourcentage de progression.", "The validator does not report a completion percentage.");
-        ToolTipService.SetToolTip(commandVerificationChip, details);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(commandVerificationChip, commandVerificationLabel.Text + " · " + details);
+        SetTooltipIfChanged(commandVerificationChip, details);
+        SetVisualValue(commandVerificationChip, Microsoft.UI.Xaml.Automation.AutomationProperties.NameProperty, commandVerificationLabel.Text + " · " + details);
     }
     async Task<CommandGuardResult> CheckCommandWithFeedbackAsync(CommandApproval? command, CancellationToken ct)
     {

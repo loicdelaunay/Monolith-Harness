@@ -14,7 +14,7 @@ public sealed partial class MainWindow
         if (!composerSpeedInitialized)
         {
             composerSpeedInitialized = true;
-            composerSpeedTimer.Tick += (_, _) => { RefreshGlobalTokenSpeed(); RefreshRecentComposerSpeed(); };
+            composerSpeedTimer.Tick += (_, _) => { RecordUiWork("speed"); RefreshGlobalTokenSpeed(); RefreshRecentComposerSpeed(); };
             Closed += (_, _) => composerSpeedTimer.Stop();
         }
     }
@@ -22,7 +22,7 @@ public sealed partial class MainWindow
     {
         EnsureComposerSpeedTimer();
         run.RecentSpeed.Observe(run.Tracker, update);
-        if ((globalTokenSpeedEnabled || IsVisible(run) && composerSpeedIndicator.Visibility == Visibility.Visible) && !composerSpeedTimer.IsEnabled) composerSpeedTimer.Start();
+        RefreshSpeedTimer();
     }
     void SaveRecentComposerSpeed(ConversationRun run)
     {
@@ -32,12 +32,16 @@ public sealed partial class MainWindow
     {
         var value = selectedSubagent == null ? ActiveRun?.RecentSpeed.Read() : null;
         if (selectedSubagent == null && value == null && chat != null && recentComposerSpeeds.TryGetValue(chat.Id, out var previous)) value = previous;
-        composerSpeedText.Text = value is { } speed ? $"⚡ {speed.Rate:F1} tok/s" : "⚡ — tok/s";
-        if (!globalTokenSpeedEnabled)
-        {
-            if (ActiveRun == null || selectedSubagent != null || composerSpeedIndicator.Visibility != Visibility.Visible) { composerSpeedTimer.Stop(); return; }
-        }
-        if (composerSpeedInitialized && !composerSpeedTimer.IsEnabled) composerSpeedTimer.Start();
+        if (VisualUpdatesAllowed) SetTextIfChanged(composerSpeedText, value is { } speed ? $"⚡ {speed.Rate:F1} tok/s" : "⚡ — tok/s");
+        RefreshSpeedTimer();
+    }
+    void RefreshSpeedTimer()
+    {
+        var needed = VisualUpdatesAllowed &&
+            (globalTokenSpeedEnabled && TokenConsumption.HasLiveGenerations(db.FilePath) ||
+             selectedSubagent == null && ActiveRun is { WaitingForModel: true, Tracker: not null } && composerSpeedIndicator.Visibility == Visibility.Visible);
+        if (needed) { EnsureComposerSpeedTimer(); if (!composerSpeedTimer.IsEnabled) composerSpeedTimer.Start(); }
+        else composerSpeedTimer.Stop();
     }
     sealed class RecentTokenSpeed
     {

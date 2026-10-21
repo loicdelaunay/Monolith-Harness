@@ -39,21 +39,22 @@ public sealed partial class MainWindow
     void ConfigureGlobalTokenSpeed(bool enabled)
     {
         globalTokenSpeedEnabled = enabled;
-        globalTokenSpeed.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        SetVisualValue(globalTokenSpeed, UIElement.VisibilityProperty, enabled ? Visibility.Visible : Visibility.Collapsed);
         RefreshGlobalTokenSpeed();
-        if (enabled) { EnsureComposerSpeedTimer(); composerSpeedTimer.Start(); }
+        RefreshSpeedTimer();
     }
 
     void RefreshGlobalTokenSpeed()
     {
-        if (!globalTokenSpeedEnabled) return;
+        RefreshSpeedTimer();
+        if (!globalTokenSpeedEnabled || !VisualUpdatesAllowed) return;
         var live = TokenConsumption.LiveRates(db.FilePath);
         var known = live.Select(value => value.ChatId).ToHashSet();
-        var fallback = conversationRuns.Values.Where(run => run.Tracker != null && !run.Cancellation.IsCancellationRequested && !known.Contains(run.Chat.Id)).ToArray();
+        var fallback = conversationRuns.Values.Where(run => run.WaitingForModel && run.Tracker != null && !run.Cancellation.IsCancellationRequested && !known.Contains(run.Chat.Id)).ToArray();
         var rate = live.Sum(value => value.TokensPerSecond) + fallback.Sum(run => run.RecentSpeed.Read()?.Rate ?? 0);
         var count = known.Union(fallback.Select(run => run.Chat.Id)).Count();
-        globalTokenSpeedValue.Text = $"{rate:F1} tok/s";
-        globalTokenSpeedChats.Text = WorkflowText($"· {count} chats", $"· {count} chats");
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(globalTokenSpeed, WorkflowText($"Débit global : {rate:F1} tokens par seconde, {count} conversations", $"Combined speed: {rate:F1} tokens per second, {count} conversations"));
+        SetTextIfChanged(globalTokenSpeedValue, $"{rate:F1} tok/s");
+        SetTextIfChanged(globalTokenSpeedChats, WorkflowText($"· {count} chats", $"· {count} chats"));
+        SetVisualValue(globalTokenSpeed, Microsoft.UI.Xaml.Automation.AutomationProperties.NameProperty, WorkflowText($"Débit global : {rate:F1} tokens par seconde, {count} conversations", $"Combined speed: {rate:F1} tokens per second, {count} conversations"));
     }
 }

@@ -11,8 +11,8 @@ public sealed partial class MainWindow
     string? stagedGuiUpdatePath;
     string? stagedGuiUpdateHash;
     readonly CancellationTokenSource updateLifetime = new();
-    readonly DispatcherTimer guiUpdateTimer = new() { Interval = TimeSpan.FromHours(1) };
-    readonly DispatcherTimer guiUpdateInstallTimer = new() { Interval = TimeSpan.FromMinutes(1) };
+    readonly CoalescedTimer guiUpdateTimer = new() { Interval = TimeSpan.FromHours(1) };
+    readonly CoalescedTimer guiUpdateInstallTimer = new() { Interval = TimeSpan.FromMinutes(1) };
     readonly Button guiUpdateButton = new() { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Stretch,
         FontSize = 12, Padding = new(8), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
     readonly StackPanel guiUpdatePanel = new() { Spacing = 4, Visibility = Visibility.Collapsed };
@@ -77,8 +77,8 @@ public sealed partial class MainWindow
     {
         if (updateChecksStarted) return;
         updateChecksStarted = true;
-        guiUpdateTimer.Tick += async (_, _) => await CheckAutomaticGuiUpdateAsync();
-        guiUpdateInstallTimer.Tick += async (_, _) => await TryInstallAutomaticGuiUpdateAsync();
+        guiUpdateTimer.Tick += async (_, _) => { RecordUiWork("maintenance"); await CheckAutomaticGuiUpdateAsync(); };
+        guiUpdateInstallTimer.Tick += async (_, _) => { RecordUiWork("maintenance"); await TryInstallAutomaticGuiUpdateAsync(); };
         Closed += (_, _) =>
         {
             guiUpdateTimer.Stop(); guiUpdateInstallTimer.Stop();
@@ -287,7 +287,7 @@ public sealed partial class MainWindow
                 if (smokeGuiUpdateInstall != null) { smokeGuiUpdateInstall(staged); return; }
                 scheduleTimer.Stop();
                 try { GitHubUpdates.InstallAfterExit(staged, Environment.ProcessPath!, [], GitHubUpdates.IsStandalone(typeof(App).Assembly)); }
-                catch { scheduleTimer.Start(); throw; }
+                catch { QueueSchedulerWake(); throw; }
                 settingsWindow?.Close(); Close(); Application.Current.Exit();
             }
             // The scheduler gate prevents a scheduled run from starting between the final idle check and exit.
@@ -298,7 +298,7 @@ public sealed partial class MainWindow
         {
             if (draftsSaved && !updateLifetime.IsCancellationRequested) ClearUpdateDrafts();
             if (automatic) automaticUpdateInstall = null;
-            updatingApplication = false;
+            updatingApplication = false; QueueSchedulerWake();
             if (!updateLifetime.IsCancellationRequested) { RefreshGuiUpdateButton(); UpdateAutomaticInstallTimer(); }
         }
     }
