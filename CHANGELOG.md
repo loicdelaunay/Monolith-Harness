@@ -9,6 +9,7 @@
 - Planification à la prochaine échéance, réveil lors des modifications de tâches et arrêt sans échéance active. Les vérifications de maintenance partagent un même minuteur ; l’entretien désactivé ne le réveille pas.
 - Pause des animations, des indicateurs et des actualisations des terminaux lorsque la fenêtre principale est inactive ou minimisée. Suspension native des pages masquées quand le moteur Windows la prend en charge, avec reprise à l’affichage ; les pages utilisées par un agent ou en navigation restent actives.
 - Débug : compteurs des actualisations, dispositions et images dessinées observées passivement sur Uno, et mesure CPU/repos de 30 secondes sans sondage du diagnostic pendant le relevé. Les mesures indisponibles et les limites de périmètre sont indiquées.
+- Compatibilité WinUI natif : utilisation de l’état d’activation propre à chaque moteur pour suspendre et reprendre les actualisations.
 - Barre du haut : marge inférieure réduite de 2 pixels et effet de survol adapté au thème sur la barre et les boutons des panneaux du chat.
 
 ## 2.2.1 — 2026-10-20

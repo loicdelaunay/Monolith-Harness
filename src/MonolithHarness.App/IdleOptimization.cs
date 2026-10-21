@@ -13,12 +13,12 @@ public sealed partial class MainWindow
     bool VisualUpdatesAllowed => !idleClosed && windowActive && AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
     readonly Dictionary<string, long> uiWork = [];
     readonly Stopwatch uiWorkClock = Stopwatch.StartNew();
-    long renderedFrames, lastMeasuredFrames;
+    long renderedFrames = 0, lastMeasuredFrames;
     Dictionary<string, long> lastMeasuredWork = [];
     double lastMeasuredAt;
-    object? passiveFrameTarget;
-    EventInfo? passiveFrameEvent;
-    Action? passiveFrameHandler;
+    object? passiveFrameTarget = null;
+    EventInfo? passiveFrameEvent = null;
+    Action? passiveFrameHandler = null;
     int liveActivityQueued;
 
     void InitializeIdleOptimization()
@@ -26,7 +26,7 @@ public sealed partial class MainWindow
         TokenConsumption.LiveActivityChanged += LiveActivityChanged;
         root.PointerPressed += (_, _) => RecordUiWork("input");
         root.KeyDown += (_, _) => RecordUiWork("input");
-        Activated += (_, args) => { windowActive = args.WindowActivationState != Windows.UI.Core.CoreWindowActivationState.Deactivated; RefreshIdlePresentation(); };
+        Activated += (_, args) => { windowActive = WindowActivity.IsActive(args); RefreshIdlePresentation(); };
         AppWindow.Changed += (_, _) => DispatcherQueue.TryEnqueue(RefreshIdlePresentation);
         root.LayoutUpdated += (_, _) => RecordUiWork("layout");
         root.Loaded += (_, _) => { AttachPassiveFrameCounter(); RefreshIdlePresentation(); };

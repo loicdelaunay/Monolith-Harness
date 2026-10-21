@@ -108,7 +108,7 @@ public sealed class DiagnosticsWindow : Window
         Panel.Loaded += async (_, _) => { await RefreshAsync(true); if (!closed && active && !measuring) timer.Start(); };
         Activated += async (_, args) =>
         {
-            active = args.WindowActivationState != Windows.UI.Core.CoreWindowActivationState.Deactivated;
+            active = WindowActivity.IsActive(args);
             if (!active) { timer.Stop(); filterDelay.Stop(); }
             else if (!closed && !measuring) { await RefreshAsync(); if (!closed && active && !measuring) timer.Start(); }
         };
