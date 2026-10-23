@@ -2,6 +2,7 @@
 
 ## 2.5.0 — 2026-10-23
 
+- SQLite : le retour arrière de la migration des instructions de projet utilise la suppression de colonne native, comme les migrations récentes, pour rester compatible avec les bases existantes.
 - Chat : les paramètres de `edit_source` disposent d’un sélecteur Raw / Formatted. La vue formatée décode le code et affiche une comparaison par blocs avec numéros de ligne : suppressions rouges, ajouts verts et remplacements orange avec leurs versions avant/après. Le calcul est différé à l’ouverture des détails et effectué hors du thread de l’interface ; le JSON original reste accessible dans Raw.
 
 ## 2.4.0 — 2026-10-23
