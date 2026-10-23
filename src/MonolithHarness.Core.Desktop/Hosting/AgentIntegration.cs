@@ -42,7 +42,7 @@ public sealed partial class HarnessService
                 await using var db = Db(); run.Options.EnabledSkills = await db.States.Select(x => x.EnabledSkills).SingleAsync(ct);
                 var definitions = Definitions(run);
                 AgentPolicy.Filter(definitions,run.Chat); SandboxWorkspace.Filter(definitions,run.Chat.SandboxEnabled);
-                if (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                if (McpAccess.Allowed(run.Chat))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 return definitions;
             }

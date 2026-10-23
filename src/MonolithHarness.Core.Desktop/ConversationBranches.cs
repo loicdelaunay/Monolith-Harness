@@ -5,7 +5,7 @@ namespace MonolithHarness.Core;
 
 public static class ConversationBranches
 {
-    public static async Task<Chat> CreateAsync(string database, int chatId, int messageId, bool resume, CancellationToken ct = default)
+    public static async Task<Chat> CreateAsync(string database, int chatId, int messageId, bool resume, CancellationToken ct = default, bool editUserMessage = false)
     {
         await using var db = new HarnessDb(database);
         var original = await db.Chats.SingleAsync(x => x.Id == chatId, ct);
@@ -13,22 +13,32 @@ public static class ConversationBranches
         var boundary = messages.SingleOrDefault(x => x.Id == messageId && x.Role is "user" or "assistant") ?? throw new ArgumentException("Message de départ introuvable.");
         if (boundary.State is not ("complete" or "compacted")) throw new InvalidOperationException("Choisissez un message terminé.");
         if (boundary.WireJson.Length > 0 && JsonNode.Parse(boundary.WireJson)?["tool_calls"] is JsonArray calls && calls.Count > 0) throw new InvalidOperationException("Choisissez la réponse finale ou le message utilisateur précédent, pour conserver les échanges d’outils complets.");
+        // An external provider can finish the same message after one or more UI questions.
+        var boundaryId = boundary.Role == "assistant" ? messages.Where(item => ConversationTimeline.Read(item)?.MessageId == messageId)
+            .Select(item => item.Id).Append(messageId).Max() : messageId;
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var branch = new Chat { ProjectId = original.ProjectId, Title = (resume ? "Sauvegarde · " : "Fork · ") + original.Title,
             InteractionMode = original.InteractionMode, ChatWebEnabled = original.ChatWebEnabled, ChatPythonEnabled = original.ChatPythonEnabled, ExecutionMode = original.ExecutionMode, OrchestrationMode = original.OrchestrationMode, AgentOptionsJson = original.AgentOptionsJson, SandboxEnabled = original.SandboxEnabled, ResourcePathsJson = original.ResourcePathsJson, AllowOutsideResources = original.AllowOutsideResources };
         db.Chats.Add(branch); await db.SaveChangesAsync(ct);
-        foreach (var message in messages.Where(x => resume || x.Id <= messageId && x.Role is not ("tasks" or "compaction")))
-            db.Messages.Add(new Message { ChatId = branch.Id, Role = message.Role, Content = message.Content, CompatibilityNotice = message.CompatibilityNotice, WireJson = message.WireJson, State = !resume && message.State == "compacted" ? "complete" : message.State,
-                InputTokens = message.InputTokens, OutputTokens = message.OutputTokens, Seconds = message.Seconds, CompletedUtc = message.CompletedUtc,
-                Attachments = message.Attachments.Select(a => new Attachment { Name = a.Name, Mime = a.Mime, Data = a.Data.ToArray() }).ToList() });
+        var copied = new List<(int Original, Message Copy)>();
+        foreach (var message in messages.Where(x => resume || x.Id <= boundaryId && x.Role is not ("tasks" or "compaction")))
+        {
+            var copy = new Message { ChatId = branch.Id, Role = message.Role, Content = message.Content, CompatibilityNotice = message.CompatibilityNotice, WireJson = message.WireJson, State = !resume && message.State == "compacted" ? "complete" : message.State,
+                InputTokens = message.InputTokens, OutputTokens = message.OutputTokens, CachedInputTokens = message.CachedInputTokens, Seconds = message.Seconds, CompletedUtc = message.CompletedUtc,
+                Attachments = message.Attachments.Select(a => new Attachment { Name = a.Name, Mime = a.Mime, Data = a.Data.ToArray() }).ToList() };
+            db.Messages.Add(copy); copied.Add((message.Id, copy));
+        }
         if (resume)
         {
-            db.Messages.RemoveRange(messages.Where(x => x.Id > messageId || x.Role is "tasks" or "compaction"));
-            foreach (var retained in messages.Where(x => x.Id <= messageId && x.State == "compacted" && x.Role != "compaction")) retained.State = "complete";
+            db.Messages.RemoveRange(messages.Where(x => x.Id > boundaryId || editUserMessage && boundary.Role == "user" && x.Id == messageId || x.Role is "tasks" or "compaction"));
+            foreach (var retained in messages.Where(x => x.Id <= boundaryId && x.State == "compacted" && x.Role != "compaction")) retained.State = "complete";
             await db.PendingInputs.Where(x => x.ChatId == chatId).ExecuteDeleteAsync(ct);
             await db.ExternalChatSessions.Where(x => x.ChatId == chatId).ExecuteDeleteAsync(ct);
             await db.Subagents.Where(x => x.ChatId == chatId).ExecuteUpdateAsync(set => set.SetProperty(x => x.ChatId, branch.Id), ct);
         }
+        await db.SaveChangesAsync(ct);
+        var ids = copied.ToDictionary(item => item.Original, item => item.Copy.Id);
+        foreach (var item in copied) ConversationTimeline.RemapBoundary(item.Copy, ids);
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return resume ? original : branch;
     }

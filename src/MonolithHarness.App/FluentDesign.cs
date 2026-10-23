@@ -26,6 +26,8 @@ internal static partial class FluentDesign
         "TextFillColorDisabledBrush" => WithOpacity(Color(theme.Text), 100),
         "TransparentBrush" => Colors.Transparent,
         "DiffAddedFillBrush" => Blend(Color(theme.Surface), Color(theme.Dark ? "#67D78C" : "#16733B"), theme.Dark ? .16 : .10),
+        "DiffModifiedFillBrush" => Blend(Color(theme.Surface), Color(theme.Dark ? "#F2B66D" : "#995000"), theme.Dark ? .16 : .10),
+        "DiffModifiedTextBrush" => Color(theme.Dark ? "#F6BF7D" : "#8C4700"),
         "DiffRemovedFillBrush" => Blend(Color(theme.Surface), Color(theme.Dark ? "#FF9292" : "#B32C2C"), theme.Dark ? .16 : .10),
         "DiffAddedTextBrush" => Color(theme.Dark ? "#83E8A3" : "#176A35"),
         "DiffRemovedTextBrush" => Color(theme.Dark ? "#FFA0A0" : "#A52A2A"),

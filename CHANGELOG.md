@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.5.0 — 2026-10-23
+
+- Chat : les paramètres de `edit_source` disposent d’un sélecteur Raw / Formatted. La vue formatée décode le code et affiche une comparaison par blocs avec numéros de ligne : suppressions rouges, ajouts verts et remplacements orange avec leurs versions avant/après. Le calcul est différé à l’ouverture des détails et effectué hors du thread de l’interface ; le JSON original reste accessible dans Raw.
+
+## 2.4.0 — 2026-10-23
+
+- MCP : commande `/mcp` pour consulter/configurer les serveurs et activer ou désactiver leur accès dans une conversation. Les modèles directs peuvent utiliser les serveurs autorisés en mode Chat ; les restrictions de ressources, de sandbox et les demandes d’autorisation restent appliquées.
+- Fenêtre : initialisation différée et vérifiée de la barre de titre, repli sur les contrôles système en cas d’échec, zone de déplacement étendue jusqu’au bord supérieur.
+- Conversation : nouveaux segments de réflexion après les échanges de questions, reprise d’un message utilisateur dans l’éditeur avec ses pièces jointes et sauvegarde de l’historique précédent.
+- Projets : édition des instructions depuis le menu contextuel, conservées dans le profil et appliquées aux prochains envois.
+- Outils : indicateur circulaire actif lorsque la fenêtre perd le focus, sans barre de progression en double ; suspension conservée lorsque la fenêtre est minimisée.
+- Fournisseurs : suppression des raccourcis associés à un fournisseur retiré et affichage des erreurs de validation à côté d’Enregistrer.
+- Correcteur : choix du niveau de réflexion, désactivé par défaut pour limiter le délai de réponse.
+- Débug : onglet Stockage avec tailles et nombres de fichiers par catégorie, calculés à la demande hors du thread de l’interface.
+
 ## 2.3.0 — 2026-10-21
 
 ### Consommation au repos et diagnostics

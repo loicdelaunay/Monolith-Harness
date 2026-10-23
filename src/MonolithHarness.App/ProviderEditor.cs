@@ -51,6 +51,8 @@ public sealed partial class MainWindow
         public required List<ProviderDraft> Drafts { get; init; }
         public required TextBlock Error { get; init; }
         public ProviderDraft? Selected { get; set; }
+        public event Action<ProviderDraft>? Removed;
+        public void NotifyRemoved(ProviderDraft draft) => Removed?.Invoke(draft);
         public Action Commit { get; set; } = () => { };
         public Action ViewChanged { get; set; } = () => { };
     }
@@ -218,7 +220,7 @@ public sealed partial class MainWindow
         }
         state.Commit = () =>
         {
-            if (state.Selected == null || editor.Visibility != Visibility.Visible) return;
+            if (refreshing || state.Selected == null || !drafts.Contains(state.Selected) || editor.Visibility != Visibility.Visible) return;
             if(state.Selected.Kind=="composite"){state.Selected.Name=name.Text;return;}
             if (state.Selected.Kind == "local")
             {
@@ -358,6 +360,7 @@ public sealed partial class MainWindow
                 catch (Exception ex) { info.Text = ex.Message; return; }
             }
             var index = drafts.IndexOf(selected); drafts.Remove(selected);
+            state.Selected = null; state.NotifyRemoved(selected);
             Refresh(drafts.Count == 0 ? null : drafts[Math.Clamp(index, 0, drafts.Count - 1)]);
         };
         testConnection.Click += async (_, _) =>

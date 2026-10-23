@@ -28,6 +28,7 @@ public sealed partial class MainWindow
         new("proposals", "", WorkflowText("Réviser les fichiers proposés", "Review proposed files")),
         new("plan", "[on|off]", WorkflowText("Mode plan ou exécution", "Plan or execution mode")),
         new("goal", "[objectif|off]", WorkflowText("Définir l’objectif de la conversation", "Set the conversation goal")),
+        new("mcp", "[list|on|off|settings]", WorkflowText("Serveurs MCP de la conversation", "Conversation MCP servers")),
         new("model", "[nom]", WorkflowText("Choisir le modèle", "Choose the model")),
         new("thinking", "[auto|low|medium|high|none]", WorkflowText("Niveau de réflexion", "Reasoning effort")),
         new("retry", "[on|off]", WorkflowText("Activer les nouvelles tentatives", "Toggle automatic retry")),
@@ -151,7 +152,7 @@ public sealed partial class MainWindow
         var separator = input.IndexOfAny([' ', '\t']);
         var name = (separator < 0 ? input[1..] : input[1..separator]).ToLowerInvariant();
         var argument = separator < 0 ? "" : input[(separator + 1)..].Trim();
-        if (SkillInvocation.Requested(input, project?.GetSourceFolders(), project?.Id ?? 0).Any(s => s.Id.Equals(name.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}'), StringComparison.OrdinalIgnoreCase)))
+        if (!CommandSlashCatalog().Any(x => x.Name == name) && SkillInvocation.Requested(input, project?.GetSourceFolders(), project?.Id ?? 0).Any(s => s.Id.Equals(name.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}'), StringComparison.OrdinalIgnoreCase)))
         { slashSuggestions.Visibility = Visibility.Collapsed; return false; }
         if (!CommandSlashCatalog().Any(x => x.Name == name))
         {
@@ -159,12 +160,13 @@ public sealed partial class MainWindow
             return true;
         }
         if (name == "help") { RefreshSlashSuggestions(all: true); return true; }
-        if (chat == null && name is "chat" or "agent" or "agents" or "plan" or "proposition" or "proposals" or "goal") return true;
+        if (chat == null && name is "mcp" or "chat" or "agent" or "agents" or "plan" or "proposition" or "proposals" or "goal") return true;
         if (ChatInteraction && name is "agents" or "plan" or "proposition" or "proposals" or "goal")
             throw new InvalidOperationException(WorkflowText("Passez en Agent pour configurer le plan et les sous-agents.", "Switch to Agent to configure planning and subagents."));
         var owner = chat;
         switch (name)
         {
+            case "mcp": composer.Text = ""; await ManageChatMcpAsync(owner!, argument); return true;
             case "chat": case "agent":
                 await ChangeConversationModeAsync(name); composer.Text = ""; return true;
             case "settings": composer.Text = ""; await Settings(); return true;

@@ -8,7 +8,7 @@ public static class ProjectResources
     public static string[] FolderLines(string text) => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     public static Project Effective(Chat chat, Project project, string? database = null)
     {
-        var copy = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
+        var copy = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson, Instructions = project.Instructions };
         copy.SetSourceFolders(For(chat, project, database)); return copy;
     }
     public static List<string> Validate(IEnumerable<string> paths)

@@ -74,6 +74,7 @@ public sealed partial class HarnessService
             if (provider.IsAcp && run.Chat.ExecutionMode == "propose") system += AgentPolicy.Prompt("propose", "disabled");
             system += CitationPaths.Prompt(project.GetSourceFolders());
             system += await InformationSkill.PromptAsync(run, ct);
+            if (provider.IsAcp) system += ProjectInstructions.Prompt(run.Project);
             system += ResourceAccessPolicy.Prompt(run.Chat);
             system += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, project.GetSourceFolders(), project.Id);
             if (!chatOnly) system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
@@ -109,7 +110,7 @@ public sealed partial class HarnessService
                     definitions = Definitions(run);
                     agent.AddDefinitions(definitions); AgentPolicy.Filter(definitions, run.Chat);
                     SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
-                    if (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                    if (McpAccess.Allowed(run.Chat))
                         foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 }
                 if (!provider.IsExternalAgent) history = await Compact(run, history, system, definitions, secret, ct);

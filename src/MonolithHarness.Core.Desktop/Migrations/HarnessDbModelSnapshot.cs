@@ -438,6 +438,10 @@ namespace MonolithHarness.Core.Migrations
                     b.Property<bool>("IsInbox")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Instructions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");

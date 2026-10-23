@@ -10,7 +10,7 @@ public static class ConversationModes
     public static string EffectiveSkills(Chat chat, string enabledSkills, bool nativeOpenCode = false) => !IsChat(chat.InteractionMode) ? enabledSkills :
         string.Join(',', new[] { chat.ChatWebEnabled ? "web" : "", chat.ChatPythonEnabled && !nativeOpenCode ? "python" : "", VisionBridge.Enabled(enabledSkills) ? "vision_bridge" : "", Skills.Enabled(enabledSkills, InformationSkill.SkillId) ? InformationSkill.SkillId : "" }.Where(x => x.Length > 0));
     public static bool ToolAllowed(Chat chat, string tool) =>
-        InformationSkill.Handles(tool) || chat.ChatWebEnabled && WebHttpTools.Handles(tool) || chat.ChatPythonEnabled && PythonTools.Handles(tool);
+        McpAccess.IsTool(tool) && McpAccess.Allowed(chat) || InformationSkill.Handles(tool) || chat.ChatWebEnabled && WebHttpTools.Handles(tool) || chat.ChatPythonEnabled && PythonTools.Handles(tool);
     public static JsonArray ToolDefinitions(Chat chat, AppState options)
     {
         var result = new JsonArray(); var skills = EffectiveSkills(chat, options.EnabledSkills);
@@ -22,7 +22,8 @@ public static class ConversationModes
     public static string ChatPrompt(string language, Chat chat, bool nativeOpenCode = false, bool nativeToolsEnabled = true, string thinkingLevel = "none", FeatureSettings? rendering = null) =>
         "You are a conversational assistant. Answer questions, explain, draft and analyze the text and attachments supplied by the user. " + MarkdownDisplay.InstructionsFor(rendering) + " " +
         "CHAT MODE: " + (thinkingLevel.Equals("none", StringComparison.OrdinalIgnoreCase) ? "Answer directly without extended reasoning. " : "Use the selected thinking level (" + thinkingLevel + ") and keep the final answer focused. ") +
-        "Only explicitly enabled web research, Python and host Information skills are available. Host Information is read-only metadata; it does not grant filesystem or command access. No project-folder tools, terminal, browser control, Git, MCP, memory tools or agents. " +
+        "Available skills include explicitly enabled web research, Python and host Information. Host Information is read-only metadata; it does not grant filesystem or command access. No project-folder tools, terminal, browser control, Git, memory tools or agents. " +
+        (McpAccess.Allowed(chat) && !nativeOpenCode ? "Configured MCP tools may be exposed after connection approval. Use only their current names and schemas; every call remains subject to user permission. Never claim a connection or action succeeded without a tool result. " : "Host MCP tools are unavailable in this mode or provider. ") +
         (chat.ChatWebEnabled && (!nativeOpenCode || nativeToolsEnabled) ? nativeOpenCode ? "Web research is available through webfetch and websearch when supported by the server. Cite fetched URLs and read only the information needed. " : WebHttpTools.Instructions + " " : "Web research is disabled. ") +
         (chat.ChatPythonEnabled && !nativeOpenCode ? Skills.All.Single(x => x.Id == "python").Instruction + " No project folders are attached. Omit working_directory to use this conversation's scripts directory. " : "Python execution is disabled. ") +
         "Never claim to have performed an action without a successful tool result. Ask clarifying questions in your response when needed. " +

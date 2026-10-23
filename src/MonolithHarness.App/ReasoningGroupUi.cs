@@ -45,11 +45,13 @@ public sealed partial class MainWindow
     ReasoningDetailLevel CurrentReasoningDisplay => reasoningDisplayOverride ?? (state.ShowReasoningDetails ? ReasoningDetailLevel.Detailed : ReasoningDetailLevel.Reduced);
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<StackPanel, ReasoningGroupUi> activityGroups = new();
     readonly List<WeakReference<ReasoningGroupUi>> activityGroupViews = [];
+    readonly System.Runtime.CompilerServices.ConditionalWeakTable<StackPanel, AssistantMessageUi> latestAssistantViews = new();
     bool reasoningResizeObserved;
     ReasoningGroupUi ActivityGroup(StackPanel host)
     {
         host = MessageHost(host);
-        if (activityGroups.TryGetValue(host, out var existing) && host.Children.Contains(existing.Card)) return existing;
+        if (activityGroups.TryGetValue(host, out var existing) && host.Children.Contains(existing.Card) &&
+            !host.Children.Skip(host.Children.IndexOf(existing.Card) + 1).OfType<FrameworkElement>().Any(child => child.Visibility == Visibility.Visible)) return existing;
         activityGroups.Remove(host);
         var details = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
         var summary = Label("", 13); summary.TextTrimming = TextTrimming.CharacterEllipsis; summary.MaxLines = 1;
@@ -86,6 +88,16 @@ public sealed partial class MainWindow
         if (ui.Group is not { } group || ui.Container is not { } card || group.Details.Children.Contains(card)) return;
         group.Host.Children.Remove(card); group.Details.Children.Add(card);
         group.Update(ui.CurrentText);
+    }
+    void ContinueAssistantAfterQuestion(ConversationRun run, Message interaction)
+    {
+        var host = MessageHost(run.Messages);
+        if (ConversationTimeline.Read(interaction) == null || !latestAssistantViews.TryGetValue(host, out var previous)) return;
+        previous.Flush();
+        var next = AddAssistantMessage(target: run.Messages, sourceProject: run.Project);
+        next.TextOffset = previous.TextOffset + previous.CurrentText.Length;
+        next.ReasoningOffset = previous.ReasoningOffset + previous.ReasoningLength;
+        previous.Continuation = next;
     }
     static bool ContainsActionSuggestion(System.Text.Json.Nodes.JsonArray calls) => calls.Any(call =>
         string.Equals(call?["function"]?["name"]?.ToString(), ActionSuggestions.Tool, StringComparison.Ordinal));

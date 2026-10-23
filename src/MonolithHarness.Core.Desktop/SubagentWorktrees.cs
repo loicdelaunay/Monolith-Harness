@@ -48,7 +48,7 @@ public sealed class SubagentWorktrees
         var token = Guid.NewGuid().ToString("N");
         var directory = Path.Combine(PortableStorage.Folder("worktrees"), "chat-" + run.Chat.Id, "agent-" + Slug(name) + "-" + token[..12]);
         var project = new Project { Id = run.Project.Id, Name = run.Project.Name, IsInbox = run.Project.IsInbox,
-            Icon = run.Project.Icon, Color = run.Project.Color, PermissionProfileJson = run.Project.PermissionProfileJson };
+            Icon = run.Project.Icon, Color = run.Project.Color, PermissionProfileJson = run.Project.PermissionProfileJson, Instructions = run.Project.Instructions };
         var workspace = new SubagentWorktrees(project, directory);
         var repositories = new Dictionary<string, Checkout>(PlatformSupport.PathComparer);
         var mappedRoots = new List<string>();

@@ -2,6 +2,7 @@ namespace MonolithHarness.Core;
 
 public sealed class Project
 {
+    public string Instructions { get; set; } = "";
     public string Icon { get; set; } = "folder";
     public string Color { get; set; } = "";
     public bool IsInbox { get; set; }

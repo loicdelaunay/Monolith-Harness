@@ -30,9 +30,9 @@ public sealed class AgentRuntime(ConversationSession run, CustomSkills skills,
     int MaxSteps => Math.Clamp(agentSettings.AgentMaxSteps, 8, 2000);
     public async Task<string> InitializeAsync(CancellationToken ct)
     {
-        if (ConversationModes.IsChat(run.Chat.InteractionMode)) return ResponseStyles.Prompt(agentSettings.ResponseStyle);
+        if (ConversationModes.IsChat(run.Chat.InteractionMode)) return ResponseStyles.Prompt(agentSettings.ResponseStyle) + ProjectInstructions.Prompt(run.Project);
         var catalog = skills.Catalog(run.Options.EnabledSkills);
-        context = await ProjectInstructions.LoadAsync(run.Project.GetSourceFolders(), ct);
+        context = ProjectInstructions.Prompt(run.Project) + await ProjectInstructions.LoadAsync(run.Project.GetSourceFolders(), ct);
         if (!run.Provider.IsOpenCode && Skills.Enabled(run.Options.EnabledSkills, "web"))
             context += "\nHTTP response preference: " + agentSettings.WebHttpResponseMode + ". Omit response_mode to follow this user setting. Smart is recommended to save context: search a stored file_id, read only relevant passages, and reuse it for follow-up questions. Legacy is for explicitly selected/requested inline whole responses. Do not switch to Legacy just to avoid targeted reading.\n";
         if (run.Composite == null && run.Chat.OrchestrationMode != "disabled") context += agentOptions.Instructions;

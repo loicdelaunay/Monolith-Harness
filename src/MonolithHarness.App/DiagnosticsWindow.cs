@@ -6,7 +6,7 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace MonolithHarness.App;
 
-public sealed class DiagnosticsWindow : Window
+public sealed partial class DiagnosticsWindow : Window
 {
     public Grid Panel { get; } = new() { Padding = new(24), RowSpacing = 12 };
     readonly ApplicationDiagnostics sampler = new();
@@ -73,6 +73,9 @@ public sealed class DiagnosticsWindow : Window
         var detail = FluentDesign.Surface(Scroll(logDetail), 12); Grid.SetRow(detail, 2); logsPanel.Children.Add(detail);
         tabs.TabItems.Add(new TabViewItem { Header = L("Journaux", "Logs"), IsClosable = false, Content = logsPanel });
         tabs.TabItems.Add(new TabViewItem { Header = L("Erreurs et interruptions", "Errors and interruptions"), IsClosable = false, Content = Scroll(errors) });
+        var storageTab = new TabViewItem { Header = L("Stockage", "Storage"), IsClosable = false, Content = BuildStorageTab() };
+        tabs.TabItems.Add(storageTab);
+        tabs.SelectionChanged += async (_, _) => { if (ReferenceEquals(tabs.SelectedItem, storageTab) && !storageMeasured) await RefreshStorageAsync(); };
         Grid.SetRow(tabs, 2); Panel.Children.Add(tabs);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(Action(L("Copier le diagnostic", "Copy diagnostics"), () =>

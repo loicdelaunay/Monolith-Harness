@@ -48,7 +48,7 @@ public class ConversationSession : IDisposable
             SandboxEnabled = !ConversationModes.IsChat(chat.InteractionMode) && chat.SandboxEnabled, ResourcePathsJson = chat.ResourcePathsJson, AllowOutsideResources = chat.AllowOutsideResources, TodoDismissed = chat.TodoDismissed,
             ExecutionMode = ConversationModes.IsChat(chat.InteractionMode) ? "chat" : AgentPolicy.Mode(chat.ExecutionMode),
             OrchestrationMode = ConversationModes.IsChat(chat.InteractionMode) ? "disabled" : AgentPolicy.Orchestration(chat.OrchestrationMode) };
-        capturedProject = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson };
+        capturedProject = new Project { Id = project.Id, Name = project.Name, IsInbox = project.IsInbox, Icon = project.Icon, Color = project.Color, PermissionProfileJson = project.PermissionProfileJson, Instructions = project.Instructions };
         Project.SetSourceFolders(ConversationModes.IsChat(Chat.InteractionMode) ? [] : ProjectResources.For(chat, project, databasePath));
         Provider = JsonSerializer.Deserialize<Provider>(JsonSerializer.Serialize(provider))!;
         SelectedProviderId=provider.Id;

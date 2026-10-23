@@ -714,7 +714,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
 
             else SetRunStatus(run, T("Réponse OpenCode terminée · historique enregistré."), StatusKind.Notice);
 
-            AddHistoryActions(active, assistantUi.Container);
+            if (assistantUi.Continuation == null) AddHistoryActions(active, assistantUi.Container);
 
             active = null;
 

@@ -45,7 +45,7 @@ public sealed partial class MainWindow
     void RefreshIdlePresentation()
     {
         if (idleClosed) return;
-        BusySpinner.SetRootActive(root.XamlRoot, VisualUpdatesAllowed);
+        BusySpinner.SetRootActive(root.XamlRoot, windowActive, AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized });
         RefreshChatBackgroundMotion(); RefreshStatusMotion();
         RefreshModelActivity(); RefreshGlobalTokenSpeed(); RefreshRecentComposerSpeed();
         RefreshTerminalPresentation(); RefreshBrowserPower();

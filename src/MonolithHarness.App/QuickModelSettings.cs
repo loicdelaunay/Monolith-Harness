@@ -141,6 +141,13 @@ public sealed partial class MainWindow
                 ThinkingLevel = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel), InteractionMode = ConversationModes.Normalize(chat?.InteractionMode) }, source);
         }
         foreach (var value in config.QuickModelLevels) Add(value);
+        providerEditor.Removed += deleted =>
+        {
+            foreach (var row in rows.Where(row => ReferenceEquals(row.Provider.SelectedItem, deleted) || row.Original.ProviderId == deleted.Id && deleted.Id > 0 && row.Provider.SelectedItem == null).ToArray())
+            { rows.Remove(row); cards.Children.Remove(row.Card); }
+            if (rows.Count == 0) enabled.IsOn = false;
+            NumberRows();
+        };
         void EnabledChanged() { editor.Visibility = enabled.IsOn ? Visibility.Visible : Visibility.Collapsed; if (enabled.IsOn && rows.Count == 0) AddCurrent(); }
         enabled.Toggled += (_, _) => EnabledChanged(); EnabledChanged(); NumberRows();
         add.Click += (_, _) => AddCurrent();

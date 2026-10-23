@@ -144,7 +144,7 @@ public sealed partial class MainWindow
         if (card?.Child is not StackPanel || message.Role is not ("user" or "assistant")) return;
         var actions = EnsureMessageActionMenu(card);
         if (message.Role == "user") AddMessageCopyAction(actions, () => message.Content);
-        if (message.State is not ("complete" or "compacted") || actions.HasBranches) return;
+        if (message.State is not ("complete" or "compacted") || actions.HasBranches || message.WireJson.Contains(ConversationTimeline.SegmentKey, StringComparison.Ordinal)) return;
         if (message.WireJson.Length > 0 && System.Text.Json.Nodes.JsonNode.Parse(message.WireJson)?["tool_calls"] is System.Text.Json.Nodes.JsonArray { Count: > 0 }) return;
         async Task Branch(bool resume)
         {
@@ -153,10 +153,19 @@ public sealed partial class MainWindow
                 if (conversationRuns.ContainsKey(message.ChatId)) throw new InvalidOperationException(WorkflowText("Arrêtez la génération avant de reprendre plus haut.", "Stop generation before resuming here."));
                 if (await ShowDialogAsync(new ContentDialog { XamlRoot = root.XamlRoot, Title = WorkflowText("Reprendre ici ?", "Resume here?"), Content = WorkflowText("La suite sera conservée dans une conversation Sauvegarde. Cette conversation reprendra à ce message et sa file d’attente sera vidée.", "Later messages will be kept in a Backup conversation. This chat will resume here and its queue will be cleared."), PrimaryButtonText = WorkflowText("Reprendre", "Resume"), CloseButtonText = WorkflowText("Annuler", "Cancel") }) != ContentDialogResult.Primary) return;
             }
-            var branch = await ConversationBranches.CreateAsync(HarnessDb.DatabasePath, message.ChatId, message.Id, resume);
+            var branch = await ConversationBranches.CreateAsync(HarnessDb.DatabasePath, message.ChatId, message.Id, resume, editUserMessage: resume && message.Role == "user");
             if (resume) foreach (var id in subagentViews.Where(x => x.Value.ChatId == message.ChatId).Select(x => x.Key).ToArray()) subagentViews.Remove(id);
             conversationHistory.Remove(message.ChatId);
             state.ChatId = branch.Id; await db.SaveChangesAsync(); await SelectProject();
+            if (resume && message.Role == "user")
+            {
+                composer.Text = message.Content;
+                pendingImages.Clear();
+                pendingImages.AddRange(message.Attachments.Select(a => new Attachment { Name = a.Name, Mime = a.Mime, Data = a.Data.ToArray() }));
+                UpdateAttachments();
+                SaveConversationDraft();
+                composer.SelectionStart = composer.Text.Length;
+            }
             composer.Focus(FocusState.Programmatic);
         }
         var fork = new MenuFlyoutItem { Text = WorkflowText("Créer un fork", "Fork from here") };

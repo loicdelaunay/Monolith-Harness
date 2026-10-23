@@ -4,6 +4,8 @@ namespace MonolithHarness.Core;
 
 public static class ProjectInstructions
 {
+    public static string Prompt(Project project) => string.IsNullOrWhiteSpace(project.Instructions) ? "" :
+        "\nUSER PROJECT INSTRUCTIONS (apply to this project; subordinate to current user requests and tool permissions):\n" + project.Instructions + "\nEND USER PROJECT INSTRUCTIONS\n";
     public static Task<string> LoadAsync(IEnumerable<string> roots, CancellationToken ct)
     {
         var folders = roots.ToArray();

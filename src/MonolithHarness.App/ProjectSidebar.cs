@@ -144,7 +144,10 @@ public sealed partial class MainWindow
                 e.Handled = true;
                 var menu = new MenuFlyout(); var manage = new MenuFlyoutItem { Text = UiText.T("Gérer") };
                 manage.Click += async (_, _) => await Guard(async () => { if (!selected) { loading = true; projects.SelectedItem = owner; loading = false; await SelectProject(); } await ManageProject(); });
-                menu.Items.Add(manage); menu.ShowAt(open);
+                menu.Items.Add(manage);
+                var instructions = new MenuFlyoutItem { Text = WorkflowText("Instructions", "Instructions"), Icon = new FontIcon { Glyph = "\uE70F" } };
+                instructions.Click += async (_, _) => await Guard(() => EditProjectInstructionsAsync(owner));
+                menu.Items.Add(instructions); menu.ShowAt(open);
             };
             var add = Action("", async () =>
             {

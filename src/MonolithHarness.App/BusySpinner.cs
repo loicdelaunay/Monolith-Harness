@@ -10,16 +10,16 @@ namespace MonolithHarness.App;
 // A small native spinner that does not depend on the optional Lottie renderer.
 sealed class BusySpinner : Grid
 {
-    sealed class RootActivity { public bool Active = true; }
+    sealed class RootActivity { public bool Active = true, Visible = true; }
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<XamlRoot, RootActivity> roots = new();
     static readonly List<WeakReference<BusySpinner>> instances = [];
     bool tracked;
-    public static void SetRootActive(XamlRoot? root, bool active)
+    public static void SetRootActive(XamlRoot? root, bool active, bool visible = true)
     {
         if (root == null) return;
         var state = roots.GetValue(root, _ => new());
-        if (state.Active == active) return;
-        state.Active = active;
+        if (state.Active == active && state.Visible == visible) return;
+        state.Active = active; state.Visible = visible;
         for (var i = instances.Count - 1; i >= 0; i--)
             if (!instances[i].TryGetTarget(out var spinner)) instances.RemoveAt(i);
             else if (spinner.XamlRoot == root) spinner.Refresh();
@@ -28,6 +28,7 @@ sealed class BusySpinner : Grid
     bool running;
     readonly RotateTransform rotation = new() { CenterX = 8, CenterY = 8 };
     bool active;
+    public bool AnimateWhenInactive { get; init; }
     public bool IsActive
     {
         get => active;
@@ -51,7 +52,7 @@ sealed class BusySpinner : Grid
 
     void Refresh()
     {
-        if (active && IsLoaded && Visibility == Visibility.Visible && (XamlRoot == null || roots.GetValue(XamlRoot, _ => new()).Active)) { if (!running) { animation.Begin(); running = true; } }
+        if (active && IsLoaded && Visibility == Visibility.Visible && (XamlRoot == null || roots.GetValue(XamlRoot, _ => new()) is { Visible: true } state && (state.Active || AnimateWhenInactive))) { if (!running) { animation.Begin(); running = true; } }
         else if (running) { animation.Stop(); running = false; }
     }
 }

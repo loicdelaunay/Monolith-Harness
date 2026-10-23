@@ -28,6 +28,8 @@ public sealed partial class MainWindow
     Button? hoveredTitleTool;
     bool desktopTitleBarHovered;
     bool customDesktopTitleBar, layingOutTitleBar, desktopChromeClosed;
+    bool titleBarSetupPending, titleBarFallback, titleBarActivated;
+    XamlRoot? observedTitleRoot;
 
     FrameworkElement BuildDesktopTitleBar()
     {
@@ -69,8 +71,13 @@ public sealed partial class MainWindow
         };
         desktopTitleBar.PointerCanceled += (_, _) => { desktopTitleBarHovered = false; hoveredTitleTool = null; RefreshDesktopTitleBarHover(); };
         desktopTitleBar.Unloaded += (_, _) => { desktopTitleBarHovered = false; hoveredTitleTool = null; RefreshDesktopTitleBarHover(); };
-        desktopTitleBar.Loaded += (_, _) => { ConfigureDesktopTitleBar(); LayoutDesktopTitleBar(); };
-        desktopTitleBar.SizeChanged += (_, _) => LayoutDesktopTitleBar();
+        desktopTitleBar.Loaded += (_, _) => QueueDesktopTitleBarSetup();
+        Activated += (_, args) =>
+        {
+            if (!WindowActivity.IsActive(args)) return;
+            titleBarActivated = true; QueueDesktopTitleBarSetup();
+        };
+        desktopTitleBar.SizeChanged += (_, _) => { LayoutDesktopTitleBar(); if (!customDesktopTitleBar) QueueDesktopTitleBarSetup(); };
         titleToolButtons.SizeChanged += (_, _) => LayoutDesktopTitleBar();
         Closed += (_, _) => desktopChromeClosed = true;
         AppWindow.Changed += (_, _) => DispatcherQueue.TryEnqueue(LayoutDesktopTitleBar);
@@ -78,9 +85,53 @@ public sealed partial class MainWindow
         return desktopTitleBar;
     }
 
+    async void QueueDesktopTitleBarSetup()
+    {
+        if (desktopChromeClosed || titleBarFallback || titleBarSetupPending || !titleBarActivated || !desktopTitleBar.IsLoaded) return;
+        titleBarSetupPending = true;
+        try
+        {
+            for (int attempt = 0; attempt < 8 && !desktopChromeClosed; attempt++)
+            {
+                await Task.Delay(attempt == 0 ? 16 : 100);
+                if (desktopChromeClosed) return;
+                if (root.XamlRoot == null || desktopTitleBar.ActualWidth <= 0) continue;
+                root.UpdateLayout();
+                ConfigureDesktopTitleBar();
+                LayoutDesktopTitleBar();
+                root.UpdateLayout();
+#if !WINDOWS
+                _ = UnoCaptionWidth();
+                if (customDesktopTitleBar && systemCaptionContainer is { IsLoaded: true, ActualWidth: > 0, ActualHeight: > 0, Visibility: Visibility.Visible }) return;
+#else
+                if (customDesktopTitleBar && AppWindow.TitleBar.Height > 0) return;
+#endif
+                // Rebind after a template/layout transition; no permanent refresh timer.
+                if (customDesktopTitleBar) { SetTitleBar(titleDragRegion); titleDragBounds = null; titleInputRegions.Clear(); }
+            }
+            if (!desktopChromeClosed)
+            {
+                titleBarFallback = true; customDesktopTitleBar = false;
+                SetTitleBar(null); ExtendsContentIntoTitleBar = false;
+                LayoutDesktopTitleBar();
+                AppLog.Write(AppLogLevel.Warning, "ui.titlebar_fallback");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!desktopChromeClosed)
+            {
+                titleBarFallback = true; customDesktopTitleBar = false;
+                SetTitleBar(null); ExtendsContentIntoTitleBar = false;
+                AppLog.Write(AppLogLevel.Warning, "ui.titlebar_setup", ex);
+            }
+        }
+        finally { titleBarSetupPending = false; }
+    }
+
     void ConfigureDesktopTitleBar()
     {
-        if (customDesktopTitleBar || !AppWindowTitleBar.IsCustomizationSupported()) return;
+        if (customDesktopTitleBar || desktopChromeClosed || root.XamlRoot == null || desktopTitleBar.ActualWidth <= 0 || !AppWindowTitleBar.IsCustomizationSupported()) return;
         try
         {
             ExtendsContentIntoTitleBar = true;
@@ -92,7 +143,11 @@ public sealed partial class MainWindow
             AppWindow.TitleBar.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
 #endif
             customDesktopTitleBar = true;
-            if (desktopTitleBar.XamlRoot is { } xamlRoot) xamlRoot.Changed += (_, _) => LayoutDesktopTitleBar();
+            if (desktopTitleBar.XamlRoot is { } xamlRoot && !ReferenceEquals(observedTitleRoot, xamlRoot))
+            {
+                observedTitleRoot = xamlRoot;
+                xamlRoot.Changed += (_, _) => { titleDragBounds = null; titleInputRegions.Clear(); LayoutDesktopTitleBar(); };
+            }
             ApplyDesktopTitleBarTheme();
         }
         catch (Exception ex)
@@ -163,7 +218,7 @@ public sealed partial class MainWindow
     FrameworkElement? systemCaptionContainer;
     double UnoCaptionWidth()
     {
-        if (systemCaptionContainer == null)
+        if (systemCaptionContainer == null || !systemCaptionContainer.IsLoaded)
         {
             for (DependencyObject? parent = root; parent != null; parent = VisualTreeHelper.GetParent(parent))
             {
@@ -184,10 +239,11 @@ public sealed partial class MainWindow
 #endif
     RectInt32 TitleBarBounds(FrameworkElement element)
     {
-        var bounds = element.TransformToVisual(root).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+        var bounds = element.TransformToVisual(null).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
         var scale = root.XamlRoot?.RasterizationScale ?? 1;
-        return new RectInt32 { X = (int)Math.Round(bounds.X * scale), Y = (int)Math.Round(bounds.Y * scale),
-            Width = (int)Math.Round(bounds.Width * scale), Height = (int)Math.Round(bounds.Height * scale) };
+        var x = (int)Math.Floor(bounds.X * scale); var y = (int)Math.Floor(bounds.Y * scale);
+        return new RectInt32 { X = x, Y = y,
+            Width = (int)Math.Ceiling(bounds.Right * scale) - x, Height = (int)Math.Ceiling(bounds.Bottom * scale) - y };
     }
     void SetTitleBarInputRegion(NonClientRegionKind kind, params RectInt32[] rectangles)
     {
@@ -199,6 +255,10 @@ public sealed partial class MainWindow
     {
         if (desktopChromeClosed || !customDesktopTitleBar || desktopTitleBar.ActualWidth <= 0 || root.XamlRoot == null) return;
         var drag = TitleBarBounds(titleDragRegion);
+        var barBounds = TitleBarBounds(desktopTitleBar);
+        // Padding is visual only: the caption must include the top physical pixel.
+        drag.Y = 0; drag.Height = barBounds.Y + barBounds.Height;
+        if (titleLeftInset.Width.Value == 0) { drag.Width += drag.X; drag.X = 0; }
         if (drag.Width > 0 && drag.Height > 0 && !Equals(titleDragBounds, drag))
         {
             titleDragBounds = drag;

@@ -19,11 +19,12 @@ public static class AgentPolicy
             ? $"Mode Chat : outil '{tool}' indisponible. Passez en Agent pour utiliser les outils / Chat mode has no tools."
             : $"Mode {(Mode(mode) == "propose" ? "Proposition" : "Plan")} : outil '{tool}' interdit. Passez en Exécution au prochain envoi / Plan mode forbids this tool.");
     }
-    public static bool Allowed(Chat chat, string tool) => ResourceAccessPolicy.Allowed(chat, tool) && (ConversationModes.IsChat(chat.InteractionMode)
+    public static bool Allowed(Chat chat, string tool) => ResourceAccessPolicy.Allowed(chat, tool) && (!McpAccess.IsTool(tool) || McpAccess.Allowed(chat)) && (ConversationModes.IsChat(chat.InteractionMode)
         ? ConversationModes.ToolAllowed(chat, tool) : Allowed(chat.ExecutionMode, tool));
     public static void Demand(Chat chat, string tool)
     {
         ResourceAccessPolicy.Demand(chat, tool);
+        if (McpAccess.IsTool(tool) && !McpAccess.Allowed(chat)) throw new UnauthorizedAccessException("MCP désactivé pour cette conversation / MCP disabled for this conversation.");
         if (!ConversationModes.IsChat(chat.InteractionMode)) { Demand(chat.ExecutionMode, tool); return; }
         if (!Allowed(chat, tool)) throw new UnauthorizedAccessException($"Mode Chat : outil '{tool}' indisponible ou skill désactivé / Tool unavailable or skill disabled in Chat mode.");
     }

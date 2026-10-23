@@ -22,7 +22,7 @@ public sealed partial class HarnessService
                 await emit(new { @event = "status", chatId = run.Chat.Id, text = "Réponse attendue / Waiting for your answer" });
                 var answer = await pending.Completion.Task.WaitAsync(ct);
                 await using var db = Db();
-                var message = new Message { ChatId = run.Chat.Id, Role = "interaction", State = "ui", Content = QuestionSummary(items, answer) };
+                var message = new Message { ChatId = run.Chat.Id, Role = "interaction", State = "ui", Content = QuestionSummary(items, answer), WireJson = ConversationTimeline.Capture(run) };
                 db.Messages.Add(message); await db.SaveChangesAsync(ct);
                 await emit(new { @event = "message", chatId = run.Chat.Id, message = MessageView(message) });
                 await emit(new { @event = "status", chatId = run.Chat.Id, text = "Reprise du travail… / Resuming…" });

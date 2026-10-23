@@ -8,8 +8,8 @@ public sealed partial class MainWindow
 {
     Window? settingsWindow;
     SettingsNavigation? settingsNavigation;
-    int settingsProviderTab = -1, settingsPermissionTab = -1, settingsServerTab = -1;
-    bool providersRequested, permissionsRequested, serverRequested;
+    int settingsProviderTab = -1, settingsPermissionTab = -1, settingsServerTab = -1, settingsMcpTab = -1;
+    bool providersRequested, permissionsRequested, serverRequested, mcpSettingsRequested;
     bool editingSettings, settingsSaveInProgress;
 
     Task Settings() => Settings(showProviders: false);
@@ -65,7 +65,7 @@ public sealed partial class MainWindow
         window.Closed += (_, _) =>
         {
             if (!ReferenceEquals(settingsWindow, window)) return;
-            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; settingsPermissionTab = -1; settingsServerTab = -1; providersRequested = false; permissionsRequested = false; serverRequested = false;
+            settingsWindow = null; settingsNavigation = null; settingsProviderTab = -1; settingsPermissionTab = -1; settingsServerTab = -1; settingsMcpTab = -1; mcpSettingsRequested = false; providersRequested = false; permissionsRequested = false; serverRequested = false;
         };
         window.Content = new Border
         {
@@ -124,15 +124,35 @@ public sealed partial class MainWindow
         panel.Children.Add(content);
         var save = new Button { Content = T("Enregistrer"), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         var cancel = new Button { Content = T("Annuler") };
-        var actions = Row(cancel, save);
-        actions.HorizontalAlignment = HorizontalAlignment.Right;
+        var validationError = Label("", 12); validationError.Foreground = FluentDesign.Resource("ToolMessageErrorStrokeBrush");
+        validationError.MaxWidth = 480; validationError.Visibility = Visibility.Collapsed;
+        var actions = new Grid { ColumnSpacing = 12 };
+        actions.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var buttons = Row(cancel, save); Grid.SetColumn(buttons, 1);
+        actions.Children.Add(validationError); actions.Children.Add(buttons);
+        actions.HorizontalAlignment = HorizontalAlignment.Stretch;
         actions.Margin = new(24, 16, 24, 16);
         Grid.SetRow(actions, 2);
         panel.Children.Add(actions);
         save.Click += (_, _) =>
         {
             if (databaseMaintenanceBusy) return;
-            if (!validate()) return;
+            validationError.Visibility = Visibility.Collapsed;
+            try
+            {
+                if (!validate())
+                {
+                    validationError.Text = WorkflowText("Vérifiez le réglage signalé dans l’onglet sélectionné.", "Check the highlighted setting in the selected tab.");
+                    validationError.Visibility = Visibility.Visible; return;
+                }
+            }
+            catch (Exception ex)
+            {
+                validationError.Text = MonolithHarness.Core.ToolAuthorization.Clean(ex.Message);
+                validationError.Visibility = Visibility.Visible;
+                MonolithHarness.Core.AppLog.Write(MonolithHarness.Core.AppLogLevel.Warning, "settings.validation", ex); return;
+            }
             if (settingsSaveInProgress) return;
             settingsSaveInProgress = true;
             save.IsEnabled = cancel.IsEnabled = false;

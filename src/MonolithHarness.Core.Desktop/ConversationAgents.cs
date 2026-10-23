@@ -10,6 +10,7 @@ public sealed class AgentRole
 
 public sealed class ConversationAgents
 {
+    public bool McpEnabled { get; set; } = true;
     public bool AutomaticCount { get; set; } = true;
     public bool AutomaticRoles { get; set; } = true;
     public bool UseGitWorktree { get; set; } = true;

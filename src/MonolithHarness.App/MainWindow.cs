@@ -602,6 +602,7 @@ public sealed partial class MainWindow : Window
     }
     void RenderHistory(List<Message> history, StackPanel messages, Project? sourceProject, int start = 0, int count = int.MaxValue)
     {
+        if (start == 0 && count == int.MaxValue) history = ConversationTimeline.ForDisplay(history);
         for (int i = start; i < history.Count && i - start < count; i++)
         {
             var item = history[i];
@@ -676,6 +677,12 @@ public sealed partial class MainWindow : Window
     sealed class AssistantMessageUi
     {
         public ReasoningGroupUi? Group { get; set; }
+        public AssistantMessageUi? Continuation { get; set; }
+        public int TextOffset { get; set; }
+        public int ReasoningOffset { get; set; }
+        public int ReasoningLength => (pendingThinking?.Text ?? reasoningText).Length;
+        string ContinuationText(string text) => text.Length >= CurrentText.Length && text.StartsWith(CurrentText, StringComparison.Ordinal) ? text[CurrentText.Length..] : text;
+        string ContinuationReasoning(string text) => text.Length >= ReasoningLength && text.StartsWith(pendingThinking?.Text ?? reasoningText, StringComparison.Ordinal) ? text[ReasoningLength..] : text;
         public Border? Container { get; set; }
         public StackPanel BodyContainer { get; init; } = null!;
         public Border ThinkingCard { get; init; } = null!;
@@ -745,6 +752,7 @@ public sealed partial class MainWindow : Window
         (string Text, bool Complete)? pendingThinking;
         public void SetDuration(double seconds, DateTime? completedUtc = null)
         {
+            if (Continuation is { } next) { next.SetDuration(seconds, completedUtc); return; }
             durationText = seconds > 0 ? UiText.Resolve("Durée : ", "Duration: ") + (seconds >= 60 ? $"{(int)(seconds / 60)} min {seconds % 60:0.#} s" : $"{seconds:0.#} s") : "";
             completedTimeTip = "";
             if (completedUtc is { } completed)
@@ -762,6 +770,7 @@ public sealed partial class MainWindow : Window
         }
         public void SetCachedInputTokens(int? count)
         {
+            if (Continuation is { } next) { next.SetCachedInputTokens(count); return; }
             cachedInputTokens = count is >= 0 ? count : null;
             RefreshFooter();
         }
@@ -781,6 +790,7 @@ public sealed partial class MainWindow : Window
         }
         public void Flush()
         {
+            if (Continuation is { } next) { next.Flush(); return; }
             if (pendingText is { } text) { pendingText = null; RenderContent(text, renderedStreaming); }
             if (pendingThinking is { } thinking) { pendingThinking = null; UpdateThinking(thinking.Text, thinking.Complete); }
         }
@@ -788,6 +798,7 @@ public sealed partial class MainWindow : Window
         bool renderedStreaming;
         public void UpdateContent(string text, bool streaming = false)
         {
+            if (Continuation is { } next) { next.UpdateContent(ContinuationText(text), streaming); return; }
             // The final update re-parses the whole reply even when its text did not change.
             if (CurrentText == text && pendingText == null && (streaming || !renderedStreaming)) return;
             CurrentText = text;
@@ -805,6 +816,7 @@ public sealed partial class MainWindow : Window
 
         public void UpdateThinking(string reasoning, bool isComplete = false, bool streaming = false)
         {
+            if (Continuation is { } next) { next.UpdateThinking(ContinuationReasoning(reasoning), isComplete, streaming); return; }
             if ((streaming || pendingThinking != null) && !CanPaint()) { pendingThinking = (reasoning, isComplete); return; }
             pendingThinking = null;
             if (string.IsNullOrEmpty(reasoning))
@@ -942,6 +954,7 @@ public sealed partial class MainWindow : Window
             ui.SetHovered(false);
         };
         actualHost.Children.Add(container);
+        latestAssistantViews.Remove(actualHost); latestAssistantViews.Add(actualHost, ui);
 
         ui.UpdateContent(initialText);
 
@@ -1138,7 +1151,7 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(toolTitle, 1);
         titleBox.Children.Add(toolTitle);
 
-        var spinner = new BusySpinner { IsActive = true, VerticalAlignment = VerticalAlignment.Center };
+        var spinner = new BusySpinner { IsActive = true, AnimateWhenInactive = true, VerticalAlignment = VerticalAlignment.Center };
         var statusBadge = Label("", 11);
         statusBadge.Foreground = FluentDesign.Resource("AccentFillColorDefaultBrush");
         statusBadge.MaxWidth = 250;
@@ -1184,14 +1197,18 @@ public sealed partial class MainWindow : Window
         summaryText.TextTrimming = TextTrimming.CharacterEllipsis;
         stack.Children.Add(summaryText);
 
-        var progressBar = new ProgressBar { IsIndeterminate = true, Height = 2, HorizontalAlignment = HorizontalAlignment.Stretch };
-        stack.Children.Add(progressBar);
         var imageHost = new StackPanel { Visibility = Visibility.Collapsed };
         stack.Children.Add(imageHost);
 
         var detailsPanel = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 0) };
 
-        if (!string.IsNullOrWhiteSpace(arguments))
+        SourceEditArgumentsView? editParameters = null;
+        if (!string.IsNullOrWhiteSpace(arguments) && toolName == "edit_source")
+        {
+            editParameters = new SourceEditArgumentsView(arguments);
+            detailsPanel.Children.Add(editParameters);
+        }
+        else if (!string.IsNullOrWhiteSpace(arguments))
         {
             var argsTitle = Label(T("Paramètres envoyés :"), 11);
             argsTitle.Foreground = Brush(160, 170, 190);
@@ -1243,12 +1260,13 @@ public sealed partial class MainWindow : Window
         stack.Children.Add(detailsPanel);
 
         bool expanded = false;
-        toggleBtn.Click += (_, _) =>
+        toggleBtn.Click += async (_, _) =>
         {
             expanded = !expanded;
             detailsPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
             toggleBtn.Content = expanded ? "▼ " + T("Réduire") : "▶ " + T("Détails");
             summaryText.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
+            if (expanded && editParameters != null) await editParameters.PrepareAsync();
         };
 
         card.Child = stack;
@@ -1271,7 +1289,6 @@ public sealed partial class MainWindow : Window
             group.Update(T("Outil") + " : " + toolName + " · " + statusBadge.Text + " · " + summary);
             card.BorderBrush = FluentDesign.Resource(failed ? "ToolMessageErrorStrokeBrush" : "ToolMessageStrokeBrush");
             spinner.IsActive = false; spinner.Visibility = Visibility.Collapsed;
-            progressBar.IsIndeterminate = false; progressBar.Visibility = Visibility.Collapsed;
             resultTitle.Text = cancelled ? WorkflowText("Exécution arrêtée :", "Execution stopped:") : T("Résultat obtenu :");
             AddPaths(resultText, output);
             if (image is { Length: > 0 })
@@ -1665,8 +1682,9 @@ public sealed partial class MainWindow : Window
         var advancedTab = tabs.Add(WorkflowText("Avancé", "Advanced"), renderingSettings.Panel, "\uE9E9");
         tabs.Add(WorkflowText("Réinitialisation", "Reset"), BuildResetSettings(loadingWindow), "\uE777");
         tabs.Add("About", about, "\uE946", footer: true);
-        settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab; settingsServerTab = serverTab;
+        settingsNavigation = tabs; settingsProviderTab = providerTab; settingsPermissionTab = permissionTab; settingsServerTab = serverTab; settingsMcpTab = mcpTab;
         if (serverRequested) { tabs.SelectedIndex = serverTab; serverRequested = false; }
+        if (mcpSettingsRequested) { tabs.SelectedIndex = mcpTab; mcpSettingsRequested = false; }
         if (providersRequested) { tabs.SelectedIndex = providerTab; providersRequested = false; }
         if (permissionsRequested) { tabs.SelectedIndex = permissionTab; permissionsRequested = false; }
         if (!await ShowSettingsWindowAsync(loadingWindow, tabs, () =>
@@ -2406,6 +2424,7 @@ public sealed partial class MainWindow : Window
         if (provider.IsAcp) systemPrompt = AcpSystemPrompt(run);
         else systemPrompt += await agent.InitializeAsync(ct);
         if (provider.IsAcp && run.Chat.ExecutionMode == "propose") systemPrompt += AgentPolicy.Prompt("propose", "disabled");
+        if (provider.IsAcp) systemPrompt += ProjectInstructions.Prompt(run.Project);
         systemPrompt += CitationPaths.Prompt(sourceFolders);
         systemPrompt += await InformationSkill.PromptAsync(run, ct);
         systemPrompt += ResourceAccessPolicy.Prompt(run.Chat);
@@ -2452,8 +2471,9 @@ public sealed partial class MainWindow : Window
                 }
                 for (int i = definitions.Count - 1; i >= 0; i--)
                     if (definitions[i]?["function"]?["name"]?.GetValue<string>().StartsWith("mcp_", StringComparison.Ordinal) == true) definitions.RemoveAt(i);
-                if (!provider.IsAcp && run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                if (!provider.IsAcp && McpAccess.Allowed(run.Chat))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
+                if (mcp.Notices.Count > 0) SetRunStatus(run, string.Join("\n", mcp.Notices), StatusKind.Notice);
                 var definitionsTokens = ContextWindow.Estimate(definitions);
                 var inputEstimate = ContextWindow.Estimate(wire) + definitionsTokens;
                 ShowContextUsage(run, inputEstimate, estimated: true);

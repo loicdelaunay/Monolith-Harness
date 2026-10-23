@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     {
         try
         {
+            if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_CHRONOLOGY_SMOKE") == "1") { await SmokeReasoningChronology(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_QUESTIONS_SMOKE") == "1") { await SmokeWorkflowQuestions(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_CHROME_SMOKE") == "1") { await SmokeDesktopChrome(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_RESPONSIVE_SMOKE") == "1") { await SmokeResponsiveSidebar(output); return; }

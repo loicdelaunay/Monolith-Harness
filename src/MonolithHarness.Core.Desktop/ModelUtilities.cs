@@ -6,6 +6,7 @@ namespace MonolithHarness.Core;
 
 public sealed record ModelToolRequest(string System, string Input, int TimeoutSeconds = 180, int MaxResponseCharacters = 200_000)
 {
+    public string ThinkingLevel { get; init; } = "auto";
     public JsonArray Messages() => new(
         new JsonObject { ["role"] = "system", ["content"] = System },
         new JsonObject { ["role"] = "user", ["content"] = Input });
@@ -48,7 +49,7 @@ public sealed class ModelToolClient(HttpClient http)
         try
         {
             if (!provider.IsOpenCode)
-                completion = await chat.StreamAsync(provider, secret, messages, [], Update, timeout.Token, retrySettings: retrySettings);
+                completion = await chat.StreamAsync(provider, secret, messages, [], Update, timeout.Token, request.ThinkingLevel, retrySettings: retrySettings);
             else
             {
                 // A fresh session for every tool request prevents benchmark answers and user text
@@ -61,7 +62,7 @@ public sealed class ModelToolClient(HttpClient http)
                 try
                 {
                     completion = await openCode.PromptAsync(isolated, secret, directory, session,
-                        request.Input, request.System, [], Update, timeout.Token, policy: new("plan", "disabled"), retrySettings: retrySettings);
+                        request.Input, request.System, [], Update, timeout.Token, policy: new("chat", "disabled", ThinkingLevel: request.ThinkingLevel), retrySettings: retrySettings);
                     watch.Stop();
                 }
                 finally

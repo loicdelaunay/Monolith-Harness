@@ -42,7 +42,7 @@ public sealed partial class MainWindow
                 SourceTools.AddDefinitions(definitions, source, enabled); AddWorkspaceToolDefinitions(definitions, run);
                 FeatureSettings.Read(run.Options.FeaturesJson).FilterBrowser(definitions);
                 AgentPolicy.Filter(definitions, run.Chat); SandboxWorkspace.Filter(definitions, run.Chat.SandboxEnabled);
-                if (run.Chat.AllowOutsideResources && !run.Chat.SandboxEnabled && !AgentPolicy.ReadOnly(run.Chat.ExecutionMode))
+                if (McpAccess.Allowed(run.Chat))
                     foreach (var definition in await mcp.RefreshAsync(ct)) definitions.Add(definition!.DeepClone());
                 return definitions;
             }

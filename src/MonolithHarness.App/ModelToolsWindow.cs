@@ -18,6 +18,8 @@ internal sealed partial class ModelToolsWindow : Window
     internal readonly Grid Panel = new() { Padding = new(24), RowSpacing = 16, Background = FluentDesign.Resource("SolidBackgroundFillColorBaseBrush") };
     readonly ComboBox model = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0 };
     readonly Button reload = null!;
+    readonly ComboBox proofThinking = new() { MinWidth = 125, VerticalAlignment = VerticalAlignment.Bottom };
+    static readonly string[] ToolThinkingLevels = ["none", "low", "medium", "high", "auto"];
     readonly TextBlock notice = Text("", 13, true);
     readonly TextBlock usage = Text("", 12, true);
     readonly ProgressBar progressBar = new() { IsIndeterminate = true, Height = 3, Visibility = Visibility.Collapsed };
@@ -82,6 +84,15 @@ internal sealed partial class ModelToolsWindow : Window
         });
         reload.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(reload, 1); toolbar.Children.Add(reload);
+        if (kind == ModelToolKind.Proofreader)
+        {
+            toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+            proofThinking.Header = L("Réflexion", "Thinking");
+            proofThinking.ItemsSource = new[] { L("Aucune · rapide", "None · fast"), L("Faible", "Low"), L("Moyenne", "Medium"), L("Élevée", "High"), "Auto" };
+            proofThinking.SelectedIndex = 0;
+            Grid.SetColumn(proofThinking, 1); Grid.SetColumn(reload, 2); toolbar.Children.Add(proofThinking);
+            busyControls.Add(proofThinking);
+        }
         Grid.SetRow(toolbar, 1); Panel.Children.Add(toolbar);
         busyControls.AddRange([model, reload]);
         stop = Button(L("Arrêter", "Stop"), () => { cancellation?.Cancel(); return Task.CompletedTask; });
@@ -147,6 +158,8 @@ internal sealed partial class ModelToolsWindow : Window
     async Task<ModelToolResult> Request(Provider selected, ModelToolRequest request, Action<string>? text, CancellationToken ct,
         Action<GenerationUpdate>? progress = null)
     {
+        if (kind == ModelToolKind.Proofreader)
+            request = request with { ThinkingLevel = ToolThinkingLevels[Math.Clamp(proofThinking.SelectedIndex, 0, ToolThinkingLevels.Length - 1)] };
         SetNotice(L("Réponse en cours…", "Generating…"));
         using var consumption = SmokeRequest == null ? TokenConsumption.Begin(consumptionDatabase, kind.ToString().ToLowerInvariant()) : null;
         var last = DateTime.MinValue;

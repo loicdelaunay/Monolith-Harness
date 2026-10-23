@@ -235,16 +235,21 @@ public sealed partial class MainWindow
         }
         SizeChangedEventHandler viewportChanged = (_, _) => FitQuestionViewport();
         scroll.SizeChanged += viewportChanged; card.SizeChanged += viewportChanged;
-        run.Messages.Children.Add(card); FitQuestionViewport(); ScrollRunToBottom(run); NotifyChat(run, true);
+        var questionHost = MessageHost(run.Messages);
+        activityGroups.Remove(questionHost);
+        questionHost.Children.Add(card); FitQuestionViewport(); ScrollRunToBottom(run); NotifyChat(run, true);
         SetRunStatus(run, WorkflowText("Réponse attendue dans la conversation", "Waiting for your answer in the conversation"), StatusKind.Notice);
         try {
             var answer = await completion.Task.WaitAsync(ct);
             string summary = string.Join("\n\n", questions.Select((q, i) => q.Question + "\n→ " + (answer.Cancelled ? WorkflowText("Annulé", "Cancelled") : string.Join(", ", answer.Answers[i]))));
             await using var store = new HarnessDb();
-            store.Messages.Add(new Message { ChatId = run.Chat.Id, Role = "interaction", State = "ui", Content = summary });
+            var interaction = new Message { ChatId = run.Chat.Id, Role = "interaction", State = "ui", Content = summary, WireJson = ConversationTimeline.Capture(run) };
+            store.Messages.Add(interaction);
             await store.SaveChangesAsync(ct); AddMessage("assistant", summary, [], run.Messages);
+            activityGroups.Remove(MessageHost(run.Messages));
+            ContinueAssistantAfterQuestion(run, interaction);
             SetRunStatus(run, WorkflowText("Reprise du travail…", "Resuming…")); return answer;
-        } finally { scroll.SizeChanged -= viewportChanged; card.SizeChanged -= viewportChanged; run.Messages.Children.Remove(card); AcknowledgeChatNotice(run.Chat.Id, actionResolved: true); }
+        } finally { scroll.SizeChanged -= viewportChanged; card.SizeChanged -= viewportChanged; questionHost.Children.Remove(card); AcknowledgeChatNotice(run.Chat.Id, actionResolved: true); }
     }
     static string QuestionDisplayTitle(string title, int index)
     {
