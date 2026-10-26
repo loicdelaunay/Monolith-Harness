@@ -24,8 +24,7 @@ public sealed partial class MainWindow
     bool applyingQuickLevel, changingQuickMode, modelOptionsIsOpen;
     string? previewQuickLevelId;
 
-    string[] ThinkingLevelLabels() => ["🧠 Auto", "🧠 " + WorkflowText("Faible", "Low"), "🧠 " + WorkflowText("Moyen", "Medium"),
-        "🧠 " + WorkflowText("Élevé", "High"), "🧠 " + WorkflowText("Désactivé", "Disabled")];
+    string[] ThinkingLevelLabels() => QuickModelShortcuts.ThinkingLevels.Select(x => ReasoningCapabilities.Label(x, state.Language == "fr")).ToArray();
 
     StackPanel BuildQuickModelHeader(TextBlock heading)
     {

@@ -6,20 +6,19 @@ namespace MonolithHarness.Core;
 public static class ChatReasoning
 {
     public static InvalidOperationException Unsupported(string model, string detail = "") => new(
-        "Mode Chat : le raisonnement ne peut pas être désactivé pour « " + model + " ». Choisissez un autre niveau de réflexion ou un modèle sans raisonnement. / Chat mode: reasoning cannot be disabled for this model. Choose another thinking level or a non-reasoning model." +
+        "Réflexion : le raisonnement ne peut pas être désactivé pour « " + model + " ». Choisissez un autre niveau de réflexion ou un modèle sans raisonnement. / Reasoning cannot be disabled for this model. Choose another thinking level or a non-reasoning model." +
         (detail.Length == 0 ? "" : "\n" + detail));
 
     public static void CheckModel(Provider provider)
     {
-        var id = provider.Model.ToLowerInvariant();
-        // These families require thinking; never substitute a low/minimal effort for off.
-        if (id.Contains("glm-5.3") || id.Contains("gemini-3") || id.Contains("gemini-2.5-pro")) throw Unsupported(provider.Model);
+        if (!ReasoningCapabilities.For(provider).Supports("none")) throw Unsupported(provider.Model);
     }
 
     public static void Disable(Provider provider, JsonObject payload)
     {
         var preset = ProviderPresets.Resolve(provider.BaseUrl)?.Id;
         payload["reasoning_effort"] = "none";
+        if (ReasoningCapabilities.For(provider).NonReasoning) payload.Remove("reasoning_effort");
         if (preset == "openrouter")
         {
             payload.Remove("reasoning_effort");

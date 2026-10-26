@@ -22,13 +22,13 @@ public sealed partial class MainWindow
         public ProviderDraft? LastProvider;
         public QuickModelLevel Read() => new() { Id = Original.Id, Name = Name.Text.Trim(),
             ProviderId = (Provider.SelectedItem as ProviderDraft)?.Id ?? Original.ProviderId,
-            Model = SettingsModelPicker.Read(Model), ThinkingLevel = QuickModelShortcuts.ThinkingLevels[Math.Clamp(Thinking.SelectedIndex, 0, 4)],
+            Model = SettingsModelPicker.Read(Model), ThinkingLevel = (Thinking.Tag as string[] ?? ["auto"])[Math.Max(0, Thinking.SelectedIndex)],
             InteractionMode = Mode.SelectedIndex == 0 ? "chat" : "agent" };
     }
 
     static Provider QuickSettingsProvider(ProviderDraft draft) => new() { Id = draft.Id, Name = draft.Name, Kind = draft.Kind,
         Model = draft.Model, BaseUrl = draft.BaseUrl, SelectedModelsJson = draft.SelectedModelsJson,
-        DetectedModelsJson = draft.DetectedModelsJson, LocalModelsJson = draft.LocalModelsJson, CompositeJson = draft.CompositeJson };
+        ModelContextsJson = draft.ModelContextsJson, DetectedModelsJson = draft.DetectedModelsJson, LocalModelsJson = draft.LocalModelsJson, CompositeJson = draft.CompositeJson };
 
     (StackPanel Panel, Action<FeatureSettings> Save, Func<bool> Validate) BuildQuickModelSettings(ProviderEditorState providerEditor)
     {
@@ -92,7 +92,7 @@ public sealed partial class MainWindow
             var providerPicker = new ComboBox { Header = WorkflowText("Fournisseur", "Provider"), DisplayMemberPath = "Name", HorizontalAlignment = HorizontalAlignment.Stretch };
             var model = new ComboBox { Header = WorkflowText("Modèle", "Model"), IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch };
             var thinking = new ComboBox { Header = WorkflowText("Réflexion", "Thinking"), HorizontalAlignment = HorizontalAlignment.Stretch,
-                ItemsSource = ThinkingLevelLabels(), SelectedIndex = Array.IndexOf(QuickModelShortcuts.ThinkingLevels, value.ThinkingLevel) };
+                ItemsSource = new[] { "Auto" }, SelectedIndex = 0 };
             var mode = new ComboBox { Header = WorkflowText("Mode", "Mode"), ItemsSource = new[] { "Chat", "Agent" },
                 SelectedIndex = value.InteractionMode == "chat" ? 0 : 1, HorizontalAlignment = HorizontalAlignment.Stretch };
             var heading = Label("", 14); heading.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
@@ -127,7 +127,18 @@ public sealed partial class MainWindow
                 var available = selected == null ? [] : ProviderModels.Visible(QuickSettingsProvider(selected));
                 RefreshModels(row, selected != null && available.Contains(selected.Model) ? selected.Model : available.FirstOrDefault() ?? "");
             };
-            model.SelectionChanged += (_, _) => { if (!row.Refreshing && model.SelectedItem is string selected) model.Text = selected; };
+            var desiredThinking = value.ThinkingLevel;
+            void RefreshThinking()
+            {
+                var configured = row.LastProvider == null ? null : QuickSettingsProvider(row.LastProvider);
+                var levels = ReasoningCapabilities.For(configured, SettingsModelPicker.Read(model)).Levels;
+                var previous = thinking.Tag is string[] old && thinking.SelectedIndex >= 0 ? old[thinking.SelectedIndex] : desiredThinking;
+                thinking.Tag = levels; thinking.ItemsSource = levels.Select(x => ReasoningCapabilities.Label(x, state.Language == "fr")).ToArray();
+                thinking.SelectedIndex = Math.Max(0, Array.IndexOf(levels, previous));
+            }
+            model.SelectionChanged += (_, _) => { if (!row.Refreshing && model.SelectedItem is string selected) model.Text = selected; RefreshThinking(); };
+            model.LostFocus += (_, _) => RefreshThinking(); providerPicker.SelectionChanged += (_, _) => RefreshThinking();
+            RefreshThinking();
             providerPicker.DropDownOpened += (_, _) => RefreshSources(row);
             model.DropDownOpened += (_, _) => RefreshModels(row, SettingsModelPicker.Read(row.Model));
             up.Click += (_, _) => Move(row, -1); down.Click += (_, _) => Move(row, 1);

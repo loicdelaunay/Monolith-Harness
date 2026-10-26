@@ -19,7 +19,8 @@ internal sealed partial class ModelToolsWindow : Window
     readonly ComboBox model = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 0 };
     readonly Button reload = null!;
     readonly ComboBox proofThinking = new() { MinWidth = 125, VerticalAlignment = VerticalAlignment.Bottom };
-    static readonly string[] ToolThinkingLevels = ["none", "low", "medium", "high", "auto"];
+    string[] toolThinkingLevels = ["auto"];
+    readonly TextBlock reasoningStatus = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12, IsTextSelectionEnabled = true };
     readonly TextBlock notice = Text("", 13, true);
     readonly TextBlock usage = Text("", 12, true);
     readonly ProgressBar progressBar = new() { IsIndeterminate = true, Height = 3, Visibility = Visibility.Collapsed };
@@ -88,7 +89,7 @@ internal sealed partial class ModelToolsWindow : Window
         {
             toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             proofThinking.Header = L("Réflexion", "Thinking");
-            proofThinking.ItemsSource = new[] { L("Aucune · rapide", "None · fast"), L("Faible", "Low"), L("Moyenne", "Medium"), L("Élevée", "High"), "Auto" };
+            proofThinking.ItemsSource = new[] { "Auto" };
             proofThinking.SelectedIndex = 0;
             Grid.SetColumn(proofThinking, 1); Grid.SetColumn(reload, 2); toolbar.Children.Add(proofThinking);
             busyControls.Add(proofThinking);
@@ -98,7 +99,7 @@ internal sealed partial class ModelToolsWindow : Window
         stop = Button(L("Arrêter", "Stop"), () => { cancellation?.Cancel(); return Task.CompletedTask; });
         stop.Visibility = Visibility.Collapsed;
         var footer = new StackPanel { Spacing = 6 };
-        footer.Children.Add(progressBar); footer.Children.Add(usage); footer.Children.Add(notice);
+        footer.Children.Add(reasoningStatus); footer.Children.Add(progressBar); footer.Children.Add(usage); footer.Children.Add(notice);
         usage.Visibility = kind == ModelToolKind.Benchmark ? Visibility.Visible : Visibility.Collapsed;
         notice.Visibility = Visibility.Collapsed;
         Grid.SetRow(footer, 3); Panel.Children.Add(footer);
@@ -113,8 +114,21 @@ internal sealed partial class ModelToolsWindow : Window
         Content = Panel; FluentDesign.WindowChrome(this);
         AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1160, Height = kind == ModelToolKind.Benchmark ? 940 : 860 });
         PopulateModels(providers, providerId, selectedModel);
-        model.SelectionChanged += (_, _) => refreshActions();
+        model.SelectionChanged += (_, _) => { RefreshToolThinking(); RefreshComparisonLevels(); refreshActions(); };
+        RefreshToolThinking(); RefreshComparisonLevels();
         Closed += (_, _) => { ClosedForTools = true; cancellation?.Cancel(); foreach (var editor in editors) editor.CloseEditor(); benchmarkPreview?.ClosePreview(); http.Dispose(); };
+    }
+
+    void RefreshToolThinking()
+    {
+        if (model.SelectedItem is not ToolModelChoice choice) return;
+        var prior = toolThinkingLevels[Math.Clamp(proofThinking.SelectedIndex, 0, toolThinkingLevels.Length - 1)];
+        var caps = ReasoningCapabilities.For(choice.Provider, choice.Model);
+        toolThinkingLevels = caps.Levels;
+        proofThinking.ItemsSource = toolThinkingLevels.Select(x => ReasoningCapabilities.Label(x, UiText.Language == "fr")).ToArray();
+        proofThinking.SelectedIndex = Math.Max(0, Array.IndexOf(toolThinkingLevels, prior));
+        ToolTipService.SetToolTip(proofThinking, caps.Source);
+        if (kind == ModelToolKind.Proofreader && reasoningStatus.Text.Length == 0) reasoningStatus.Text = caps.Source;
     }
 
     void PopulateModels(List<Provider> providers, int? providerId, string? selectedModel)
@@ -138,7 +152,7 @@ internal sealed partial class ModelToolsWindow : Window
         {
             using var source = new CancellationTokenSource();
             cancellation = source;
-            SetBusy(true); usage.Text = "";
+            SetBusy(true); usage.Text = ""; reasoningStatus.Text = "";
             SetNotice(L("Connexion au modèle…", "Connecting to the model…"));
             try
             {
@@ -151,7 +165,7 @@ internal sealed partial class ModelToolsWindow : Window
                 ? L("Arrêté. Les résultats déjà reçus sont conservés ; la dernière réponse peut être incomplète.", "Stopped. Received results are retained; the last response may be incomplete.")
                 : L("Action annulée. Le texte d’origine est conservé.", "Cancelled. The original text is preserved."), true); }
             catch (Exception ex) { SetNotice(ex.Message, true); }
-            finally { cancellation = null; if (!ClosedForTools) SetBusy(false); }
+            finally { cancellation = null; if (!ClosedForTools) { SetBusy(false); RefreshToolThinking(); RefreshComparisonLevels(); } }
         }
     }
 
@@ -159,13 +173,17 @@ internal sealed partial class ModelToolsWindow : Window
         Action<GenerationUpdate>? progress = null)
     {
         if (kind == ModelToolKind.Proofreader)
-            request = request with { ThinkingLevel = ToolThinkingLevels[Math.Clamp(proofThinking.SelectedIndex, 0, ToolThinkingLevels.Length - 1)] };
+            request = request with { ThinkingLevel = toolThinkingLevels[Math.Clamp(proofThinking.SelectedIndex, 0, toolThinkingLevels.Length - 1)] };
         SetNotice(L("Réponse en cours…", "Generating…"));
         using var consumption = SmokeRequest == null ? TokenConsumption.Begin(consumptionDatabase, kind.ToString().ToLowerInvariant()) : null;
         var last = DateTime.MinValue;
         var streaming = true;
         GenerationUpdate? latest = null;
-        void Render(GenerationUpdate update) { text?.Invoke(update.Text); progress?.Invoke(update); }
+        void Render(GenerationUpdate update)
+        {
+            if (update.ReasoningSelection != null) reasoningStatus.Text = update.ReasoningSelection.Describe(UiText.Language == "fr");
+            text?.Invoke(update.Text); progress?.Invoke(update);
+        }
         void Update(GenerationUpdate update)
         {
             if (update.Retry is { } retry)
@@ -174,7 +192,7 @@ internal sealed partial class ModelToolsWindow : Window
                 return;
             }
             latest = update;
-            if ((text == null && progress == null) || (DateTime.UtcNow - last).TotalMilliseconds < 60) return;
+            if ((DateTime.UtcNow - last).TotalMilliseconds < 60) return;
             last = DateTime.UtcNow;
             DispatcherQueue.TryEnqueue(() => { if (streaming && !ClosedForTools && !ct.IsCancellationRequested) Render(update); });
         }
@@ -193,7 +211,7 @@ internal sealed partial class ModelToolsWindow : Window
         ct.ThrowIfCancellationRequested();
         if (!ClosedForTools)
         {
-            Render(new(result.Text, result.Reasoning, result.InputTokens, result.OutputTokens, result.Seconds));
+            Render(new(result.Text, result.Reasoning, result.InputTokens, result.OutputTokens, result.Seconds) { ReasoningSelection = result.ReasoningSelection });
             if (kind == ModelToolKind.Benchmark) usage.Text = Metrics(result);
         }
         return result;

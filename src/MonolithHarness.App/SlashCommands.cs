@@ -30,7 +30,7 @@ public sealed partial class MainWindow
         new("goal", "[objectif|off]", WorkflowText("Définir l’objectif de la conversation", "Set the conversation goal")),
         new("mcp", "[list|on|off|settings]", WorkflowText("Serveurs MCP de la conversation", "Conversation MCP servers")),
         new("model", "[nom]", WorkflowText("Choisir le modèle", "Choose the model")),
-        new("thinking", "[auto|low|medium|high|none]", WorkflowText("Niveau de réflexion", "Reasoning effort")),
+        new("thinking", "[auto|none|minimal|low|medium|high|xhigh|max]", WorkflowText("Niveau de réflexion", "Reasoning effort")),
         new("retry", "[on|off]", WorkflowText("Activer les nouvelles tentatives", "Toggle automatic retry")),
         new("theme", "[id]", WorkflowText("Changer de thème", "Change theme")),
         new("settings", "", WorkflowText("Ouvrir les réglages", "Open settings")),
@@ -198,8 +198,9 @@ public sealed partial class MainWindow
                 if (argument.Equals("off", StringComparison.OrdinalIgnoreCase) || argument.Length == 0) goals.ChatGoals.Remove(owner!.Id); else goals.ChatGoals[owner!.Id] = argument;
                 state.FeaturesJson = goals.Json(); break;
             case "thinking":
-                if (argument is not ("auto" or "low" or "medium" or "high" or "none")) throw new ArgumentException("/thinking auto|low|medium|high|none");
-                state.ThinkingLevel = argument; PopulateThinkingSelector(); break;
+                if (!ReasoningCapabilities.For(ThinkingProvider).Supports(argument)) throw new ArgumentException("/thinking " + string.Join('|', ReasoningCapabilities.For(ThinkingProvider).Levels));
+                if (ChatInteraction) state.ChatThinkingLevel = argument; else state.ThinkingLevel = argument;
+                PopulateThinkingSelector(); RefreshModelOptions(); break;
             case "retry":
                 var retries = FeatureSettings.Read(state.FeaturesJson);
                 retries.RetryEnabled = argument.ToLowerInvariant() switch { "" => !retries.RetryEnabled, "on" => true, "off" => false, _ => throw new ArgumentException("/retry on|off") };

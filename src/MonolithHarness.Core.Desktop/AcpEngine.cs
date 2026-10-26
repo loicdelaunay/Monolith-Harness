@@ -31,6 +31,12 @@ public sealed class AcpEngine
         var current = session["models"]?["currentModelId"]?.ToString();
         if (!string.IsNullOrWhiteSpace(current)) models.Add(current);
         if (models.Count == 0) models.Add(AcpProviders.DefaultModel);
+        var levels = new List<string>();
+        if (session["configOptions"] is JsonArray options)
+            CollectOptions(options.FirstOrDefault(x => x?["category"]?.ToString() == "thought_level")?["options"] as JsonArray, levels);
+        // Session options describe the current model only, never all models in its catalogue.
+        var currentModel = current ?? session["configOptions"]?.AsArray().FirstOrDefault(x => x?["category"]?.ToString() == "model")?["currentValue"]?.ToString();
+        ModelContexts.SetReasoning(provider, currentModel ?? AcpProviders.DefaultModel, levels, "ACP · options du modèle courant");
         provider.SupportsImages = client.SupportsImages;
         return ProviderModels.Normalize(models);
     }
@@ -53,7 +59,7 @@ public sealed class AcpEngine
         Directory.CreateDirectory(options.Directory);
         await using var client = new Client(AcpProviders.StartInfo(provider, options.Directory, effort));
         var text = new StringBuilder(); var reasoning = new StringBuilder(); var timer = Stopwatch.StartNew();
-        string? sessionId = null;
+        string? sessionId = null; ReasoningSelection? reasoningTrace = null; bool receivedThought = false;
         client.Permission = async (request, token) =>
         {
             if (request["sessionId"]?.ToString() != sessionId) return false;
@@ -69,19 +75,26 @@ public sealed class AcpEngine
             if (method != "session/update" || parameters["sessionId"]?.ToString() != sessionId) return;
             var value = parameters["update"]; var type = value?["sessionUpdate"]?.ToString();
             if (type == "agent_message_chunk" && value?["content"]?["type"]?.ToString() == "text") text.Append(value["content"]!["text"]?.ToString());
-            else if (type == "agent_thought_chunk" && value?["content"]?["type"]?.ToString() == "text") reasoning.Append(value["content"]!["text"]?.ToString());
+            else if (type == "agent_thought_chunk" && value?["content"]?["type"]?.ToString() == "text")
+            {
+                var thought = value["content"]!["text"]?.ToString() ?? "";
+                receivedThought |= thought.Length > 0; reasoning.Append(thought);
+            }
             else if (type is "tool_call" or "tool_call_update")
                 reasoning.AppendLine().Append(value?["title"]?.ToString() ?? value?["toolCallId"]?.ToString()).Append(" · ").Append(value?["status"]?.ToString());
             else if (type == "plan" && value?["entries"] is JsonArray entries)
                 foreach (var entry in entries) reasoning.AppendLine().Append(entry?["content"]?.ToString()).Append(" · ").Append(entry?["status"]?.ToString());
             else return;
-            update(new(text.ToString(), reasoning.ToString(), null, null, timer.Elapsed.TotalSeconds) { HasModelOutput = true });
+            if (effort == "none" && receivedThought) throw ChatReasoning.Unsupported(provider.Model);
+            update(new(text.ToString(), reasoning.ToString(), null, null, timer.Elapsed.TotalSeconds) { HasModelOutput = true,
+                ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace?.Describe() ?? "" });
         };
         await client.Initialize(ct);
         await client.AuthenticateChatGpt(provider, ct);
         var session = await client.NewSession(options.Directory, ct);
         sessionId = session["sessionId"]?.ToString() ?? throw new IOException("ACP : identifiant de session absent.");
-        await client.Configure(session, sessionId, provider.Kind == "antigravity-acp" ? AcpProviders.DefaultModel : provider.Model, effort, options, ct);
+        reasoningTrace = await client.Configure(session, sessionId, provider.Kind == "antigravity-acp" ? AcpProviders.DefaultModel : provider.Model, effort, options, ct);
+        update(new("", "", null, null, 0) { ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace.Describe() });
         var prompt = Content(messages, client.SupportsImages);
         try
         {
@@ -89,7 +102,8 @@ public sealed class AcpEngine
             if (result["stopReason"]?.ToString() == "cancelled") throw new OperationCanceledException("ACP : génération arrêtée.", ct);
             if (result["stopReason"]?.ToString() == "refusal" && text.Length == 0) text.Append("L’agent a refusé cette demande.");
             if (text.Length == 0 && reasoning.Length == 0) throw new IOException("ACP : la session s’est terminée sans réponse.");
-            return new(new JsonObject { ["role"] = "assistant", ["content"] = text.ToString(), ["reasoning_content"] = reasoning.ToString() }, null, null, timer.Elapsed.TotalSeconds);
+            if (effort == "none" && receivedThought) throw ChatReasoning.Unsupported(provider.Model);
+            return new Completion(new JsonObject { ["role"] = "assistant", ["content"] = text.ToString(), ["reasoning_content"] = reasoning.ToString() }, null, null, timer.Elapsed.TotalSeconds) { ReasoningSelection = reasoningTrace };
         }
         catch (OperationCanceledException)
         {
@@ -171,7 +185,7 @@ public sealed class AcpEngine
             if (session["sessionId"]?.ToString() is { Length: > 0 } id) sessions.Add(id);
             return session;
         }
-        public async Task Configure(JsonObject session, string id, string model, string? effort, AcpRunOptions options, CancellationToken ct)
+        public async Task<ReasoningSelection> Configure(JsonObject session, string id, string model, string? effort, AcpRunOptions options, CancellationToken ct)
         {
             if (session["modes"]?["availableModes"] is JsonArray modes)
             {
@@ -180,6 +194,8 @@ public sealed class AcpEngine
                 await Request("session/set_mode", new() { ["sessionId"] = id, ["modeId"] = wanted }, ct);
             }
             else if (options.Mode != "execute") throw new InvalidOperationException("Cet agent ACP ne permet pas d’imposer un mode en lecture seule.");
+            var requestedEffort = ReasoningCapabilities.Normalize(effort);
+            var trace = new ReasoningSelection(requestedEffort, "auto", requestedEffort == "auto" ? "" : "Option de réflexion non déclarée par l’agent ACP", "ACP · option omise");
             if (session["configOptions"] is JsonArray config)
             {
                 foreach (var (category, requested) in new[] { ("model", model), ("thought_level", effort ?? "auto") })
@@ -189,11 +205,15 @@ public sealed class AcpEngine
                     if (option == null) { if (category == "model") throw new IOException("Cet agent ACP ne permet pas de sélectionner ce modèle."); continue; }
                     var values = new List<string>(); CollectOptions(option["options"] as JsonArray, values);
                     if (!values.Contains(requested)) { if (category == "model") throw new IOException("Modèle ACP indisponible : " + requested); continue; }
-                    await Request("session/set_config_option", new() { ["sessionId"] = id, ["configId"] = option["id"]?.ToString(), ["value"] = requested }, ct);
+                    var configured = await Request("session/set_config_option", new() { ["sessionId"] = id, ["configId"] = option["id"]?.ToString(), ["value"] = requested }, ct);
+                    if (category == "thought_level") trace = trace with { Sent = requested, Fallback = "", Parameter = "ACP thought_level=" + requested };
+                    config = configured["configOptions"] as JsonArray ?? config;
                 }
             }
             else if (model != AcpProviders.DefaultModel && session["models"]?["availableModels"] is JsonArray)
                 await Request("session/set_model", new() { ["sessionId"] = id, ["modelId"] = model }, ct);
+            if (requestedEffort == "none" && trace.Sent != "none") throw ChatReasoning.Unsupported(model, trace.Fallback);
+            return trace;
         }
         public async Task<JsonObject> Request(string method, JsonObject parameters, CancellationToken ct)
         {

@@ -66,8 +66,7 @@ public sealed partial class MainWindow
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(conversationModeSwitch, WorkflowText("Chat / Agent", "Chat / Agent"));
         if (thinkingSelector.Items.Count > 0)
         {
-            var index = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel).ToLowerInvariant() switch
-            { "low" => 1, "medium" => 2, "high" => 3, "none" => 4, _ => 0 };
+            var index = Array.IndexOf(availableThinkingLevels, ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel));
             if (thinkingSelector.SelectedIndex != index) PopulateThinkingSelector();
             else thinkingSelector.IsEnabled = ActiveRun == null && !applyingQuickLevel;
         }

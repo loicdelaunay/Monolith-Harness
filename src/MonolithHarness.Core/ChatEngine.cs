@@ -9,6 +9,7 @@ namespace MonolithHarness.Core;
 public record GenerationUpdate(string Text, string Reasoning, int? InputTokens, int? OutputTokens, double Seconds)
 {
     public string CompatibilityNotice { get; init; } = "";
+    public ReasoningSelection? ReasoningSelection { get; init; }
     public RetryProgress? Retry { get; init; }
     public GenerationTermination? Termination { get; init; }
     public int ResumeAttempt { get; init; }
@@ -20,6 +21,7 @@ public record Completion(JsonObject Message, int? InputTokens, int? OutputTokens
 {
     public GenerationTermination? Termination { get; init; }
     internal CompletionUsage? Usage { get; init; }
+    public ReasoningSelection? ReasoningSelection { get; init; }
     public int? CachedInputTokens { get; init; }
 }
 
@@ -59,6 +61,8 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             if (x["capabilities"] is JsonObject capabilities && capabilities["completion_chat"] is JsonValue chat && chat.TryGetValue<bool>(out var supported) && !supported) return false;
             return x["architecture"] is not JsonObject architecture || architecture["output_modalities"] is not JsonArray output || output.Any(value => value?.ToString() == "text");
         }).ToList();
+        using var metadataBatch = ModelContexts.Batch(provider);
+        foreach (var model in chatModels) ReasoningCapabilities.Capture(provider, ProviderPresets.NormalizeModelId(provider, model["id"]?.ToString() ?? ""), model);
         ModelContexts.Merge(provider, chatModels.Select(x => ModelContexts.FromApi(ProviderPresets.NormalizeModelId(provider, x["id"]?.GetValue<string>() ?? ""), x)));
         var ids = ProviderModels.Normalize(chatModels.Select(x => ProviderPresets.NormalizeModelId(provider, x["id"]?.GetValue<string>() ?? "")));
         if (Uri.TryCreate(provider.BaseUrl, UriKind.Absolute, out var endpoint) && endpoint.Scheme == "https" && endpoint.Host == "generativelanguage.googleapis.com")
@@ -150,6 +154,9 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
         Action<GenerationUpdate> update, CancellationToken ct, string? reasoningEffort, int inputEstimate, Action<ContextRequestProgress>? requestProgress, bool requireNoReasoning)
     {
         if (ProviderGuard?.Invoke(provider) is { } refused) throw new InvalidOperationException(refused);
+        requireNoReasoning |= ReasoningCapabilities.Normalize(reasoningEffort) == "none";
+        var reasoningSelection = ReasoningCapabilities.Select(provider, requireNoReasoning ? "none" : reasoningEffort);
+        reasoningEffort = reasoningSelection.Sent;
         if (requireNoReasoning) ChatReasoning.CheckModel(provider);
         var progress = new ContextRequestProgress(ContextRequestStage.Preparing, inputEstimate, messages.Count);
         requestProgress?.Invoke(progress);
@@ -165,7 +172,7 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
         }
         var compatibilityKey = provider.Id + "|" + provider.BaseUrl + "|" + provider.Model + "|" + provider.SupportsImages + (requireNoReasoning ? "|chat" : "");
         var profile = compatibility.GetOrAdd(compatibilityKey, _ => new()).Copy();
-        if (requireNoReasoning) profile.NoEffort = false;
+        profile.NoEffort = false; // Rejection of one effort must not disable every other declared level.
         if (!provider.SupportsImages && messages.OfType<JsonObject>().Any(m => m["content"] is JsonArray a && a.Any(p => p?["type"]?.GetValue<string>() == "image_url"))) profile.DisableImages();
         for (int attempt = 0; ; attempt++)
         {
@@ -184,6 +191,12 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
                 if (requireNoReasoning) ChatReasoning.Disable(provider, actual);
                 request.Content = new StringContent(actual.ToJsonString(), Encoding.UTF8, "application/json");
             }
+            var trace = reasoningSelection with { Sent = profile.NoEffort ? "auto" : profile.NoThinking ? "none" : reasoningSelection.Sent,
+                Fallback = profile.NoEffort || profile.NoThinking ? profile.Notice : reasoningSelection.Fallback,
+                Parameter = nativeVertex ? request.Content == null ? "" : "generationConfig.thinkingConfig=" +
+                    JsonNode.Parse(await request.Content.ReadAsStringAsync(ct))?["generationConfig"]?["thinkingConfig"]?.ToJsonString() : ReasoningCapabilities.Parameter(actual) };
+            compatibilityNotice = string.Join("\n", new[] { trace.Describe(), compatibilityNotice }.Where(x => x.Length > 0));
+            update(new("", "", null, null, 0) { ReasoningSelection = trace, CompatibilityNotice = compatibilityNotice });
             progress = progress with { Stage = ContextRequestStage.Sending, PayloadBytes = request.Content!.Headers.ContentLength };
             requestProgress?.Invoke(progress);
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -192,7 +205,13 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
                 var detail = await ProviderErrorDetails.ReadAsync(response, key, ct);
                 if ((int)response.StatusCode is 400 or 422 && !RequestRetry.IsIncompleteJsonBadRequest(response.StatusCode, detail) && attempt < 4 && !nativeVertex && profile.Learn(detail, provider.Kind == "deepseek" || provider.Model.Contains("deepseek", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (requireNoReasoning && profile.NoEffort) throw ChatReasoning.Unsupported(provider.Model, detail);
+                    if (profile.NoEffort)
+                    {
+                        ReasoningCapabilities.Reject(provider, reasoningEffort ?? "auto");
+                        var caps = ReasoningCapabilities.For(provider);
+                        ModelContexts.SetReasoning(provider, provider.Model, caps.Levels.Where(x => x != reasoningEffort), caps.Source + " · refus API");
+                        if (requireNoReasoning) throw ChatReasoning.Unsupported(provider.Model, detail);
+                    }
                     continue;
                 }
                 throw new HttpRequestException($"API : HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {detail}", null, response.StatusCode);
@@ -200,11 +219,12 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
             requestProgress?.Invoke(progress with { Stage = ContextRequestStage.AwaitingOutput });
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
             compatibility[compatibilityKey] = profile.Copy();
-            return await ParseLinesAsync(nativeVertex ? VertexApiKey.OpenAiLinesAsync(reader, provider.Model, ct) : ReadLinesAsync(reader, ct), value =>
+            var completion = await ParseLinesAsync(nativeVertex ? VertexApiKey.OpenAiLinesAsync(reader, provider.Model, ct) : ReadLinesAsync(reader, ct), value =>
             {
                 if (requireNoReasoning && value.Reasoning.Length > 0) throw ChatReasoning.Unsupported(provider.Model);
-                update(value with { CompatibilityNotice = compatibilityNotice });
+                update(value with { CompatibilityNotice = compatibilityNotice, ReasoningSelection = trace });
             }, ct);
+            return completion with { ReasoningSelection = trace };
         }
     }
     public static Task<Completion> ParseStreamAsync(TextReader reader, Action<GenerationUpdate> update, CancellationToken ct)

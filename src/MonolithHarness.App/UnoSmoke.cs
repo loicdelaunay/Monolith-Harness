@@ -297,24 +297,30 @@ public sealed partial class MainWindow
             using(var check=new HarnessDb())if(!check.ScheduledTasks.Any(x=>x.Name=="Tâche de test Uno"))throw new Exception("Task editor did not save.");
             tasksWindow.Close();await Task.Delay(100);
             await SmokeScheduledExecutionAsync();
-            var editor=BuildProviderEditor(fixture.Id);root.Children.Add(new ScrollViewer { Content=editor.Panel,Background=FluentDesign.Card,Padding=new(24),HorizontalAlignment=HorizontalAlignment.Stretch });
+            // Providers: searchable connection list, then a detail view with Connection / Models / Advanced pages.
+            static string AccessibleName(FrameworkElement element)=>Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(element);
+            var editor=BuildProviderEditor(fixture.Id);var editorOverlay=new Border { Child=editor.Panel,Background=FluentDesign.Card,Padding=new(24) };
+            root.Children.Add(editorOverlay);
             await Task.Delay(300);await Capture(root,Path.Combine(output,"provider-cards.png"));
-            var providerCards=editor.Cards;
-            var fixtureCard=providerCards.Children.OfType<Border>().Single(card=>Descendants(card).OfType<TextBlock>().Any(text=>text.Text=="Uno fixture"));
-            Descendants(fixtureCard).OfType<Expander>().Single().IsExpanded=true;
+            if(editor.Selected?.Id!=fixture.Id || !editor.Cards.Children.OfType<Border>().Any(row=>Descendants(row).OfType<TextBlock>().Any(text=>text.Text=="Uno fixture")))
+                throw new Exception("Provider list did not show and select the fixture connection.");
+            if(Descendants(editor.Panel).OfType<CheckBox>().Any(x=>AccessibleName(x).StartsWith("model-",StringComparison.Ordinal)))
+                throw new Exception("Provider models were rendered before opening the Models page.");
+            Descendants(editor.Panel).OfType<ProviderConnectionLayout>().Single().ShowPage(1);
             await Task.Delay(150);
-            var modelSearch=Descendants(fixtureCard).OfType<TextBox>().Single(x=>x.PlaceholderText?.Contains("modèle",StringComparison.OrdinalIgnoreCase)==true);
+            var modelSearch=Descendants(editor.Panel).OfType<AutoSuggestBox>().Single(x=>x.Name=="ProviderModelSearch");
             modelSearch.Text="model-b";
             await Task.Delay(100);
-            var visibleModels=Descendants(fixtureCard).OfType<CheckBox>().Where(x=>x.Content?.ToString()?.StartsWith("model-")==true).Select(x=>x.Content?.ToString()).ToArray();
+            var visibleModels=Descendants(editor.Panel).OfType<CheckBox>().Select(AccessibleName).Where(x=>x.StartsWith("model-",StringComparison.Ordinal)).ToArray();
             if(visibleModels.Length!=1 || visibleModels[0]!="model-b")
                 throw new Exception("Provider model search did not filter the visible page: "+string.Join(",",visibleModels));
-            Click(Descendants(fixtureCard).OfType<Button>().Single(x=>x.Content?.ToString()=="Tout décocher"));
-            Click(Descendants(fixtureCard).OfType<Button>().Single(x=>x.Content?.ToString()=="Tout cocher"));
-            Descendants(fixtureCard).OfType<CheckBox>().Single(x=>x.Content?.ToString()=="model-b").IsChecked=false;
+            Click(Descendants(editor.Panel).OfType<Button>().Single(x=>x.Content?.ToString()=="Tout décocher"));
+            Click(Descendants(editor.Panel).OfType<Button>().Single(x=>x.Content?.ToString()=="Tout cocher"));
+            Descendants(editor.Panel).OfType<CheckBox>().Single(x=>AccessibleName(x)=="model-b").IsChecked=false;
             editor.Commit();await SaveProviderDraftsAsync(editor);PopulateModelSelector();
             if(modelSelector.Items.OfType<ModelChoice>().Where(x=>x.ProviderId==fixture.Id).Select(x=>x.Model).Single()!="model-a")
-                throw new Exception("Provider card checkbox did not update the model picker.");
+                throw new Exception("Provider model checkbox did not update the model picker.");
+            root.Children.Remove(editorOverlay);
             using(var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15)))
             using(var server=new TcpListener(IPAddress.Loopback,0))
             {
@@ -322,9 +328,8 @@ public sealed partial class MainWindow
                 fixture.BaseUrl=$"http://127.0.0.1:{((IPEndPoint)server.LocalEndpoint).Port}/v1";
                 await db.SaveChangesAsync();
                 var testedEditor=BuildProviderEditor(fixture.Id);
-                root.Children.Add(new ScrollViewer { Content=testedEditor.Panel,Background=FluentDesign.Card,Padding=new(24) });
-                var gear=Descendants(testedEditor.Panel).OfType<Button>().Single(x=>Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(x).Contains("Uno fixture"));
-                Click(gear);
+                root.Children.Add(new Border { Child=testedEditor.Panel,Background=FluentDesign.Card,Padding=new(24) });await Task.Delay(100);
+                Click(Descendants(testedEditor.Panel).OfType<Button>().Single(x=>AccessibleName(x).StartsWith("Uno fixture · ",StringComparison.Ordinal)));
                 var test=Descendants(testedEditor.Panel).OfType<Button>().Single(x=>x.Content?.ToString()=="Tester la connexion");
                 var serve=Task.Run(async()=>
                 {
@@ -353,19 +358,20 @@ public sealed partial class MainWindow
                 SelectedModelsJson=System.Text.Json.JsonSerializer.Serialize(new[]{largeModels[0]}) };
             db.Providers.Add(largeProvider);await db.SaveChangesAsync();
             var largeEditor=BuildProviderEditor(largeProvider.Id);
-            var largeOverlay=new ScrollViewer { Content=largeEditor.Panel,Background=FluentDesign.Card,Padding=new(24) };
+            var largeOverlay=new Border { Child=largeEditor.Panel,Background=FluentDesign.Card,Padding=new(24) };
             root.Children.Add(largeOverlay);await Task.Delay(100);
-            var largeCards=largeEditor.Cards;
-            var largeCard=largeCards.Children.OfType<Border>().Single(card=>Descendants(card).OfType<TextBlock>().Any(text=>text.Text==largeProvider.Name));
-            if(Descendants(largeCard).OfType<CheckBox>().Any())throw new Exception("Collapsed provider rendered model checkboxes eagerly.");
-            Descendants(largeCard).OfType<Expander>().Single().IsExpanded=true;await Task.Delay(100);
-            if(Descendants(largeCard).OfType<CheckBox>().Count()>50)throw new Exception("Provider rendered more than one model page.");
-            var largeSearch=Descendants(largeCard).OfType<TextBox>().Single(x=>x.PlaceholderText?.Contains("modèle",StringComparison.OrdinalIgnoreCase)==true);
+            if(!largeEditor.Cards.Children.OfType<Border>().Any(row=>Descendants(row).OfType<TextBlock>().Any(text=>text.Text==largeProvider.Name)))
+                throw new Exception("Large provider is missing from the connection list.");
+            IEnumerable<string> LargeModels()=>Descendants(largeEditor.Panel).OfType<CheckBox>().Select(AccessibleName).Where(x=>x.StartsWith("opencode/model-",StringComparison.Ordinal));
+            if(LargeModels().Any())throw new Exception("Provider rendered model checkboxes before opening the Models page.");
+            Descendants(largeEditor.Panel).OfType<ProviderConnectionLayout>().Single().ShowPage(1);await Task.Delay(100);
+            if(LargeModels().Count()>50)throw new Exception("Provider rendered more than one model page.");
+            var largeSearch=Descendants(largeEditor.Panel).OfType<AutoSuggestBox>().Single(x=>x.Name=="ProviderModelSearch");
             largeSearch.Text="model-04999";await Task.Delay(100);
-            var largeVisible=Descendants(largeCard).OfType<CheckBox>().Select(x=>x.Content?.ToString()).ToArray();
+            var largeVisible=LargeModels().ToArray();
             if(largeVisible.Length!=1 || largeVisible[0]!=largeModels[^1])throw new Exception("Large provider search did not find a model outside the first page.");
             root.Children.Remove(largeOverlay);
-            File.WriteAllText(Path.Combine(output,"smoke-ok.txt"),"Uno UI: async history pagination/lazy images/UI heartbeat, rapid conversation/project switching/drafts/active runs, settings loading/cancel, conversation search/selection/hover/localization, assistant message copy menu and branch actions, live theme preview/cancel, embedded browser/navigation/input/screenshot/tab switch, Markdown, model picker, task editor/save, scheduled generation/tool/history, provider cards, connection test and status lifetime passed.");
+            File.WriteAllText(Path.Combine(output,"smoke-ok.txt"),"Uno UI: async history pagination/lazy images/UI heartbeat, rapid conversation/project switching/drafts/active runs, settings loading/cancel, conversation search/selection/hover/localization, assistant message copy menu and branch actions, live theme preview/cancel, embedded browser/navigation/input/screenshot/tab switch, Markdown, model picker, task editor/save, scheduled generation/tool/history, provider list/models page, connection test and status lifetime passed.");
         }
         catch(Exception ex) { File.WriteAllText(Path.Combine(output,"smoke-error.txt"),ex.ToString()); }
         finally { Close(); Application.Current.Exit(); }

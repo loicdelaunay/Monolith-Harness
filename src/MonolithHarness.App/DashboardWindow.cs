@@ -218,7 +218,7 @@ internal sealed partial class DashboardWindow : Window
     static string ProviderName(TokenUsage entry) => entry.ProviderName.Length == 0 ? L("Historique · fournisseur inconnu", "History · unknown provider") :
         entry.ProviderId is int id ? $"{entry.ProviderName} · #{id}" : entry.ProviderName;
     static string ActivityName(string value) => value switch { "chat" => L("Conversations", "Chats"), "agent" => L("Agents", "Agents"), "naming" => L("Nommage", "Naming"),
-        "vision" => L("Vision", "Vision"), "compaction" => L("Compactage", "Compaction"), "translator" => L("Traduction", "Translation"),
+        "vision" => L("Vision", "Vision"), "compaction" => L("Compactage", "Compaction"), "memory" => L("Mémoire", "Memory"), "translator" => L("Traduction", "Translation"),
         "proofreader" => L("Correction / reformulation", "Proofreading / rephrasing"), "benchmark" => L("Benchmark", "Benchmark"), "ai_detector" => L("Détection IA", "AI detection"), _ => value };
     void RenderModels()
     {

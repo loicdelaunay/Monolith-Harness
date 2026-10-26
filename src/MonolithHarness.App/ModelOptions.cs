@@ -92,7 +92,7 @@ public sealed partial class MainWindow
         thinkingSection.Children.Add(new Border { Height = 1, Background = FluentDesign.Stroke, Margin = new(0, 0, 0, 4) });
         var thinkingHeading = ModelOptionHeading(); Grid.SetRow(thinkingHeading, 1); thinkingSection.Children.Add(thinkingHeading);
         Grid.SetRow(thinkingSegments, 2); thinkingSection.Children.Add(thinkingSegments); sections.Children.Add(thinkingSection);
-        thinkingSegments.SetLabels("Auto", "Faible", "Moyenne", "Élevée", "Sans");
+        thinkingSegments.SetLabels("Auto");
         thinkingSegments.SelectionChanged += (_, _) =>
         {
             if (loading || updatingThinkingSelector || applyingQuickLevel || ActiveRun != null) return;
@@ -133,7 +133,7 @@ public sealed partial class MainWindow
             providerHeading.Text = WorkflowText("Fournisseur", "Provider"); modelHeading.Text = WorkflowText("Modèle", "Model");
             modelSelector.RefreshLanguage(); providerSelector.RefreshLanguage();
             thinkingHeading.Text = WorkflowText("Réflexion", "Thinking");
-            thinkingSegments.SetLabels("Auto", WorkflowText("Faible", "Low"), WorkflowText("Moyenne", "Medium"), WorkflowText("Élevée", "High"), WorkflowText("Sans", "Off"));
+            thinkingSegments.SetLabels(availableThinkingLevels.Select(x => ReasoningCapabilities.Label(x, state.Language == "fr")).ToArray());
             done.Content = WorkflowText("Terminer", "Done");
             resetLabel.Text = WorkflowText("Rétablir les valeurs par défaut", "Restore defaults");
             ToolTipService.SetToolTip(reset, WorkflowText("Rétablir la réflexion et le contexte par défaut, sans changer le fournisseur ni le modèle.", "Restore default thinking and context without changing the provider or model."));
@@ -176,18 +176,22 @@ public sealed partial class MainWindow
         modelContextEditor.Bind(provider, async _ => await Guard(async () => { await db.SaveChangesAsync(); RefreshContextInfo(); }));
         var choice = modelSelector.SelectedItem as ModelChoice;
         selectedModelName.Text = choice?.Model ?? WorkflowText("Choisir un modèle", "Choose a model");
-        selectedThinking.Text = thinkingSelector.SelectedItem?.ToString() ?? "🧠 Auto";
+        var caps = ReasoningCapabilities.For(ThinkingProvider);
+        if (!availableThinkingLevels.SequenceEqual(caps.Levels)) PopulateThinkingSelector();
+        selectedThinking.Text = thinkingSelector.SelectedItem?.ToString() ?? "Auto";
         thinkingSegments.SelectedIndex = thinkingSelector.SelectedIndex;
-        thinkingDescription.Text = thinkingSelector.SelectedIndex switch
+        thinkingDescription.Text = SelectedThinkingLevel switch
         {
-            1 => WorkflowText("Demande une réflexion courte pour privilégier la rapidité.", "Requests brief thinking to favor speed."),
-            2 => WorkflowText("Demande un équilibre entre réflexion et rapidité.", "Requests a balance between thinking and speed."),
-            3 => WorkflowText("Demande une réflexion approfondie pour les tâches complexes.", "Requests deeper thinking for complex tasks."),
-            4 => ChatInteraction
+            "low" or "minimal" => WorkflowText("Demande une réflexion courte pour privilégier la rapidité.", "Requests brief thinking to favor speed."),
+            "medium" => WorkflowText("Demande un équilibre entre réflexion et rapidité.", "Requests a balance between thinking and speed."),
+            "high" or "xhigh" or "max" => WorkflowText("Demande une réflexion approfondie pour les tâches complexes.", "Requests deeper thinking for complex tasks."),
+            "enabled" => WorkflowText("Active le raisonnement ; son intensité reste gérée par ce modèle.", "Enables reasoning; intensity remains model-controlled."),
+            "none" => ChatInteraction
                 ? WorkflowText("Réponse sans raisonnement étendu, sélectionnée par défaut en mode Chat.", "Response without extended reasoning, selected by default in Chat mode.")
                 : WorkflowText("Demande une réponse sans raisonnement étendu.", "Requests a response without extended reasoning."),
             _ => WorkflowText("Utilise le niveau de réflexion par défaut du modèle.", "Uses the model's default thinking level.")
         };
+        thinkingDescription.Text += "\n" + caps.Source + "\n" + WorkflowText("Paramètres de la requête ; effort interne du modèle non mesuré.", "Request parameters; internal model effort is not measured.");
         ToolTipService.SetToolTip(thinkingDescription, WorkflowText("La prise en charge des niveaux de réflexion dépend du fournisseur et du modèle.",
             "Support for thinking levels depends on the provider and model."));
         ToolTipService.SetToolTip(thinkingSelector, thinkingDescription.Text + "\n" + WorkflowText("La prise en charge des niveaux de réflexion dépend du fournisseur et du modèle.",

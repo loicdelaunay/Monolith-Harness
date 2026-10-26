@@ -7,7 +7,7 @@ namespace MonolithHarness.App;
 
 public sealed partial class MainWindow
 {
-    FrameworkElement BuildMemorySettings(Dictionary<string, ToggleSwitch> skillToggles)
+    (FrameworkElement Panel, Action<FeatureSettings> Save) BuildMemorySettings(Dictionary<string, ToggleSwitch> skillToggles)
     {
         var store = new MemoryStore(HarnessDb.DatabasePath);
         var panel = new StackPanel { Spacing = 14, Tag = "memory-settings" };
@@ -22,7 +22,20 @@ public sealed partial class MainWindow
             skill.Toggled += (_, _) => { if (toggle.IsOn != skill.IsOn) toggle.IsOn = skill.IsOn; };
             panel.Children.Add(FluentDesign.Setting(WorkflowText(fr, en), WorkflowText("Lecture et recherche ; écritures selon vos autorisations. Lecture seule en mode Plan.", "Read and search; writes follow your permissions. Read-only in Plan mode."), toggle));
         }
-        panel.Children.Add(Label(WorkflowText("Les outils mémoire sont proposés aux modèles OpenAI compatibles et à leurs sous-agents. OpenCode conserve ses outils propres. Aucun contenu mémoire n’est injecté en bloc dans le contexte.", "Memory tools are exposed to OpenAI-compatible models and their subagents. OpenCode retains its own tools. Memory contents are not bulk-injected into context."), 12));
+        var initialFeatures = FeatureSettings.Read(state.FeaturesJson);
+        var forceRead = new ToggleSwitch { Tag = "memory-force-read", IsOn = initialFeatures.MemoryForceRead, OnContent = WorkflowText("Activée", "Enabled"), OffContent = WorkflowText("Désactivée", "Disabled") };
+        var forceWrite = new ToggleSwitch { Tag = "memory-force-write", IsOn = initialFeatures.MemoryForceWrite, OnContent = WorkflowText("Activée", "Enabled"), OffContent = WorkflowText("Désactivée", "Disabled") };
+        panel.Children.Add(FluentDesign.Setting(WorkflowText("Forcer la lecture en début de discussion", "Force read at conversation start"),
+            WorkflowText("Avant la première réponse d’une discussion, l’application lit les 20 mémoires accessibles les plus récentes et les transmet au modèle, qui doit consulter celles utiles à la demande.",
+                "Before a conversation's first response, the app reads the 20 most recent accessible memories and gives them to the model, which must check those relevant to the request."), forceRead));
+        panel.Children.Add(FluentDesign.Setting(WorkflowText("Forcer l’écriture en fin de discussion", "Force write at conversation end"),
+            WorkflowText("Après chaque réponse terminée, une requête supplémentaire demande au modèle d’enregistrer les faits durables de l’échange. Écritures selon vos autorisations ; ignorée en mode Plan.",
+                "After each completed response, an extra request asks the model to save the exchange's durable facts. Writes follow your permissions; skipped in Plan mode."), forceWrite));
+        void RefreshAutomation() => forceRead.IsEnabled = forceWrite.IsEnabled = skillToggles[MemoryTools.ConversationSkill].IsOn || skillToggles[MemoryTools.SharedSkill].IsOn;
+        skillToggles[MemoryTools.ConversationSkill].Toggled += (_, _) => RefreshAutomation();
+        skillToggles[MemoryTools.SharedSkill].Toggled += (_, _) => RefreshAutomation();
+        RefreshAutomation();
+        panel.Children.Add(Label(WorkflowText("Les outils mémoire sont proposés aux modèles OpenAI compatibles et à leurs sous-agents. OpenCode conserve ses outils propres. Hors lecture forcée, aucun contenu mémoire n’est injecté en bloc dans le contexte.", "Memory tools are exposed to OpenAI-compatible models and their subagents. OpenCode retains its own tools. Except for the forced read, memory contents are not bulk-injected into context."), 12));
         var browser = new StackPanel { Spacing = 10, Visibility = Visibility.Collapsed };
         var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = FluentDesign.Secondary };
         var progress = new ProgressBar { IsIndeterminate = true, Visibility = Visibility.Collapsed, Height = 3 };
@@ -183,7 +196,7 @@ public sealed partial class MainWindow
         search.TextChanged += (_, _) => { searchTimer.Stop(); searchTimer.Start(); };
         searchTimer.Tick += async (_, _) => { searchTimer.Stop(); if (!initializing) await Safe(() => Load()); };
         panel.Unloaded += (_, _) => { searchTimer.Stop(); searching?.Cancel(); searching = null; revision++; initializing = false; };
-        return panel;
+        return (panel, settings => { settings.MemoryForceRead = forceRead.IsOn; settings.MemoryForceWrite = forceWrite.IsOn; });
     }
 
     string ScopeLabel(string scope) => scope == "shared" ? WorkflowText("Partagée", "Shared") : WorkflowText("Conversation", "Conversation");

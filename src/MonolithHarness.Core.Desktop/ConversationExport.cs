@@ -64,6 +64,7 @@ public static class ConversationExport
         Setting(L("Autorisations", "Permissions"), state.PermissionMode);
         Setting(L("Continuation automatique", "Auto-continue"), state.AutoContinue);
         Setting(L("Relance des fins prématurées", "Resume premature endings"), features.RecoverPrematureCompletion);
+        Setting(L("Mémoire : lecture / écriture forcées", "Memory: forced read / write"), $"{features.MemoryForceRead} / {features.MemoryForceWrite}");
         Setting("Skills", state.EnabledSkills);
         Setting(L("Accès navigateur / DOM", "Browser / DOM access"), $"{browser} / {dom}");
         Setting(L("Sources associées", "Attached sources"), string.Join(", ", ProjectResources.For(chat, project)));

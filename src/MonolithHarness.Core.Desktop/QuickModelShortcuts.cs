@@ -13,7 +13,7 @@ public sealed class QuickModelLevel
 public static class QuickModelShortcuts
 {
     public const int MaximumLevels = 10;
-    public static readonly string[] ThinkingLevels = ["auto", "low", "medium", "high", "none"];
+    public static readonly string[] ThinkingLevels = ReasoningCapabilities.All;
 
     public static void Normalize(FeatureSettings settings)
     {
@@ -50,7 +50,7 @@ public static class QuickModelShortcuts
     }
 
     public static bool Available(QuickModelLevel level, Provider? provider) => provider != null
-        && provider.Id == level.ProviderId && ProviderModels.CanChat(provider) && ProviderModels.Visible(provider).Contains(level.Model);
+        && provider.Id == level.ProviderId && ProviderModels.CanChat(provider) && ProviderModels.Visible(provider).Contains(level.Model) && ReasoningCapabilities.For(provider, level.Model).Supports(level.ThinkingLevel);
 
     public static bool Matches(QuickModelLevel level, Provider? provider, AppState state, Chat? chat) => Available(level, provider)
         && level.Model == provider!.Model && level.InteractionMode == ConversationModes.Normalize(chat?.InteractionMode)
@@ -61,6 +61,8 @@ public static class QuickModelShortcuts
     {
         Validate([level], true);
         if (!Available(level, provider)) throw new ArgumentException("Ce modèle n’est plus activé pour ce fournisseur / This model is no longer enabled for this provider.");
+        if (!ReasoningCapabilities.For(provider, level.Model).Supports(level.ThinkingLevel))
+            throw new ArgumentException("Ce niveau de réflexion n’est pas disponible pour ce modèle. Modifiez le raccourci / Thinking level unavailable; edit the shortcut.");
         ModelContexts.Select(provider, level.Model);
         state.ProviderId = provider.Id;
         chat.InteractionMode = level.InteractionMode;

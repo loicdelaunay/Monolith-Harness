@@ -31,6 +31,8 @@ public sealed partial class MainWindow
         }
         if (memory == null) throw new Exception("Memory settings page was not found.");
         await Task.Delay(100);
+        if (Find(memory).OfType<ToggleSwitch>().Count(x => x.Tag is "memory-force-read" or "memory-force-write" && !x.IsOn) != 2)
+            throw new Exception("Forced memory read/write toggles are missing or not disabled by default.");
         Click(Find(memory).OfType<Button>().Single(x => x.Content?.ToString() == "Voir la mémoire"));
         for (var attempt = 0; attempt < 100 && memoryDatabaseWindow?.Content is not DependencyObject; attempt++) await Task.Delay(20);
         if (memoryDatabaseWindow?.Content is not DependencyObject viewer) throw new Exception("Memory database window did not open.");

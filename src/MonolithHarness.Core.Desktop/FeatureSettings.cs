@@ -6,6 +6,8 @@ public sealed class FeatureSettings : IRetrySettings, ICompletionRecoverySetting
 {
     public LoopDetectionSettings LoopDetection { get; set; } = new();
     public InformationSettings Information { get; set; } = new();
+    public bool MemoryForceRead { get; set; }
+    public bool MemoryForceWrite { get; set; }
     public DesktopInputSettings KeyboardInput { get; set; } = new();
     public DesktopInputSettings MouseInput { get; set; } = new();
     public int ImageGenerationProviderId { get; set; }

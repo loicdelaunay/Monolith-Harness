@@ -91,16 +91,27 @@ public static class ProviderPresets
                     if (content.Count > 0) message["content"] = content;
                 }
             }
+        if ((provider.Kind == "deepseek" || Uri.TryCreate(provider.BaseUrl, UriKind.Absolute, out var deepSeekUrl) && deepSeekUrl.Host == "api.deepseek.com")
+            && payload["reasoning_effort"]?.ToString() is { } deepSeekEffort && deepSeekEffort != "auto")
+        {
+            payload["thinking"] = new JsonObject { ["type"] = deepSeekEffort == "none" ? "disabled" : "enabled" };
+            if (deepSeekEffort == "none") payload.Remove("reasoning_effort");
+        }
         switch (id)
         {
             case "openrouter":
                 request.Headers.TryAddWithoutValidation("X-Title", "Monolith Harness");
-                if (payload.Remove("reasoning_effort", out var effort)) payload["reasoning"] = new JsonObject { ["effort"] = effort };
+                if (payload.Remove("reasoning_effort", out var effort)) payload["reasoning"] = effort?.ToString() == "enabled"
+                    ? new JsonObject { ["enabled"] = true } : new JsonObject { ["effort"] = effort };
                 break;
             case "zai":
                 // GLM's thinking switch is independent of the OpenAI effort levels.
-                if (payload.Remove("reasoning_effort", out var thinking))
-                    payload["thinking"] = new JsonObject { ["type"] = thinking?.ToString() == "none" && !provider.Model.StartsWith("glm-5.3", StringComparison.OrdinalIgnoreCase) ? "disabled" : "enabled" };
+                if (payload["reasoning_effort"] is { } thinking)
+                {
+                    var level = thinking.ToString();
+                    payload["thinking"] = new JsonObject { ["type"] = level == "none" ? "disabled" : "enabled" };
+                    if (level is "none" or "enabled" || !(provider.Model.StartsWith("glm-5.2", StringComparison.OrdinalIgnoreCase) || provider.Model.StartsWith("glm-5.3", StringComparison.OrdinalIgnoreCase))) payload.Remove("reasoning_effort");
+                }
                 break;
         }
     }
@@ -110,6 +121,7 @@ public static class ProviderPresets
 
     public static string ReasoningNotice(Provider provider, string? effort)
     {
+        if (provider.Model.StartsWith("glm-5.2", StringComparison.OrdinalIgnoreCase) || provider.Model.StartsWith("glm-5.3", StringComparison.OrdinalIgnoreCase)) return "";
         if (Resolve(provider.BaseUrl)?.Id != "zai" || string.IsNullOrWhiteSpace(effort) || effort.Equals("auto", StringComparison.OrdinalIgnoreCase)) return "";
         if (effort.Equals("none", StringComparison.OrdinalIgnoreCase)) return provider.Model.StartsWith("glm-5.3", StringComparison.OrdinalIgnoreCase)
             ? "Compatibilité : ce modèle GLM impose le raisonnement ; il reste activé." : "";

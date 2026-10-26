@@ -554,6 +554,8 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
             db.Messages.Add(active); await db.SaveChangesAsync(ct);
 
             assistantUi = AddAssistantMessage("", target: run.Messages); ScrollRunToBottom(run);
+            var reasoningTransport = Label("", 11); reasoningTransport.TextWrapping = TextWrapping.Wrap;
+            run.Messages.Children.Add(reasoningTransport);
 
             SetRunStatus(run, T("OpenCode réfléchit…"));
 
@@ -584,6 +586,11 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
                         if (update.Retry is { } retry) { ShowModelRetry(run, retry, assistantUi, ct); return; }
                         run.ExportProgress = new(active.Id, update);
 
+                        if (update.CompatibilityNotice.Length > 0)
+                        {
+                            active.CompatibilityNotice = update.CompatibilityNotice;
+                            reasoningTransport.Text = update.ReasoningSelection?.Describe(state.Language == "fr") ?? update.CompatibilityNotice;
+                        }
                         active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
 
                         ModelProgress(run, update);

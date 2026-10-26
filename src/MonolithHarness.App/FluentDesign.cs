@@ -34,6 +34,8 @@ internal static partial class FluentDesign
         "TitleBarHoverBrush" => Blend(Color(theme.Background), Color(theme.Text), .035),
         "ControlHoverBrush" => Blend(Color(theme.Surface), Color(theme.Text), .07),
         "ControlPressedBrush" => Blend(Color(theme.Surface), Color(theme.Text), .11),
+        "ProviderConnectionSelectionBrush" => Blend(Color(theme.Surface), Color(theme.Accent), theme.Dark ? .18 : .13),
+        "ProviderConnectionSelectionHoverBrush" => Blend(Color(theme.Surface), Color(theme.Accent), theme.Dark ? .25 : .20),
         "ControlSelectedBrush" => Blend(Color(theme.Surface), Color(theme.Accent), theme.Dark ? .18 : .13),
         "ControlSelectedHoverBrush" => Blend(Color(theme.Surface), Color(theme.Accent), theme.Dark ? .25 : .20),
         "SelectionBrush" => Color(ThemeContrast.Selection(theme)),

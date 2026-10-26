@@ -65,10 +65,10 @@ public sealed partial class MainWindow
         var name = current?.Provider.Model ?? provider?.Model ?? (modelSelector.SelectedItem as ModelChoice)?.Model;
         selectedModelName.Text = string.IsNullOrWhiteSpace(name) ? WorkflowText("Choisir un modèle", "Choose a model") : name;
         var thinking = (current?.Options.ThinkingLevel ?? ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel)).ToLowerInvariant();
-        var index = thinking switch { "low" => 1, "medium" => 2, "high" => 3, "none" => 4, _ => 0 };
-        selectedThinking.Text = ThinkingLevelLabels()[index];
-        composerThinkingMarker.Text = index switch { 1 => "1", 2 => "2", 3 => "3", 4 => "—", _ => "A" };
-        composerThinkingMarker.Foreground = index == 4 ? FluentDesign.Secondary : FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
+        var index = Array.IndexOf(QuickModelShortcuts.ThinkingLevels, thinking);
+        selectedThinking.Text = ReasoningCapabilities.Label(thinking, state.Language == "fr");
+        composerThinkingMarker.Text = thinking switch { "minimal" => "m", "low" => "1", "medium" => "2", "high" => "3", "xhigh" => "4", "max" => "M", "none" => "—", _ => "A" };
+        composerThinkingMarker.Foreground = thinking == "none" ? FluentDesign.Secondary : FluentDesign.Resource("AccentTextFillColorPrimaryBrush");
         var thinkingLabel = WorkflowText("Réflexion : ", "Thinking: ") + selectedThinking.Text;
         ToolTipService.SetToolTip(composerThinkingIcon, thinkingLabel);
         ToolTipService.SetToolTip(composerThinkingMarker, thinkingLabel);

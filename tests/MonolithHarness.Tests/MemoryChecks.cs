@@ -65,6 +65,25 @@ static class MemoryChecks
             check(searched?["items"]?.AsArray().Count == 1, "Mémoire : lecture via le dispatcher des agents");
             var nativeSaved = JsonNode.Parse(await runtime.CallAsync("memory_save", new JsonObject { ["scope"] = "conversation", ["category"] = "general", ["key"] = "native", ["title"] = "Native", ["content"] = "Saved through the agent runtime" }, default));
             check(nativeSaved?["id"]?.GetValue<int>() > 0, "Mémoire : écriture autorisée via le dispatcher des agents");
+            Message[] firstTurn = [new() { Role = "user", Content = "Retiens que je préfère TypeScript." }];
+            check(await MemoryAutomation.ReadPromptAsync(run, firstTurn, default) == "" && !MemoryAutomation.WriteEnabled(run), "Mémoire : lecture et écriture forcées désactivées par défaut");
+            var previousFeatures = run.Options.FeaturesJson; var previousMode = run.Chat.ExecutionMode;
+            run.Options.FeaturesJson = new FeatureSettings { MemoryForceRead = true, MemoryForceWrite = true }.Json();
+            var forcedRead = await MemoryAutomation.ReadPromptAsync(run, firstTurn, default);
+            check(forcedRead.Contains("MEMORY READ AT CONVERSATION START") && forcedRead.Contains("\"id\":" + sharedEntry.Id), "Mémoire : lecture forcée transmise au début de la discussion");
+            check(await MemoryAutomation.ReadPromptAsync(run, [.. firstTurn, new() { Role = "assistant", Content = "Noté." }], default) == "", "Mémoire : lecture forcée limitée à la première réponse");
+            var writerCalls = 0;
+            var forcedWrite = await MemoryAutomation.WriteAsync(run, [.. firstTurn, new() { Role = "assistant", Content = "Noté." }],
+                (_, tools, _) => Task.FromResult(writerCalls++ == 0 && tools.Count == 4
+                    ? new Completion(new JsonObject { ["role"] = "assistant", ["content"] = "", ["tool_calls"] = new JsonArray(new JsonObject { ["id"] = "call_memory", ["type"] = "function", ["function"] = new JsonObject {
+                        ["name"] = "memory_save", ["arguments"] = new JsonObject { ["scope"] = "shared", ["category"] = "project", ["key"] = "language.preferred", ["title"] = "Langage préféré", ["content"] = "TypeScript" }.ToJsonString() } }) }, 1, 1, .1)
+                    : new Completion(new JsonObject { ["role"] = "assistant", ["content"] = "Saved." }, 1, 1, .1)),
+                runtime.CallAsync, default);
+            check(forcedWrite is { Saved: 1, Error: null } && writerCalls == 2 && (await store.SearchAsync(a, "typescript")).Items.Count == 1, "Mémoire : écriture forcée en fin de réponse via le dispatcher");
+            run.Chat.ExecutionMode = "plan";
+            check(!MemoryAutomation.WriteEnabled(run) && await MemoryAutomation.WriteAsync(run, firstTurn, (_, _, _) => throw new InvalidOperationException("No API call expected"), runtime.CallAsync, default) == null
+                && (await MemoryAutomation.ReadPromptAsync(run, firstTurn, default)).Length > 0, "Mémoire : mode Plan garde la lecture forcée sans écriture");
+            run.Chat.ExecutionMode = previousMode; run.Options.FeaturesJson = previousFeatures;
             var args = new JsonObject { ["scope"] = "shared", ["category"] = "general", ["key"] = "refused", ["title"] = "Refused", ["content"] = "No write" };
             await MemoryTools.CallAsync(run, "memory_save", args, _ => Task.FromResult(options.EnabledSkills), (_, _, _, _) => Task.FromResult(false), default);
             check((await store.SearchAsync(a, "refused")).Items.Count == 0, "Mémoire : refus d’autorisation sans écriture");

@@ -15,6 +15,10 @@ public sealed class SettingsNavigation : Grid
     { Name = "SettingsPageBody", HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new(24, 0, 24, 24) };
     readonly TextBlock heading = new() { FontSize = 24, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
     readonly ContentPresenter header = new() { Visibility = Visibility.Collapsed };
+    readonly ContentPresenter viewport = new() { Margin = new(24, 0, 24, 8), Visibility = Visibility.Collapsed };
+    readonly List<bool> fillsViewport = [];
+    public TextBlock SaveStatus { get; } = new() { Name = "SettingsSaveStatus", FontSize = 12, TextWrapping = TextWrapping.Wrap,
+        Foreground = FluentDesign.Secondary, VerticalAlignment = VerticalAlignment.Center };
     readonly List<UIElement> pages = [];
     readonly List<UIElement?> headers = [];
     readonly List<NavigationViewItem> items = [];
@@ -43,6 +47,7 @@ public sealed class SettingsNavigation : Grid
         var pageHeader = new SettingsHeaderPanel { Margin = new(24, 20, 24, 16), Spacing = 16, RightAlignLast = true };
         pageHeader.Children.Add(heading); pageHeader.Children.Add(header); content.Children.Add(pageHeader);
         SetRow(body, 1); content.Children.Add(body);
+        SetRow(viewport, 1); content.Children.Add(viewport);
         navigation.Content = content; Children.Add(navigation);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SearchBox,
             UiText.Resolve("Rechercher un paramètre", "Search settings"));
@@ -79,7 +84,11 @@ public sealed class SettingsNavigation : Grid
         heading.Text = items[SelectedIndex].Content?.ToString() ?? "";
         header.Content = headers[SelectedIndex];
         header.Visibility = header.Content == null ? Visibility.Collapsed : Visibility.Visible;
-        body.Content = pages[SelectedIndex]; ScrollToTop();
+        body.Content = null; viewport.Content = null;
+        body.Visibility = fillsViewport[SelectedIndex] ? Visibility.Collapsed : Visibility.Visible;
+        viewport.Visibility = fillsViewport[SelectedIndex] ? Visibility.Visible : Visibility.Collapsed;
+        if (fillsViewport[SelectedIndex]) viewport.Content = pages[SelectedIndex]; else body.Content = pages[SelectedIndex];
+        ScrollToTop();
     }
 
     void Search()
@@ -111,6 +120,7 @@ public sealed class SettingsNavigation : Grid
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(result, entry.Section + " · " + entry.Title);
             result.Click += (_, _) => Open(entry); results.Children.Add(result);
         }
+        viewport.Content = null; viewport.Visibility = Visibility.Collapsed; body.Visibility = Visibility.Visible;
         body.Content = results; ScrollToTop();
     }
 
@@ -118,6 +128,18 @@ public sealed class SettingsNavigation : Grid
     {
         searchDelay.Stop(); SelectedIndex = entry.Page;
         foreach (var expander in entry.Expanders) expander.IsExpanded = true;
+        if (pages[entry.Page] is FrameworkElement providerPage)
+        {
+            // Hidden provider tabs must be opened before focusing a search result.
+            for (DependencyObject? current = entry.Target; current != null; current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current))
+                if (current is ProviderConnectionLayout layout)
+                {
+                    if (IsInside(entry.Target, layout.Models)) layout.ShowPage(1);
+                    else if (IsInside(entry.Target, layout.Advanced)) layout.ShowPage(2);
+                    else layout.ShowPage(0);
+                    break;
+                }
+        }
         DispatcherQueue.TryEnqueue(() =>
         {
             body.UpdateLayout();
@@ -131,13 +153,19 @@ public sealed class SettingsNavigation : Grid
         });
     }
 
+    static bool IsInside(FrameworkElement target, DependencyObject parent)
+    {
+        for (DependencyObject? item = target; item != null; item = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(item)) if (ReferenceEquals(item, parent)) return true;
+        return false;
+    }
+
     public void ScrollToTop() => body.ChangeView(null, 0, null, true);
 
-    public int Add(string title,UIElement page, string? icon = null, bool footer = false, UIElement? fixedHeader = null)
+    public int Add(string title,UIElement page, string? icon = null, bool footer = false, UIElement? fixedHeader = null, bool fillViewport = false)
     {
         string[] icons = ["\uE713", "\uE968", "\uE945", "\uE8F1", "\uE8D4", "\uE8A5", "\uE72E", "\uE774"];
         var item = new NavigationViewItem { Content = title, Icon = FluentDesign.Icon(icon ?? icons[Math.Min(pages.Count, icons.Length - 1)]) };
-        items.Add(item); pages.Add(page); headers.Add(fixedHeader);
+        items.Add(item); pages.Add(page); headers.Add(fixedHeader); fillsViewport.Add(fillViewport);
         if (footer) navigation.FooterMenuItems.Add(item); else navigation.MenuItems.Add(item);
         if (pages.Count == 1) SelectedIndex = 0;
         return pages.Count - 1;

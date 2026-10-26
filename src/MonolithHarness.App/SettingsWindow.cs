@@ -75,7 +75,7 @@ public sealed partial class MainWindow
         };
         FluentDesign.WindowChrome(window);
         ApplyBrandingIcon(window);
-        window.AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1000, Height = 840 });
+        ResizeSettingsWindow(window);
         window.Activate();
         try { await YieldSettingsAsync(window); await PopulateSettingsAsync(window); }
         catch (OperationCanceledException) when (!ReferenceEquals(settingsWindow, window)) { }
@@ -87,6 +87,26 @@ public sealed partial class MainWindow
             ApplyTheme(savedAppearance.Theme);
             ConfigureChatBackground(savedAppearance);
         }
+    }
+
+    static void ResizeSettingsWindow(Window window)
+    {
+        int width = 1360, height = 960;
+        // Uno Desktop does not implement DisplayArea; native WinUI can constrain the window to the monitor.
+#if WINDOWS
+        try
+        {
+            var display = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(window.AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+            if (display is { WorkArea.Width: > 0, WorkArea.Height: > 0 })
+            {
+                width = Math.Min(width, Math.Max(640, display.WorkArea.Width - 64));
+                height = Math.Min(height, Math.Max(480, display.WorkArea.Height - 64));
+            }
+        }
+        catch (NotImplementedException) { } // Uno Desktop does not expose DisplayArea yet.
+        catch (NotSupportedException) { }
+#endif
+        window.AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
     }
 
     async Task YieldSettingsAsync(Window window)
@@ -130,7 +150,9 @@ public sealed partial class MainWindow
         actions.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         actions.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var buttons = Row(cancel, save); Grid.SetColumn(buttons, 1);
-        actions.Children.Add(validationError); actions.Children.Add(buttons);
+        var saveNotes = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        if (content is SettingsNavigation settings) saveNotes.Children.Add(settings.SaveStatus);
+        saveNotes.Children.Add(validationError); actions.Children.Add(saveNotes); actions.Children.Add(buttons);
         actions.HorizontalAlignment = HorizontalAlignment.Stretch;
         actions.Margin = new(24, 16, 24, 16);
         Grid.SetRow(actions, 2);
@@ -173,7 +195,7 @@ public sealed partial class MainWindow
         ApplyBrandingIcon(window);
         window.Content = panel;
         ObserveTextZoom(panel);
-        window.AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1000, Height = 840 });
+        ResizeSettingsWindow(window);
         window.Activate();
         return await completed.Task;
     }

@@ -16,6 +16,8 @@ public sealed record ModelToolResult(string Text, int InputTokens, int OutputTok
     bool InputEstimated, bool OutputEstimated, double Seconds, double? FirstTokenSeconds, string Reasoning = "")
 {
     // End-to-end throughput is comparable across SSE and OpenCode polling transports.
+    public ReasoningSelection? ReasoningSelection { get; init; }
+    public int? CachedInputTokens { get; init; }
     public double TokensPerSecond => Seconds > 0 ? OutputTokens / Seconds : 0;
     public int TotalTokens => InputTokens + OutputTokens;
     public bool Estimated => InputEstimated || OutputEstimated;
@@ -49,7 +51,7 @@ public sealed class ModelToolClient(HttpClient http)
         try
         {
             if (!provider.IsOpenCode)
-                completion = await chat.StreamAsync(provider, secret, messages, [], Update, timeout.Token, request.ThinkingLevel, retrySettings: retrySettings);
+                completion = await chat.StreamAsync(provider, secret, messages, [], Update, timeout.Token, request.ThinkingLevel, retrySettings: retrySettings, requireNoReasoning: request.ThinkingLevel == "none");
             else
             {
                 // A fresh session for every tool request prevents benchmark answers and user text
@@ -97,7 +99,7 @@ public sealed class ModelToolClient(HttpClient http)
         var input = completion.InputTokens is >= 0 ? completion.InputTokens : null;
         var output = completion.OutputTokens is >= 0 ? completion.OutputTokens : null;
         return new(text, input ?? ContextWindow.Estimate(messages), output ?? ContextWindow.EstimateText(text + reasoning),
-            input == null, output == null, seconds, first, reasoning);
+            input == null, output == null, seconds, first, reasoning) { ReasoningSelection = completion.ReasoningSelection, CachedInputTokens = completion.CachedInputTokens };
     }
 }
 

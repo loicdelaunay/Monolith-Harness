@@ -353,14 +353,7 @@ public sealed partial class MainWindow : Window
         thinkingSelector.SelectionChanged += async (_, _) =>
         {
             if (loading || updatingThinkingSelector || applyingQuickLevel || ActiveRun != null) return;
-            var level = thinkingSelector.SelectedIndex switch
-            {
-                1 => "low",
-                2 => "medium",
-                3 => "high",
-                4 => "none",
-                _ => "auto"
-            };
+            var level = SelectedThinkingLevel;
             if (ChatInteraction) state.ChatThinkingLevel = level; else state.ThinkingLevel = level;
             RefreshModelOptions();
             await Guard(() => db.SaveChangesAsync());
@@ -566,36 +559,40 @@ public sealed partial class MainWindow : Window
         if(Environment.GetEnvironmentVariable("MONOLITHHARNESS_UI_SMOKE") is {Length:>0} smoke)
             DispatcherQueue.TryEnqueue(async () => await UnoSmokeAsync(smoke));
     }
+    Provider? ThinkingProvider
+    {
+        get
+        {
+            if (provider?.IsComposite != true) return provider;
+            try { return CompositeModel.Resolve(CompositeModel.Read(provider.CompositeJson).Orchestrator, db.Providers.Local); }
+            catch (InvalidOperationException) { return null; }
+        }
+    }
+    string[] availableThinkingLevels = ["auto"];
+    string SelectedThinkingLevel => availableThinkingLevels[Math.Clamp(thinkingSelector.SelectedIndex, 0, availableThinkingLevels.Length - 1)];
     void PopulateThinkingSelector()
     {
         updatingThinkingSelector = true;
         try
         {
-            thinkingSelector.ItemsSource = new[]
+            var caps = ReasoningCapabilities.For(ThinkingProvider);
+            var requested = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel);
+            availableThinkingLevels = caps.Levels;
+            thinkingSelector.ItemsSource = availableThinkingLevels.Select(x => ReasoningCapabilities.Label(x, state.Language == "fr")).ToArray();
+            thinkingSegments.SetLabels(availableThinkingLevels.Select(x => ReasoningCapabilities.Label(x, state.Language == "fr")).ToArray());
+            var index = Array.IndexOf(availableThinkingLevels, requested);
+            if (index < 0)
             {
-                "🧠 Auto",
-                $"🧠 {T("Faible")}",
-                $"🧠 {T("Moyen")}",
-                $"🧠 {T("Élevé")}",
-                $"🧠 {T("Désactivé")}"
-            };
-            thinkingSelector.SelectedIndex = ConversationModes.EffectiveThinking(chat, state.ThinkingLevel, state.ChatThinkingLevel).ToLowerInvariant() switch
-            {
-                "low" => 1,
-                "medium" => 2,
-                "high" => 3,
-                "none" => 4,
-                _ => 0
-            };
+                index = 0;
+                if (ChatInteraction) state.ChatThinkingLevel = "auto"; else state.ThinkingLevel = "auto";
+            }
+            thinkingSelector.SelectedIndex = index; thinkingSegments.SelectedIndex = index;
             thinkingSelector.IsEnabled = ActiveRun == null && !applyingQuickLevel;
-            ToolTipService.SetToolTip(thinkingSelector, T("Niveau de réflexion / thinking du modèle (reasoning effort)"));
+            ToolTipService.SetToolTip(thinkingSelector, caps.Source);
         }
-        finally
-        {
-            updatingThinkingSelector = false;
-            RefreshModelOptions();
-        }
+        finally { updatingThinkingSelector = false; }
     }
+
     void UpdateProvider()
     {
         modelLabel.Text = provider == null ? T("Aucun fournisseur") : $"{provider.Model} · {provider.Name}";
@@ -1665,12 +1662,15 @@ public sealed partial class MainWindow : Window
         tabs.Add(WorkflowText("Chat", "Chat"), chatSettings, "\uE8F2");
         tabs.Add(WorkflowText("Apparence", "Appearance"), appearance.Panel, "\uE790");
         var shortcutsTab = tabs.Add(WorkflowText("Raccourcis", "Shortcuts"), quickModelSettings.Panel, "\uE765");
-        var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968", fixedHeader: providerEditor.Header);
+        var providerTab = tabs.Add(T("Fournisseurs"),providerEditor.Panel, "\uE968", fillViewport: true);
+        providerEditor.Changed = () => tabs.SaveStatus.Text = providerEditor.HasChanges() ? WorkflowText("Modifications non enregistrées", "Unsaved changes") : "";
         providerEditor.ViewChanged = tabs.ScrollToTop;
+        providerEditor.Changed();
         tabs.Add("Skills",skillPanel, "\uE945");
         tabs.Add(WorkflowText("Agents", "Agents"), agentAutomationSettings.Panel, "\uE8D7");
         tabs.Add(WorkflowText("Détection de boucle", "Loop detection"), loopSettings.Panel, "\uE777");
-        tabs.Add(WorkflowText("Mémoire", "Memory"), BuildMemorySettings(skillToggles), "\uE8F1");
+        var memorySettings = BuildMemorySettings(skillToggles);
+        tabs.Add(WorkflowText("Mémoire", "Memory"), memorySettings.Panel,"\uE8F1");
         var compactionTab = tabs.Add(WorkflowText("Compactage", "Compaction"), compactionSettings.Panel, "\uE8A3");
         var mcpTab = tabs.Add("MCP",mcpEditor.Panel, "\uE8D4");
         var templateTab = tabs.Add("Templates",templateEditor.Panel, "\uE8A5");
@@ -1754,7 +1754,7 @@ public sealed partial class MainWindow : Window
         agentAutomationSettings.Save(savedFeatures);
         compactionSettings.Save(savedFeatures);
         webHttpSettings.Save(savedFeatures);
-        informationSettings.Save(savedFeatures);
+        informationSettings.Save(savedFeatures); memorySettings.Save(savedFeatures);
         keyboardSettings.Save(savedFeatures); mouseSettings.Save(savedFeatures);
         commandGuardSettings.Save(savedFeatures);
         AppLog.Write(AppLogLevel.Information, "settings.save.branding");
@@ -2430,6 +2430,7 @@ public sealed partial class MainWindow : Window
         systemPrompt += ResourceAccessPolicy.Prompt(run.Chat);
         systemPrompt += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, sourceFolders, run.Project.Id);
         if (!chatOnly) systemPrompt += FeatureSettings.Read(run.Options.FeaturesJson).GoalInstructions(run.Chat.Id);
+        systemPrompt += await MemoryAutomation.ReadPromptAsync(run, history, ct);
         if (!provider.IsAcp && run.Chat.OrchestrationMode != "disabled")
         {
             var report = await agent.StartAsync(ct);
@@ -2625,8 +2626,23 @@ public sealed partial class MainWindow : Window
                 wire = ComposeWire(systemPrompt, ConversationModes.History(persistedHistory, run.Chat));
                 if (toolResults.Count == 0 && steered.Count==0)
                 {
-                    SetRunStatus(run, completion.Termination is { CanResume: true } ending ? ending.Describe(run.Options.Language != "en") : T("Réponse terminée · historique enregistré."), StatusKind.Notice);
-                    active = null; break;
+                    active = null;
+                    var memoryNote = "";
+                    if (MemoryAutomation.WriteEnabled(run))
+                    {
+                        SetRunStatus(run, WorkflowText("Mémoire · enregistrement de fin de réponse…", "Memory · saving at the end of the response…"));
+                        var memory = await MemoryAutomation.WriteAsync(run, persistedHistory,
+                            (messages, tools, token) => engine.StreamAsync(provider, secret, messages, tools, _ => { }, token, run.Options.ThinkingLevel, FeatureSettings.Read(run.Options.FeaturesJson)),
+                            async (name, args, token) =>
+                            {
+                                await ProjectResources.DemandToolAsync(run.Project, name, args.ToJsonString(), (scope, details, approval) => RequestAccessAsync(scope, "Projet · " + name, details, name, approval), token);
+                                return await agent.CallAsync(name, args, token);
+                            }, ct);
+                        if (memory != null) memoryNote = memory.Error is { } memoryError ? WorkflowText(" · Mémoire non enregistrée : ", " · Memory not saved: ") + memoryError
+                            : WorkflowText($" · Mémoire : {memory.Saved} enregistrement(s)", $" · Memory: {memory.Saved} saved");
+                    }
+                    SetRunStatus(run, (completion.Termination is { CanResume: true } ending ? ending.Describe(run.Options.Language != "en") : T("Réponse terminée · historique enregistré.")) + memoryNote, StatusKind.Notice);
+                    break;
                 }
                 active = null;
             }

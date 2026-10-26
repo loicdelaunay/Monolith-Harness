@@ -15,10 +15,22 @@ public static class ModelContexts
     {
         public int? MaximumTokens { get; set; }
         public int? OverrideTokens { get; set; }
+        public string[]? ReasoningLevels { get; set; }
+        public string ReasoningSource { get; set; } = "";
+        public string ReasoningEndpoint { get; set; } = "";
         public string Source { get; set; } = "API";
     }
-    sealed class Cache { public string Json = ""; public Dictionary<string, Entry> Entries = new(StringComparer.Ordinal); }
+    sealed class Cache { public int Defer; public string Json = ""; public Dictionary<string, Entry> Entries = new(StringComparer.Ordinal); }
     static readonly ConditionalWeakTable<Provider, Cache> cache = new();
+    sealed class MetadataBatch(Provider provider, Cache value) : IDisposable
+    {
+        public void Dispose() { if (--value.Defer == 0) Save(provider, value.Entries); }
+    }
+    public static IDisposable Batch(Provider provider)
+    {
+        Read(provider); var value = cache.GetValue(provider, _ => new Cache()); value.Defer++;
+        return new MetadataBatch(provider, value);
+    }
     public static int Ceiling(Provider provider) => provider.IsLocal ? 262144 : 10_000_000;
     static Dictionary<string, Entry> Read(Provider provider)
     {
@@ -68,6 +80,18 @@ public static class ModelContexts
         }
         if (changed) Save(provider, entries);
     }
+    public static (string[]? Levels, string Source) Reasoning(Provider provider, string model)
+    {
+        Read(provider).TryGetValue(model, out var entry);
+        return entry?.ReasoningEndpoint == provider.Kind + "|" + provider.BaseUrl.TrimEnd('/') ? (entry.ReasoningLevels, entry.ReasoningSource) : (null, "");
+    }
+    public static void SetReasoning(Provider provider, string model, IEnumerable<string> levels, string source)
+    {
+        var entries = Read(provider);
+        if (!entries.TryGetValue(model, out var entry)) entries[model] = entry = new();
+        entry.ReasoningLevels = levels.Where(ReasoningCapabilities.All.Contains).Distinct().ToArray();
+        entry.ReasoningSource = source; entry.ReasoningEndpoint = provider.Kind + "|" + provider.BaseUrl.TrimEnd('/'); Save(provider, entries);
+    }
     public static void MergeLocal(Provider provider)
     {
         if (provider.IsLocal) Merge(provider, LocalModelInfo.Read(provider)
@@ -86,6 +110,7 @@ public static class ModelContexts
     static int? Count(JsonNode? node) => TokenCache.ReadCount(node) is >= 1024 and <= 10_000_000 and var count ? count : null;
     static void Save(Provider provider, Dictionary<string, Entry> entries)
     {
+        if (cache.GetValue(provider, _ => new Cache()).Defer > 0) return;
         provider.ModelContextsJson = JsonSerializer.Serialize(entries);
         cache.GetValue(provider, _ => new Cache()).Json = provider.ModelContextsJson;
         Sync(provider);

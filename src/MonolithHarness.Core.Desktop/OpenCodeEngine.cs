@@ -79,6 +79,7 @@ public sealed class OpenCodeEngine(HttpClient http)
         var json = await JsonAsync(provider, password, HttpMethod.Get, "provider", directory, null, ct);
         var providers = json?["all"] as JsonArray ?? json?["providers"] as JsonArray ?? json as JsonArray ?? [];
         var connected = (json?["connected"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? "").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        using var metadataBatch = ModelContexts.Batch(provider);
         var result = new List<OpenCodeModel>();
         foreach (var item in providers.OfType<JsonObject>())
         {
@@ -95,7 +96,10 @@ public sealed class OpenCodeEngine(HttpClient http)
                 {
                     var model = pair.Value as JsonObject;
                     if (provider.BypassFreeLimitation || isConnected || isFreeProvider || IsFreeModel(model, pair.Key))
+                    {
                         AddModel(result, providerId, pair.Key, model);
+                        ReasoningCapabilities.CaptureOpenCode(provider, providerId + "/" + pair.Key, model);
+                    }
                 }
             }
             else if (item["models"] is JsonArray modelList)
@@ -104,7 +108,10 @@ public sealed class OpenCodeEngine(HttpClient http)
                 {
                     var modelId = String(model, "id", "modelID");
                     if (provider.BypassFreeLimitation || isConnected || isFreeProvider || IsFreeModel(model, modelId))
+                    {
                         AddModel(result, providerId, modelId, model);
+                        ReasoningCapabilities.CaptureOpenCode(provider, providerId + "/" + modelId, model);
+                    }
                 }
             }
         }
@@ -195,11 +202,10 @@ public sealed class OpenCodeEngine(HttpClient http)
             ["system"] = systemPrompt,
             ["parts"] = parts
         };
-        if (policy?.Mode == "chat")
-        {
-            if (policy.RequireNoReasoning) ChatReasoning.CheckModel(provider);
-            payload["variant"] = await ChatVariantAsync(provider, password, directory, separator, policy.ThinkingLevel, ct);
-        }
+        var selection = await ChatVariantAsync(provider, password, directory, separator, policy?.ThinkingLevel ?? "auto", ct);
+        payload["variant"] = selection.Variant;
+        var reasoningTrace = selection.Trace;
+        update(new("", "", null, null, 0) { ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace.Describe() });
         payload["tools"] = provider.OpenCodeTools
             ? new JsonObject { ["question"] = workflow != null }
             : await DisabledToolsAsync(provider, password, directory, ct);
@@ -265,7 +271,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 if (parsed.Text != lastText || parsed.Reasoning != lastReasoning || parsed.Completed)
                 {
                     lastText = parsed.Text; lastReasoning = parsed.Reasoning;
-                    update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds) { CachedInputTokens = parsed.CachedInputTokens });
+                    update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds) { CachedInputTokens = parsed.CachedInputTokens, ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace.Describe() });
                 }
                 if (!parsed.Completed) continue;
                 if (provider.OpenCodeTools && (workflow != null || policy?.Mode == "chat" && policy.ChatWebEnabled))
@@ -282,6 +288,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 if (policy?.RequireNoReasoning == true && calls.Any(x => x.Reasoning.Length > 0)) throw ChatReasoning.Unsupported(provider.Model);
                 return new Completion(message, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds)
                 {
+                    ReasoningSelection = reasoningTrace,
                     CachedInputTokens = parsed.CachedInputTokens,
                     Usage = new(calls.Sum(x => (long)(x.InputTokens ?? ContextWindow.EstimateText(systemPrompt + prompt) + attachments.Count * 1000)),
                         calls.Sum(x => (long)(x.OutputTokens ?? ContextWindow.EstimateText(x.Text + x.Reasoning))),
@@ -301,28 +308,31 @@ public sealed class OpenCodeEngine(HttpClient http)
         }
     }
 
-    async Task<string> ChatVariantAsync(Provider provider, string password, string directory, int separator, string thinkingLevel, CancellationToken ct)
+    async Task<(string Variant, ReasoningSelection Trace)> ChatVariantAsync(Provider provider, string password, string directory, int separator, string thinkingLevel, CancellationToken ct)
     {
         thinkingLevel = thinkingLevel.ToLowerInvariant();
-        if (thinkingLevel == "auto") return "default"; // Clear a previous explicit variant.
+        if (thinkingLevel == "auto") return ("default", new("auto", "auto", Parameter: "OpenCode variant=default")); // Clear a previous explicit variant.
         var json = await JsonAsync(provider, password, HttpMethod.Get, "provider", directory, null, ct);
         var providers = json?["all"] as JsonArray ?? json?["providers"] as JsonArray ?? json as JsonArray ?? [];
         var owner = providers.OfType<JsonObject>().FirstOrDefault(x => String(x, "id", "providerID", "key") == provider.Model[..separator]);
         var modelId = provider.Model[(separator + 1)..];
         var model = owner?["models"] is JsonObject models ? models[modelId] :
             (owner?["models"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(x => String(x, "id", "modelID", "key") == modelId);
+        ReasoningCapabilities.CaptureOpenCode(provider, provider.Model, model as JsonObject);
+        var trace = ReasoningCapabilities.Select(provider, thinkingLevel);
+        if (trace.Sent == "auto") return ("default", trace with { Parameter = "OpenCode variant=default" });
         if (model?["variants"] is JsonObject variants)
             foreach (var variant in variants)
             {
-                if (thinkingLevel == "none" && ChatReasoning.ExplicitlyDisabled(variant.Value)) return variant.Key;
+                if (thinkingLevel == "none" && ChatReasoning.ExplicitlyDisabled(variant.Value)) return (variant.Key, trace with { Parameter = "OpenCode variant=" + variant.Key });
                 var effort = variant.Value is JsonObject settings ? settings["reasoningEffort"]?.ToString() ?? settings["reasoning_effort"]?.ToString() : null;
                 if (thinkingLevel != "none" && (variant.Key.Equals(thinkingLevel, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(effort, thinkingLevel, StringComparison.OrdinalIgnoreCase))) return variant.Key;
+                    string.Equals(effort, thinkingLevel, StringComparison.OrdinalIgnoreCase))) return (variant.Key, trace with { Parameter = "OpenCode variant=" + variant.Key });
             }
         if (thinkingLevel == "none")
         {
             if (ChatReasoning.IsFalse(model?["capabilities"]?["reasoning"]))
-                return "default"; // Explicit non-reasoning model; reset any previous reasoning variant.
+                return ("default", trace with { Parameter = "OpenCode · modèle sans raisonnement" }); // Explicit non-reasoning model; reset any previous reasoning variant.
             throw ChatReasoning.Unsupported(provider.Model, "OpenCode ne déclare aucune variante sans raisonnement / OpenCode exposes no non-reasoning variant.");
         }
         throw new InvalidOperationException("OpenCode : le niveau de réflexion « " + thinkingLevel + " » n’est pas déclaré pour ce modèle. Choisissez Auto ou un autre niveau. / OpenCode: the selected thinking level is not declared for this model. Choose Auto or another level.");

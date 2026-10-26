@@ -25,7 +25,7 @@ public sealed partial class HarnessService(string database, Func<string, JsonObj
     static JsonObject Obj(object value) => (JsonSerializer.SerializeToNode(value, Json) as JsonObject)!;
     HarnessDb Db() => new(database);
     public async Task Initialize() { ChatEngine.ProviderGuard = provider => ServerSync.BlockedReason(guardStore.Read(), provider); await using var db = Db(); await db.InitializeAsync(); AppLog.Configure(FeatureSettings.Read((await db.States.SingleAsync()).FeaturesJson)); AppLog.Write(AppLogLevel.Information, "host.started"); new CustomSkills(CustomSkills.DefaultRoot).EnsureTemplate(); await InitializeArtifactMaintenanceAsync(); _ = ResumeSharesAsync(); }
-    static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, p.AcpArgumentsJson, hasKey = p.ProtectedKey.Length > 0 };
+    static object ProviderView(Provider p) => new { p.Id, p.Name, p.Kind, p.CompositeJson, p.LocalModelsJson, p.DetectedModelsJson, p.SelectedModelsJson, p.BaseUrl, p.Model, p.ContextLimit, p.ModelContextsJson, reasoningCapabilities = ReasoningCapabilities.For(p), p.SupportsImages, p.Username, p.ExecutablePath, p.AutoStart, p.OpenCodeTools, p.AcpArgumentsJson, hasKey = p.ProtectedKey.Length > 0 };
     static string Html(string text)
     {
         var document = Markdig.Markdown.Parse(text, Markdown);

@@ -234,7 +234,7 @@ public sealed partial class TerminalUi(CliOptions options) : IDisposable
                 if (view.ContextRequest != null && (data["modelOutput"]?.GetValue<bool>() == true || streamedText.Length > 0 || streamedReasoning.Length > 0))
                 { view.ContextRequest = null; view.Status = streamedText.Length > 0 ? L("Réponse en cours…", "Response in progress…") : L("Le modèle réfléchit…", "Thinking…"); }
                 view.Thinking = string.IsNullOrWhiteSpace(streamedText) || streamedReasoning.Length > view.Reasoning.GetValueOrDefault(messageId, "").Length;
-                view.Messages[messageId] = new() { Id = messageId, ChatId = id, Role = "assistant", Content = S(data, "text"), State = "streaming" };
+                view.Messages[messageId] = new() { Id = messageId, ChatId = id, Role = "assistant", Content = S(data, "text"), State = "streaming", CompatibilityNotice = S(data, "compatibilityNotice") };
                 view.Reasoning[messageId] = S(data, "reasoning"); view.Tokens = I(data, "tokens"); view.Limit = I(data, "limit");
                 view.Speed = data["speed"]?.GetValue<double>() ?? 0; break;
             case "message":

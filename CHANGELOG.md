@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.8.0 — 2026-10-26
+
+- Mémoire : deux options désactivées par défaut dans Réglages > Mémoire, en GUI comme en CLI. « Forcer la lecture en début de discussion » transmet au modèle les 20 mémoires accessibles les plus récentes avant la première réponse d’une discussion et lui demande de consulter celles utiles. « Forcer l’écriture en fin de discussion » lance, après chaque réponse terminée, une requête supplémentaire réservée aux outils mémoire pour enregistrer les faits durables de l’échange, sans modifier l’historique du chat.
+- Les écritures forcées suivent les autorisations habituelles et les règles du projet, sont ignorées en mode Plan, avec OpenCode / ACP et en mode Chat, et leur résultat s’affiche dans le statut de fin de réponse. Leur consommation apparaît sous l’activité Mémoire du tableau de bord.
+- CLI : les accents des menus Réglages, file d’attente, sous-agents, Git, terminaux, mémoire et sandbox s’affichent correctement (« Réglages » au lieu de « RÃ©glages »).
+
+## 2.7.0 — 2026-10-23
+
+- Réflexion : choix limités aux capacités déclarées du modèle ou à son catalogue fournisseur, avec Auto seul lorsque les capacités sont inconnues. Les niveaux Minimale, Très élevée et Maximale sont disponibles lorsqu’ils sont pris en charge ; chat, correcteur, raccourcis, tâches planifiées et CLI partagent ces capacités.
+- Les réponses affichent le niveau demandé, le niveau envoyé, les paramètres de transport et les éventuels replis. Sans réflexion utilise une désactivation explicite dans les modes Chat, Agent et correcteur ; une incompatibilité est signalée au lieu de réactiver implicitement le raisonnement.
+- Benchmark : comparaison de niveaux sur les mêmes épreuves reproductibles, sélection des niveaux, répétitions, ordre alterné, délai moyen, premier élément reçu, tokens et réussite aux réponses vérifiables. Le rapport JSON conserve les réponses et les traces, y compris les erreurs et les résultats partiels ; le score décrit les seules épreuves évaluées.
+
+## 2.6.0 — 2026-10-23
+
+- Réglages desktop : refonte de Fournisseurs avec liste de connexions recherchable à gauche et panneau de détail à droite. Les onglets Connexion, Modèles et Avancé séparent l’authentification, les modèles disponibles dans le chat et les réglages techniques. La liste et le détail défilent indépendamment ; les petites fenêtres disposent d’un retour à la liste.
+- Les connexions disposent de logos locaux, d’actions Dupliquer/Supprimer dans le menu contextuel, d’un remplacement explicite de la clé enregistrée et d’un résultat de connexion affiché sous le test. La recherche de modèles conserve les suggestions, la sélection multiple et la pagination. Les modifications de connexions sont signalées près de la barre d’enregistrement.
+
 ## 2.5.0 — 2026-10-23
 
 - SQLite : le retour arrière de la migration des instructions de projet utilise la suppression de colonne native, comme les migrations récentes, pour rester compatible avec les bases existantes.

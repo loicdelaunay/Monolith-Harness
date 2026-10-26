@@ -129,15 +129,22 @@ using (var client = new HttpClient(new FakeHandler(async request =>
         new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "Bonjour" }), ChatEngine.ToolDefinitions(true, false), _ => { }, default);
     Check(result.OutputTokens == 4, "Client HTTP complet avec fournisseur simulé");
 }
+// Only levels declared for the model are sent; unknown capabilities keep the provider default.
+var reasoningProvider = new Provider { BaseUrl = "https://example.com/v1", Model = "reasoning-test" };
+ModelContexts.SetReasoning(reasoningProvider, reasoningProvider.Model, ["low", "high"], "test");
+string? sentEffort = "unset";
 using (var client = new HttpClient(new FakeHandler(async request =>
 {
-    var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync())!;
-    Check(body["reasoning_effort"]?.GetValue<string>() == "high", "Paramètre reasoning_effort transmis dans le payload");
+    sentEffort = JsonNode.Parse(await request.Content!.ReadAsStringAsync())!["reasoning_effort"]?.GetValue<string>();
     return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(stream) };
 })))
 {
+    await new ChatEngine(client).StreamAsync(reasoningProvider, "test-key",
+        new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "Bonjour" }), new JsonArray(), _ => { }, default, "high");
+    Check(sentEffort == "high", "Paramètre reasoning_effort transmis pour un niveau déclaré par le modèle");
     await new ChatEngine(client).StreamAsync(new Provider { BaseUrl = "https://example.com/v1" }, "test-key",
         new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "Bonjour" }), new JsonArray(), _ => { }, default, "high");
+    Check(sentEffort == null, "Paramètre reasoning_effort omis lorsque les capacités du modèle sont inconnues");
 }
 using (var client = new HttpClient(new FakeHandler(_ => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)))))
     await Throws<HttpRequestException>(() => new ChatEngine(client).StreamAsync(new Provider(), "invalid", new JsonArray(), new JsonArray(), _ => { }, default), "Erreur API 401 remontée");
@@ -364,7 +371,8 @@ try
         await upgrade.Database.ExecuteSqlRawAsync("INSERT INTO States (Id, ProviderId, BrowserUrl) VALUES (1, 1, 'https://example.com')");
         await upgrade.Database.MigrateAsync();
         var migrated = await upgrade.States.SingleAsync();
-        Check(migrated.Language == "fr" && migrated.EnabledSkills == "sources,web" && migrated.BrowserUrl == "https://example.com" && migrated.ThinkingLevel == "auto" && migrated.PermissionMode == PermissionModes.Ask, "Mise à niveau d’une base existante sans perte d’état");
+        // The 2.1.1 migration enables action suggestions for existing profiles.
+        Check(migrated.Language == "fr" && migrated.EnabledSkills == "sources,web," + ActionSuggestions.SkillId && migrated.BrowserUrl == "https://example.com" && migrated.ThinkingLevel == "auto" && migrated.PermissionMode == PermissionModes.Ask, "Mise à niveau d’une base existante sans perte d’état");
     }
     await using (var db = new HarnessDb(path))
     {

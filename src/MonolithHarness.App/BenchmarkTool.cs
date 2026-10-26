@@ -50,7 +50,7 @@ internal sealed partial class ModelToolsWindow
         reshuffle.VerticalAlignment = VerticalAlignment.Bottom;
         At(choices, benchmarkScope, 0); At(choices, benchmarkLevel, 0, 1); At(choices, Row(benchmarkSeed, reshuffle), 1); At(choices, benchmarkLimit, 1, 1);
         At(choices, benchmarkApplication, 2); Grid.SetColumnSpan(benchmarkApplication, 2);
-        overview.Children.Add(choices); busyControls.AddRange([benchmarkLevel, benchmarkScope, benchmarkLimit, benchmarkSeed, reshuffle, benchmarkApplication]);
+        overview.Children.Add(choices); overview.Children.Add(BuildReasoningComparisonOptions()); busyControls.AddRange([benchmarkLevel, benchmarkScope, benchmarkLimit, benchmarkSeed, reshuffle, benchmarkApplication]);
         var cards = new Grid { ColumnSpacing = 10, RowSpacing = 10 };
         foreach (var _ in Enumerable.Range(0, 5)) cards.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         foreach (var _ in Enumerable.Range(0, 3)) cards.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -79,7 +79,7 @@ internal sealed partial class ModelToolsWindow
                 Grid.SetColumn((FrameworkElement)cards.Children[i], i % columns); Grid.SetRow((FrameworkElement)cards.Children[i], i / columns);
             }
         };
-        overview.Children.Add(cards);
+        benchmarkMetrics = cards; overview.Children.Add(cards);
         benchmarkDescription = Text("", 13, true); overview.Children.Add(benchmarkDescription);
         overview.Children.Add(Text(L(
             "Difficile : ARC-AGI-2, optimisation et contraintes générées. Applications : code HTML exécuté dans l’aperçu hors ligne, contrôles fonctionnels indépendants. Le rendu reste à examiner. Débit avec latence ; tarification habituelle du fournisseur.",
@@ -89,7 +89,7 @@ internal sealed partial class ModelToolsWindow
         var scrollContent = new StackPanel { Spacing = 16 }; scrollContent.Children.Add(overview); scrollContent.Children.Add(benchmarkRows);
         At(body, new ScrollViewer { Content = scrollContent, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalContentAlignment = HorizontalAlignment.Stretch }, 0);
         run = Button(L("Lancer le benchmark", "Run benchmark"), RunBenchmark, true);
-        copyBenchmark = Copy(() => benchmarkReport?.Json() ?? "", L("Copier le rapport JSON", "Copy JSON report"));
+        copyBenchmark = Copy(() => reasoningComparison?.Json() ?? benchmarkReport?.Json() ?? "", L("Copier le rapport JSON", "Copy JSON report"));
         secondaryActions = copyBenchmark;
         benchmarkLayout = new Grid { ColumnSpacing = 18 };
         benchmarkLayout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
@@ -111,7 +111,8 @@ internal sealed partial class ModelToolsWindow
         refreshActions = () =>
         {
             run.IsEnabled = !Busy && model.SelectedItem != null;
-            copyBenchmark.IsEnabled = benchmarkReport?.Entries.Count > 0;
+            copyBenchmark.IsEnabled = reasoningComparison?.Entries.Count > 0 || benchmarkReport?.Entries.Count > 0;
+            benchmarkScope.IsEnabled = !Busy && compareReasoning.IsChecked != true;
             reloadBenchmarkPreview.IsEnabled = !Busy && benchmarkPreviewHtml != null;
             copyBenchmarkHtml.IsEnabled = benchmarkPreviewHtml != null;
         };
@@ -130,10 +131,11 @@ internal sealed partial class ModelToolsWindow
         var applications = benchmarkApplication.SelectedIndex <= 0 ? VisualBenchmarkTask.Cases : [VisualBenchmarkTask.Cases[benchmarkApplication.SelectedIndex - 1]];
         currentBenchmarkCases = benchmarkScope.SelectedIndex == 0 ? reasoning : reasoning.Concat(applications).ToArray();
         benchmarkApplication.Visibility = benchmarkScope.SelectedIndex == 0 ? Visibility.Collapsed : Visibility.Visible;
+        reasoningComparison = null; RefreshComparisonInfo();
         benchmarkReport = null; benchmarkEntries.Clear(); benchmarkRows.Children.Clear(); usage.Text = "";
         benchmarkPreview?.ClosePreview(); benchmarkPreview = null; benchmarkPreviewHtml = null;
         benchmarkPreviewHost.Children.Clear(); benchmarkPreviewHost.Children.Add(Text(L("L’application générée apparaîtra ici.", "The generated application will appear here."), 16, true));
-        SetBenchmarkPreviewVisible(benchmarkScope.SelectedIndex != 0);
+        SetBenchmarkPreviewVisible(compareReasoning.IsChecked != true && benchmarkScope.SelectedIndex != 0);
         foreach (var item in BenchmarkCases) benchmarkRows.Children.Add(Card(Text(CaseTitle(item) + " · " + L("En attente", "Pending"), 14, true)));
         benchmarkGrade.Text = benchmarkPercent.Text = benchmarkSpeed.Text = benchmarkTokens.Text = benchmarkLogic.Text = benchmarkBugs.Text = "—";
         benchmarkDescription.Text = L($"{BenchmarkCases.Count} requêtes · {BenchmarkCases.Count(c => c.Category == "logic")} logique · {BenchmarkCases.Count(c => c.Category == "bug")} code · {BenchmarkCases.Count(c => c.Category == "visual")} applications · série {BenchmarkSeed}",
@@ -185,6 +187,8 @@ internal sealed partial class ModelToolsWindow
 
     Task RunBenchmark() => StartOperation(async (selected, ct) =>
     {
+        if (compareReasoning.IsChecked == true) { await RunReasoningComparison(selected, ct); return; }
+        reasoningComparison = null;
         if (!ToolWebPreviewAllowed && BenchmarkCases.Any(c => c.Visual != null))
             throw new InvalidOperationException(L("Les épreuves interactives nécessitent WebView. Choisissez Raisonnement et code, ou activez Autoriser les aperçus WebView dans les outils dans Réglages / Général sur un poste compatible.", "Interactive challenges require WebView. Choose Reasoning and code, or enable Allow WebView previews in tools in Settings / General on a compatible device."));
         foreach (var button in benchmarkReplayButtons) busyControls.Remove(button); benchmarkReplayButtons.Clear();

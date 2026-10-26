@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         var prompt = new TextBox { Header = WorkflowText("Instruction", "Instruction"), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 100, MaxHeight = 240 };
         var connection = new ComboBox { Header = WorkflowText("Fournisseur", "Provider"), ItemsSource = allProviders, HorizontalAlignment = HorizontalAlignment.Stretch };
         var model = new ComboBox { Header = "Modèle / Model", HorizontalAlignment = HorizontalAlignment.Stretch };
-        var thinking = new ComboBox { Header = "Réflexion / Reasoning", ItemsSource = new[] { "auto", "none", "low", "medium", "high" } };
+        var thinking = new ComboBox { Header = "Réflexion / Reasoning", ItemsSource = new[] { "auto" } };
         var context = new NumberBox { Header = "Contexte (tokens) / Context", Minimum = 1024, Maximum = 10_000_000 };
         var images = new CheckBox { Content = "Modèle compatible images / Image-capable model" };
         var period = new ComboBox { Header = "Fréquence / Frequency", ItemsSource = new[] { "Toutes les X minutes / Every X minutes", "Toutes les X heures / Every X hours", "Chaque jour / Daily", "Chaque semaine / Weekly", "CRON personnalisé / Custom CRON" }, SelectedIndex = 0 };
@@ -146,6 +146,9 @@ public sealed partial class MainWindow
         };
         model.SelectionChanged += (_, _) =>
         {
+            var previous = thinking.SelectedItem as string ?? "auto";
+            var levels = ReasoningCapabilities.For(connection.SelectedItem as Provider, model.SelectedItem as string).Levels;
+            thinking.ItemsSource = levels; thinking.SelectedItem = levels.Contains(previous) ? previous : "auto";
             if (!editing && connection.SelectedItem is Provider selected && model.SelectedItem is string id)
                 context.Value = ModelContexts.For(selected, id).Limit;
         };

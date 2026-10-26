@@ -78,6 +78,7 @@ public sealed partial class HarnessService
             system += ResourceAccessPolicy.Prompt(run.Chat);
             system += SkillInvocation.Instructions(run.Prompt, run.Options.EnabledSkills, project.GetSourceFolders(), project.Id);
             if (!chatOnly) system += FeatureSettings.Read(options.FeaturesJson).GoalInstructions(run.Chat.Id);
+            system += await MemoryAutomation.ReadPromptAsync(run, history, ct);
             if (!provider.IsAcp && run.Chat.OrchestrationMode != "disabled")
             {
                 var report = await agent.StartAsync(ct);
@@ -135,7 +136,7 @@ public sealed partial class HarnessService
                     lastUpdate = DateTime.UtcNow;
                     // The stdout writer serializes events; blocking here preserves ordering without unobserved tasks.
                     emit(new { @event = "stream", chatId = chat.Id, messageId = active.Id, text = update.Text, reasoning = update.Reasoning,
-                        html = Html(update.Text), speed = update.TokensPerSecond, compatibilityNotice = active.CompatibilityNotice, cachedInputTokens = update.CachedInputTokens,
+                        html = Html(update.Text), speed = update.TokensPerSecond, reasoningSelection = update.ReasoningSelection, compatibilityNotice = active.CompatibilityNotice, cachedInputTokens = update.CachedInputTokens,
                         speedMin = speedTracker.MinSpeed, speedMax = speedTracker.MaxSpeed, speedAverage = speedTracker.AverageSpeed,
                         speedEstimated = !update.OutputTokens.HasValue,
                         tokens = (update.InputTokens ?? input) + (update.OutputTokens ?? ContextWindow.EstimateText(update.Text + update.Reasoning)),
@@ -207,7 +208,23 @@ public sealed partial class HarnessService
                     await Compact(run, history, system, definitions, secret, ct, true);
                 }
                 active = null;
-                if (results.Count == 0 && steered.Count==0) break;
+                if (results.Count == 0 && steered.Count==0)
+                {
+                    if (MemoryAutomation.WriteEnabled(run))
+                    {
+                        await emit(new { @event = "status", chatId = chat.Id, text = "Mémoire · enregistrement de fin de réponse / Memory · saving at the end of the response…" });
+                        var memory = await MemoryAutomation.WriteAsync(run, history,
+                            (messages, tools, token) => engine.StreamAsync(provider, secret, messages, tools, _ => { }, token, options.ThinkingLevel, FeatureSettings.Read(options.FeaturesJson)),
+                            async (name, args, token) =>
+                            {
+                                await ProjectResources.DemandToolAsync(run.Project, name, args.ToJsonString(), (scope, details, approval) => Approve(scope, "Projet · " + name, details, approval), token);
+                                return await agent.CallAsync(name, args, token);
+                            }, ct);
+                        if (memory != null) completionStatus = memory.Error is { } memoryError ? "Mémoire non enregistrée / Memory not saved: " + memoryError
+                            : $"Mémoire : {memory.Saved} enregistrement(s) / Memory: {memory.Saved} saved";
+                    }
+                    break;
+                }
             }
         }
         catch (Exception ex)
