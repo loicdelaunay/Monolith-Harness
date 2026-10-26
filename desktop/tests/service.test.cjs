@@ -102,7 +102,7 @@ test('desktop service: SQLite, providers, skills, permissions and simultaneous c
   t.after(async()=>{child.stdin.end();await new Promise(resolve=>{if(child.exitCode!=null)return resolve();child.once('exit',resolve);setTimeout(()=>child.kill(),5000).unref();});server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await fs.rm(directory,{recursive:true,force:true});});
   await ready;
   const initial=await rpc('snapshot');assert.equal(initial.state.permissionMode,'ask');assert.equal(initial.providers.length,2);assert.ok(!('protectedKey' in initial.providers[0]));
-  assert.equal(initial.appearanceThemes.length,10);assert.equal(initial.appearanceThemes.filter(x=>x.dark).length,5);
+  assert.equal(initial.appearanceThemes.length,11);assert.equal(initial.appearanceThemes.filter(x=>x.dark).length,6);
   const mcpFile=await rpc('mcp.json.get');assert.equal(mcpFile.path,path.join(directory,'MCP.json'));
   const godot=JSON.stringify({mcpServers:{godot:{command:'npx',args:['@coding-solo/godot-mcp'],env:{GODOT_PATH:'/path/to/godot',DEBUG:'true'},enabled:false}}});
   await rpc('mcp.json.save',{content:godot,expected:mcpFile.content});
@@ -110,8 +110,8 @@ test('desktop service: SQLite, providers, skills, permissions and simultaneous c
   await rpc('mcp.toggle',{id:imported.id,enabled:true});assert.equal(JSON.parse(await fs.readFile(mcpFile.path,'utf8')).mcpServers.godot.enabled,true);
   const current=await rpc('mcp.json.get');await assert.rejects(rpc('mcp.json.save',{content:'{',expected:current.content}));assert.equal(await fs.readFile(mcpFile.path,'utf8'),current.content);
   await rpc('mcp.json.save',{content:'{"mcpServers":{}}',expected:current.content});
-  await rpc('state.save',{featuresJson:JSON.stringify({Theme:'ivory',ComposerInfoExpanded:false})});
-  const appearance=JSON.parse((await rpc('snapshot')).state.featuresJson);assert.equal(appearance.Theme,'ivory');assert.equal(appearance.ComposerInfoExpanded,false);
+  await rpc('state.save',{featuresJson:JSON.stringify({Theme:'ivory',ShowComposerSpeed:false})});
+  const appearance=JSON.parse((await rpc('snapshot')).state.featuresJson);assert.equal(appearance.Theme,'ivory');assert.equal(appearance.ShowComposerSpeed,false);
 
   const provider=await rpc('provider.save',{name:'local',kind:'openai',baseUrl:`http://127.0.0.1:${server.address().port}/v1`,model:'test-model',key:'fixture-not-a-real-key',contextLimit:4096});
   assert.equal(provider.hasKey,true);assert.deepEqual(await rpc('provider.models',{id:provider.id}),['test-model']);
@@ -271,7 +271,8 @@ test('desktop service: SQLite, providers, skills, permissions and simultaneous c
   }
   assert.ok((await rpc('snapshot')).permissions.some(x=>x.scope==='desktop|applications'),'Always-allow inventory permission is persisted');
   const pythonProvider=await rpc('provider.save',{...provider,model:'python-agent'});
-  await rpc('state.save',{enabledSkills:'python',permissionMode:'allow'});
+  // 'allow' now needs an installed command validator; this step checks bundled Python, not approval.
+  await rpc('state.save',{enabledSkills:'python',permissionMode:'full'});
   const pythonChat=await rpc('chat.save',{projectId:project.id,title:'Python tools'});
   await rpc('send',{chatId:pythonChat.id,providerId:pythonProvider.id,text:'Create and execute a script'});
   assert.equal((await rpc('history',{chatId:pythonChat.id})).at(-1).content,'Bundled Python completed.');

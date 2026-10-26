@@ -50,7 +50,9 @@ test('agent modes: Plan enforcement, delegation, project instructions and lazy c
   await rpc('state.save',{enabledSkills:'sources,write_sources,terminal,custom:exemple-revue',permissionMode:'allow'});
   async function run(mode,orchestration){calls=childCalls=rootCalls=0;payloads.length=0;const chat=await rpc('chat.save',{projectId:project.id,title:scenario});await rpc('chat.modes',{id:chat.id,executionMode:mode,orchestrationMode:orchestration});await rpc('send',{chatId:chat.id,providerId:provider.id,text:'Inspect this project'});return rpc('history',{chatId:chat.id});}
   const plan=await run('plan','disabled');
-  assert.ok(plan.filter(x=>x.role==='tool').every(x=>x.content.includes('Mode Plan')));await assert.rejects(fs.stat(path.join(directory,'blocked.md')));
+  // Plan refuses local writes and commands; per-conversation MCP access (off in Plan) refuses forged MCP calls first.
+  const planRefusals=plan.filter(x=>x.role==='tool');assert.equal(planRefusals.length,3);
+  assert.ok(planRefusals.every(x=>x.content.startsWith('mcp_')?x.content.includes('MCP disabled for this conversation'):x.content.includes('Mode Plan')));await assert.rejects(fs.stat(path.join(directory,'blocked.md')));
   assert.ok(payloads[0].messages[0].content.includes('PROJECT-CONVENTION-TEST'));
   assert.ok(!payloads[0].tools.some(x=>['write_source','run_terminal','delegate_tasks'].includes(x.function.name)));
   assert.ok(!payloads[0].messages[0].content.includes('# Exemple de skill personnalisable'));

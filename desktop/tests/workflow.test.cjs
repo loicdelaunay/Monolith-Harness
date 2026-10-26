@@ -109,7 +109,8 @@ test('structured tasks, interactive questions, concurrent chats and loop decisio
   const openCode=await rpc('provider.save',{name:'Unisolated OpenCode',kind:'opencode',baseUrl:'http://127.0.0.1:9',model:'fixture'});
   await assert.rejects(rpc('send',{chatId:sandboxChat.id,providerId:openCode.id,text:'sandbox'}),/OpenCode.*not supported/);
   assert.equal((await rpc('history',{chatId:sandboxChat.id})).length,0,'unsupported provider fails before message/inference');
-  await rpc('state.save',{enabledSkills:'sources,terminal'});
+  // 'allow' now needs an installed command validator; these terminals check parallel execution, not approval.
+  await rpc('state.save',{enabledSkills:'sources,terminal',permissionMode:'full'});
   const terminalChat=await create(),parallel=send(terminalChat,'terminals');
   await waitFor(()=>events.find(x=>x.event==='status'&&x.chatId===terminalChat.id&&x.text.includes('wait_terminal')));
   const tabs=await rpc('terminals.list',{chatId:terminalChat.id});assert.equal(tabs.length,2);assert.ok(tabs.every(t=>t.status==='running'));

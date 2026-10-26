@@ -169,13 +169,26 @@ try
     var readRun = await Run(chat: fileChat);
     Check(readRun.Code == 0 && resumed!.ToJsonString().Contains("Portable conversation file"),
         "Reopening a folderless chat in a fresh CLI client retains its files");
-    step = 0;
-    api.Respond = (_, _) => Interlocked.Increment(ref step) == 1
+    // Headless --allow-tools runs commands only when the command validator rates them low risk. This profile has no
+    // installed validator, so the command stays denied; an interactive approval then checks the working directory.
+    step = 0; resumed = null;
+    api.Respond = (body, _) => Interlocked.Increment(ref step) == 1
         ? FakeApi.Tool("run_terminal", new { command = "echo conversation-terminal > terminal.txt" })
-        : FakeApi.Text("Terminal complete");
-    var terminalRun = await Run(execute: true, allow: true, chat: fileChat);
-    Check(terminalRun.Code == 0 && File.Exists(Path.Combine(fileRoot, "terminal.txt")),
-        "CLI terminal tools start in the current conversation workspace");
+        : (resumed = body) != null ? FakeApi.Text("Terminal complete") : "";
+    var unvalidated = await Run(execute: true, allow: true, chat: fileChat);
+    Check(unvalidated.Code == 0 && !File.Exists(Path.Combine(fileRoot, "terminal.txt")) && resumed!.ToJsonString().Contains("Access denied", StringComparison.Ordinal),
+        "Headless --allow-tools keeps commands denied without an installed command validator");
+    step = 0; JsonObject? terminalApproval = null;
+    await using (var interactive = new CliClient(new() { Database = database, Chat = fileChat }, (name, parameters, _) => name == "permission"
+        ? Task.FromResult<JsonNode?>(JsonValue.Create((terminalApproval = parameters) != null ? "allow" : "deny"))
+        : throw new NotSupportedException("Host operation unavailable in CLI: " + name), _ => Task.CompletedTask))
+    {
+        var (_, terminalChat, terminalProvider) = await interactive.Initialize(new() { Database = database, Chat = fileChat }, CancellationToken.None);
+        await interactive.Call("chat.modes", new { id = terminalChat, executionMode = "execute" });
+        await interactive.Call("send", new { chatId = terminalChat, providerId = terminalProvider, text = "Test the CLI" }).WaitAsync(TimeSpan.FromSeconds(20));
+    }
+    Check(terminalApproval != null && File.Exists(Path.Combine(fileRoot, "terminal.txt")),
+        "CLI terminal tools start in the current conversation workspace once the command is approved");
     foreach (var execute in new[] { false, true })
     {
         if (execute)
