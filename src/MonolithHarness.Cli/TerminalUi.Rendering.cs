@@ -39,8 +39,8 @@ public sealed partial class TerminalUi
                     rendered.AddRange(TerminalText.Wrap(!code && source.StartsWith('#') ? source.TrimStart('#').TrimStart() : source, width).Select(s => new DisplayLine(s, lineKind)));
                 }
                 if (message.Role == "tool" && !showDetails) rendered.Add(new(L("▸ /details pour développer", "▸ /details to expand"), "tool"));
-                if (message.CompatibilityNotice.Length > 0)
-                    rendered.AddRange(TerminalText.Wrap(message.CompatibilityNotice, width).Select(s => new DisplayLine(s, "muted")));
+                if (ReasoningSelection.WithoutTrace(message.CompatibilityNotice) is { Length: > 0 } notice)
+                    rendered.AddRange(TerminalText.Wrap(notice, width).Select(s => new DisplayLine(s, "muted")));
                 foreach (var image in message.Attachments) rendered.Add(new("▧ " + image.Name, "muted"));
                 if (message.Role == "assistant" && message.State != "streaming" && message.Seconds > 0)
                     rendered.Add(new(L("Durée : ", "Duration: ") + $"{message.Seconds:0.#} s", "muted"));

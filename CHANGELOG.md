@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.0 — 2026-10-27
+
+- Fournisseurs : chaque modèle dispose d’un mode de réflexion dans l’onglet Modèles. « Découverte automatique » utilise les capacités déclarées par l’API, les catalogues intégrés et l’identifiant du modèle ; « Manuel » permet de cocher les niveaux acceptés ; « Par défaut » n’envoie aucun paramètre de réflexion. Les niveaux proposés dans le chat, les raccourcis et le CLI suivent ce choix.
+- Découverte automatique améliorée : paramètres déclarés par les passerelles comme OpenRouter, familles OpenAI, Gemini et DeepSeek reconnues derrière une passerelle ou un proxy, nouvelles générations Gemini Pro.
+- Chat : le détail « Réflexion · demandée / envoyée » et les paramètres de transport ne s’affichent plus dans la conversation, y compris pour les messages déjà enregistrés ; les vraies notices de compatibilité restent visibles.
+- Fournisseurs : l’URL de base de l’API est dans l’onglet Connexion. Les connexions fournies par le serveur Monolith sont signalées et en lecture seule ; elles ne peuvent plus être supprimées ou modifiées dans l’éditeur, ce qui faisait réapparaître la connexion après l’enregistrement.
+
 ## 2.8.0 — 2026-10-26
 
 - Mémoire : deux options désactivées par défaut dans Réglages > Mémoire, en GUI comme en CLI. « Forcer la lecture en début de discussion » transmet au modèle les 20 mémoires accessibles les plus récentes avant la première réponse d’une discussion et lui demande de consulter celles utiles. « Forcer l’écriture en fin de discussion » lance, après chaque réponse terminée, une requête supplémentaire réservée aux outils mémoire pour enregistrer les faits durables de l’échange, sans modifier l’historique du chat.

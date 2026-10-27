@@ -667,7 +667,7 @@ public sealed partial class MainWindow : Window
                 AddMessage(item.Role, item.Content, item.Attachments, messages, sourceProject);
             }
             AddHistoryActions(item, actionCard);
-            if (item.CompatibilityNotice.Length > 0) AddMessage("info", item.CompatibilityNotice, [], messages, sourceProject);
+            if (ReasoningSelection.WithoutTrace(item.CompatibilityNotice) is { Length: > 0 } notice) AddMessage("info", notice, [], messages, sourceProject);
         }
     }
     readonly List<WeakReference<AssistantMessageUi>> reasoningViews = [];

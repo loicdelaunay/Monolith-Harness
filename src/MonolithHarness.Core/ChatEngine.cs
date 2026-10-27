@@ -195,7 +195,6 @@ public sealed class ChatEngine(HttpClient http, IChatEngineRuntime? runtime = nu
                 Fallback = profile.NoEffort || profile.NoThinking ? profile.Notice : reasoningSelection.Fallback,
                 Parameter = nativeVertex ? request.Content == null ? "" : "generationConfig.thinkingConfig=" +
                     JsonNode.Parse(await request.Content.ReadAsStringAsync(ct))?["generationConfig"]?["thinkingConfig"]?.ToJsonString() : ReasoningCapabilities.Parameter(actual) };
-            compatibilityNotice = string.Join("\n", new[] { trace.Describe(), compatibilityNotice }.Where(x => x.Length > 0));
             update(new("", "", null, null, 0) { ReasoningSelection = trace, CompatibilityNotice = compatibilityNotice });
             progress = progress with { Stage = ContextRequestStage.Sending, PayloadBytes = request.Content!.Headers.ContentLength };
             requestProgress?.Invoke(progress);

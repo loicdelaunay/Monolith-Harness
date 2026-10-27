@@ -87,14 +87,14 @@ public sealed class AcpEngine
             else return;
             if (effort == "none" && receivedThought) throw ChatReasoning.Unsupported(provider.Model);
             update(new(text.ToString(), reasoning.ToString(), null, null, timer.Elapsed.TotalSeconds) { HasModelOutput = true,
-                ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace?.Describe() ?? "" });
+                ReasoningSelection = reasoningTrace });
         };
         await client.Initialize(ct);
         await client.AuthenticateChatGpt(provider, ct);
         var session = await client.NewSession(options.Directory, ct);
         sessionId = session["sessionId"]?.ToString() ?? throw new IOException("ACP : identifiant de session absent.");
         reasoningTrace = await client.Configure(session, sessionId, provider.Kind == "antigravity-acp" ? AcpProviders.DefaultModel : provider.Model, effort, options, ct);
-        update(new("", "", null, null, 0) { ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace.Describe() });
+        update(new("", "", null, null, 0) { ReasoningSelection = reasoningTrace });
         var prompt = Content(messages, client.SupportsImages);
         try
         {

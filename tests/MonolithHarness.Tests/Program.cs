@@ -40,6 +40,7 @@ if (args.Contains("--web-http")) { Console.WriteLine($"{passed} checks passed.")
 await CompleteDesignChecks.Run(Check);
 if (args.Contains("--complete-design")) { Console.WriteLine($"{passed} checks passed."); return; }
 await ResponseStyleChecks.Run(Check);
+ReasoningModeChecks.Run(Check);
 if (args.Contains("--response-styles")) { Console.WriteLine($"{passed} checks passed."); return; }
 await UpdateChecks.Run(Check);
 if (args.Contains("--updates-only")) { Console.WriteLine($"{passed} contrôles réussis."); return; }

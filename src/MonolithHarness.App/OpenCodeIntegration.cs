@@ -554,8 +554,8 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
             db.Messages.Add(active); await db.SaveChangesAsync(ct);
 
             assistantUi = AddAssistantMessage("", target: run.Messages); ScrollRunToBottom(run);
-            var reasoningTransport = Label("", 11); reasoningTransport.TextWrapping = TextWrapping.Wrap;
-            run.Messages.Children.Add(reasoningTransport);
+            var compatibilityLabel = Label("", 11); compatibilityLabel.TextWrapping = TextWrapping.Wrap; compatibilityLabel.Visibility = Visibility.Collapsed;
+            run.Messages.Children.Add(compatibilityLabel);
 
             SetRunStatus(run, T("OpenCode réfléchit…"));
 
@@ -589,7 +589,7 @@ process.on('SIGTERM', async () => { try { await listener.stop(); } catch {} proc
                         if (update.CompatibilityNotice.Length > 0)
                         {
                             active.CompatibilityNotice = update.CompatibilityNotice;
-                            reasoningTransport.Text = update.ReasoningSelection?.Describe(state.Language == "fr") ?? update.CompatibilityNotice;
+                            compatibilityLabel.Text = update.CompatibilityNotice; compatibilityLabel.Visibility = Visibility.Visible;
                         }
                         active.Content = update.Text; active.InputTokens = update.InputTokens; active.OutputTokens = update.OutputTokens; active.CachedInputTokens = update.CachedInputTokens; active.Seconds = update.Seconds;
 

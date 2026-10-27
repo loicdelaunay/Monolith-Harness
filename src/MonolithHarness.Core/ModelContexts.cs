@@ -18,6 +18,9 @@ public static class ModelContexts
         public string[]? ReasoningLevels { get; set; }
         public string ReasoningSource { get; set; } = "";
         public string ReasoningEndpoint { get; set; } = "";
+        // User choice kept apart from discovery, so returning to automatic restores the captured levels.
+        public string ReasoningMode { get; set; } = "";
+        public string[]? ManualReasoningLevels { get; set; }
         public string Source { get; set; } = "API";
     }
     sealed class Cache { public int Defer; public string Json = ""; public Dictionary<string, Entry> Entries = new(StringComparer.Ordinal); }
@@ -91,6 +94,20 @@ public static class ModelContexts
         if (!entries.TryGetValue(model, out var entry)) entries[model] = entry = new();
         entry.ReasoningLevels = levels.Where(ReasoningCapabilities.All.Contains).Distinct().ToArray();
         entry.ReasoningSource = source; entry.ReasoningEndpoint = provider.Kind + "|" + provider.BaseUrl.TrimEnd('/'); Save(provider, entries);
+    }
+    public static (string Mode, string[] Manual) ReasoningPreference(Provider provider, string model)
+    {
+        Read(provider).TryGetValue(model, out var entry);
+        return (entry?.ReasoningMode is "manual" or "default" ? entry.ReasoningMode : "auto", entry?.ManualReasoningLevels ?? []);
+    }
+    public static void SetReasoningPreference(Provider provider, string model, string mode, IEnumerable<string> manual)
+    {
+        if (model.Trim().Length == 0) return;
+        var entries = Read(provider);
+        if (!entries.TryGetValue(model, out var entry)) entries[model] = entry = new();
+        entry.ReasoningMode = mode is "manual" or "default" ? mode : "";
+        entry.ManualReasoningLevels = mode == "manual" ? manual.Where(x => x != "auto" && ReasoningCapabilities.All.Contains(x)).Distinct().ToArray() : null;
+        Save(provider, entries);
     }
     public static void MergeLocal(Provider provider)
     {

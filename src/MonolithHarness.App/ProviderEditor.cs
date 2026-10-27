@@ -112,6 +112,14 @@ public sealed partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Stretch };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetLiveSetting(connectionResult, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var modelsResult = new InfoBar { Name = "ProviderModelsResult", IsOpen = false, IsClosable = false };
+        // The server owns its providers: saving never deletes or rewrites them, so the editor shows them read-only.
+        var managed = ServerManagedProviders();
+        bool Managed(ProviderDraft? draft) => draft is { Id: > 0 } && managed.Contains(draft.Id);
+        bool CanEdit(ProviderDraft? draft) => draft != null && !Managed(draft);
+        var managedNotice = new InfoBar { Name = "ServerManagedProvider", IsOpen = false, IsClosable = false, Severity = InfoBarSeverity.Informational,
+            Title = WorkflowText("Connexion fournie par votre serveur Monolith", "Connection provided by your Monolith server"),
+            Message = WorkflowText("Le serveur la synchronise : elle n’est ni modifiable ni supprimable ici. Retirez-la côté serveur ou déconnectez-vous dans Réglages > Serveur.",
+                "The server synchronizes it: it cannot be edited or deleted here. Remove it on the server or sign out in Settings > Server.") };
         var modelsHost = new StackPanel { Spacing = 12 };
         var modelsBusy = new ProgressRing { Width = 22, Height = 22, IsActive = false, Visibility = Visibility.Collapsed };
         var importModels = new Button { Content = T("Importer les modèles OpenCode") };
@@ -186,9 +194,11 @@ public sealed partial class MainWindow
             view.Description.Text = ProviderDescription(draft);
             view.Logo.Content = draft == null ? null : ProviderConnectionIcon(draft, 32);
             var enabled = draft != null;
-            foreach (var control in new Control[] { name, url, key, model, limit, vision, deleteKey, testConnection, importModels, username, executable, browseExecutable, autoStart, openCodeTools, bypassFreeLimitation }) control.IsEnabled = enabled;
+            var editable = CanEdit(draft);
+            foreach (var control in new Control[] { name, url, key, model, limit, vision, deleteKey, testConnection, importModels, username, executable, browseExecutable, autoStart, openCodeTools, bypassFreeLimitation, acpArguments, connectAccount, vertexFields }) control.IsEnabled = editable;
             if (connectionBusy) testConnection.IsEnabled = importModels.IsEnabled = connectAccount.IsEnabled = false;
-            remove.IsEnabled = duplicate.IsEnabled = enabled;
+            duplicate.IsEnabled = enabled; remove.IsEnabled = editable;
+            managedNotice.IsOpen = Managed(draft); managedNotice.Visibility = managedNotice.IsOpen ? Visibility.Visible : Visibility.Collapsed;
             name.Text = draft?.Name ?? ""; url.Text = draft?.BaseUrl ?? ""; model.Text = draft?.Model ?? "";
             model.ItemsSource = draft == null ? null : ModelCatalog.GetModelsForProvider(AsProvider(draft));
             model.SelectedItem = draft?.Model; model.Text = draft?.Model ?? "";
@@ -237,8 +247,8 @@ public sealed partial class MainWindow
         {
             var draft = state.Selected;
             var stored = draft?.ProtectedKey.Length > 0 && draft.DeleteKey == false;
-            key.IsEnabled = draft != null && (!stored || draft!.EditingKey || draft.PendingKey.Length > 0);
-            replaceKey.Visibility = stored ? Visibility.Visible : Visibility.Collapsed;
+            key.IsEnabled = CanEdit(draft) && (!stored || draft!.EditingKey || draft.PendingKey.Length > 0);
+            replaceKey.Visibility = stored && CanEdit(draft) ? Visibility.Visible : Visibility.Collapsed;
             replaceKey.Content = draft?.EditingKey == true ? WorkflowText("Conserver", "Keep saved") : WorkflowText("Remplacer", "Replace");
             key.PlaceholderText = stored ? "••••••••••••••••" : T("Votre clé API");
             keyNote.Text = draft?.PendingKey.Length > 0 ? WorkflowText("La nouvelle clé sera appliquée à l’enregistrement.", "The new key will be applied when saved.")
@@ -397,6 +407,7 @@ public sealed partial class MainWindow
         remove.Click += async (_, _) =>
         {
             if (state.Selected is not { } selected) return;
+            if (Managed(selected)) { managedNotice.IsOpen = true; managedNotice.Visibility = Visibility.Visible; return; }
             if (selected.LocalBusy) { ShowConnectionResult(selected, WorkflowText("Annulez l’opération locale avant de retirer ce fournisseur.", "Cancel the local operation before removing this provider."), InfoBarSeverity.Warning); return; }
             if (selected.Kind == "local")
             {
@@ -472,7 +483,7 @@ public sealed partial class MainWindow
             finally
             {
                 connectionBusy = false;
-                testConnection.IsEnabled = importModels.IsEnabled = connectAccount.IsEnabled = state.Selected != null;
+                testConnection.IsEnabled = importModels.IsEnabled = connectAccount.IsEnabled = CanEdit(state.Selected);
                 editorBusy.IsActive = modelsBusy.IsActive = false; editorBusy.Visibility = modelsBusy.Visibility = Visibility.Collapsed;
             }
         };
@@ -485,7 +496,7 @@ public sealed partial class MainWindow
             info.Text = WorkflowText("Connexion OpenAI : terminez l’authentification dans le navigateur…", "OpenAI sign-in: complete authentication in your browser…");
             try { await Discover(draft, selectAll: true, authenticate: true); await SaveTestedProviderAsync(draft); info.Text = WorkflowText("Compte connecté · modèles enregistrés.", "Account connected · models saved."); }
             catch (Exception ex) { info.Text = ex.Message; }
-            finally { connectionBusy = false; connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = state.Selected != null; editorBusy.IsActive = modelsBusy.IsActive = false; editorBusy.Visibility = modelsBusy.Visibility = Visibility.Collapsed; }
+            finally { connectionBusy = false; connectAccount.IsEnabled = testConnection.IsEnabled = importModels.IsEnabled = CanEdit(state.Selected); editorBusy.IsActive = modelsBusy.IsActive = false; editorBusy.Visibility = modelsBusy.Visibility = Visibility.Collapsed; }
         };
         async Task<List<string>?> Discover(ProviderDraft draft, bool selectAll = false, bool authenticate = false)
         {
@@ -543,7 +554,7 @@ public sealed partial class MainWindow
             try { await Discover(draft); }
             catch (OperationCanceledException) { ShowConnectionResult(draft, WorkflowText("Recherche annulée ou délai de réponse dépassé.", "Model lookup cancelled or timed out."), InfoBarSeverity.Warning); }
             catch (Exception ex) { ShowConnectionResult(draft, ex.Message, draft.Kind == "vertex" && VertexAi.TryRead(draft.BaseUrl, out var config) && config!.Authentication == VertexAi.Express ? InfoBarSeverity.Warning : InfoBarSeverity.Error); }
-            finally { connectionBusy = false; importModels.IsEnabled = testConnection.IsEnabled = connectAccount.IsEnabled = state.Selected != null; editorBusy.IsActive = modelsBusy.IsActive = false; editorBusy.Visibility = modelsBusy.Visibility = Visibility.Collapsed; }
+            finally { connectionBusy = false; importModels.IsEnabled = testConnection.IsEnabled = connectAccount.IsEnabled = CanEdit(state.Selected); editorBusy.IsActive = modelsBusy.IsActive = false; editorBusy.Visibility = modelsBusy.Visibility = Visibility.Collapsed; }
         };
 
         void ShowProviderHelp(ProviderDraft? draft)
@@ -571,7 +582,7 @@ public sealed partial class MainWindow
                 "Automatic discovery may be unavailable. You can still select a model manually. GLM uses enabled/disabled thinking; effort is managed by the model."), 12));
         }
 
-        string ProviderDescription(ProviderDraft? draft) => draft == null ? "" : draft.Kind switch
+        string ProviderDescription(ProviderDraft? draft) => draft == null ? "" : (Managed(draft) ? WorkflowText("Serveur Monolith · ", "Monolith server · ") : "") + draft.Kind switch
         {
             "local" => WorkflowText("Local · cet ordinateur", "Local · this computer"),
             "composite" => WorkflowText("Modèle composé", "Composite model"),
@@ -628,8 +639,12 @@ public sealed partial class MainWindow
         {
             if (view.SelectedPage != 1 || state.Selected is not { } draft) return;
             modelsHost.Children.Clear();
+            if (draft.Kind != "composite" && !AsProvider(draft).IsExternalAgent)
+                modelsHost.Children.Add(BuildProviderReasoning(draft, () => AsProvider(draft), () => state.Changed(), CanEdit(draft)));
             if (draft.Kind == "composite")
                 modelsHost.Children.Add(Label(WorkflowText("Les modèles sont définis par les agents du modèle composé, dans Connexion.", "Models are defined by the composite agents in Connection."), 13));
+            else if (Managed(draft))
+                modelsHost.Children.Add(Label(WorkflowText("Les modèles de cette connexion sont fournis par le serveur.", "This connection's models are provided by the server."), 13));
             else modelsHost.Children.Add(BuildProviderModelChoices(draft, () => AsProvider(draft), () =>
             {
                 refreshing = true; model.SelectedItem = draft.Model; model.Text = draft.Model; RefreshLimit(draft); refreshing = false;
@@ -642,9 +657,9 @@ public sealed partial class MainWindow
             HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new(12) };
         FluentDesign.IconButton(connectionAdvanced, "\uE76C", WorkflowText("Paramètres avancés", "Advanced settings"));
         connectionAdvanced.Click += (_, _) => view.ShowPage(2);
-        foreach (var item in new UIElement[] { name, connectAccount, vertexFields, username, keyRow, keyNote, Row(testConnection, editorBusy), connectionResult, compositePanel, connectionAdvanced }) editor.Children.Add(item);
+        foreach (var item in new UIElement[] { managedNotice, name, connectAccount, vertexFields, url, username, keyRow, keyNote, Row(testConnection, editorBusy), connectionResult, compositePanel, connectionAdvanced }) editor.Children.Add(item);
         foreach (var item in new UIElement[] { model, Row(importModels, modelsBusy), modelsResult, localPanel, modelsHost }) view.Models.Children.Add(item);
-        foreach (var item in new UIElement[] { info, url, providerHelp, limit, vision, autoStart, openCodeTools, bypassFreeLimitation, connectionLaunch, deleteKey }) view.Advanced.Children.Add(item);
+        foreach (var item in new UIElement[] { info, providerHelp, limit, vision, autoStart, openCodeTools, bypassFreeLimitation, connectionLaunch, deleteKey }) view.Advanced.Children.Add(item);
         view.PageChanged += _ => { state.Commit(); BuildSelectedModels(); };
         var searchDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         searchDelay.Tick += (_, _) => { searchDelay.Stop(); RenderCards(); };

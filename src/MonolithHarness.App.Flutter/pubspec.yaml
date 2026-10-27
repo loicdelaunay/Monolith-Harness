@@ -1,7 +1,7 @@
 name: monolith_harness_app_flutter
 description: "Monolith Android: native Flutter Material chat, skills and local web apps."
 publish_to: 'none'
-version: 2.8.0+161
+version: 2.9.0+162
 
 environment:
   sdk: ^3.13.1

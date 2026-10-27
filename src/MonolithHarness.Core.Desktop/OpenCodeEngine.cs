@@ -205,7 +205,7 @@ public sealed class OpenCodeEngine(HttpClient http)
         var selection = await ChatVariantAsync(provider, password, directory, separator, policy?.ThinkingLevel ?? "auto", ct);
         payload["variant"] = selection.Variant;
         var reasoningTrace = selection.Trace;
-        update(new("", "", null, null, 0) { ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace.Describe() });
+        update(new("", "", null, null, 0) { ReasoningSelection = reasoningTrace });
         payload["tools"] = provider.OpenCodeTools
             ? new JsonObject { ["question"] = workflow != null }
             : await DisabledToolsAsync(provider, password, directory, ct);
@@ -271,7 +271,7 @@ public sealed class OpenCodeEngine(HttpClient http)
                 if (parsed.Text != lastText || parsed.Reasoning != lastReasoning || parsed.Completed)
                 {
                     lastText = parsed.Text; lastReasoning = parsed.Reasoning;
-                    update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds) { CachedInputTokens = parsed.CachedInputTokens, ReasoningSelection = reasoningTrace, CompatibilityNotice = reasoningTrace.Describe() });
+                    update(new(parsed.Text, parsed.Reasoning, parsed.InputTokens, parsed.OutputTokens, timer.Elapsed.TotalSeconds) { CachedInputTokens = parsed.CachedInputTokens, ReasoningSelection = reasoningTrace });
                 }
                 if (!parsed.Completed) continue;
                 if (provider.OpenCodeTools && (workflow != null || policy?.Mode == "chat" && policy.ChatWebEnabled))

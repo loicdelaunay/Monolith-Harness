@@ -26,6 +26,7 @@ public sealed partial class MainWindow
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_DISPLAY_SMOKE") == "1") { await SmokeMessageDisplay(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_CONVERSATION_FILES_SMOKE") == "1") { await SmokeConversationFileWorkspace(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_PROVIDER_NAV_SMOKE") == "1") { await SmokeProviderNavigation(output); return; }
+            if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_PROVIDER_DELETE_SMOKE") == "1") { await SmokeProviderDeletion(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_LOCAL_MODELS_SMOKE") == "1") { await SmokeLocalModels(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_UPDATES_SMOKE") == "1") { await SmokeApplicationUpdates(output); return; }
             if (Environment.GetEnvironmentVariable("MONOLITHHARNESS_EDITOR_SMOKE") == "1") { await SmokeTextToolRegression(output); return; }
@@ -317,9 +318,16 @@ public sealed partial class MainWindow
             Click(Descendants(editor.Panel).OfType<Button>().Single(x=>x.Content?.ToString()=="Tout décocher"));
             Click(Descendants(editor.Panel).OfType<Button>().Single(x=>x.Content?.ToString()=="Tout cocher"));
             Descendants(editor.Panel).OfType<CheckBox>().Single(x=>AccessibleName(x)=="model-b").IsChecked=false;
+            var reasoningMode=Descendants(editor.Panel).OfType<ComboBox>().Single(x=>x.Name=="ProviderReasoningMode");
+            if(reasoningMode.SelectedIndex!=0)throw new Exception("Provider thinking does not start with automatic discovery.");
+            reasoningMode.SelectedIndex=1;await Task.Delay(100);
+            if(Descendants(editor.Panel).OfType<StackPanel>().Single(x=>x.Name=="ProviderReasoningLevels").Visibility!=Visibility.Visible)throw new Exception("Manual thinking levels are not shown.");
+            Descendants(editor.Panel).OfType<CheckBox>().Single(x=>x.Tag as string=="high").IsChecked=true;
             editor.Commit();await SaveProviderDraftsAsync(editor);PopulateModelSelector();
             if(modelSelector.Items.OfType<ModelChoice>().Where(x=>x.ProviderId==fixture.Id).Select(x=>x.Model).Single()!="model-a")
                 throw new Exception("Provider model checkbox did not update the model picker.");
+            if(ReasoningCapabilities.For(fixture,"model-a") is not { Source: "Manuel" } manualThinking || !manualThinking.Supports("high"))
+                throw new Exception("Manual thinking levels were not saved with the provider.");
             root.Children.Remove(editorOverlay);
             using(var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15)))
             using(var server=new TcpListener(IPAddress.Loopback,0))

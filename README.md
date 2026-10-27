@@ -26,28 +26,28 @@
       <br><br>
       Windows / Linux
       <br><br>
-      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v2.8.0"><strong>Download GUI</strong></a>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v2.9.0"><strong>Download GUI</strong></a>
     </td>
     <td align="center" valign="top">
       <img src="docs/images/branding/cli.png" alt="CLI logo" width="80">
       <br><br>
       Windows / Linux
       <br><br>
-      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v2.8.0"><strong>Download CLI</strong></a>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v2.9.0"><strong>Download CLI</strong></a>
     </td>
     <td align="center" valign="top">
       <img src="docs/images/branding/android.png" alt="Android logo" width="80">
       <br><br>
       Android ARM64
       <br><br>
-      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v2.8.0"><strong>Download APK</strong></a>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v2.9.0"><strong>Download APK</strong></a>
     </td>
     <td align="center" valign="top">
       <img src="docs/images/branding/server.png" alt="Server logo" width="80">
       <br><br>
       Windows / Linux
       <br><br>
-      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/server-v2.8.0"><strong>Download Server</strong></a>
+      <a href="https://github.com/loicdelaunay/Monolith-Harness/releases/tag/server-v2.9.0"><strong>Download Server</strong></a>
       <br><br>
       <a href="docs/server.md">Server documentation</a>
     </td>
@@ -203,7 +203,7 @@ Plan mode blocks modifying tools at the application boundary. The optional sandb
 
 ## Quick start
 
-1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v2.8.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v2.8.0) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
+1. Download the [GUI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/v2.9.0), or choose the [CLI release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/cli-v2.9.0) for a terminal workspace. The archives cover Windows x64 and Fedora Linux x64.
 2. Extract the archive into a **writable folder** and run <code>MonolithHarness.exe</code> on Windows or <code>./MonolithHarness</code> on Linux. The app creates its portable resources under <code>workspace/</code> beside the executable.
 3. Open **Settings → Providers**. Add a provider and its API key or endpoint. **Test connection** detects, selects, and saves its models; you can change that selection later.
 4. Create a project, attach the source folders you want to share with its chats, and start a conversation.
@@ -245,7 +245,7 @@ For a Windows source build, install the .NET 10 SDK and Git LFS. The native WinU
 ~~~powershell
 git clone https://github.com/loicdelaunay/Monolith-Harness.git
 cd Monolith-Harness
-git checkout v2.8.0
+git checkout v2.9.0
 git lfs pull
 dotnet run --project tests/MonolithHarness.Tests -c Release
 .\publish.ps1 -OutputDirectory artifacts\GUI
@@ -255,15 +255,15 @@ Publications use `artifacts/GUI`, `artifacts/CLI` and `artifacts/SERVER`. Tempor
 
 ### Android application
 
-Install the APK from the [Flutter Android release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v2.8.0) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
+Install the APK from the [Flutter Android release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/android-v2.9.0) on an ARM64 phone with Android 8 or newer, allow installation from the source you use, then configure an HTTPS provider in Settings. Android data stays in the app's private storage and API credentials use Android Keystore. No desktop workspace or API key is included in the APK.
 
-For source builds, use tag `v2.8.0` or branch `main`, Flutter 3.47.1, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/flutter-android.md).
+For source builds, use tag `v2.9.0` or branch `main`, Flutter 3.47.1, JDK 17 and Android SDK 36. See [build commands, signing and mobile limits](docs/flutter-android.md).
 
 ### Optional server
 
 The [Server](docs/server.md) is **optional**. Host it on your own Windows or Linux machine to add on-premise cloud execution, shared providers and collaboration. Desktop and CLI can connect to it while keeping their standalone local workflow. Android server integration is not available in this release.
 
-Download the [Server release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/server-v2.8.0), extract it into a writable private folder, launch `MonolithHarness.exe` (Windows) or `./MonolithHarness` (Linux), then open `http://127.0.0.1:5800`. See the [Server guide](docs/server.md) for first sign-in, configuration and deployment limits.
+Download the [Server release](https://github.com/loicdelaunay/Monolith-Harness/releases/tag/server-v2.9.0), extract it into a writable private folder, launch `MonolithHarness.exe` (Windows) or `./MonolithHarness` (Linux), then open `http://127.0.0.1:5800`. See the [Server guide](docs/server.md) for first sign-in, configuration and deployment limits.
 
 ~~~powershell
 .\publish-server.ps1 -OutputDirectory artifacts/SERVER
